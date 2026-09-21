@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Données : jamais sous git (audio, embeddings, base). Les labels sont sauvegardés à part (§9, risque 10).
+data/

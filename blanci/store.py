@@ -1,0 +1,90 @@
+"""Stockage des embeddings : Parquet partitionné <encodeur>/<jeu>/<site>/<aaaamm>.parquet (§13.3).
+
+Colonnes : window_id, recording_id, offset_s, emb (liste de taille fixe float16[dim]).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+META_COLUMNS = ["window_id", "recording_id", "offset_s"]
+PARTITION_KEYS = ("dataset", "site", "month")
+
+
+def _as_set(value: str | list[str] | None) -> set[str] | None:
+    if value is None:
+        return None
+    return {value} if isinstance(value, str) else set(value)
+
+
+@dataclass
+class EmbeddingStore:
+    root: Path  # data/embeddings
+    encoder_id: str
+
+    @property
+    def directory(self) -> Path:
+        return Path(self.root) / self.encoder_id
+
+    def partition_path(self, dataset: str, site: str, month: str) -> Path:
+        return self.directory / dataset / site / f"{month}.parquet"
+
+    def write(
+        self, meta: pd.DataFrame, emb: np.ndarray, dataset: str, site: str, month: str
+    ) -> Path:
+        """Ajoute des fenêtres à une partition ; une fenêtre déjà présente est remplacée."""
+        if len(meta) != len(emb):
+            raise ValueError("meta et emb n'ont pas le même nombre de lignes")
+        path = self.partition_path(dataset, site, month)
+        meta = meta[META_COLUMNS].reset_index(drop=True)
+        emb = np.asarray(emb, dtype=np.float16)
+        if path.exists():
+            old_meta, old_emb = self.read(path)
+            keep = ~old_meta["window_id"].isin(meta["window_id"]).to_numpy()
+            meta = pd.concat([old_meta[keep], meta], ignore_index=True)
+            emb = np.concatenate([old_emb[keep].astype(np.float16), emb])
+        dim = emb.shape[1]
+        values = pa.array(emb.reshape(-1), type=pa.float16())
+        table = pa.Table.from_pandas(meta, preserve_index=False).append_column(
+            "emb", pa.FixedSizeListArray.from_arrays(values, dim)
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".parquet.tmp")
+        pq.write_table(table, tmp)
+        tmp.replace(path)  # écriture atomique : pas de partition à moitié écrite
+        return path
+
+    def read(self, path: Path) -> tuple[pd.DataFrame, np.ndarray]:
+        table = pq.read_table(path)
+        column = table.column("emb").combine_chunks()
+        dim = column.type.list_size
+        emb = column.flatten().to_numpy(zero_copy_only=False).reshape(-1, dim)
+        return table.drop(["emb"]).to_pandas(), emb
+
+    def fragments(self, filters: dict | None = None) -> Iterator[Path]:
+        """Partitions retenues par les filtres {dataset, site, month} (valeur ou liste)."""
+        filters = filters or {}
+        unknown = set(filters) - set(PARTITION_KEYS)
+        if unknown:
+            raise ValueError(f"filtres inconnus : {sorted(unknown)} (attendus : {PARTITION_KEYS})")
+        wanted = {key: _as_set(filters.get(key)) for key in PARTITION_KEYS}
+        for path in sorted(self.directory.glob("*/*/*.parquet")):
+            values = dict(zip(PARTITION_KEYS, (path.parent.parent.name, path.parent.name, path.stem)))
+            if all(wanted[k] is None or values[k] in wanted[k] for k in PARTITION_KEYS):
+                yield path
+
+    def load(self, filters: dict | None = None) -> tuple[pd.DataFrame, np.ndarray]:
+        parts = [self.read(path) for path in self.fragments(filters)]
+        if not parts:
+            return pd.DataFrame(columns=META_COLUMNS), np.zeros((0, 0), dtype=np.float16)
+        return (
+            pd.concat([m for m, _ in parts], ignore_index=True),
+            np.concatenate([e for _, e in parts]),
+        )

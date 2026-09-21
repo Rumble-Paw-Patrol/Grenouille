@@ -1,0 +1,87 @@
+# Configuration par défaut. Chemins relatifs au dossier de lancement (racine du dépôt).
+# Surcharge : blanci --config mon_fichier.yaml <commande> (fusion clé par clé).
+
+paths:
+  raw: data/raw                    # data/raw/{2023,2026}/<site>/<micro>/*.wav — lecture seule
+  db: data/db/blanci.sqlite
+  embeddings: data/embeddings
+  label_imports: data/labels/imports   # fichiers reçus, jamais modifiés
+  models: data/models
+  frozen_test: data/frozen_test        # jeu gelé, lecture seule
+  reports: data/reports
+
+recorder:
+  # Utilisé seulement si l'en-tête GUANO du WAV est absent ou sans fuseau.
+  # Heure des noms de fichiers Song Meter = heure locale réglée sur l'enregistreur. [À VÉRIFIER]
+  filename_utc_offset_h: -3        # Guyane : UTC−3, pas d'heure d'été
+
+signal:
+  note_max_s: 0.103                # durée max d'une note d'A. blanci (0,090–0,103 s)
+  note_dur_s: [0.07, 0.13]         # durées acceptées pour un onset (marge autour de 0,090–0,103 s)
+  band_hz: [4400, 5500]            # bande de la note (fréquence dominante 4,48–5,41 kHz)
+  ioi_range_s: [1.2, 1.906]        # intervalle entre notes d'A. blanci (moyenne 1,414 s)
+  onset_k_mad: 4.0                 # seuil d'enveloppe = médiane + k × MAD (en dB)
+
+# Heures locales à traiter en priorité (Courtois et al. 2025) : [début, fin[.
+peak_hours_local: [[7, 9], [15, 17]]
+
+# Grilles de fenêtres, indépendantes de l'encodeur (§4). Pas ≤ moitié de la fenêtre (§1).
+grids:
+  w3: {window_s: 3.0, hop_s: 1.5}
+  w5: {window_s: 5.0, hop_s: 2.5}
+
+qc:
+  # Seuils provisoires, à calibrer sur les fichiers étiquetés pluie / micro dans sac.
+  silent_dbfs: -70.0               # RMS en dessous : enregistrement muet
+  clip_fraction: 0.0001            # fraction d'échantillons saturés au-dessus : saturation
+  in_bag_hf_ratio: 0.02            # énergie > 2 kHz / énergie totale en dessous : micro dans sac
+  rain_flatness: 0.5               # platitude spectrale 1–10 kHz au-dessus...
+  rain_min_dbfs: -35.0             # ...et niveau au-dessus : pluie
+
+labels:
+  import:
+    # Colonnes reconnues dans les fichiers d'annotation (casse et accents ignorés).
+    # À compléter au premier fichier réel si une colonne n'est pas détectée.
+    columns:
+      file: [fichier, file, filename, nom_fichier, nom, enregistrement, recording, audio]
+      offset_s: [debut, start, offset, offset_s, start_s, debut_s, temps, time, begin]
+      comment: [commentaire, commentaires, comment, comments, remarque, remarques, notes]
+      label: [label, etiquette, classe, class]
+      quality: [qualite, quality]
+      site: [site]
+      mic_id: [micro, mic, mic_id, capteur, enregistreur]
+    offset_unit: seconds           # seconds | window_index (indice de fenêtre Biophonia)
+    window_s: 3.0                  # durée des fenêtres annotées (convention Biophonia)
+    annotator: expert
+
+# Encodeurs (§2). La f_e et la durée de fenêtre sont lues dans le modèle ; la grille en découle
+# (pas = fenêtre × grid_hop_ratio). Noms bacpipe [À VÉRIFIER] à l'installation.
+encoders:
+  grid_hop_ratio: 0.5
+  batch_size: 64
+  models:
+    birdmae: {backend: bacpipe, model: birdmae}
+    beats: {backend: bacpipe, model: beats}
+    naturebeats: {backend: bacpipe, model: naturebeats}
+    perch_v2: {backend: bacpipe, model: perch_v2}
+    birdnet: {backend: bacpipe, model: birdnet}     # référence du tuteur, non déployable
+
+head:
+  C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]
+  n_splits: 5                      # plis groupés par micro
+  seed: 0
+
+benchmark:
+  negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)
+  slot_tolerance_min: 30           # même micro, créneau horaire à ± 30 min
+  n_boot: 1000
+  precisions: [0.1, 0.5]
+
+aggregate:
+  # Règle enregistrement (§1), à calibrer sur les 20 enregistrements écoutés en entier.
+  min_positive_windows: 3          # en dessous : « suspect » (détection isolée)
+  min_span_s: 10.0                 # fenêtres positives étalées sur moins : « suspect »
+
+active:
+  batch_recordings: 40             # lots de 30–50 enregistrements (§5)
+  mix: [0.6, 0.2, 0.2]             # incertains, scores maximaux, aléatoire stratifié (micro, heure)
