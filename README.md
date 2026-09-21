@@ -14,10 +14,18 @@ uv run blanci --help
 
 ## Données
 
+Enregistrements de 2 min, nommés `<micro>_<AAAAMMJJ>_<HHMMSS>` — par exemple
+`2la04530_20260106_103000.wav` : micro `2LA04530`, 6 janvier 2026 à 10 h 30 locales
+(UTC−3). WAV et FLAC sont inventoriés tous les deux ; l'appariement avec le fichier
+d'annotations se fait sur le nom **sans extension**.
+
+Annotations : un tableau Excel, une ligne par fenêtre de 3 s, avec le nom de
+l'enregistrement, le timecode, le score de l'ancien prestataire et la vérification manuelle.
+
 Hors git, sous `data/` (chemins dans `config/default.yaml`) :
 
 ```
-data/raw/{2023,2026}/<site>/<micro>/*.wav   # audio brut, jamais modifié
+data/raw/{2023,2026}/<site>/<micro>/*.{wav,flac}   # audio brut, jamais modifié
 data/labels/imports/                        # fichiers d'annotation reçus, jamais modifiés
 data/db/blanci.sqlite                       # inventaire, fenêtres, labels (ajout seul)
 data/embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet
@@ -58,10 +66,15 @@ uv run blanci evaluate --encoder birdmae-1                       # plis par micr
 uv run blanci evaluate --encoder birdmae-1 --holdout tresor,kaw  # sites tenus à l'écart
 ```
 
-Les colonnes des fichiers d'annotation sont reconnues automatiquement (fichier, début,
-commentaire, qualité, site, micro) ; si une colonne n'est pas trouvée, ajouter son nom dans
-`labels.import.columns` de la config. Chaque ligne doit désigner un enregistrement déjà
-inventorié.
+Les colonnes du fichier d'annotations sont reconnues automatiquement, y compris sous forme
+de libellé composé (« Nom de l'enregistrement ») : fichier, timecode, vérification manuelle,
+score, commentaire, qualité, site, micro. Si une colonne n'est pas trouvée, ajouter son nom
+dans `labels.import.columns` de la config.
+
+La colonne de vérification tranche positif/négatif : oui/non et leurs variantes, réponses
+rédigées mentionnant *blanci*, ou nom d'un faux ami connu (qui donne aussi l'espèce). Une
+valeur non reconnue (« à revoir ») **bloque la ligne** au lieu d'être rangée en négatif ;
+`--dry-run` les liste toutes. Chaque ligne doit désigner un enregistrement déjà inventorié.
 
 ## Avancement
 
@@ -72,12 +85,16 @@ inventorié.
 | M2 `head`, `search`, `queue`, prototype Streamlit | `train`, `score`, `queue`, `search` en service et en CLI ; GUI Streamlit à faire |
 | M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | modules écrits et testés ; `aggregate` branché, `sequential`/`fusion` pas encore |
 
-320 tests passent sur Python 3.11 (`uv run pytest`), dont la chaîne complète en ligne de
+386 tests passent sur Python 3.11 (`uv run pytest`), dont la chaîne complète en ligne de
 commande sur un corpus synthétique. Tous les modules sont couverts sauf
 `encoders/bacpipe_encoder.py`, `encoders/onnx_encoder.py` et `encoders/export.py`, qui
 demandent respectivement bacpipe (groupe `research`) et un modèle exporté.
 
 **Non validé sur données réelles** : l'adaptateur bacpipe devine l'API de la bibliothèque
-(noms de modules, `SAMPLE_RATE`, `preprocess()`). Les annotations sont des fenêtres de 3 s ;
-reste à savoir si elles arrivent en tableau (fichier + début) ou en extraits WAV découpés —
-dans ce dernier cas, il faudra un importeur qui retrouve l'enregistrement et le décalage.
+(noms de modules, `SAMPLE_RATE`, `preprocess()`) ; il sera confronté à bacpipe installé en M1.
+
+Le format d'entrée est écrit d'après la description de Léonard et couvert par
+`tests/test_real_format.py`, mais aucun fichier réel n'a encore été lu. L'acceptation M0
+reste à faire : `ingest` sur une centaine de fichiers, puis `import-labels --dry-run` sur le
+vrai tableau, pour relire les verdicts et les lignes signalées avant d'écrire quoi que ce
+soit en base.

@@ -14,9 +14,11 @@ import sqlite3
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 
 from blanci.db import utc_now, window_id_for
@@ -226,27 +228,95 @@ def column_key(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
 
 
+def _contains_words(column: str, candidate: str) -> bool:
+    """« nom_de_l_enregistrement » contient « nom » et « enregistrement », mais pas « time »."""
+    words, wanted = column.split("_"), candidate.split("_")
+    return any(words[i : i + len(wanted)] == wanted for i in range(len(words) - len(wanted) + 1))
+
+
 def detect_columns(df: pd.DataFrame, candidates: dict[str, list[str]]) -> dict[str, str]:
-    """Champ → nom de colonne réel, premier candidat trouvé."""
+    """Champ → nom de colonne réel.
+
+    Deux passes : d'abord les égalités exactes, ensuite les libellés composés
+    (« Nom de l'enregistrement » pour `fichier`). Une colonne ne sert qu'à un seul champ,
+    le premier de la config — d'où l'ordre file, offset, comment, verdict, label, score.
+    """
     by_key = {column_key(c): c for c in df.columns}
-    found = {}
-    for key, names in candidates.items():
-        for name in names:
-            if column_key(name) in by_key:
-                found[key] = by_key[column_key(name)]
-                break
+    found: dict[str, str] = {}
+    taken: set[str] = set()
+
+    for match_exactly in (True, False):
+        for field_name, names in candidates.items():
+            if field_name in found:
+                continue
+            for name in names:
+                wanted = column_key(name)
+                for key, column in by_key.items():
+                    if key in taken:
+                        continue
+                    hit = key == wanted if match_exactly else _contains_words(key, wanted)
+                    if hit:
+                        found[field_name] = column
+                        taken.add(key)
+                        break
+                if field_name in found:
+                    break
     return found
 
 
 def parse_offset(value: Any, unit: str, window_s: float) -> float:
-    """Secondes depuis un nombre, « mm:ss » ou « hh:mm:ss » ; ou indice de fenêtre."""
-    if isinstance(value, str) and ":" in value:
+    """Secondes depuis un nombre, « mm:ss », « hh:mm:ss », une durée Excel, ou un indice.
+
+    Excel rend une cellule au format horaire en `datetime.time` ou en `Timedelta` selon son
+    format : les deux comptent depuis le début de l'enregistrement, pas depuis une date.
+    """
+    if isinstance(value, timedelta):
+        seconds = value.total_seconds()
+    elif isinstance(value, time):
+        seconds = value.hour * 3600 + value.minute * 60 + value.second + value.microsecond / 1e6
+    elif isinstance(value, datetime):  # cellule horaire lue comme date du 1900-01-00
+        seconds = value.hour * 3600 + value.minute * 60 + value.second + value.microsecond / 1e6
+    elif isinstance(value, str) and ":" in value:
         seconds = 0.0
         for part in value.strip().split(":"):
             seconds = seconds * 60 + float(part.replace(",", "."))
     else:
         seconds = float(str(value).replace(",", "."))
     return seconds * window_s if unit == "window_index" else seconds
+
+
+# Verdicts d'une colonne « vérif manuelle ». Tout ce qui n'est reconnu ni ici ni comme
+# commentaire est signalé ligne par ligne : un « oui » pris pour un négatif passerait inaperçu.
+VERDICT_YES = re.compile(
+    r"^(o|oui|y|yes|v|vrai|true|ok|x|1|1\.0|confirme[e]?|valide[e]?|certain[e]?|"
+    r"present[e]?|avere[e]?|blanci)$"
+)
+VERDICT_NO = re.compile(
+    r"^(n|non|no|f|faux|false|ko|0|0\.0|rejete[e]?|invalide|absent[e]?|"
+    r"pas blanci|non blanci|erreur|faux positif)$"
+)
+
+
+# Labels qui ne reconnaissent rien de précis : ils ne valent pas verdict.
+VAGUE_LABELS = ("other", "uncertain")
+
+
+def parse_verdict(value: Any) -> bool | None:
+    """True / False depuis une colonne de vérification, None si la valeur n'est pas concluante."""
+    if value is None or (not isinstance(value, str) and pd.isna(value)):
+        return None
+    if isinstance(value, bool | np.bool_):
+        return bool(value)
+    if isinstance(value, int | float | np.number) and float(value) in (0.0, 1.0):
+        return bool(value)
+    norm = normalize(value)
+    if VERDICT_YES.match(norm):
+        return True
+    if VERDICT_NO.match(norm):
+        return False
+    if re.search(r"\bblanci\b", norm):  # « blanci lointain », « blanci malgré la pluie »
+        return not re.search(r"\b(pas|non|aucun|sans)\b", norm)
+    return None
 
 
 def file_key(name: str) -> str:
@@ -281,6 +351,17 @@ class LabelImportReport:
             "  qualité : " + ", ".join(f"{k}={v}" for k, v in sorted(qualities.items())),
             "  espèces : " + ", ".join(f"{k}={v}" for k, v in species.most_common()),
         ]
+        scores = [
+            r["conditions"]["previous_model_score"]
+            for r in self.rows
+            if "previous_model_score" in r["conditions"]
+        ]
+        if scores:
+            lines.append(
+                f"  score de l'ancien modèle : {len(scores)} lignes, "
+                f"min {min(scores):.3f}, médiane {sorted(scores)[len(scores) // 2]:.3f}, "
+                f"max {max(scores):.3f}"
+            )
         if other:
             lines.append(f"  {len(other)} commentaires non reconnus (label other) :")
             lines += [f"    - {c!r}" for c in sorted(set(other))]
@@ -319,8 +400,11 @@ def import_label_file(
             f"{path.name} : colonnes {missing} introuvables parmi {list(df.columns)} ; "
             "compléter labels.import.columns dans la config"
         )
-    if kind is None and "label" not in columns:
-        raise ValueError(f"{path.name} : pas de colonne label, préciser --kind positive|negative")
+    if kind is None and not ({"verdict", "label"} & set(columns)):
+        raise ValueError(
+            f"{path.name} : ni colonne de vérification ni colonne label parmi {list(df.columns)} ; "
+            "préciser --kind positive|negative, ou compléter labels.import.columns"
+        )
 
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     report.already_imported = (
@@ -329,16 +413,47 @@ def import_label_file(
     recordings = _resolve_recordings(con)
     window_s = float(icfg["window_s"])
 
+    # Colonne qui porte le verdict : « vérif manuelle » de préférence, sinon « label ».
+    verdict_column = columns.get("verdict") or columns.get("label")
+
     for i, record in enumerate(df.to_dict("records"), start=2):  # ligne 1 = en-tête
         row_kind = kind
+        verdict_text = record.get(verdict_column) if verdict_column else None
         if row_kind is None:
-            value = normalize(record[columns["label"]])
-            positive = "blanci" in value and not re.search(r"\bpas\b", value)
-            row_kind = "positive" if positive else "negative"
-        quality = _normalize_quality(record.get(columns.get("quality", ""), None))
-        parsed = parse_comment(record.get(columns.get("comment", ""), None), row_kind, quality)
+            verdict = parse_verdict(verdict_text)
+            if verdict is None:
+                # Pas un oui/non. La cellule nomme-t-elle un faux ami reconnu ? Si oui, c'est
+                # un négatif : l'expert a écrit ce qu'il a entendu à la place d'A. blanci.
+                # Sinon (« à revoir », « ? »), on ne devine pas : la ligne est signalée.
+                probe = parse_comment(verdict_text, "negative")
+                if probe.label in VAGUE_LABELS:
+                    report.unresolved.append(
+                        (i, f"vérification illisible : {verdict_text!r} (utiliser --kind)")
+                    )
+                    continue
+                verdict = False
+            row_kind = "positive" if verdict else "negative"
 
-        matches = recordings.get(file_key(record[columns["file"]]), [])
+        quality = _normalize_quality(record.get(columns.get("quality", ""), None))
+        # Le texte de la vérification sert aussi de commentaire : c'est souvent lui qui
+        # nomme le faux ami (« fourmilier tacheté ») ou la qualité (« lointain »).
+        comment = record.get(columns.get("comment", ""), None)
+        if (comment is None or pd.isna(comment)) and isinstance(verdict_text, str):
+            comment = verdict_text
+        parsed = parse_comment(comment, row_kind, quality)
+        if "score" in columns:
+            score = record[columns["score"]]
+            if not pd.isna(score):
+                parsed.conditions["previous_model_score"] = float(score)
+
+        referenced = str(record[columns["file"]])
+        matches = recordings.get(file_key(referenced), [])
+        if len(matches) > 1:
+            # Même nom en .wav et en .flac : on préfère l'extension citée, si elle existe.
+            suffix = Path(referenced.replace("\\", "/")).suffix.lower()
+            same_suffix = [m for m in matches if Path(m["path"]).suffix.lower() == suffix]
+            if same_suffix:
+                matches = same_suffix
         for key in ("site", "mic_id"):
             if key in columns and len(matches) > 1:
                 wanted = normalize(record[columns[key]])

@@ -141,3 +141,37 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
 27. **`embedded_training_set` dans `dataset.py`** : point d'entrée commun du benchmark et de
     l'entraînement. Les deux doivent voir exactement les mêmes labels et les mêmes négatifs
     appariés, sinon le benchmark ne prédit pas ce que fera la tête.
+
+## 2026-09-21 — Format réel des données (Léonard)
+
+28. **Format confirmé.** Enregistrements de 2 min sur disque externe, nommés
+    `2la04530_20260106_103000` : micro `2LA04530`, 6 janvier 2026 à 10 h 30 locales. Les
+    fichiers sont des **`.wav`**, mais l'Excel les cite en **`.flac`**. L'inventaire accepte
+    désormais les deux (`audio.suffixes`), et l'appariement Excel ↔ disque se fait sur le nom
+    **sans extension** : une citation `.flac` retrouve un `.wav`. Si les deux formats
+    existent pour un même nom, l'extension citée départage ; sans extension citée, la ligne
+    est signalée comme ambiguë plutôt que devinée.
+
+29. **Le micro vient du préfixe du nom de fichier** quand l'arborescence n'a pas de dossier
+    micro. Il est conservé tel quel (`2la04530`, minuscules) ; les comparaisons avec l'Excel
+    passent par `normalize`, la casse n'a donc pas d'importance.
+
+30. **Colonne « vérif manuelle » = verdict.** `parse_verdict` lit les oui/non (et variantes
+    `o`, `x`, `ok`, `vrai`, `1`, `True`, `confirmé`…) et les réponses rédigées mentionnant
+    *blanci*. Si la cellule nomme un faux ami reconnu (« fourmilier tacheté »), l'import en
+    tire un négatif **et** l'espèce. Si elle ne dit rien de reconnaissable (« à revoir »,
+    « ? »), la ligne est signalée : l'ancien code l'aurait rangée en négatif sans un mot, ce
+    qui aurait transformé 345 positifs en 345 négatifs silencieusement.
+
+31. **Score de l'ancien prestataire conservé** dans `labels.conditions.previous_model_score`,
+    et résumé (min / médiane / max) par `--dry-run`. C'est le repère chiffré du §6 : il
+    permettra plus tard de mesurer le rappel relatif au détecteur Biophonia, et de voir quels
+    positifs il ne remontait qu'à score médiocre (§5, conséquence 2).
+
+32. **Détection des colonnes en deux passes** : égalité exacte d'abord, puis libellé composé
+    par mots entiers (« Nom de l'enregistrement » → `fichier`). Une colonne ne sert qu'à un
+    seul champ. La comparaison par mots évite qu'un candidat `time` capture `timecode`.
+
+33. **Timecode robuste aux formats Excel** : nombre, « mm:ss », « hh:mm:ss », `datetime.time`,
+    `timedelta` et `Timestamp`. Excel rend une cellule horaire différemment selon son format
+    d'affichage, et l'erreur serait silencieuse.

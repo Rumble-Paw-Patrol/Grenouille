@@ -1,7 +1,8 @@
-"""Inventaire des enregistrements : scan récursif, en-têtes WAV, nommage Song Meter, QC.
+"""Inventaire des enregistrements : scan récursif, en-têtes, nommage Song Meter, QC.
 
-Arborescence attendue : <racine>/<jeu>/<site>/<micro>/**/*.wav. Si le dossier micro manque,
-le micro est pris dans l'en-tête GUANO (numéro de série) ou le préfixe du nom de fichier.
+Arborescence attendue : <racine>/<jeu>/<site>/<micro>/**/*.{wav,flac}. Si le dossier micro
+manque, le micro est pris dans l'en-tête GUANO (numéro de série) ou le préfixe du nom de
+fichier — pour `2la04530_20260106_103000.flac`, le micro est `2la04530`.
 La racine audio n'est jamais modifiée.
 """
 
@@ -12,7 +13,7 @@ import io
 import json
 import re
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -24,8 +25,12 @@ from blanci.audio import load_audio
 from blanci.db import recording_id_for
 from blanci.qc import qc_flags, qc_indices
 
-# <préfixe>_<AAAAMMJJ>_<HHMMSS>[_suffixe].wav — convention Wildlife Acoustics.
+# <préfixe>_<AAAAMMJJ>_<HHMMSS>[_suffixe] — convention Wildlife Acoustics.
 SONGMETER_NAME = re.compile(r"^(?P<prefix>.+?)_(?P<date>\d{8})_(?P<time>\d{6})(?:_.*)?$")
+
+# Formats lus par libsndfile et utilisés sur le terrain. Les Song Meter Mini 2 écrivent en
+# WAV ou en FLAC selon leur réglage de compression ; les deux se lisent de la même façon.
+AUDIO_SUFFIXES = (".wav", ".flac")
 
 
 @dataclass
@@ -35,18 +40,22 @@ class IngestReport:
     errors: list[tuple[str, str]] = field(default_factory=list)
 
 
-def iter_wav_files(directory: Path) -> Iterator[Path]:
-    """Fichiers WAV triés.
+def iter_audio_files(directory: Path, suffixes: Sequence[str] = AUDIO_SUFFIXES) -> Iterator[Path]:
+    """Fichiers audio triés.
 
     Ignore les fichiers cachés, dont les `._*` que macOS sème sur un disque externe.
     """
+    wanted = {s.lower() for s in suffixes}
     for path in sorted(directory.rglob("*")):
-        if path.is_file() and path.suffix.lower() == ".wav" and not path.name.startswith("."):
+        if path.is_file() and path.suffix.lower() in wanted and not path.name.startswith("."):
             yield path
 
 
 def read_guano(source: Path | BinaryIO) -> dict[str, str]:
-    """Métadonnées GUANO (bloc RIFF `guan`) écrites par les Song Meter ; {} si absentes."""
+    """Métadonnées GUANO (bloc RIFF `guan`) écrites par les Song Meter ; {} si absentes.
+
+    Propre au WAV : un FLAC renvoie {} et l'horodatage vient alors du nom de fichier.
+    """
     if isinstance(source, Path):
         with open(source, "rb") as f:
             return read_guano(f)
@@ -165,7 +174,8 @@ def ingest(
         f"ON CONFLICT(recording_id) DO UPDATE SET {updates}"
     )
 
-    for n, path in enumerate(iter_wav_files(directory), start=1):
+    suffixes = cfg.get("audio", {}).get("suffixes", AUDIO_SUFFIXES)
+    for n, path in enumerate(iter_audio_files(directory, suffixes), start=1):
         rel = path.relative_to(root).as_posix()
         if rel in known and not force:
             report.skipped += 1

@@ -10,8 +10,12 @@ paths:
   frozen_test: data/frozen_test        # jeu gelé, lecture seule
   reports: data/reports
 
+audio:
+  # Formats inventoriés (lus par libsndfile). Les Song Meter écrivent en WAV ou en FLAC.
+  suffixes: [".wav", ".flac"]
+
 recorder:
-  # Utilisé seulement si l'en-tête GUANO du WAV est absent ou sans fuseau.
+  # Utilisé seulement si l'en-tête GUANO du WAV est absent ou sans fuseau (toujours en FLAC).
   # Heure des noms de fichiers Song Meter = heure locale réglée sur l'enregistreur. [À VÉRIFIER]
   filename_utc_offset_h: -3        # Guyane : UTC−3, pas d'heure d'été
 
@@ -44,9 +48,14 @@ labels:
     # À compléter au premier fichier réel si une colonne n'est pas détectée.
     columns:
       file: [fichier, file, filename, nom_fichier, nom, enregistrement, recording, audio]
-      offset_s: [debut, start, offset, offset_s, start_s, debut_s, temps, time, begin]
+      offset_s: [timecode, debut, start, offset, offset_s, start_s, debut_s, temps, time, begin]
       comment: [commentaire, commentaires, comment, comments, remarque, remarques, notes]
+      # Colonne qui tranche : « vérif manuelle » du fichier reçu. Son texte sert aussi de
+      # commentaire (il nomme souvent le faux ami ou la qualité).
+      verdict: [verif_manuelle, verif, verification, validation, valide, confirme, controle,
+                verif_humaine, verifie]
       label: [label, etiquette, classe, class]
+      score: [score, score_modele, score_biophonia, confiance, confidence, proba, probabilite]
       quality: [qualite, quality]
       site: [site]
       mic_id: [micro, mic, mic_id, capteur, enregistreur]
