@@ -56,7 +56,9 @@ def fit_fusion(
     _check(head_oof, y, columns)
     X = _design(head_oof.values, features, columns)
     scaler = StandardScaler().fit(X)
-    model = LogisticRegression(C=C, class_weight="balanced", max_iter=2000).fit(scaler.transform(X), y)
+    model = LogisticRegression(C=C, class_weight="balanced", max_iter=2000).fit(
+        scaler.transform(X), y
+    )
     return Fusion(columns, scaler, model)
 
 

@@ -86,8 +86,8 @@ def test_import_labels_is_atomic_idempotent_and_append_only(raw, cfg, tmp_path):
     report = import_label_file(con, positives, cfg, kind="positive")
     assert report.inserted == 2 and not report.unresolved
     labels = con.execute(
-        "SELECT l.label, l.quality, w.offset_s, w.dur_s FROM labels l JOIN windows w USING (window_id) "
-        "ORDER BY w.offset_s"
+        "SELECT l.label, l.quality, w.offset_s, w.dur_s FROM labels l "
+        "JOIN windows w USING (window_id) ORDER BY w.offset_s"
     ).fetchall()
     assert [tuple(r) for r in labels] == [("blanci", "C", 36.0, 3.0), ("blanci", "A", 90.0, 3.0)]
 
@@ -114,7 +114,9 @@ def test_import_labels_is_atomic_idempotent_and_append_only(raw, cfg, tmp_path):
 
 def test_cli_end_to_end(raw, cfg, tmp_path):
     config = tmp_path / "config.yaml"
-    config.write_text(yaml.safe_dump({"paths": {**cfg["paths"], "raw": str(raw)}}), encoding="utf-8")
+    config.write_text(
+        yaml.safe_dump({"paths": {**cfg["paths"], "raw": str(raw)}}), encoding="utf-8"
+    )
     positives = write_csv(
         tmp_path / "positifs.csv",
         ["fichier;debut;commentaire", "SMM01_20260212_070000.wav;117;chant lointain"],
@@ -124,7 +126,9 @@ def test_cli_end_to_end(raw, cfg, tmp_path):
     assert result.exit_code == 0, result.output
     assert "4 ajoutés" in result.output and "1 erreurs" in result.output
 
-    result = runner.invoke(app, ["-c", str(config), "import-labels", str(positives), "--kind", "positive"])
+    result = runner.invoke(
+        app, ["-c", str(config), "import-labels", str(positives), "--kind", "positive"]
+    )
     assert result.exit_code == 0, result.output
     assert "1 labels ajoutés" in result.output
 

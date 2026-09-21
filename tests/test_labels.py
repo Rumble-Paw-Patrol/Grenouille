@@ -102,8 +102,13 @@ def test_missing_comment_is_other_for_negatives():
 
 @pytest.mark.parametrize(
     "value, unit, expected",
-    [(36, "seconds", 36.0), ("1,5", "seconds", 1.5), ("01:30", "seconds", 90.0),
-     ("0:01:30.5", "seconds", 90.5), (12, "window_index", 36.0)],
+    [
+        (36, "seconds", 36.0),
+        ("1,5", "seconds", 1.5),
+        ("01:30", "seconds", 90.0),
+        ("0:01:30.5", "seconds", 90.5),
+        (12, "window_index", 36.0),
+    ],
 )
 def test_parse_offset(value, unit, expected):
     assert parse_offset(value, unit, 3.0) == expected
@@ -113,9 +118,18 @@ def test_detect_columns_ignores_case_accents_and_units():
     df = pd.DataFrame(columns=["Fichier", "Début (s)", "Commentaires", "Qualité"])
     found = detect_columns(
         df,
-        {"file": ["fichier"], "offset_s": ["debut"], "comment": ["commentaire", "commentaires"],
-         "quality": ["qualite"], "site": ["site"]},
+        {
+            "file": ["fichier"],
+            "offset_s": ["debut"],
+            "comment": ["commentaire", "commentaires"],
+            "quality": ["qualite"],
+            "site": ["site"],
+        },
     )
-    assert found == {"file": "Fichier", "offset_s": "Début (s)", "comment": "Commentaires",
-                     "quality": "Qualité"}
+    assert found == {
+        "file": "Fichier",
+        "offset_s": "Début (s)",
+        "comment": "Commentaires",
+        "quality": "Qualité",
+    }
     assert column_key("Nom du fichier") == "nom_du_fichier"

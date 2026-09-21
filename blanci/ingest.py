@@ -36,7 +36,10 @@ class IngestReport:
 
 
 def iter_wav_files(directory: Path) -> Iterator[Path]:
-    """Fichiers WAV triés ; ignore les fichiers cachés (dont les `._*` de macOS sur disque externe)."""
+    """Fichiers WAV triés.
+
+    Ignore les fichiers cachés, dont les `._*` que macOS sème sur un disque externe.
+    """
     for path in sorted(directory.rglob("*")):
         if path.is_file() and path.suffix.lower() == ".wav" and not path.name.startswith("."):
             yield path

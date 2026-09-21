@@ -22,7 +22,9 @@ def test_same_rate_is_identity():
     np.testing.assert_array_equal(x, y)
 
 
-@pytest.mark.parametrize("sr, target", [(48000, 32000), (32000, 16000), (16000, 32000), (44100, 32000)])
+@pytest.mark.parametrize(
+    "sr, target", [(48000, 32000), (32000, 16000), (16000, 32000), (44100, 32000)]
+)
 def test_length_dtype_and_frequency_preserved(sr, target):
     y = resample(tone(4750, sr), sr, target)
     assert y.dtype == np.float32

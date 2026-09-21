@@ -26,8 +26,9 @@ class Encoder(Protocol):
     def embed(self, wav: np.ndarray, sr: int) -> np.ndarray:  # (n_windows, dim)
         ...
 
-    def embed_tokens(self, wav: np.ndarray, sr: int) -> np.ndarray | None:
-        ...  # (n_windows, n_tokens, dim)
+    def embed_tokens(
+        self, wav: np.ndarray, sr: int
+    ) -> np.ndarray | None: ...  # (n_windows, n_tokens, dim)
 
 
 def encoder_id(encoder: Encoder) -> str:
@@ -73,5 +74,8 @@ class BaseEncoder:
             return None
         x = self._prepare(wav, sr)
         return np.concatenate(
-            [self._forward_tokens(x[i : i + self.batch_size]) for i in range(0, len(x), self.batch_size)]
+            [
+                self._forward_tokens(x[i : i + self.batch_size])
+                for i in range(0, len(x), self.batch_size)
+            ]
         )

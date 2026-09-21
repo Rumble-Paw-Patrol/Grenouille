@@ -53,3 +53,42 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     Guyane). La feuille de route écrit *A. hahneli* à la suite d'*Allobates femoralis*, ce qui
     suggère *Allobates*. [À VÉRIFIER] avec le tuteur. « piau » interprété comme Piauhau hurleur
     (*Lipaugus vociferans*), [À VÉRIFIER].
+
+## 2026-09-21 — Environnement, tests des modules M1
+
+11. **Modules hors de l'arborescence du §13.2** : `dataset.py` (transfert des annotations vers
+    une grille d'encodeur, négatifs appariés, assemblage du jeu d'apprentissage) et `embed.py`
+    (extraction reprenable, remplissage de `windows`, mesure du débit). Le §13.2 les laisse
+    implicites entre `store.py` et `head.py` ; les isoler évite de gonfler `cli.py` et rend
+    l'apprentissage testable sans audio. `benchmark.py` et `service.py` suivront de même.
+
+12. **`Encoder.embed(wav, sr)` reçoit un lot de fenêtres**, de forme (n_fenêtres, n_échantillons)
+    à la fréquence d'échantillonnage native de l'enregistrement, et non un signal continu. Le
+    §13.4 écrit `embed(self, wav, sr) -> (n_windows, dim)` sans dire qui découpe. Découper dans
+    `grid.py` puis passer le lot garde une grille unique, indépendante de l'encodeur (§4), et
+    permet le traitement par lots. Le rééchantillonnage et le complément de zéros sont faits
+    dans `BaseEncoder._prepare`, jamais chez l'appelant (§13.7).
+
+13. **Grille d'un encodeur = sa fenêtre × `grid_hop_ratio` (0,5)**. Un encodeur à fenêtre de 3 s
+    est donc échantillonné tous les 1,5 s, un encodeur à 5 s tous les 2,5 s. Le §1 impose un pas
+    ≤ la moitié de la fenêtre pour qu'aucune note de 0,09 s ne soit coupée ; un ratio unique
+    évite d'avoir à régler le pas encodeur par encodeur.
+
+14. **Score d'enregistrement pour l'AP = maximum des fenêtres** (`to_recordings(how="max")`),
+    avec `top3` en variante. Le §1 définit le score d'un enregistrement comme la *proportion* de
+    fenêtres positives, mais une proportion suppose un seuil déjà fixé : circulaire pour une
+    métrique de classement. Le maximum s'en passe. La proportion reste la sortie de
+    `aggregate_recording`, pour la décision, pas pour l'AP.
+
+15. **Négatifs appariés présumés, jamais écrits dans `labels`.** `paired_negatives` marque ses
+    fenêtres `background_presumed` avec une colonne `presumed`. Personne ne les a écoutées : en
+    saison et à l'heure de pic, une partie contient sans doute *A. blanci*. Les inscrire dans
+    `labels` polluerait le jeu annoté et fausserait tout comptage de positifs. Le bruit
+    d'étiquette est identique pour tous les encodeurs, donc sans effet sur leur comparaison (§2).
+
+16. **`recall_at_precision` renvoie le seuil le plus élevé à rappel égal.** Il renvoyait le plus
+    bas : même rappel, mais davantage de faux positifs dans la file de vérification. Le §6
+    demande « le seuil le plus élevé gardant précision ≥ 0,1 ». Corrigé, avec test.
+
+17. **Ruff ne formate pas le Markdown** (`extend-exclude = ["*.md"]`). `ruff format` reformatait
+    les blocs de code Python du glossaire, qui est un document manuscrit.

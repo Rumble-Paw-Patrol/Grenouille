@@ -71,14 +71,16 @@ class OnnxEncoder(BaseEncoder):
         )
         self._manifest = manifest
         self.name, self.version = manifest.name, manifest.version
-        self.sample_rate, self.window_s, self.dim = manifest.sample_rate, manifest.window_s, manifest.dim
+        self.sample_rate, self.window_s, self.dim = (
+            manifest.sample_rate,
+            manifest.window_s,
+            manifest.dim,
+        )
         self.has_tokens = manifest.tokens_output_name is not None
         self.batch_size = batch_size
 
     def _forward(self, batch: np.ndarray) -> np.ndarray:
-        (out,) = self._session.run(
-            [self._manifest.output_name], {self._manifest.input_name: batch}
-        )
+        (out,) = self._session.run([self._manifest.output_name], {self._manifest.input_name: batch})
         return out
 
     def _forward_tokens(self, batch: np.ndarray) -> np.ndarray | None:

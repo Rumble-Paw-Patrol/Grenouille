@@ -50,6 +50,15 @@ inventorié.
 
 | Jalon | État |
 |---|---|
-| M0 dépôt, config, `ingest`, `import-labels`, tests `grid` / `resample` / `search` | code et tests écrits ; acceptation à faire sur les données réelles |
-| M1 `embed` via bacpipe, `benchmark` en plis par micro | — |
-# test
+| M0 dépôt, config, `ingest`, `import-labels`, tests `grid` / `resample` / `search` | code et tests écrits ; **acceptation à faire sur les données réelles** |
+| M1 `embed` via bacpipe, `benchmark` en plis par micro | modules écrits et testés ; adaptateur bacpipe non validé, `benchmark.py` à écrire |
+| M2 `head`, `search`, `queue`, prototype Streamlit | `head`, `active`, `dataset` écrits et testés ; `service.py` et la GUI à faire |
+| M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | modules écrits et testés ; non branchés sur la CLI |
+
+244 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+`encoders/bacpipe_encoder.py`, `encoders/onnx_encoder.py` et `encoders/export.py`, qui
+demandent respectivement bacpipe (groupe `research`) et un modèle exporté.
+
+**Non validé sur données réelles** : l'adaptateur bacpipe devine l'API de la bibliothèque
+(noms de modules, `SAMPLE_RATE`, `preprocess()`) ; le format des 345 + 158 annotations est
+inconnu, l'importeur suppose un tableau CSV ou Excel.

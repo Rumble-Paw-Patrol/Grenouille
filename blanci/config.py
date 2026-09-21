@@ -1,4 +1,7 @@
-"""Chargement de la configuration YAML (config/default.yaml, surchargée par un fichier utilisateur)."""
+"""Chargement de la configuration YAML.
+
+config/default.yaml, surchargée par un fichier utilisateur passé à `--config`.
+"""
 
 from __future__ import annotations
 

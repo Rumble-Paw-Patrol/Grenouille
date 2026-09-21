@@ -39,17 +39,23 @@ def ingest(
     dataset: Annotated[str, typer.Option(help="Jeu : sous-dossier de la racine (2023, 2026).")],
     root: Annotated[Path | None, typer.Argument(help="Racine audio (défaut : paths.raw).")] = None,
     qc: Annotated[bool, typer.Option(help="Calculer les indices de contrôle qualité.")] = True,
-    hash_files: Annotated[bool, typer.Option("--hash/--no-hash", help="SHA-256 du contenu.")] = True,
+    hash_files: Annotated[
+        bool, typer.Option("--hash/--no-hash", help="SHA-256 du contenu.")
+    ] = True,
     force: Annotated[bool, typer.Option(help="Réinventorier les fichiers déjà connus.")] = False,
 ) -> None:
     """Inventaire des enregistrements + QC → table recordings."""
     cfg = _cfg(ctx)
     root = root or config_path(cfg, "raw")
     if root.resolve() != config_path(cfg, "raw").resolve():
-        typer.echo(f"attention : racine {root} ≠ paths.raw ; les chemins stockés sont relatifs à {root}")
+        typer.echo(
+            f"attention : racine {root} ≠ paths.raw ; les chemins stockés sont relatifs à {root}"
+        )
     con = connect(config_path(cfg, "db"))
     report = run_ingest(con, root, dataset, cfg, run_qc=qc, hash_file=hash_files, force=force)
-    typer.echo(f"{report.added} ajoutés, {report.skipped} déjà inventoriés, {len(report.errors)} erreurs")
+    typer.echo(
+        f"{report.added} ajoutés, {report.skipped} déjà inventoriés, {len(report.errors)} erreurs"
+    )
     if report.errors:
         out = config_path(cfg, "reports") / f"ingest_errors_{dataset}.csv"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -63,7 +69,8 @@ def import_labels(
     ctx: typer.Context,
     files: Annotated[list[Path], typer.Argument(help="Fichiers CSV ou Excel reçus.")],
     kind: Annotated[
-        str | None, typer.Option(help="positive | negative, si le fichier n'a pas de colonne label.")
+        str | None,
+        typer.Option(help="positive | negative, si le fichier n'a pas de colonne label."),
     ] = None,
     annotator: Annotated[str | None, typer.Option(help="Défaut : labels.import.annotator.")] = None,
     dry_run: Annotated[bool, typer.Option(help="Analyser sans rien écrire.")] = False,
@@ -109,7 +116,9 @@ def check_grid(ctx: typer.Context) -> None:
             r["window_id"]
             for r in rows
             if not containing_windows(
-                r["offset_s"], r["offset_s"] + r["dur_s"], window_grid(r["duration_s"], window_s, hop_s)
+                r["offset_s"],
+                r["offset_s"] + r["dur_s"],
+                window_grid(r["duration_s"], window_s, hop_s),
             )
         ]
         typer.echo(
@@ -131,17 +140,23 @@ def status(ctx: typer.Context) -> None:
                   SUM(duration_s) / 3600.0 hours, MIN(sample_rate) sr_min, MAX(sample_rate) sr_max
            FROM recordings GROUP BY dataset, site ORDER BY dataset, site"""
     ):
-        sr = f"{r['sr_min']} Hz" if r["sr_min"] == r["sr_max"] else f"{r['sr_min']}–{r['sr_max']} Hz"
+        sr = (
+            f"{r['sr_min']} Hz" if r["sr_min"] == r["sr_max"] else f"{r['sr_min']}–{r['sr_max']} Hz"
+        )
         typer.echo(
-            f"  {r['dataset']} / {r['site']} : {r['n']}, {r['mics']} micros, {r['hours']:.1f} h, {sr}"
+            f"  {r['dataset']} / {r['site']} : {r['n']}, {r['mics']} micros, "
+            f"{r['hours']:.1f} h, {sr}"
         )
     flags: Counter[str] = Counter()
     for (qc,) in con.execute("SELECT qc_flags FROM recordings WHERE qc_flags IS NOT NULL"):
         flags.update(k for k, v in json.loads(qc).items() if v is True)
     if flags:
-        typer.echo("Drapeaux QC (seuils provisoires) : " + ", ".join(f"{k}={v}" for k, v in flags.items()))
+        typer.echo(
+            "Drapeaux QC (seuils provisoires) : " + ", ".join(f"{k}={v}" for k, v in flags.items())
+        )
     typer.echo("Labels :")
     for r in con.execute(
-        "SELECT source, label, COUNT(*) n FROM labels GROUP BY source, label ORDER BY source, n DESC"
+        "SELECT source, label, COUNT(*) n FROM labels "
+        "GROUP BY source, label ORDER BY source, n DESC"
     ):
         typer.echo(f"  {r['source']} / {r['label']} : {r['n']}")

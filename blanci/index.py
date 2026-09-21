@@ -57,7 +57,16 @@ def search(
             part["query"] = best_query[keep]
             candidates.append(part)
 
-    columns = ["rank", "window_id", "recording_id", "offset_s", "score", "sim_pos", "sim_neg", "query"]
+    columns = [
+        "rank",
+        "window_id",
+        "recording_id",
+        "offset_s",
+        "score",
+        "sim_pos",
+        "sim_neg",
+        "query",
+    ]
     if not candidates:
         return pd.DataFrame(columns=columns)
     out = pd.concat(candidates, ignore_index=True)

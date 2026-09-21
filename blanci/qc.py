@@ -19,7 +19,9 @@ def qc_indices(wav: np.ndarray, sr: int) -> dict[str, float]:
     total = psd[freqs >= 100].sum()
     hf = psd[freqs >= 2000].sum()
     mid = psd[(freqs >= 1000) & (freqs <= min(10000, sr / 2))]
-    flatness = float(np.exp(np.mean(np.log(mid + 1e-20))) / (mid.mean() + 1e-20)) if len(mid) else 0.0
+    flatness = (
+        float(np.exp(np.mean(np.log(mid + 1e-20))) / (mid.mean() + 1e-20)) if len(mid) else 0.0
+    )
     return {
         "rms_dbfs": 20 * float(np.log10(max(rms, 1e-10))),
         "peak": float(np.abs(wav).max()) if len(wav) else 0.0,

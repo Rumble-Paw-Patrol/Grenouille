@@ -37,7 +37,7 @@ app = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.11,<0.12"]
+requires = ["uv_build>=0.11,<0.13"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
@@ -47,6 +47,9 @@ module-root = ""
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Ruff reformate les blocs de code Python des fichiers Markdown : la documentation est
+# écrite à la main, elle ne suit pas le style du dépôt.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

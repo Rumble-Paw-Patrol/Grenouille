@@ -7,7 +7,7 @@ aléatoire est une erreur. Métriques rejetées : exactitude, F1 au seuil 0,5, k
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -38,10 +38,13 @@ def average_precision(y: np.ndarray, scores: np.ndarray) -> float:
     return float(average_precision_score(y, scores))
 
 
-def recall_at_precision(y: np.ndarray, scores: np.ndarray, min_precision: float) -> tuple[float, float]:
+def recall_at_precision(
+    y: np.ndarray, scores: np.ndarray, min_precision: float
+) -> tuple[float, float]:
     """(rappel, seuil) : rappel maximal parmi les seuils gardant la précision ≥ min_precision.
 
-    Rappel 0 et seuil +inf si aucun seuil n'atteint la précision plancher.
+    À rappel égal, le seuil le plus élevé (§6) : même rappel, moins de candidats dans la file
+    de vérification. Rappel 0 et seuil +inf si aucun seuil n'atteint la précision plancher.
     """
     y = np.asarray(y)
     if y.sum() == 0:
@@ -50,7 +53,9 @@ def recall_at_precision(y: np.ndarray, scores: np.ndarray, min_precision: float)
     ok = precision[:-1] >= min_precision  # le dernier point (rappel 0) n'a pas de seuil
     if not ok.any():
         return 0.0, float("inf")
-    best = np.flatnonzero(ok)[np.argmax(recall[:-1][ok])]
+    candidates = np.flatnonzero(ok)
+    best_recall = recall[:-1][candidates].max()
+    best = candidates[recall[:-1][candidates] == best_recall][-1]  # dernier = seuil le plus haut
     return float(recall[best]), float(thresholds[best])
 
 
@@ -151,13 +156,20 @@ def evaluate(
     n_boot: int = 1000,
     seed: int = 0,
     how: str = "max",
-) -> dict[str, float]:
+) -> dict[str, Any]:
     """Métriques sur des scores hors-pli. `groups` = identifiant d'enregistrement de chaque
-    fenêtre : unité du bootstrap, et unité d'agrégation au niveau « recording »."""
+    fenêtre : unité du bootstrap, et unité d'agrégation au niveau « recording ».
+
+    Valeurs flottantes, sauf `level` (str) et `n_pos` / `n_neg` (int).
+    """
     scores, labels, groups = np.asarray(scores), np.asarray(labels), np.asarray(groups)
     if level == "recording":
         rec = to_recordings(scores, labels, groups, how)
-        scores, labels, groups = rec["score"].to_numpy(), rec["y"].to_numpy(), rec["recording_id"].to_numpy()
+        scores, labels, groups = (
+            rec["score"].to_numpy(),
+            rec["y"].to_numpy(),
+            rec["recording_id"].to_numpy(),
+        )
     ap = average_precision(labels, scores)
     lo, hi = bootstrap_ci(labels, scores, groups, average_precision, n_boot, seed)
     out = {

@@ -50,15 +50,19 @@ def rank_points(decisions: pd.DataFrame) -> pd.DataFrame:
     df["is_pos"] = df["status"].isin(["positive", "verified_positive"])
     df["is_flag"] = df["status"].isin(["positive", "suspect"])
     df["is_verified"] = df["status"] == "verified_positive"
-    points = df.groupby(["dataset", "site", "mic_id"]).agg(
-        n_recordings=("recording_id", "nunique"),
-        n_positive=("is_pos", "sum"),
-        n_suspect=("status", lambda s: int((s == "suspect").sum())),
-        n_verified=("is_verified", "sum"),
-        n_to_check=("is_flag", "sum"),
-        n_days_positive=("day", lambda d: d[df.loc[d.index, "is_pos"]].nunique()),
-        max_fraction=("fraction", "max"),
-    ).reset_index()
+    points = (
+        df.groupby(["dataset", "site", "mic_id"])
+        .agg(
+            n_recordings=("recording_id", "nunique"),
+            n_positive=("is_pos", "sum"),
+            n_suspect=("status", lambda s: int((s == "suspect").sum())),
+            n_verified=("is_verified", "sum"),
+            n_to_check=("is_flag", "sum"),
+            n_days_positive=("day", lambda d: d[df.loc[d.index, "is_pos"]].nunique()),
+            max_fraction=("fraction", "max"),
+        )
+        .reset_index()
+    )
     points["status"] = np.select(
         [points["n_verified"] > 0, points["n_to_check"] > 0],
         [POINT_CONFIRMED, POINT_TO_CHECK],

@@ -70,7 +70,9 @@ SPECIES_RULES = (
     SpeciesRule(r"psittacide", "bird", "Psittacidae"),
     SpeciesRule(r"pic a cou rouge", "bird", "Pic à cou rouge"),
     SpeciesRule(r"\bmartinet\b", "bird", "Martinet"),
-    SpeciesRule(r"\bpiau\b", "bird", "Piauhau hurleur"),  # « piau » : Lipaugus vociferans ? [À VÉRIFIER]
+    SpeciesRule(
+        r"\bpiau\b", "bird", "Piauhau hurleur"
+    ),  # « piau » : Lipaugus vociferans ? [À VÉRIFIER]
     SpeciesRule(r"(?:adenomera |a\. ?)?andreae", "amphibian", "Adenomera andreae"),
     SpeciesRule(
         r"(?:hyalinobatrachium |h\. ?)?cappellei",
@@ -93,7 +95,8 @@ SPECIES_RULES = (
     SpeciesRule(
         r"hyalinobatrachium", "amphibian", "Hyalinobatrachium sp.", "Hyalinobatrachium", True
     ),
-    # « A. hahneli » : Ameerega hahneli (Dendrobatidae) ; la feuille de route écrit Allobates. [À VÉRIFIER]
+    # « A. hahneli » : Ameerega hahneli (Dendrobatidae) ; la feuille de route
+    # écrit Allobates. [À VÉRIFIER]
     SpeciesRule(r"(?:ameerega |a\. ?)?hahneli", "amphibian", "Ameerega hahneli"),
     SpeciesRule(r"(?:allobates |a\.? ?)?femoralis", "amphibian", "Allobates femoralis"),
     SpeciesRule(r"(?:amazophrynella )?\bteko\b", "amphibian", "Amazophrynella teko"),
@@ -171,7 +174,13 @@ def parse_comment(comment: str | None, kind: Kind, quality: str | None = None) -
         if quality is None:
             quality = infer_quality(tags, species)
             conditions["quality_inferred"] = True
-        label = "blanci_chorus" if CHORUS.search(norm) else "blanci_solo" if SOLO.search(norm) else "blanci"
+        label = (
+            "blanci_chorus"
+            if CHORUS.search(norm)
+            else "blanci_solo"
+            if SOLO.search(norm)
+            else "blanci"
+        )
         return ParsedComment(label, TARGET_SPECIES, quality, conditions)
 
     if IN_BAG.search(norm):

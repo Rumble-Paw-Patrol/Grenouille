@@ -51,9 +51,11 @@ def prototype_scores(X: np.ndarray, w: np.ndarray, b: float) -> np.ndarray:
 
 def knn_scores(X_train: np.ndarray, y_train: np.ndarray, X: np.ndarray) -> np.ndarray:
     """Marge top-1 : similarité au positif le plus proche − au négatif le plus proche."""
+    y_train = np.asarray(y_train).astype(bool)
+    if not y_train.any() or y_train.all():
+        raise ValueError("la marge kNN exige des positifs et des négatifs dans l'entraînement")
     Xn, Tn = l2_normalize(X), l2_normalize(X_train)
     sims = Xn @ Tn.T
-    y_train = np.asarray(y_train).astype(bool)
     return sims[:, y_train].max(axis=1) - sims[:, ~y_train].max(axis=1)
 
 
@@ -71,7 +73,9 @@ class Head:
     meta: dict[str, Any] = field(default_factory=dict)
 
     def decision(self, X: np.ndarray) -> np.ndarray:
-        return ((np.asarray(X, dtype=np.float32) - self.mean) / self.scale) @ self.coef + self.intercept
+        return (
+            (np.asarray(X, dtype=np.float32) - self.mean) / self.scale
+        ) @ self.coef + self.intercept
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         return 1.0 / (1.0 + np.exp(-self.decision(X)))
@@ -94,9 +98,9 @@ class Head:
 
 def fit_logistic(X: np.ndarray, y: np.ndarray, C: float, seed: int = 0) -> Head:
     scaler = StandardScaler().fit(X)
-    model = LogisticRegression(
-        C=C, class_weight="balanced", max_iter=2000, random_state=seed
-    ).fit(scaler.transform(X), y)
+    model = LogisticRegression(C=C, class_weight="balanced", max_iter=2000, random_state=seed).fit(
+        scaler.transform(X), y
+    )
     scale = np.where(scaler.scale_ > 0, scaler.scale_, 1.0)
     return Head(
         scaler.mean_.astype(np.float32),
@@ -108,7 +112,12 @@ def fit_logistic(X: np.ndarray, y: np.ndarray, C: float, seed: int = 0) -> Head:
 
 
 def select_C(
-    X: np.ndarray, y: np.ndarray, groups: np.ndarray, C_grid: list[float], n_splits: int = 5, seed: int = 0
+    X: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    C_grid: list[float],
+    n_splits: int = 5,
+    seed: int = 0,
 ) -> tuple[float, dict[float, float]]:
     """C maximisant l'AP moyenne en validation groupée (plis internes)."""
     folds = grouped_folds(y, groups, n_splits, seed)
@@ -129,8 +138,12 @@ def train_head(
     X, y = np.asarray(X, dtype=np.float32), np.asarray(y).astype(int)
     C, cv_ap = select_C(X, y, np.asarray(groups), C_grid, seed=seed)
     head = fit_logistic(X, y, C, seed)
-    head.meta |= {"cv_ap": {str(k): v for k, v in cv_ap.items()}, "n_pos": int(y.sum()),
-                  "n_neg": int(len(y) - y.sum()), "seed": seed}
+    head.meta |= {
+        "cv_ap": {str(k): v for k, v in cv_ap.items()},
+        "n_pos": int(y.sum()),
+        "n_neg": int(len(y) - y.sum()),
+        "seed": seed,
+    }
     return head
 
 

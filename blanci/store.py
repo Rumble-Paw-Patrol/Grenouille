@@ -61,6 +61,10 @@ class EmbeddingStore:
         tmp.replace(path)  # écriture atomique : pas de partition à moitié écrite
         return path
 
+    def read_meta(self, path: Path) -> pd.DataFrame:
+        """Métadonnées seules : évite de charger les embeddings pour savoir ce qui est déjà fait."""
+        return pq.read_table(path, columns=META_COLUMNS).to_pandas()
+
     def read(self, path: Path) -> tuple[pd.DataFrame, np.ndarray]:
         table = pq.read_table(path)
         column = table.column("emb").combine_chunks()
@@ -76,7 +80,8 @@ class EmbeddingStore:
             raise ValueError(f"filtres inconnus : {sorted(unknown)} (attendus : {PARTITION_KEYS})")
         wanted = {key: _as_set(filters.get(key)) for key in PARTITION_KEYS}
         for path in sorted(self.directory.glob("*/*/*.parquet")):
-            values = dict(zip(PARTITION_KEYS, (path.parent.parent.name, path.parent.name, path.stem)))
+            parts = (path.parent.parent.name, path.parent.name, path.stem)
+            values = dict(zip(PARTITION_KEYS, parts, strict=True))
             if all(wanted[k] is None or values[k] in wanted[k] for k in PARTITION_KEYS):
                 yield path
 

@@ -1,4 +1,6 @@
-"""Jeux d'apprentissage et d'évaluation : labels courants, transfert vers la grille, négatifs appariés.
+"""Jeux d'apprentissage et d'évaluation.
+
+Labels courants, transfert vers la grille, négatifs appariés.
 
 - Transfert (DECISIONS n° 4) : une fenêtre de grille hérite du label d'une annotation si elle la
   contient (annotation courte, 3 s) ou si elle y est contenue (annotation d'enregistrement
@@ -48,7 +50,9 @@ def local_minutes(start_utc: pd.Series, utc_offset_h: float) -> pd.Series:
     return t.dt.hour * 60 + t.dt.minute
 
 
-def transfer_labels(annotations: pd.DataFrame, grid: pd.DataFrame, eps: float = 1e-6) -> pd.DataFrame:
+def transfer_labels(
+    annotations: pd.DataFrame, grid: pd.DataFrame, eps: float = 1e-6
+) -> pd.DataFrame:
     """Labels des fenêtres de grille. annotations : recording_id, offset_s, dur_s, label ;
     grid : window_id, recording_id, offset_s, dur_s (dur_s = fenêtre de l'encodeur)."""
     merged = grid.merge(annotations, on="recording_id", suffixes=("", "_ann"))
@@ -87,10 +91,17 @@ def paired_negatives(
         same_point = rec.index[(rec["point"] == rec.at[rid, "point"])]
         gap = (minutes[same_point] - minutes[rid]).abs()
         gap = np.minimum(gap, 24 * 60 - gap)
-        pool = [i for r in same_point[gap <= slot_tolerance_min] if r in by_recording
-                for i in by_recording[r] if i not in chosen]
+        pool = [
+            i
+            for r in same_point[gap <= slot_tolerance_min]
+            if r in by_recording
+            for i in by_recording[r]
+            if i not in chosen
+        ]
         if pool:
-            chosen.update(rng.choice(pool, size=min(per_positive, len(pool)), replace=False).tolist())
+            chosen.update(
+                rng.choice(pool, size=min(per_positive, len(pool)), replace=False).tolist()
+            )
     out = grid.loc[sorted(chosen), ["window_id", "recording_id", "offset_s"]].copy()
     out["label"], out["y"] = "background_presumed", 0
     return out.reset_index(drop=True)
@@ -117,7 +128,12 @@ def training_set(
         positives = set(labeled.loc[labeled["y"] == 1, "recording_id"])
         negatives = paired_negatives(
             grid[~grid["window_id"].isin(labeled["window_id"])],
-            recordings, positives, per_positive, slot_tolerance_min, utc_offset_h, seed,
+            recordings,
+            positives,
+            per_positive,
+            slot_tolerance_min,
+            utc_offset_h,
+            seed,
         )
         parts.append(negatives.assign(presumed=True))
     data = pd.concat(parts, ignore_index=True)
