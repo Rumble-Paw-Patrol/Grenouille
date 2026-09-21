@@ -124,6 +124,8 @@ def paired_bootstrap(
         diffs.append(metric(y[idx], a[idx]) - metric(y[idx], b[idx]))
     diffs = np.asarray(diffs, dtype=float)
     diffs = diffs[~np.isnan(diffs)]
+    if not len(diffs):  # métrique indéfinie partout (une seule classe) : pas de comparaison
+        return {"diff": float("nan"), "lo": float("nan"), "hi": float("nan"), "significant": False}
     lo, hi = np.quantile(diffs, [alpha / 2, 1 - alpha / 2])
     return {
         "diff": metric(y, a) - metric(y, b),

@@ -51,11 +51,11 @@ inventorié.
 | Jalon | État |
 |---|---|
 | M0 dépôt, config, `ingest`, `import-labels`, tests `grid` / `resample` / `search` | code et tests écrits ; **acceptation à faire sur les données réelles** |
-| M1 `embed` via bacpipe, `benchmark` en plis par micro | modules écrits et testés ; adaptateur bacpipe non validé, `benchmark.py` à écrire |
+| M1 `embed` via bacpipe, `benchmark` en plis par micro | `embed` et `benchmark` écrits et testés ; adaptateur bacpipe non validé, commandes CLI à brancher |
 | M2 `head`, `search`, `queue`, prototype Streamlit | `head`, `active`, `dataset` écrits et testés ; `service.py` et la GUI à faire |
 | M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | modules écrits et testés ; non branchés sur la CLI |
 
-244 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+267 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
 `encoders/bacpipe_encoder.py`, `encoders/onnx_encoder.py` et `encoders/export.py`, qui
 demandent respectivement bacpipe (groupe `research`) et un modèle exporté.
 

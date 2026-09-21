@@ -92,3 +92,21 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
 
 17. **Ruff ne formate pas le Markdown** (`extend-exclude = ["*.md"]`). `ruff format` reformatait
     les blocs de code Python du glossaire, qui est un document manuscrit.
+
+## 2026-09-21 — Benchmark (§2)
+
+18. **`knn_top1` exclut les fenêtres du même enregistrement** du voisinage. Deux fenêtres
+    voisines d'un même fichier de 2 min se chevauchent (pas = moitié de la fenêtre) et
+    partagent le fond sonore : le plus proche voisin d'un positif serait presque toujours la
+    fenêtre d'à côté, et la mesure vaudrait 1 pour tous les encodeurs. Le §2 demande un
+    « kNN top-1 » sans préciser le voisinage.
+
+19. **Comparaisons appariées au niveau enregistrement seulement.** Le §2 demande des
+    comparaisons appariées « sur les mêmes plis ». Deux encodeurs de fenêtres différentes
+    (3 s et 5 s) n'ont pas la même grille, donc pas les mêmes fenêtres ; ils voient en
+    revanche les mêmes enregistrements. `compare_encoders` apparie donc sur l'intersection
+    des enregistrements, avec la sonde logistique.
+
+20. **`paired_bootstrap` renvoie NaN plutôt que de planter** quand la métrique est indéfinie
+    sur tous les rééchantillonnages (une seule classe). Il appelait `np.quantile` sur un
+    tableau vide ; `bootstrap_ci` se protégeait déjà de ce cas.
