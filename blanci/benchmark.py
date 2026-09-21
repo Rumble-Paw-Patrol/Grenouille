@@ -13,14 +13,14 @@ départagent alors licence, vitesse et prise en main — colonnes renseignées �
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from blanci.dataset import training_set
+from blanci.dataset import embedded_training_set
+from blanci.db import encoder_params
 from blanci.evaluate import average_precision, evaluate, paired_bootstrap, to_recordings
 from blanci.head import oof_scores
 from blanci.index import l2_normalize
@@ -28,16 +28,6 @@ from blanci.store import EmbeddingStore
 
 PROBES = ("knn", "prototype", "logistic")
 LEVELS = ("window", "recording")
-
-
-def encoder_params(con: sqlite3.Connection, encoder_id: str) -> dict:
-    """Paramètres enregistrés par `embed` : f_e, fenêtre, pas, dimension, débit mesuré."""
-    row = con.execute(
-        "SELECT params_json FROM models WHERE model_id = ? AND kind = 'encoder'", (encoder_id,)
-    ).fetchone()
-    if row is None:
-        raise ValueError(f"encodeur inconnu dans la table models : {encoder_id} (lancer `embed`)")
-    return json.loads(row["params_json"])
 
 
 def knn_top1(X: np.ndarray, y: np.ndarray, recordings: np.ndarray, chunk_rows: int = 4096) -> float:
@@ -103,24 +93,20 @@ def benchmark_encoder(
     Les trois derniers servent aux comparaisons appariées entre encodeurs.
     """
     params = encoder_params(con, encoder_id)
-    meta, emb = EmbeddingStore(store_root, encoder_id).load(filters)
-    if not len(meta):
-        raise ValueError(f"aucun embedding pour {encoder_id} (filtres : {filters})")
-
-    grid = meta.assign(dur_s=params["window_s"])
     bench, head = cfg["benchmark"], cfg["head"]
-    data = training_set(
+    data, X = embedded_training_set(
         con,
-        grid,
+        EmbeddingStore(store_root, encoder_id),
+        params["window_s"],
         per_positive=bench["negatives_per_positive"],
         slot_tolerance_min=bench["slot_tolerance_min"],
         utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
         seed=head["seed"],
+        filters=filters,
     )
     if data["y"].nunique() < 2:
         raise ValueError(f"{encoder_id} : une seule classe dans le jeu étiqueté")
 
-    X = emb[data["row"].to_numpy()].astype(np.float32)
     y = data["y"].to_numpy()
     groups = data["point"].to_numpy()
     recordings = data["recording_id"].to_numpy()

@@ -1,4 +1,8 @@
-"""Interface en ligne de commande `blanci` (§13.5). Jalon M0 : ingest, import-labels, check-grid."""
+"""Interface en ligne de commande `blanci` (§13.5).
+
+Chaque commande se contente de lire la config, d'ouvrir la base et d'appeler `service.py` :
+la future GUI appellera les mêmes fonctions (§4). `export-onnx` attend M5.
+"""
 
 from __future__ import annotations
 
@@ -8,19 +12,43 @@ from collections import Counter
 from pathlib import Path
 from typing import Annotated, Any
 
+import pandas as pd
 import typer
 
+from blanci.benchmark import run_benchmark, write_report
 from blanci.config import config_path, load_config
 from blanci.db import connect
+from blanci.embed import embed_recordings, select_recordings
+from blanci.encoders import get_encoder
 from blanci.grid import containing_windows, max_hop_without_cut, window_grid
 from blanci.ingest import ingest as run_ingest
 from blanci.labels import POSITIVE_LABELS, import_label_file
+from blanci.service import (
+    append_label,
+    evaluate_holdout,
+    make_queue,
+    ranked_points,
+    score_and_decide,
+    similarity_search,
+    train_and_register,
+)
 
 app = typer.Typer(help="Détection acoustique d'Anomaloglossus blanci.", no_args_is_help=True)
 
 
 def _cfg(ctx: typer.Context) -> dict[str, Any]:
     return ctx.obj
+
+
+def _split(value: str | None) -> list[str]:
+    """« tresor,kaw » → ['tresor', 'kaw']."""
+    return [part.strip() for part in (value or "").split(",") if part.strip()]
+
+
+def _write_csv(frame: pd.DataFrame, path: Path, message: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(path, index=False)
+    typer.echo(f"{message} : {path}")
 
 
 @app.callback()
@@ -128,6 +156,209 @@ def check_grid(ctx: typer.Context) -> None:
         )
         for window_id in uncovered[:10]:
             typer.echo(f"    - {window_id}")
+
+
+@app.command()
+def embed(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Nom dans encoders.models ou paquet ONNX.")],
+    dataset: Annotated[str | None, typer.Option(help="Restreindre à un jeu (2023, 2026).")] = None,
+    site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
+    peak_hours: Annotated[
+        bool, typer.Option(help="Ne traiter que les heures de pic locales (§5).")
+    ] = False,
+    batch: Annotated[int | None, typer.Option(help="Défaut : encoders.batch_size.")] = None,
+) -> None:
+    """Extraction des embeddings → stock Parquet. Reprenable : ce qui est fait est sauté."""
+    cfg = _cfg(ctx)
+    if batch:
+        cfg["encoders"]["batch_size"] = batch
+    con = connect(config_path(cfg, "db"))
+    recordings = select_recordings(
+        con,
+        dataset=dataset,
+        site=site,
+        peak_hours=cfg["peak_hours_local"] if peak_hours else None,
+        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+    )
+    if recordings.empty:
+        typer.echo("aucun enregistrement retenu par ces filtres")
+        raise typer.Exit(1)
+    typer.echo(f"{len(recordings)} enregistrements à traiter avec {encoder}")
+    model = get_encoder(encoder, cfg)
+    report = embed_recordings(
+        con,
+        model,
+        recordings,
+        config_path(cfg, "raw"),
+        config_path(cfg, "embeddings"),
+        hop_ratio=cfg["encoders"]["grid_hop_ratio"],
+    )
+    typer.echo(
+        f"{report.encoder_id} : {report.recordings} encodés, {report.skipped} déjà faits, "
+        f"{report.errors} illisibles ; {report.windows} fenêtres, "
+        f"{report.windows_per_s:.1f} fenêtres/s (×{report.realtime_factor:.0f} temps réel)"
+    )
+
+
+@app.command()
+def benchmark(
+    ctx: typer.Context,
+    encoders: Annotated[str, typer.Option(help="Identifiants séparés par des virgules.")],
+    site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
+    dataset: Annotated[str | None, typer.Option(help="Restreindre à un jeu.")] = None,
+) -> None:
+    """Tableau comparatif des encodeurs (§2), en plis groupés par micro."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    filters = {k: v for k, v in (("site", site), ("dataset", dataset)) if v}
+    results, comparisons = run_benchmark(
+        con, _split(encoders), config_path(cfg, "embeddings"), cfg, filters or None
+    )
+    paths = write_report(results, comparisons, config_path(cfg, "reports"))
+    for level in ("window", "recording"):
+        part = results[results["level"] == level]
+        typer.echo(f"Niveau {level} (AP décroissante) :")
+        for r in part.itertuples():
+            typer.echo(
+                f"  {r.encoder_id:<16} {r.probe:<10} AP {r.ap:.3f} [{r.ap_lo:.3f} ; {r.ap_hi:.3f}]"
+            )
+    typer.echo(f"rapport : {paths['markdown']}")
+
+
+@app.command()
+def train(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur (nom-version).")],
+    min_precision: Annotated[
+        float | None,
+        typer.Option(help="Précision plancher du seuil. Défaut : benchmark.precisions[0]."),
+    ] = None,
+    site: Annotated[str | None, typer.Option(help="N'entraîner que sur un site.")] = None,
+) -> None:
+    """Entraîne la tête logistique et calibre son seuil sur les scores hors-pli."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    result = train_and_register(
+        con, encoder, cfg, filters={"site": site} if site else None, min_precision=min_precision
+    )
+    typer.echo(result.summary())
+    typer.echo(f"tête enregistrée : {result.directory}")
+
+
+@app.command()
+def score(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
+    head: Annotated[str, typer.Option(help="Version de tête (v1, v2…) ou latest.")] = "latest",
+    site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
+    dataset: Annotated[str | None, typer.Option(help="Restreindre à un jeu.")] = None,
+) -> None:
+    """Score toutes les fenêtres du stock, puis décide par enregistrement (§1)."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    filters = {k: v for k, v in (("site", site), ("dataset", dataset)) if v}
+    result = score_and_decide(con, encoder, cfg, version=head, filters=filters or None)
+    typer.echo(result.summary())
+    points = ranked_points(con, encoder, result.version)
+    _write_csv(
+        points,
+        config_path(cfg, "reports") / f"points_{encoder}_{result.version}.csv",
+        "points classés",
+    )
+    for r in points.head(10).itertuples():
+        typer.echo(
+            f"  {r.site}/{r.mic_id:<6} {r.status:<18} {r.n_positive} positifs "
+            f"sur {r.n_recordings} enregistrements, {r.n_days_positive} jours"
+        )
+
+
+@app.command()
+def queue(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
+    n: Annotated[int | None, typer.Option(help="Défaut : active.batch_recordings.")] = None,
+    head: Annotated[str, typer.Option(help="Version de tête ou latest.")] = "latest",
+    mix: Annotated[
+        str | None, typer.Option(help="Proportions incertains,top,aléatoire. Défaut : active.mix.")
+    ] = None,
+) -> None:
+    """File de vérification : 60 % incertains, 20 % meilleurs, 20 % aléatoire stratifié (§5)."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    proportions = tuple(float(x) for x in _split(mix)) if mix else None
+    if proportions is not None and len(proportions) != 3:
+        raise typer.BadParameter("--mix attend trois proportions, par exemple 0.6,0.2,0.2")
+    rows = make_queue(con, encoder, cfg, n=n, version=head, mix=proportions)
+    counts = rows["reason"].value_counts().to_dict()
+    typer.echo(f"{len(rows)} enregistrements : " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+    _write_csv(rows, config_path(cfg, "reports") / f"queue_{encoder}.csv", "file")
+
+
+@app.command()
+def search(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
+    k: Annotated[int, typer.Option(help="Nombre de candidats à remonter.")] = 300,
+    site: Annotated[str | None, typer.Option(help="Chercher dans ce site.")] = None,
+    dataset: Annotated[str | None, typer.Option(help="Chercher dans ce jeu.")] = None,
+    paired_negatives: Annotated[
+        bool, typer.Option(help="Retrancher la similarité aux négatifs appariés (§3).")
+    ] = True,
+) -> None:
+    """Fenêtres les plus proches des positifs annotés (§5, récolte hors Mataroni)."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    filters = {key: value for key, value in (("site", site), ("dataset", dataset)) if value}
+    found = similarity_search(
+        con, encoder, cfg, k=k, filters=filters or None, use_paired_negatives=paired_negatives
+    )
+    typer.echo(f"{len(found)} candidats")
+    for r in found.head(10).itertuples():
+        typer.echo(f"  {r.score:+.3f}  {r.path} @ {r.offset_s:.1f} s")
+    _write_csv(found, config_path(cfg, "reports") / f"search_{encoder}.csv", "candidats")
+
+
+@app.command()
+def evaluate(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
+    level: Annotated[str, typer.Option(help="window | recording.")] = "recording",
+    holdout: Annotated[
+        str | None, typer.Option(help="Sites tenus à l'écart, par exemple tresor,kaw (§6).")
+    ] = None,
+) -> None:
+    """Évalue sur des sites tenus à l'écart, ou en plis groupés par micro si aucun n'est donné."""
+    if level not in ("window", "recording"):
+        raise typer.BadParameter("--level attend window ou recording")
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    metrics = evaluate_holdout(con, encoder, cfg, _split(holdout), level=level)
+    typer.echo(f"{metrics['encoder_id']} — {metrics['protocol']}, niveau {metrics['level']}")
+    typer.echo(f"  {metrics['n_pos']} positifs, {metrics['n_neg']} négatifs")
+    typer.echo(f"  AP {metrics['ap']:.3f} [{metrics['ap_lo']:.3f} ; {metrics['ap_hi']:.3f}]")
+    for p in cfg["benchmark"]["precisions"]:
+        typer.echo(
+            f"  rappel à P≥{p} : {metrics[f'recall@p{p}']:.3f} "
+            f"[{metrics[f'recall@p{p}_lo']:.3f} ; {metrics[f'recall@p{p}_hi']:.3f}]"
+        )
+
+
+@app.command("label")
+def label_window(
+    ctx: typer.Context,
+    window_id: Annotated[str, typer.Argument(help="Identifiant de fenêtre.")],
+    label: Annotated[str, typer.Option(help="blanci_solo, bird, rain…")],
+    source: Annotated[str, typer.Option(help="import | similarity | active | random | audit.")],
+    quality: Annotated[str | None, typer.Option(help="A, B ou C.")] = None,
+    species: Annotated[str | None, typer.Option(help="Espèce du faux ami.")] = None,
+    annotator: Annotated[str | None, typer.Option(help="Qui a annoté.")] = None,
+) -> None:
+    """Ajoute un label à une fenêtre (les labels ne se modifient jamais, ils s'ajoutent)."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    label_id = append_label(con, window_id, label, source, quality, species, None, annotator)
+    typer.echo(f"label {label_id} ajouté : {window_id} → {label}")
 
 
 @app.command()

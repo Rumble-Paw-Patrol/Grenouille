@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -107,6 +108,59 @@ def migrate(con: sqlite3.Connection) -> None:
         con.executescript(script)
         con.execute(f"PRAGMA user_version = {number}")
     con.commit()
+
+
+def model_params(con: sqlite3.Connection, model_id: str, kind: str | None = None) -> dict:
+    """Paramètres JSON d'un modèle enregistré."""
+    sql = "SELECT params_json FROM models WHERE model_id = ?"
+    args: tuple = (model_id,)
+    if kind is not None:
+        sql += " AND kind = ?"
+        args += (kind,)
+    row = con.execute(sql, args).fetchone()
+    if row is None:
+        label = f"{kind} " if kind else ""
+        raise ValueError(f"{label}inconnu dans la table models : {model_id}")
+    return json.loads(row["params_json"])
+
+
+def encoder_params(con: sqlite3.Connection, encoder_id: str) -> dict:
+    """Paramètres enregistrés par `embed` : f_e, fenêtre, pas, dimension, débit mesuré."""
+    try:
+        return model_params(con, encoder_id, kind="encoder")
+    except ValueError as exc:
+        raise ValueError(f"encodeur inconnu : {encoder_id} (lancer `blanci embed`)") from exc
+
+
+def register_model(
+    con: sqlite3.Connection,
+    model_id: str,
+    kind: str,
+    name: str,
+    version: str,
+    params: dict,
+    sha256: str | None = None,
+) -> None:
+    """Ajoute ou met à jour une ligne du registre (§13.3)."""
+    con.execute(
+        "INSERT INTO models (model_id, kind, name, version, sha256, params_json, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(model_id) DO UPDATE SET "
+        "params_json = excluded.params_json, sha256 = excluded.sha256",
+        (model_id, kind, name, version, sha256, json.dumps(params), utc_now()),
+    )
+    con.commit()
+
+
+def next_version(con: sqlite3.Connection, kind: str, name: str) -> str:
+    """Version suivante d'un modèle : v1, v2, … Les versions précédentes restent en base."""
+    versions = [
+        int(row["version"][1:])
+        for row in con.execute(
+            "SELECT version FROM models WHERE kind = ? AND name = ?", (kind, name)
+        )
+        if str(row["version"]).startswith("v") and str(row["version"])[1:].isdigit()
+    ]
+    return f"v{max(versions, default=0) + 1}"
 
 
 def recording_id_for(rel_path: str) -> str:

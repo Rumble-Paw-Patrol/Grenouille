@@ -110,3 +110,34 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
 20. **`paired_bootstrap` renvoie NaN plutôt que de planter** quand la métrique est indéfinie
     sur tous les rééchantillonnages (une seule classe). Il appelait `np.quantile` sur un
     tableau vide ; `bootstrap_ci` se protégeait déjà de ce cas.
+
+## 2026-09-21 — Couche de service et CLI (§13.5)
+
+21. **Format des annotations confirmé** (Léonard) : ce sont des **fenêtres de 3 s**, ce que
+    `labels.import.window_s` suppose déjà. Reste inconnu : si ce sont des lignes de tableau
+    (fichier + début) ou des extraits WAV découpés. Dans le second cas, il faudra un
+    importeur qui retrouve l'enregistrement d'origine et le décalage.
+
+22. **Registre des modèles dans `db.py`** (`model_params`, `encoder_params`, `register_model`,
+    `next_version`), puisque c'est lui qui possède la table `models`. Les versions de tête
+    s'incrémentent par encodeur : `v1`, `v2`… et les précédentes restent en base, pour
+    comparer une décision ancienne au modèle qui l'a produite (§4).
+
+23. **Identifiants estampillés** : `<encodeur>:head:<version>` pour une tête,
+    `<encodeur>:head:<version>:p<précision>` pour un seuil. Le §13.3 impose les colonnes
+    `encoder_id`, `head_version`, `threshold_id` dans `decisions` sans fixer leur forme.
+
+24. **Le seuil est calibré sur les scores hors-pli**, pas sur les scores d'entraînement. Un
+    seuil calibré en-pli serait optimiste, la tête ayant vu chacun de ses exemples (§6).
+
+25. **Les décisions se remplacent, les labels s'ajoutent.** `score_and_decide` efface les
+    décisions du même triplet (encodeur, tête, seuil) avant d'écrire : elles sont
+    reproductibles à partir du modèle. Les labels, eux, sont en ajout seul (§13.7).
+
+26. **`evaluate --holdout` sans site** retombe sur la validation groupée par micro (§6,
+    niveau 1) au lieu d'échouer : c'est le protocole par défaut tant qu'il n'y a pas de
+    positifs hors Mataroni.
+
+27. **`embedded_training_set` dans `dataset.py`** : point d'entrée commun du benchmark et de
+    l'entraînement. Les deux doivent voir exactement les mêmes labels et les mêmes négatifs
+    appariés, sinon le benchmark ne prédit pas ce que fera la tête.

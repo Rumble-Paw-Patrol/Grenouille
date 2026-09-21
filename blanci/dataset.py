@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from blanci.labels import POSITIVE_LABELS
+from blanci.store import EmbeddingStore
 
 EXCLUDED_LABELS = ("blanci_uncertain", "uncertain")
 
@@ -140,3 +141,34 @@ def training_set(
     row_of = pd.Series(np.arange(len(grid)), index=grid["window_id"])
     data["row"] = row_of.loc[data["window_id"]].to_numpy()
     return data.merge(recordings[["recording_id", "point", "site"]], on="recording_id", how="left")
+
+
+def embedded_training_set(
+    con: sqlite3.Connection,
+    store: EmbeddingStore,
+    window_s: float,
+    per_positive: int = 0,
+    slot_tolerance_min: float = 30,
+    utc_offset_h: float = -3,
+    seed: int = 0,
+    filters: dict | None = None,
+) -> tuple[pd.DataFrame, np.ndarray]:
+    """Fenêtres étiquetées du stock d'un encodeur, avec leurs embeddings alignés.
+
+    Point d'entrée commun du benchmark (§2) et de l'entraînement de la tête (§4) : les deux
+    doivent voir exactement les mêmes labels et les mêmes négatifs appariés.
+    """
+    meta, emb = store.load(filters)
+    if not len(meta):
+        raise ValueError(f"aucun embedding pour {store.encoder_id} (filtres : {filters})")
+    data = training_set(
+        con,
+        meta.assign(dur_s=window_s),
+        per_positive=per_positive,
+        slot_tolerance_min=slot_tolerance_min,
+        utc_offset_h=utc_offset_h,
+        seed=seed,
+    )
+    if data.empty:
+        raise ValueError(f"aucune fenêtre étiquetée dans le stock de {store.encoder_id}")
+    return data, emb[data["row"].to_numpy()].astype(np.float32)
