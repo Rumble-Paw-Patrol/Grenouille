@@ -7,3 +7,10 @@ __pycache__/
 
 # Données : jamais sous git (audio, embeddings, base). Les labels sont sauvegardés à part (§9, risque 10).
 data/
+
+# Configuration propre à une machine (chemin du disque externe) : voir config/local.example.yaml.
+config/local.yaml
+
+# Exports du prestataire (annotations, détections) : données de l'ONF et de Biophonia, pas les
+# nôtres. Elles restent en local, jamais sur GitHub.
+documentation/*.xlsx

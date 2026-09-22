@@ -52,15 +52,17 @@ def test_ingest_inventories_and_flags(raw, cfg):
     rows = rows_by_name(con)
     first = rows["SMM01_20260212_070000.wav"]
     assert first["recording_id"] == recording_id_for("2026/Mataroni/M01/SMM01_20260212_070000.wav")
-    assert (first["dataset"], first["site"], first["mic_id"]) == ("2026", "Mataroni", "M01")
+    # Micro = numéro de série (GUANO), pas le nom du dossier : sur le terrain, le même
+    # enregistreur s'appelle « SM4 A », « SM A_SMA13417 » ou « SMA13417 » selon le relevé.
+    assert (first["dataset"], first["site"], first["mic_id"]) == ("2026", "Mataroni", "SMM01")
     assert first["start_utc"] == "2026-02-12T10:00:00Z"  # GUANO, UTC−3
     assert first["duration_s"] == 120.0 and first["sample_rate"] == 16000
     assert len(first["sha256"]) == 64
     assert set(json.loads(first["qc_flags"])) >= {"rain", "saturation", "in_bag", "silent"}
     # Sans GUANO : horodatage du nom de fichier + décalage configuré (UTC−3).
     assert rows["SMM01_20260212_073000.wav"]["start_utc"] == "2026-02-12T10:30:00Z"
-    # Extension en majuscules acceptée ; micro pris dans GUANO si le dossier micro manque.
-    assert rows["SMM02_20260212_070000.WAV"]["mic_id"] == "M02"
+    # Extension en majuscules acceptée ; sans GUANO, le micro vient du préfixe du nom.
+    assert rows["SMM02_20260212_070000.WAV"]["mic_id"] == "SMM02"
     assert rows["SMM03_20260213_150000.wav"]["mic_id"] == "SMM03"
 
     again = ingest(con, raw, "2026", cfg)
@@ -89,7 +91,8 @@ def test_import_labels_is_atomic_idempotent_and_append_only(raw, cfg, tmp_path):
         "SELECT l.label, l.quality, w.offset_s, w.dur_s FROM labels l "
         "JOIN windows w USING (window_id) ORDER BY w.offset_s"
     ).fetchall()
-    assert [tuple(r) for r in labels] == [("blanci", "C", 36.0, 3.0), ("blanci", "A", 90.0, 3.0)]
+    # Sans commentaire, la qualité reste inconnue (None), pas A par défaut.
+    assert [tuple(r) for r in labels] == [("blanci", "C", 36.0, 3.0), ("blanci", None, 90.0, 3.0)]
 
     assert import_label_file(con, positives, cfg, kind="positive").already_imported
     assert con.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == 2

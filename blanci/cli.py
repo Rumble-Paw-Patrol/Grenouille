@@ -64,32 +64,58 @@ def main(
 @app.command()
 def ingest(
     ctx: typer.Context,
-    dataset: Annotated[str, typer.Option(help="Jeu : sous-dossier de la racine (2023, 2026).")],
-    root: Annotated[Path | None, typer.Argument(help="Racine audio (défaut : paths.raw).")] = None,
+    dataset: Annotated[str, typer.Option(help="Jeu (2023, 2026…) : une étiquette.")],
+    folder: Annotated[
+        Path | None,
+        typer.Argument(help="Dossier à inventorier, sous paths.raw (défaut : paths.raw/<jeu>)."),
+    ] = None,
+    site: Annotated[
+        str | None,
+        typer.Option(help="Site de tous les fichiers du dossier (sinon lu dans l'arborescence)."),
+    ] = None,
     qc: Annotated[bool, typer.Option(help="Calculer les indices de contrôle qualité.")] = True,
     hash_files: Annotated[
         bool, typer.Option("--hash/--no-hash", help="SHA-256 du contenu.")
     ] = True,
     force: Annotated[bool, typer.Option(help="Réinventorier les fichiers déjà connus.")] = False,
 ) -> None:
-    """Inventaire des enregistrements + QC → table recordings."""
+    """Inventaire des enregistrements + QC → table recordings.
+
+    Inventorier les relevés dans l'ordre chronologique : un fichier déjà vu sous un autre
+    chemin (reste de carte SD) est écarté comme doublon, le premier inventorié l'emporte.
+    """
     cfg = _cfg(ctx)
-    root = root or config_path(cfg, "raw")
-    if root.resolve() != config_path(cfg, "raw").resolve():
-        typer.echo(
-            f"attention : racine {root} ≠ paths.raw ; les chemins stockés sont relatifs à {root}"
-        )
     con = connect(config_path(cfg, "db"))
-    report = run_ingest(con, root, dataset, cfg, run_qc=qc, hash_file=hash_files, force=force)
-    typer.echo(
-        f"{report.added} ajoutés, {report.skipped} déjà inventoriés, {len(report.errors)} erreurs"
+    report = run_ingest(
+        con,
+        config_path(cfg, "raw"),
+        dataset,
+        cfg,
+        run_qc=qc,
+        hash_file=hash_files,
+        force=force,
+        scan=folder,
+        site=site,
     )
-    if report.errors:
-        out = config_path(cfg, "reports") / f"ingest_errors_{dataset}.csv"
+    typer.echo(
+        f"{report.added} ajoutés, {report.skipped} déjà inventoriés, "
+        f"{report.relocated} déplacés, {len(report.duplicates)} doublons écartés, "
+        f"{len(report.errors)} erreurs"
+    )
+    # Un rapport par (jeu, site) : inventorier un relevé n'écrase pas le rapport du précédent.
+    stem = f"{dataset}_{site}" if site else dataset
+    reports = config_path(cfg, "reports")
+    for kind, header, rows in (
+        ("errors", ("path", "error"), report.errors),
+        ("duplicates", ("ecarte", "conserve"), report.duplicates),
+    ):
+        if not rows:
+            continue
+        out = reports / f"ingest_{kind}_{stem}.csv"
         out.parent.mkdir(parents=True, exist_ok=True)
         with out.open("w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerows([("path", "error"), *report.errors])
-        typer.echo(f"détail des erreurs : {out}")
+            csv.writer(f).writerows([header, *rows])
+        typer.echo(f"détail ({'erreurs' if kind == 'errors' else 'doublons'}) : {out}")
 
 
 @app.command("import-labels")

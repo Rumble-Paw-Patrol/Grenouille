@@ -322,7 +322,7 @@ def multi_site_corpus(con, tmp_path, encoder_id="good-1", separation=4.0, seed=0
     for site in ("mataroni", "tresor"):
         for mic in range(3):
             for day in range(4):
-                rel = f"2026/{site}/{site[0].upper()}{mic}/d{day}.wav"
+                rel = f"2026/{site}/{site[0].upper()}{mic}/{site}_{mic}_d{day}.wav"
                 rid = recording_id_for(rel)
                 con.execute(
                     "INSERT INTO recordings (recording_id, path, dataset, site, mic_id, "

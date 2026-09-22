@@ -163,9 +163,18 @@ def next_version(con: sqlite3.Connection, kind: str, name: str) -> str:
     return f"v{max(versions, default=0) + 1}"
 
 
-def recording_id_for(rel_path: str) -> str:
-    """Identifiant stable : chemin relatif à la racine audio, indépendant de la machine."""
-    return hashlib.sha256(rel_path.encode("utf-8")).hexdigest()[:16]
+def recording_key(path: str) -> str:
+    """Identité d'un enregistrement : son nom sans dossier ni extension, en minuscules.
+
+    `<série>_<AAAAMMJJ>_<HHMMSS>` est unique pour un enregistreur donné et survit à la copie
+    sur un autre disque, à une réorganisation des dossiers et au passage WAV ↔ FLAC.
+    """
+    return Path(path.replace("\\", "/")).stem.lower()
+
+
+def recording_id_for(path: str) -> str:
+    """Identifiant stable, indépendant du dossier et de la machine (voir `recording_key`)."""
+    return hashlib.sha256(recording_key(path).encode("utf-8")).hexdigest()[:16]
 
 
 def window_id_for(recording_id: str, offset_s: float) -> str:

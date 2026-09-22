@@ -78,7 +78,7 @@ def build_recordings(con, n_mics=4, days=4):
     layout = []
     for mic in range(n_mics):
         for day in range(days):
-            rel = f"2026/mataroni/M{mic}/d{day}.wav"
+            rel = f"2026/mataroni/M{mic}/M{mic}_d{day}.wav"
             rid = add_recording(
                 con, rel, "mataroni", f"M{mic}", f"2026-02-{10 + day:02d}T13:00:00Z"
             )

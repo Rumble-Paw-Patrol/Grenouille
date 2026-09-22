@@ -18,7 +18,7 @@ import soundfile as sf
 
 from blanci.db import connect
 from blanci.ingest import ingest as run_ingest
-from blanci.ingest import iter_audio_files, parse_songmeter_name
+from blanci.ingest import iter_audio_files, parse_songmeter_name, start_utc
 from blanci.labels import import_label_file, parse_offset, parse_verdict
 
 SR = 32000
@@ -102,6 +102,29 @@ def test_ingest_mixes_wav_and_flac(tmp_path, cfg):
     assert report.added == 2 and not report.errors
     suffixes = {r["path"][-5:] for r in con.execute("SELECT path FROM recordings")}
     assert suffixes == {"0.wav", ".flac"}
+
+
+@pytest.mark.parametrize(
+    "guano, stem, expected",
+    [
+        # Chaînes relevées sur le disque : décalage sans zéro devant l'heure.
+        ("2025-12-27 15:30:00-3:00", "2LA04186_20251227_153000", "2025-12-27T18:30:00Z"),
+        # Enregistreur réglé en UTC : le nom de fichier est aussi en UTC. Avant correction,
+        # le repli sur « nom + UTC−3 » donnait 15:10Z, soit 3 h d'erreur sans avertissement.
+        ("2024-10-22 12:10:16+0:00", "2LA02707_20241022_121016", "2024-10-22T12:10:16Z"),
+        ("2024-02-20 14:30:00-3:00", "SMA14163_20240220_143000", "2024-02-20T17:30:00Z"),
+        ("2026-02-12T07:00:00-03:00", "SMM01_20260212_070000", "2026-02-12T10:00:00Z"),
+        ("2026-01-06 10:30:00+10:30", "X_20260106_103000", "2026-01-06T00:00:00Z"),
+    ],
+)
+def test_guano_timestamp_keeps_the_recorder_timezone(guano, stem, expected):
+    assert start_utc({"Timestamp": guano}, stem, -3) == expected
+
+
+def test_unreadable_guano_falls_back_to_the_filename():
+    assert start_utc({"Timestamp": "pas une date"}, "X_20260106_103000", -3) == (
+        "2026-01-06T13:30:00Z"
+    )
 
 
 def test_ingest_dates_from_the_filename(tmp_path, cfg, onf_corpus):
@@ -269,17 +292,60 @@ def test_verification_text_names_the_false_friend(tmp_path, cfg, ingested):
 
 
 def test_unreadable_verdict_blocks_the_import(tmp_path, cfg, ingested):
-    """Un « à revoir » ne doit pas devenir un négatif en silence."""
+    """Un « peut-être » ne doit pas devenir un négatif en silence."""
     con, names = ingested
     sheet = write_sheet(
         tmp_path / "a.xlsx",
-        [(names[0], 36, 0.91, "oui"), (names[1], 12, 0.83, "à revoir")],
+        [(names[0], 36, 0.91, "oui"), (names[1], 12, 0.83, "peut-être")],
     )
     report = import_label_file(con, sheet, cfg, kind=None)
     assert report.inserted == 0
     assert len(report.unresolved) == 1
     assert "vérification illisible" in report.unresolved[0][1]
     assert con.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("pending", ["à vérif", "à conf", "à revoir", "À vérifier écouteurs"])
+def test_pending_verdict_is_set_aside_without_blocking(tmp_path, cfg, ingested, pending):
+    """« à vérif » : l'expert n'a pas tranché. Pas de label inventé, pas de blocage."""
+    con, names = ingested
+    sheet = write_sheet(
+        tmp_path / "a.xlsx",
+        [(names[0], 36, 0.91, "oui"), (names[1], 12, 0.83, pending)],
+    )
+    report = import_label_file(con, sheet, cfg, kind=None)
+    assert report.inserted == 1 and not report.unresolved
+    assert len(report.pending) == 1 and report.pending[0][0] == 3
+    assert "attente" in report.summary()
+
+
+def test_unverified_detections_are_not_labels(tmp_path, cfg, ingested):
+    """Le fichier de l'ancien prestataire liste toutes ses détections ; seules les vérifiées
+    sont des labels. Une cellule de vérification vide n'est ni positive ni négative."""
+    con, names = ingested
+    sheet = write_sheet(
+        tmp_path / "a.xlsx",
+        [
+            (names[0], 36, 0.91, True),
+            (names[0], 39, 0.35, None),
+            (names[1], 12, 0.12, None),
+            (names[2], 3, 0.83, False),
+        ],
+    )
+    report = import_label_file(con, sheet, cfg, kind=None)
+    assert report.inserted == 2 and report.unverified == 2 and not report.unresolved
+    assert "jamais écoutées" in report.summary()
+
+
+def test_boolean_verdicts_from_excel(tmp_path, cfg, ingested):
+    """Le vrai fichier range True / False en booléens Excel."""
+    con, names = ingested
+    sheet = write_sheet(
+        tmp_path / "a.xlsx", [(names[0], 36, 0.91, True), (names[1], 12, 0.83, False)]
+    )
+    import_label_file(con, sheet, cfg, kind=None)
+    labels = [r["label"] for r in con.execute("SELECT label FROM labels ORDER BY label_id")]
+    assert labels[0].startswith("blanci") and not labels[1].startswith("blanci")
 
 
 def test_kind_option_bypasses_the_verdict_column(tmp_path, cfg, ingested):
@@ -353,35 +419,257 @@ def test_a_full_path_in_the_sheet_also_matches(tmp_path, cfg, ingested):
     assert report.inserted == 1 and not report.unresolved
 
 
-def test_same_stem_in_both_formats_prefers_the_cited_extension(tmp_path, cfg):
-    """Si les deux formats coexistent, l'extension citée départage au lieu d'être ambiguë."""
+def test_same_recording_in_two_formats_is_inventoried_once(tmp_path, cfg):
+    """Un même nom en .wav et en .flac est un seul enregistrement : l'autre est un doublon."""
     raw = tmp_path / "raw"
     write_recording(raw / "2026" / "mataroni" / f"{STEMS[0]}.wav", seed=0)
-    write_recording(raw / "2026" / "mataroni" / f"{STEMS[0]}.flac", seed=1)
+    write_recording(raw / "2026" / "mataroni" / f"{STEMS[0]}.flac", seed=0)
     cfg["paths"]["raw"] = str(raw)
     con = connect(cfg["paths"]["db"])
-    run_ingest(con, raw, "2026", cfg, hash_file=False)
+    report = run_ingest(con, raw, "2026", cfg, hash_file=False)
+    assert report.added == 1 and len(report.duplicates) == 1
 
-    sheet = write_sheet(tmp_path / "a.xlsx", [(f"{STEMS[0]}.flac", 36, 0.9, "oui")])
+    # L'extension citée n'a alors plus d'importance : il n'y a qu'un candidat.
+    for cited in (f"{STEMS[0]}.wav", f"{STEMS[0]}.flac", STEMS[0]):
+        sheet = write_sheet(tmp_path / f"{cited}.xlsx", [(cited, 36, 0.9, "oui")])
+        imported = import_label_file(con, sheet, cfg, kind=None, dry_run=True)
+        assert len(imported.rows) == 1 and not imported.unresolved, cited
+
+
+def test_cited_extension_breaks_a_tie_in_an_older_database(tmp_path, cfg, ingested):
+    """Base constituée avant la détection des doublons : deux formats pour un même nom.
+    L'extension citée départage ; sans elle, la ligne est ambiguë et signalée."""
+    con, _ = ingested
+    original = con.execute(
+        "SELECT * FROM recordings WHERE path LIKE ?", (f"%{STEMS[0]}.wav",)
+    ).fetchone()
+    flac_path = original["path"][: -len(".wav")] + ".flac"
+    con.execute(
+        "INSERT INTO recordings (recording_id, path, dataset, site, mic_id, start_utc, "
+        "duration_s, sample_rate, channels) VALUES ('copie', ?, '2026', ?, ?, ?, ?, ?, 1)",
+        (
+            flac_path,
+            original["site"],
+            original["mic_id"],
+            original["start_utc"],
+            original["duration_s"],
+            original["sample_rate"],
+        ),
+    )
+    con.commit()
+
+    cited = write_sheet(tmp_path / "a.xlsx", [(f"{STEMS[0]}.flac", 36, 0.9, "oui")])
+    report = import_label_file(con, cited, cfg, kind=None, dry_run=True)
+    assert len(report.rows) == 1 and report.rows[0]["recording_id"] == "copie"
+
+    bare = write_sheet(tmp_path / "b.xlsx", [(STEMS[0], 36, 0.9, "oui")])
+    report = import_label_file(con, bare, cfg, kind=None, dry_run=True)
+    assert "ambigu" in report.unresolved[0][1]
+
+
+# --- Fichier de l'ancien prestataire : clés S3, commentaires, doublons de relevés --------
+
+
+def test_s3_key_matches_the_file_on_disk(tmp_path, cfg, ingested):
+    """« 2353462-2la04530_20260106_103000.flac » désigne 2la04530_20260106_103000.wav."""
+    con, names = ingested
+    sheet = write_sheet(tmp_path / "a.xlsx", [(f"2353462-{names[0]}", 36, 0.9, True)])
     report = import_label_file(con, sheet, cfg, kind=None)
     assert report.inserted == 1 and not report.unresolved
-    path = con.execute(
-        "SELECT r.path FROM labels l JOIN windows w USING (window_id) "
-        "JOIN recordings r USING (recording_id)"
-    ).fetchone()["path"]
-    assert path.endswith(".flac")
 
 
-def test_same_stem_both_formats_without_extension_is_ambiguous(tmp_path, cfg):
-    """Sans extension citée, deux candidats : la ligne est signalée, pas devinée."""
+def test_file_key_strips_only_an_s3_prefix():
+    from blanci.labels import file_key
+
+    assert file_key("2353462-2la03550_20260108_143000.flac") == "2la03550_20260108_143000"
+    assert file_key("D:/x/2LA03550_20260108_143000.wav") == "2la03550_20260108_143000"
+    assert file_key("12-notes.wav") == "12-notes"  # pas un nom Song Meter : intact
+
+
+def provider_sheet(path, rows):
+    """Colonnes du fichier Blancinet réel, commentaires dans des colonnes sans nom."""
+    pd.DataFrame(
+        rows,
+        columns=[
+            "file_s3_key",
+            "station",
+            "label_name",
+            "start_time",
+            "end_time",
+            "score",
+            "vérification",
+            "Colonne1",
+            "Unnamed: 12",
+        ],
+    ).to_excel(path, index=False)
+    return path
+
+
+def test_provider_sheet_columns_are_detected(tmp_path, cfg, ingested):
+    con, names = ingested
+    sheet = provider_sheet(
+        tmp_path / "blancinet.xlsx",
+        [(f"1-{names[0]}", "Mataroni_crique2_RB04", "ANOBLA", 36, 39, 0.9, True, None, None)],
+    )
+    report = import_label_file(con, sheet, cfg, kind=None, dry_run=True)
+    assert report.columns["file"] == "file_s3_key"
+    assert report.columns["offset_s"] == "start_time"
+    assert report.columns["verdict"] == "vérification"
+    assert report.columns["score"] == "score"
+    assert len(report.rows) == 1 and report.rows[0]["offset_s"] == 36.0
+
+
+def test_anonymous_columns_feed_the_comment(tmp_path, cfg, ingested):
+    """Les commentaires du vrai fichier sont dans « Colonne1 » et « Unnamed: 12 »."""
+    con, names = ingested
+    sheet = provider_sheet(
+        tmp_path / "blancinet.xlsx",
+        [
+            (f"1-{names[2]}", "st", "ANOBLA", 3, 6, 0.8, False, "oiseau Fourmilier tacheté", None),
+            (f"2-{names[1]}", "st", "ANOBLA", 9, 12, 0.7, False, None, "A. andreae"),
+            (
+                f"3-{names[0]}",
+                "st",
+                "ANOBLA",
+                36,
+                39,
+                0.9,
+                True,
+                "chants audibles en second plan",
+                "Colonne1",
+            ),
+        ],
+    )
+    report = import_label_file(con, sheet, cfg, kind=None, dry_run=True)
+    by_offset = {r["offset_s"]: r for r in report.rows}
+    assert by_offset[3.0]["label"] == "bird" and "ourmilier" in by_offset[3.0]["species"]
+    assert by_offset[9.0]["label"] == "amphibian" and by_offset[9.0]["species"] == (
+        "Adenomera andreae"
+    )
+    positive = by_offset[36.0]
+    assert positive["quality"] == "C"  # « second plan »
+    assert "Colonne1" not in positive["comment"]  # en-tête recopié dans une cellule, écarté
+
+
+def test_sd_card_leftovers_are_inventoried_once(tmp_path, cfg):
+    """Carte SD rapportée à Mataroni avec les fichiers de CDR : copies identiques écartées,
+    le relevé inventorié en premier (le plus ancien) garde le fichier et son site."""
     raw = tmp_path / "raw"
-    write_recording(raw / "2026" / "mataroni" / f"{STEMS[0]}.wav", seed=0)
-    write_recording(raw / "2026" / "mataroni" / f"{STEMS[0]}.flac", seed=1)
-    cfg["paths"]["raw"] = str(raw)
+    releve_1 = raw / "Projet" / "RELEVE 1 CDR" / "2LA03021" / "Data"
+    releve_3 = raw / "Projet" / "RELEVE 3 Mataroni" / "2LA03021_GI18" / "Data"
+    write_recording(releve_1 / "2LA03021_20251221_093000.wav", seed=0)
+    write_recording(releve_3 / "2LA03021_20251221_093000.wav", seed=0)  # reste de carte SD
+    write_recording(releve_3 / "2LA03021_20260108_073000.wav", seed=1)
     con = connect(cfg["paths"]["db"])
-    run_ingest(con, raw, "2026", cfg, hash_file=False)
 
-    sheet = write_sheet(tmp_path / "a.xlsx", [(STEMS[0], 36, 0.9, "oui")])
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 0
-    assert "ambigu" in report.unresolved[0][1]
+    first = run_ingest(con, raw, "2026", cfg, hash_file=False, scan=releve_1.parents[1], site="CDR")
+    second = run_ingest(
+        con, raw, "2026", cfg, hash_file=False, scan=releve_3.parents[1], site="Mataroni"
+    )
+    assert first.added == 1 and second.added == 1 and len(second.duplicates) == 1
+    sites = dict(con.execute("SELECT substr(path, -28, 24), site FROM recordings").fetchall())
+    assert sites == {
+        "2LA03021_20251221_093000": "CDR",
+        "2LA03021_20260108_073000": "Mataroni",
+    }
+    mics = {r[0] for r in con.execute("SELECT DISTINCT mic_id FROM recordings")}
+    assert mics == {"2LA03021"}  # numéro de série, pas « 2LA03021_GI18 » ni « Data »
+
+
+def test_scan_folder_must_be_under_the_raw_root(tmp_path, cfg):
+    elsewhere = tmp_path / "ailleurs"
+    write_recording(elsewhere / "2LA03021_20251221_093000.wav")
+    con = connect(cfg["paths"]["db"])
+    with pytest.raises(ValueError, match="n'est pas sous la racine"):
+        run_ingest(con, tmp_path / "raw", "2026", cfg, scan=elsewhere)
+
+
+def test_each_survey_keeps_its_own_ingest_report(tmp_path):
+    """Deux relevés du même jeu : le rapport du second n'écrase pas celui du premier."""
+    import yaml
+    from typer.testing import CliRunner
+
+    from blanci.cli import app
+
+    raw = tmp_path / "raw"
+    cdr = raw / "RELEVE 1 CDR" / "2LA03021" / "Data"
+    mataroni = raw / "RELEVE 3 Mataroni" / "2LA03021_GI18" / "Data"
+    write_recording(cdr / "2LA03021_20251221_093000.wav")
+    (cdr / "2LA03021_20251221_100000.wav").write_bytes(b"")  # fichier vide, comme SMA14826
+    write_recording(mataroni / "2LA03021_20251221_093000.wav")  # reste de carte SD
+    config = tmp_path / "local.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "paths": {
+                    "raw": str(raw),
+                    "db": str(tmp_path / "db.sqlite"),
+                    "reports": str(tmp_path / "reports"),
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    for site, folder in (("CDR", cdr.parents[1]), ("Mataroni", mataroni.parents[1])):
+        result = runner.invoke(
+            app,
+            [
+                "--config",
+                str(config),
+                "ingest",
+                "--dataset",
+                "2026",
+                "--site",
+                site,
+                "--no-qc",
+                "--no-hash",
+                str(folder),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+    reports = sorted(p.name for p in (tmp_path / "reports").iterdir())
+    assert reports == ["ingest_duplicates_2026_Mataroni.csv", "ingest_errors_2026_CDR.csv"]
+
+
+# --- Copie sur un autre disque ------------------------------------------------------------
+
+
+def test_recording_id_ignores_folder_and_extension():
+    """L'identité d'un enregistrement est son nom : copie, réorganisation, WAV ↔ FLAC."""
+    from blanci.db import recording_id_for
+
+    base = recording_id_for(
+        "Projet blanci 2025/RELEVE 3 Mataroni/2LA04530_MGM06/Data/2LA04530_20260106_103000.wav"
+    )
+    assert recording_id_for("2026/Mataroni/2LA04530/2LA04530_20260106_103000.flac") == base
+    assert recording_id_for("2la04530_20260106_103000") == base
+
+
+def test_moving_to_a_new_disk_keeps_labels(tmp_path, cfg):
+    """Copie sur un nouveau disque, dossiers réorganisés : l'inventaire suit les fichiers,
+    les labels restent attachés, rien n'est compté en doublon."""
+    old_disk, new_disk = tmp_path / "ancien", tmp_path / "nouveau"
+    old = old_disk / "RELEVE 3 Mataroni - 06-13 janv 2026" / "2LA04530_MGM06" / "Data"
+    write_recording(old / f"{STEMS[0].upper()}.wav", seed=0)
+    con = connect(cfg["paths"]["db"])
+    run_ingest(con, old_disk, "2026", cfg, hash_file=False, scan=old_disk, site="Mataroni")
+    sheet = write_sheet(tmp_path / "a.xlsx", [(f"{STEMS[0]}.flac", 36, 0.9, True)])
+    assert import_label_file(con, sheet, cfg, kind=None).inserted == 1
+    before = con.execute("SELECT recording_id, qc_flags FROM recordings").fetchone()
+
+    # Nouveau disque, arborescence <jeu>/<site>/<micro>/ ; l'ancien n'est plus branché.
+    new = new_disk / "2026" / "Mataroni" / "2LA04530"
+    write_recording(new / f"{STEMS[0].upper()}.wav", seed=0)
+    report = run_ingest(con, new_disk, "2026", cfg, run_qc=False, hash_file=False)
+    assert report.relocated == 1 and report.added == 0 and not report.duplicates
+
+    row = con.execute("SELECT * FROM recordings").fetchone()
+    assert row["recording_id"] == before["recording_id"]
+    assert row["path"] == f"2026/Mataroni/2LA04530/{STEMS[0].upper()}.wav"
+    assert row["qc_flags"] == before["qc_flags"]  # QC déjà calculé : pas effacé
+    labelled = con.execute(
+        "SELECT COUNT(*) FROM labels l JOIN windows w USING (window_id) "
+        "JOIN recordings r USING (recording_id)"
+    ).fetchone()[0]
+    assert labelled == 1

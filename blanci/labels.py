@@ -173,7 +173,9 @@ def parse_comment(comment: str | None, kind: Kind, quality: str | None = None) -
     if kind == "positive":
         if species:
             conditions["co_occurring"] = species
-        if quality is None:
+        # Sans commentaire, la qualité reste inconnue : un « vrai » sec ne dit pas que le
+        # chant était clair, et un A par défaut viderait de sens le rappel par qualité (§6).
+        if quality is None and raw:
             quality = infer_quality(tags, species)
             conditions["quality_inferred"] = True
         label = (
@@ -300,6 +302,22 @@ VERDICT_NO = re.compile(
 # Labels qui ne reconnaissent rien de précis : ils ne valent pas verdict.
 VAGUE_LABELS = ("other", "uncertain")
 
+# « à vérif », « à conf », « à revoir » : l'expert n'a pas encore tranché. Ni label ni
+# blocage : la ligne est mise de côté et listée, elle reviendra dans une file de vérification.
+VERDICT_PENDING = re.compile(r"^a (verif|verifier|conf|confirmer|revoir|reecouter)\b")
+
+# Colonnes sans nom où l'on range des commentaires (« Colonne1 » d'un tableau Excel,
+# « Unnamed: 12 » d'une cellule sans en-tête) : leur texte rejoint le commentaire.
+ANONYMOUS_COLUMN = re.compile(r"^(colonne|column|unnamed)_?\d*$")
+
+
+def _is_blank(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return bool(pd.isna(value))
+
 
 def parse_verdict(value: Any) -> bool | None:
     """True / False depuis une colonne de vérification, None si la valeur n'est pas concluante."""
@@ -319,9 +337,15 @@ def parse_verdict(value: Any) -> bool | None:
     return None
 
 
+# Clé S3 de l'ancien prestataire : « 2353462-2la03550_20260108_143000.flac ». Le préfixe
+# numérique n'est retiré que devant un nom Song Meter, pour ne jamais tronquer un vrai nom.
+S3_PREFIX = re.compile(r"^\d+-(?=.+_\d{8}_\d{6}$)")
+
+
 def file_key(name: str) -> str:
-    """Nom de fichier sans dossier ni extension, en minuscules."""
-    return Path(str(name).replace("\\", "/")).stem.lower()
+    """Nom de fichier sans dossier, extension ni préfixe S3, en minuscules."""
+    stem = Path(str(name).replace("\\", "/")).stem.lower()
+    return S3_PREFIX.sub("", stem)
 
 
 def _normalize_quality(value: Any) -> str | None:
@@ -337,6 +361,8 @@ class LabelImportReport:
     columns: dict[str, str]
     rows: list[dict[str, Any]] = field(default_factory=list)
     unresolved: list[tuple[int, str]] = field(default_factory=list)
+    unverified: int = 0  # verdict vide : détection jamais écoutée, pas un label
+    pending: list[tuple[int, str]] = field(default_factory=list)  # « à vérif », « à conf »
     already_imported: bool = False
     inserted: int = 0
 
@@ -362,11 +388,22 @@ class LabelImportReport:
                 f"min {min(scores):.3f}, médiane {sorted(scores)[len(scores) // 2]:.3f}, "
                 f"max {max(scores):.3f}"
             )
-        if other:
-            lines.append(f"  {len(other)} commentaires non reconnus (label other) :")
-            lines += [f"    - {c!r}" for c in sorted(set(other))]
+        silent = sum(1 for c in other if not c)
+        if silent:
+            lines.append(f"  {silent} négatifs sans commentaire (label other : espèce inconnue)")
+        if len(other) > silent:
+            lines.append(f"  {len(other) - silent} commentaires non reconnus (label other) :")
+            lines += [f"    - {c!r}" for c in sorted({c for c in other if c})]
+        if self.unverified:
+            lines.append(
+                f"  {self.unverified} lignes sans vérification (détections jamais écoutées) : "
+                "ignorées, ce ne sont pas des labels"
+            )
+        if self.pending:
+            lines.append(f"  {len(self.pending)} lignes en attente de vérification, de côté :")
+            lines += [f"    - ligne {i} : {msg}" for i, msg in self.pending]
         if self.unresolved:
-            lines.append(f"  {len(self.unresolved)} lignes sans enregistrement correspondant :")
+            lines.append(f"  {len(self.unresolved)} lignes non résolues (bloquent l'import) :")
             lines += [f"    - ligne {i} : {msg}" for i, msg in self.unresolved[:20]]
         if self.already_imported:
             lines.append("  déjà importé (même SHA-256) : rien n'est ajouté")
@@ -415,11 +452,24 @@ def import_label_file(
 
     # Colonne qui porte le verdict : « vérif manuelle » de préférence, sinon « label ».
     verdict_column = columns.get("verdict") or columns.get("label")
+    comment_columns = ([columns["comment"]] if "comment" in columns else []) + [
+        c
+        for c in df.columns
+        if ANONYMOUS_COLUMN.match(column_key(str(c))) and c not in columns.values()
+    ]
+    headers = {str(c).strip() for c in df.columns}
 
     for i, record in enumerate(df.to_dict("records"), start=2):  # ligne 1 = en-tête
         row_kind = kind
         verdict_text = record.get(verdict_column) if verdict_column else None
         if row_kind is None:
+            if _is_blank(verdict_text):
+                # Détection de l'ancien modèle que personne n'a écoutée : pas un label.
+                report.unverified += 1
+                continue
+            if isinstance(verdict_text, str) and VERDICT_PENDING.match(normalize(verdict_text)):
+                report.pending.append((i, f"{record[columns['file']]} : {verdict_text!r}"))
+                continue
             verdict = parse_verdict(verdict_text)
             if verdict is None:
                 # Pas un oui/non. La cellule nomme-t-elle un faux ami reconnu ? Si oui, c'est
@@ -435,12 +485,15 @@ def import_label_file(
             row_kind = "positive" if verdict else "negative"
 
         quality = _normalize_quality(record.get(columns.get("quality", ""), None))
-        # Le texte de la vérification sert aussi de commentaire : c'est souvent lui qui
-        # nomme le faux ami (« fourmilier tacheté ») ou la qualité (« lointain »).
-        comment = record.get(columns.get("comment", ""), None)
-        if (comment is None or pd.isna(comment)) and isinstance(verdict_text, str):
-            comment = verdict_text
-        parsed = parse_comment(comment, row_kind, quality)
+        # Commentaire = texte de la vérification (il nomme souvent le faux ami ou la qualité)
+        # + colonne commentaire + colonnes sans nom. Un texte égal à un en-tête (« Colonne1 »
+        # recopié dans une cellule) est un reste de mise en forme, pas un commentaire.
+        texts: list[str] = []
+        for value in [verdict_text, *(record.get(c) for c in comment_columns)]:
+            if isinstance(value, str) and value.strip() and value.strip() not in headers:
+                if value.strip() not in texts:
+                    texts.append(value.strip())
+        parsed = parse_comment(" | ".join(texts) or None, row_kind, quality)
         if "score" in columns:
             score = record[columns["score"]]
             if not pd.isna(score):

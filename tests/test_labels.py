@@ -79,7 +79,7 @@ def test_false_friend_comments(comment, label, species):
         ("chant lointain", "C", ["distant"], None),
         ("chants audibles malgré la pluie", "B", ["rain"], None),
         ("chant audible ET présence du fourmilier tacheté", "B", [], ["Fourmilier tacheté"]),
-        ("", "A", [], None),
+        ("chant régulier et audible", "A", [], None),
     ],
 )
 def test_positive_comments(comment, quality, tags, co_occurring):
@@ -88,6 +88,14 @@ def test_positive_comments(comment, quality, tags, co_occurring):
     assert parsed.quality == quality and parsed.conditions["quality_inferred"]
     assert parsed.conditions["tags"] == tags
     assert parsed.conditions.get("co_occurring") == co_occurring
+
+
+@pytest.mark.parametrize("comment", ["", None, float("nan")])
+def test_positive_without_comment_has_unknown_quality(comment):
+    """345 positifs dont 339 sans commentaire : un A par défaut serait une fausse certitude."""
+    parsed = parse_comment(comment, "positive")
+    assert parsed.label == "blanci" and parsed.quality is None
+    assert "quality_inferred" not in parsed.conditions
 
 
 def test_explicit_quality_wins_over_inference():

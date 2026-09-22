@@ -1,0 +1,8 @@
+# Modèle de configuration locale : copier en config/local.yaml (ignoré par git) et adapter.
+# Utilisation : uv run blanci --config config/local.yaml <commande>
+#
+# paths.raw = racine du disque externe. Les chemins des enregistrements sont stockés relatifs
+# à cette racine : ils restent valables quand le disque change de lettre (Windows) ou de point
+# de montage (/Volumes/<nom>/ sur Mac), il suffit de modifier cette ligne.
+paths:
+  raw: "D:/"

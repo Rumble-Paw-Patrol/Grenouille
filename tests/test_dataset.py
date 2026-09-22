@@ -168,7 +168,7 @@ def test_paired_negatives_share_the_mic_and_the_time_slot(con):
     same_slot = add_recording(con, "2026/mataroni/M1/d11.wav", start_utc="2026-02-11T13:00:00Z")
     other_hour = add_recording(con, "2026/mataroni/M1/d11b.wav", start_utc="2026-02-11T20:00:00Z")
     other_mic = add_recording(
-        con, "2026/mataroni/M9/d11.wav", mic="M9", start_utc="2026-02-11T13:00:00Z"
+        con, "2026/mataroni/M9/m9_d11.wav", mic="M9", start_utc="2026-02-11T13:00:00Z"
     )
     grid = grid_frame([positive, same_slot, other_hour, other_mic])
     out = paired_negatives(grid, recordings_table(con), {positive}, per_positive=5)

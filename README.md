@@ -14,41 +14,47 @@ uv run blanci --help
 
 ## Données
 
-Enregistrements de 2 min, nommés `<micro>_<AAAAMMJJ>_<HHMMSS>` — par exemple
-`2la04530_20260106_103000.wav` : micro `2LA04530`, 6 janvier 2026 à 10 h 30 locales
-(UTC−3). WAV et FLAC sont inventoriés tous les deux ; l'appariement avec le fichier
-d'annotations se fait sur le nom **sans extension**.
-
-Annotations : un tableau Excel, une ligne par fenêtre de 3 s, avec le nom de
-l'enregistrement, le timecode, le score de l'ancien prestataire et la vérification manuelle.
-
-Hors git, sous `data/` (chemins dans `config/default.yaml`) :
+L'audio reste sur le disque externe, jamais modifié. Sa racine se déclare dans
+`config/local.yaml` (copie de `config/local.example.yaml`, ignorée par git) ; les chemins sont
+stockés relatifs à cette racine, ils survivent à un changement de lettre ou de machine.
 
 ```
-data/raw/{2023,2026}/<site>/<micro>/*.{wav,flac}   # audio brut, jamais modifié
-data/labels/imports/                        # fichiers d'annotation reçus, jamais modifiés
-data/db/blanci.sqlite                       # inventaire, fenêtres, labels (ajout seul)
-data/embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet
-data/reports/                               # rapports d'erreurs d'inventaire
+<disque>/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04530_MGM06/Data/
+    2LA04530_20260106_103000.wav      # micro 2LA04530, 6 janvier 2026, 10 h 30 locales
 ```
+
+Enregistrements de 2 min, 48 kHz stéréo. Le micro est le numéro de série (GUANO, sinon
+préfixe du nom), l'heure vient du GUANO avec le fuseau de l'enregistreur. WAV et FLAC sont
+inventoriés ; l'appariement avec les annotations se fait sur le nom sans extension.
+
+Annotations : l'export Excel de Blancinet v0.1.0 (une ligne par détection de 3 s, clé S3,
+score, vérification `True` / `False`, commentaires). Seules les lignes vérifiées deviennent des
+labels.
+
+Hors git, sous `data/` : `db/blanci.sqlite` (inventaire, fenêtres, labels en ajout seul),
+`embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet`, `models/`, `reports/`.
 
 ## Commandes
 
 Toutes passent par `blanci/service.py`, que la future GUI appellera de la même façon (§4).
 
 ```sh
-# --- Données -------------------------------------------------------------
-# Inventaire + contrôle qualité (reprenable : les fichiers déjà connus sont sautés)
-uv run blanci ingest --dataset 2026
+B="uv run blanci --config config/local.yaml"
 
-# Import des annotations ; --dry-run d'abord pour relire l'analyse des commentaires
-uv run blanci import-labels data/labels/imports/positifs.csv --kind positive --dry-run
-uv run blanci import-labels data/labels/imports/positifs.csv --kind positive
-uv run blanci import-labels data/labels/imports/faux_amis.csv --kind negative
+# --- Données -------------------------------------------------------------
+# Inventaire, relevé par relevé, DANS L'ORDRE CHRONOLOGIQUE : les cartes SD d'un relevé
+# contiennent encore les fichiers du précédent ; le premier inventorié garde le fichier.
+# --no-qc --no-hash : en-têtes seuls, le disque entier en quelques minutes.
+$B ingest --dataset 2026 --site CDR --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025"
+$B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026"
+
+# Import des annotations ; --dry-run d'abord pour relire verdicts, espèces et lignes signalées
+$B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx --dry-run
+$B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
 
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
-uv run blanci check-grid
-uv run blanci status
+$B check-grid
+$B status
 
 # --- Embeddings et choix d'encodeur (§2) ---------------------------------
 uv run blanci embed --encoder birdmae --peak-hours    # reprenable
@@ -71,30 +77,30 @@ de libellé composé (« Nom de l'enregistrement ») : fichier, timecode, vérif
 score, commentaire, qualité, site, micro. Si une colonne n'est pas trouvée, ajouter son nom
 dans `labels.import.columns` de la config.
 
-La colonne de vérification tranche positif/négatif : oui/non et leurs variantes, réponses
-rédigées mentionnant *blanci*, ou nom d'un faux ami connu (qui donne aussi l'espèce). Une
-valeur non reconnue (« à revoir ») **bloque la ligne** au lieu d'être rangée en négatif ;
-`--dry-run` les liste toutes. Chaque ligne doit désigner un enregistrement déjà inventorié.
+La colonne de vérification tranche positif/négatif : `True` / `False`, oui/non et leurs
+variantes, réponses rédigées mentionnant *blanci*, ou nom d'un faux ami connu (qui donne
+aussi l'espèce). Une cellule vide est une détection jamais écoutée : ignorée, ce n'est pas un
+label. « à vérif » / « à conf » sont mises de côté et listées. Toute autre valeur non reconnue
+**bloque l'import** au lieu d'être rangée en négatif ; `--dry-run` les liste toutes. Chaque
+ligne doit désigner un enregistrement déjà inventorié.
 
 ## Avancement
 
 | Jalon | État |
 |---|---|
-| M0 dépôt, config, `ingest`, `import-labels` | code et tests écrits ; **acceptation à faire sur les données réelles** |
+| M0 dépôt, config, `ingest`, `import-labels` | **accepté sur données réelles** le 22/09 (DECISIONS n° 49) |
 | M1 `embed`, `benchmark` en plis par micro | écrits, testés, branchés sur la CLI ; **adaptateur bacpipe non validé** |
 | M2 `head`, `search`, `queue`, prototype Streamlit | `train`, `score`, `queue`, `search` en service et en CLI ; GUI Streamlit à faire |
 | M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | modules écrits et testés ; `aggregate` branché, `sequential`/`fusion` pas encore |
 
-386 tests passent sur Python 3.11 (`uv run pytest`), dont la chaîne complète en ligne de
-commande sur un corpus synthétique. Tous les modules sont couverts sauf
+Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 positifs et
+150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
+viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
+
+410 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
 `encoders/bacpipe_encoder.py`, `encoders/onnx_encoder.py` et `encoders/export.py`, qui
 demandent respectivement bacpipe (groupe `research`) et un modèle exporté.
 
-**Non validé sur données réelles** : l'adaptateur bacpipe devine l'API de la bibliothèque
-(noms de modules, `SAMPLE_RATE`, `preprocess()`) ; il sera confronté à bacpipe installé en M1.
-
-Le format d'entrée est écrit d'après la description de Léonard et couvert par
-`tests/test_real_format.py`, mais aucun fichier réel n'a encore été lu. L'acceptation M0
-reste à faire : `ingest` sur une centaine de fichiers, puis `import-labels --dry-run` sur le
-vrai tableau, pour relire les verdicts et les lignes signalées avant d'écrire quoi que ce
-soit en base.
+**Reste à faire avant M1** : écarter les enregistrements hors campagne (durée ≠ 2 min, dates
+hors relevé) ; décider du canal audio (stéréo, gains 6 et 18 dB, DECISIONS n° 44) ; valider
+l'adaptateur bacpipe contre la bibliothèque installée.
