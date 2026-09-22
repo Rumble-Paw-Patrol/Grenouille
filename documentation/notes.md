@@ -42,10 +42,15 @@ Autre méthode : par exemple, certains modèles ont leur propre mécanisme d'att
 
 ## Méthode de sélection des candidats à annoter
 
-Récolte par similarité
 Queue 60-20-20
+Récolte par similarité
 YAPAT
 Étiquetage en bloc par cluster
+
+Queue 60-20-20 : baseline, proportions modifiable (plus d'aléatoire en début d'entraînement)
+Récolte par similarité : identifie des positifs faciles. Idéal pour amorcer l'annotation d'un nouveau site.
+YAPAT
+Cluster : quand un groupe s'avère homogène après une dizaine d'évaluation, annotation massive du groupe.
 
 ## Trucs à faire
 
@@ -63,16 +68,15 @@ trouver les enregistrements annotés de 2023. J'ai seulement 2026 à ce jour. ->
 
 check pb pluie et coup de feu. La signature sonore du coup de feu, diffus lorsque le micro est loin du point de tir, se fond dans le bruit de pluie omniprésent. Quelle solution ? 
 
-c'est quoi le pb avec tensorflow ?
-
-fine tuning vs entraînement
-
-trouver les enregistrements annotés de 2023. J'ai seulement 2026 à ce jour. -> réunion avec le collègue de trésor lundi
+## Extra pro
+location colocation guyane
+vivre en guyane
 
 
-
-
+## Old
 --------------------------------------------------------------------------------------------------------------------------------------------
+intérêt de head
+fine tuning vs entraînement
 
 
 H1 : les enregistreurs sont tous des Wildlife Acoustics Song Meter Mini 2. D'après mon tuteur c'est le top.
