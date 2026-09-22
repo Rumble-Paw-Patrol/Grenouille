@@ -750,9 +750,7 @@ ses représentations.
   par fenêtre. **La baseline de référence** : si le CNN maison ne la bat pas, il n'apporte
   rien.
 - ***Attentive probing*** : la tête est un module d'attention qui apprend **où regarder**
-  parmi les représentations *token-level*. Plus puissant, mais nécessite de rétropropager à
-  travers des activations intermédiaires — donc **impossible sur un modèle figé au format
-  TFLite**.
+  parmi les représentations *token-level*. Plus puissant, mais la contrainte est l'accès aux tokens avant agrégation donc **impossible sur un modèle figé au format TFLite**.
 
 **Régression logistique** — `z = w·x + b`, `p = σ(z)`, loss BCE. Littéralement un neurone
 unique suivi d'une sigmoïde, sans couche cachée : frontière de décision = hyperplan.

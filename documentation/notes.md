@@ -1,3 +1,66 @@
+## À prompter une fois le squelette terminé
+
+###Le prototype simple apparaît au §3 comme « baseline de similarité », mais il n'est repris ni au §6 ni dans la spécification du §13. Il est sur la carte, pas dans le plan d'exécution. Ça vaut une ligne dans DECISIONS.md pour trancher.
+
+Et garde bien la seconde fonction du différentiel mentionnée dans ta feuille de route : l'écart de score entre prototype simple et prototype différentiel mesure la part de fond sonore captée par l'embedding. Si les deux donnent le même classement, l'ambiance de Mataroni ne pollue pas ; si le différentiel fait nettement mieux, c'est qu'elle pollue, et tu le sais avant d'avoir entraîné quoi que ce soit.
+
+###Tester le seuillage spectral en amont et comparer les performances
+
+###Considérer pondérer les entrées de la régression logistique de fusion. Quel expert écouter en priorité ? Encodeur + probe (hors pli) ou le module sequential ?
+
+###Afin de connaître quel encodeur fournit les tokens en sortie :
+Lire la fonction forward du modèle. Cherche .mean(dim=…), .max(…), [:, 0] (extraction du token de classe), AdaptiveAvgPool ou GlobalAveragePooling2D.
+
+Le test empirique, en cinq lignes. Tu récupères à la fois les tokens et l'embedding par défaut, puis tu compares :
+(schématique : les noms d'attributs dépendent du modèle)
+h = tokens_avant_agregation(x)     # (B, N, d)
+e = embedding_par_defaut(x)        # (B, d)
+cos = torch.nn.functional.cosine_similarity
+print(cos(e, h.mean(1), dim=-1).mean())          # moyenne ?
+print(cos(e, h[:, 0], dim=-1).mean())            # token de classe ?
+print(cos(e, h.max(1).values, dim=-1).mean())    # maximum ?
+
+La candidate dont la similarité approche 1 est la bonne. Si aucune n'y arrive exactement, c'est souvent qu'une normalisation ou une projection s'applique après l'agrégation — il faut alors remonter dans le code.
+
+##Benchmark des méthodes pour head - Choix de w
+
+Recherche par l'exemple - w = l'embedding d'une fenêtre de référence
+Prototype simple - w = μ₊, moyenne des positives
+Prototype différentiel - w = μ₊ − μ₋
+Linear probe [moyenne, maximum]- w appris par optimisation
+Attentive probe - w appris par optimisation (sur certains modèles seulement)
+Cascade linear probe + attentive probe sur candidats sélectionnés
+Autre méthode spécifique à la sortie d'un foundation model - dépend du modèle
+Wrapper - outil de bacpipe à explorer
+
+Prototype simple : baseline
+Prototype différentiel : l'écart de score avec baseline mesure la part de fond sonore captée par l'embedding
+Linear probe : dès quelques dizaines de positifs, la régression logistique apprend une direction qui tient compte de la covariance, ce que le prototype ne sait pas faire. Généralise mieux sur un site MAIS risque de moins généraliser d'un site à l'autre par rapport au prototype différentiel. Le prototype différentiel à négatives appariées, qui annule explicitement la moyenne du site, pourrait généraliser mieux tant qu'on a pas de positifs multi-sites. Ce serait un résultat intéressant, hypothèse à tester.
+Linear probe : moyenne ou maximum ou combinaison des deux ou moyenne en fréquence et max sur l'axe du temps.
+Attentive probe : coûteux en mémoire car il conserve les vecteurs de chaque token, si trop coûteux : disque dur stockant les tokens ou méthode de la cascade.
+Autre méthode : par exemple, certains modèles ont leur propre mécanisme d'attention. Dans ce cas là, ne pas construire de head ? Que faire ?
+
+## Méthode de sélection des candidats à annoter
+
+Récolte par similarité
+Queue 60-20-20
+YAPAT
+Étiquetage en bloc par cluster
+
+## Trucs à faire
+
+Annoter manuellement un max de données d'un max de points d'écoutes différents.
+
+## Questions en suspens
+
+les fichiers sont en stéréo avec deux gains (6 et 18 dB) et le canal à 18 dB sature parfois. Faut-il garder la moyenne des deux canaux ou un suel ?
+
+c'est quoi le pb avec tensorflow ?
+
+trouver les enregistrements annotés de 2023. J'ai seulement 2026 à ce jour. -> réunion avec le collègue de trésor lundi
+
+## Autres
+
 check pb pluie et coup de feu. La signature sonore du coup de feu, diffus lorsque le micro est loin du point de tir, se fond dans le bruit de pluie omniprésent. Quelle solution ? 
 
 c'est quoi le pb avec tensorflow ?
