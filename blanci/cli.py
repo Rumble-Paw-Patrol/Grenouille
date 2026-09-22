@@ -23,6 +23,7 @@ from blanci.encoders import get_encoder
 from blanci.grid import containing_windows, max_hop_without_cut, window_grid
 from blanci.ingest import ingest as run_ingest
 from blanci.labels import POSITIVE_LABELS, import_label_file
+from blanci.qc import apply_metadata_flags
 from blanci.service import (
     append_label,
     evaluate_holdout,
@@ -102,6 +103,7 @@ def ingest(
         f"{report.relocated} déplacés, {len(report.duplicates)} doublons écartés, "
         f"{len(report.errors)} erreurs"
     )
+    _echo_flags(report.flagged)
     # Un rapport par (jeu, site) : inventorier un relevé n'écrase pas le rapport du précédent.
     stem = f"{dataset}_{site}" if site else dataset
     reports = config_path(cfg, "reports")
@@ -116,6 +118,25 @@ def ingest(
         with out.open("w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerows([header, *rows])
         typer.echo(f"détail ({'erreurs' if kind == 'errors' else 'doublons'}) : {out}")
+
+
+def _echo_flags(flagged: dict[str, int]) -> None:
+    typer.echo(
+        f"signalés (jamais encodés) : {flagged.get('duration_off', 0)} de durée anormale, "
+        f"{flagged.get('off_campaign', 0)} hors relevé"
+    )
+
+
+@app.command()
+def flag(ctx: typer.Context) -> None:
+    """Recalcule les drapeaux d'inventaire (durée anormale, hors relevé) sans lire l'audio.
+
+    Un enregistrement signalé reste dans la base et sur le disque ; il n'est simplement jamais
+    encodé, donc jamais tiré comme négatif ni proposé à la vérification.
+    """
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    _echo_flags(apply_metadata_flags(con, cfg["qc"]))
 
 
 @app.command("import-labels")
@@ -219,6 +240,7 @@ def embed(
         config_path(cfg, "raw"),
         config_path(cfg, "embeddings"),
         hop_ratio=cfg["encoders"]["grid_hop_ratio"],
+        channel=cfg["audio"]["channel"],
     )
     typer.echo(
         f"{report.encoder_id} : {report.recordings} encodés, {report.skipped} déjà faits, "

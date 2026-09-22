@@ -49,9 +49,13 @@ def select_recordings(
     site: str | None = None,
     peak_hours: list[list[int]] | None = None,
     utc_offset_h: float = -3,
-    exclude_flags: tuple[str, ...] = ("in_bag", "silent"),
+    exclude_flags: tuple[str, ...] = ("in_bag", "silent", "duration_off", "off_campaign"),
 ) -> pd.DataFrame:
-    """Enregistrements à encoder, filtrés par jeu, site, heures de pic locales et drapeaux QC."""
+    """Enregistrements à encoder, filtrés par jeu, site, heures de pic locales et drapeaux QC.
+
+    Un enregistrement signalé n'est jamais encodé : il ne peut donc devenir ni négatif apparié,
+    ni candidat de file de vérification, ni score. Le fichier, lui, n'est pas touché.
+    """
     df = pd.read_sql_query("SELECT * FROM recordings ORDER BY path", con)
     if dataset:
         df = df[df["dataset"] == dataset]
@@ -98,6 +102,7 @@ def embed_recordings(
     hop_ratio: float = 0.5,
     flush_every: int = 50,
     progress_every: int = 100,
+    channel: int | str = "mean",
 ) -> EmbedReport:
     eid = encoder_id(encoder)
     store = EmbeddingStore(store_root, eid)
@@ -117,7 +122,7 @@ def embed_recordings(
                 report.skipped += 1
                 continue
             try:
-                wav, sr = load_audio(Path(raw_root) / rec.path)
+                wav, sr = load_audio(Path(raw_root) / rec.path, channel)
             except Exception:  # fichier illisible : déjà signalé à l'inventaire
                 report.errors += 1
                 continue
@@ -156,17 +161,22 @@ def embed_recordings(
                 )
         _flush(store, con, metas, embs, dataset, site, month)
 
-    register_encoder(con, encoder, hop_s, report)
+    register_encoder(con, encoder, hop_s, report, channel)
     return report
 
 
 def register_encoder(
-    con: sqlite3.Connection, encoder: Encoder, hop_s: float, report: EmbedReport
+    con: sqlite3.Connection,
+    encoder: Encoder,
+    hop_s: float,
+    report: EmbedReport,
+    channel: int | str = "mean",
 ) -> None:
     params: dict[str, Any] = {
         "sample_rate": encoder.sample_rate,
         "window_s": encoder.window_s,
         "hop_s": hop_s,
+        "channel": channel,  # micro lu : des embeddings de micros différents ne se comparent pas
         "dim": encoder.dim,
         "has_tokens": encoder.has_tokens,
         "last_run": asdict(report)

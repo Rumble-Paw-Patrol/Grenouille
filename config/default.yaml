@@ -13,6 +13,10 @@ paths:
 audio:
   # Formats inventoriés (lus par libsndfile). Les Song Meter écrivent en WAV ou en FLAC.
   suffixes: [".wav", ".flac"]
+  # Canal lu : 0 = premier micro (gain 6 dB), 1 = second micro (gain 18 dB), mean = moyenne.
+  # Mesuré sur 91 enregistrements (DECISIONS n° 50) : deux micros distincts, même lisibilité
+  # des notes d'A. blanci (écart médian +0,2 dB), mais le micro à 18 dB sature 3 fois plus.
+  channel: 0
 
 recorder:
   # Utilisé seulement si l'en-tête GUANO du WAV est absent ou sans fuseau (toujours en FLAC).
@@ -41,6 +45,12 @@ qc:
   in_bag_hf_ratio: 0.02            # énergie > 2 kHz / énergie totale en dessous : micro dans sac
   rain_flatness: 0.5               # platitude spectrale 1–10 kHz au-dessus...
   rain_min_dbfs: -35.0             # ...et niveau au-dessus : pluie
+  # Drapeaux calculés sur l'inventaire seul (sans lire l'audio), recalculés après chaque
+  # inventaire ou par `blanci flag`. Un enregistrement signalé n'est jamais encodé.
+  expected_duration_s: 120.0       # programme des Song Meter : 2 min toutes les 30 min
+  duration_tolerance_s: 1.0        # au-delà : duration_off (test, déclenchement manuel)
+  campaign_gap_days: 7             # trou plus long dans la série d'un micro : sort du relevé
+
 
 labels:
   import:

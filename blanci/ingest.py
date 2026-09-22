@@ -23,7 +23,7 @@ import soundfile as sf
 
 from blanci.audio import load_audio
 from blanci.db import recording_id_for
-from blanci.qc import qc_flags, qc_indices
+from blanci.qc import apply_metadata_flags, qc_flags, qc_indices
 
 # <préfixe>_<AAAAMMJJ>_<HHMMSS>[_suffixe] — convention Wildlife Acoustics.
 SONGMETER_NAME = re.compile(r"^(?P<prefix>.+?)_(?P<date>\d{8})_(?P<time>\d{6})(?:_.*)?$")
@@ -40,6 +40,7 @@ class IngestReport:
     errors: list[tuple[str, str]] = field(default_factory=list)
     duplicates: list[tuple[str, str]] = field(default_factory=list)  # (écarté, conservé)
     relocated: int = 0  # déjà connus sous un chemin qui n'existe plus : chemin mis à jour
+    flagged: dict[str, int] = field(default_factory=dict)  # drapeaux d'inventaire, total
 
 
 def iter_audio_files(directory: Path, suffixes: Sequence[str] = AUDIO_SUFFIXES) -> Iterator[Path]:
@@ -162,7 +163,7 @@ def describe_recording(
 
     qc = None
     if run_qc:
-        wav, sr = load_audio(io.BytesIO(data))
+        wav, sr = load_audio(io.BytesIO(data), cfg.get("audio", {}).get("channel", "mean"))
         qc = json.dumps(qc_flags(qc_indices(wav, sr), cfg["qc"]))
 
     return {
@@ -267,4 +268,6 @@ def ingest(
             con.commit()
             print(f"  {n} fichiers parcourus ({report.added} ajoutés)", flush=True)
     con.commit()
+    # Les drapeaux d'inventaire dépendent de toute la série d'un micro : recalculés ici.
+    report.flagged = apply_metadata_flags(con, cfg["qc"])
     return report

@@ -64,7 +64,7 @@ def workspace(tmp_path, monkeypatch):
         for mic in mics:
             for day in range(4):
                 # Le premier jour de chaque micro porte une tonale à 4,75 kHz : le « chant ».
-                path = raw / "2026" / site / mic / f"{mic}_20260{2 + day}10_100000.wav"
+                path = raw / "2026" / site / mic / f"{mic}_202602{10 + day}_100000.wav"
                 write_soundscape(path, tone_hz=4750.0 if day == 0 else None, seed=seed)
                 seed += 1
 
@@ -84,6 +84,9 @@ def workspace(tmp_path, monkeypatch):
                 "benchmark": {"n_boot": 20, "negatives_per_positive": 4},
                 "head": {"n_splits": 3, "C_grid": [1.0], "seed": 0},
                 "active": {"batch_recordings": 5, "mix": [0.6, 0.2, 0.2]},
+                # Enregistrements de synthèse de 12 s : sans cela, tous seraient signalés
+                # « durée anormale » et jamais encodés.
+                "qc": {"expected_duration_s": DURATION_S},
             }
         ),
         encoding="utf-8",

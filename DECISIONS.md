@@ -282,3 +282,58 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     - `check-grid` : 0 annotation positive coupée sur 345, grilles 3 s et 5 s ;
     - trois enregistreurs ont un préfixe de nom personnalisé (ALOUATTA, LAGOTHRIX, SAIMIRI) :
       le micro retenu est leur numéro de série GUANO (SMA11407, 2MA02726, SMA11393).
+
+## 2026-09-22 — Canal audio, drapeaux d'inventaire, deux disques
+
+50. **Canal audio : premier micro (gain 6 dB) par défaut** (`audio.channel: 0`), plus la
+    moyenne des deux canaux. Mesuré sur 91 enregistrements (les 51 à positifs + 40 d'autres
+    sites) :
+    - les deux canaux sont **deux micros distincts** qui écoutent la même scène : enveloppes
+      d'énergie très corrélées (0,75 à 0,94 le plus souvent), formes d'onde presque pas
+      (0,05 à 0,40, sans décalage constant) ; un micro unique enregistré deux fois donnerait
+      une corrélation proche de 1 au décalage 0 ;
+    - l'écart de niveau vaut bien le réglage : +10 à +12 dB pour le second canal ;
+    - **les 12 dB de plus n'améliorent pas la lisibilité des notes d'A. blanci** : rapport
+      signal/bruit dans la bande 4,4–5,5 kHz de 8,5 dB (6 dB de gain) contre 9,8 dB (18 dB),
+      écart médian par enregistrement +0,2 dB. Le fond de la forêt est 46 dB au-dessus du
+      bruit de quantification 16 bits : le gain amplifie le fond autant que les notes ;
+    - le micro à 18 dB sature dans 12 % des fichiers, celui à 6 dB dans 4 %.
+    Moyenner deux micros ne gagne rien, hérite des saturations du plus amplifié (4 fois plus
+    fort, il domine la moyenne) et additionne deux points d'écoute décalés de quelques
+    centimètres, ce qui creuse des annulations de phase à des fréquences qui dépendent de la
+    direction du son — de l'ordre de la bande d'A. blanci pour un écart de ~3,6 cm. Le canal
+    est inscrit dans les paramètres de l'encodeur (`models.params_json`) : des embeddings de
+    micros différents ne se comparent pas. Piste pour plus tard : le second micro comme
+    augmentation de données (deux « vues » du même instant).
+
+51. **Drapeaux d'inventaire, sans lire l'audio** (`duration_off`, `off_campaign`), recalculés
+    à chaque inventaire et par `blanci flag`. Un enregistrement signalé reste dans la base et
+    sur le disque ; il n'est jamais encodé, donc jamais tiré comme négatif apparié, proposé à
+    la vérification ni scoré.
+    - `duration_off` : durée hors de 120 s ± 1 s (tests, déclenchements manuels).
+    - `off_campaign` : pour chaque (jeu, site, micro), la série de dates est coupée à chaque
+      trou de plus de 7 jours ; le plus gros bloc est la campagne, le reste en sort. Un micro
+      posé en continu sur plusieurs relevés d'un même site (phénologie 2023-2024) reste un bloc.
+    Résultat sur l'inventaire 2026 : 148 durées anormales, 70 hors relevé, 149 enregistrements
+    signalés au total (69 cumulent les deux), **aucun enregistrement annoté**. Un seul hors
+    relevé a une durée normale (2LA04429, 17 décembre, carte posée à Mataroni le 6 janvier).
+
+52. **Deux disques, un seul utile en plus.** D: (Samsung T7 Shield, 4 To) et E: (Seagate
+    Basic, 1 To). Comparaison des noms de fichiers :
+    - E: `enregistrements_blanci_mataroni_01-26` = copie exacte du relevé Mataroni du D:
+      (les 9 noms « en plus » sont les fichiers vides) ;
+    - E: `Pheno_blanci_Molokoi` = copie de la partie Molokoï de « Projet Phénologie blanci »
+      du D: (21 009 noms sur 21 012) ;
+    - **E: `Enregistrements blanci Mataroni mai 2026` : 18 fichiers absents du D:** (un micro,
+      2LA03595 au point GI07, 19 mai 2026) ;
+    - D: « Projet Phénologie blanci » (2023-2024, Trésor, Kaw, Molokoï, 66 824 fichiers, jeu
+      de test temporel du §6) **n'est pas encore inventorié** ; « Mares » (16 568 fichiers,
+      nov. 2024 – fév. 2025) et « SM_MaraisKaw_sd1/sd2 » (808 fichiers, 2026) : rôle à préciser.
+    L'inventaire ne suit qu'une racine (`paths.raw`) : les deux disques ne s'inventorient pas
+    ensemble. Inutile de le changer, les enregistrements seront regroupés sur le disque du
+    stage (DECISIONS n° 45-46).
+
+53. **Feuille de route corrigée par Léonard** : 345 fenêtres positives pour 51 enregistrements
+    (DECISIONS n° 35 confirmé). D'autres annotations suivront, sur plus de sites. Le second
+    export (`..._dataset2_verifBV.xlsx`) n'est pas importé : même format, aucune fenêtre
+    vérifiée.

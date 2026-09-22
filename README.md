@@ -54,6 +54,7 @@ $B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
 
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid
+$B flag      # durées anormales et hors relevé : signalés, jamais encodés
 $B status
 
 # --- Embeddings et choix d'encodeur (§2) ---------------------------------
@@ -97,10 +98,13 @@ Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 po
 150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
 viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
 
-410 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+427 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
 `encoders/bacpipe_encoder.py`, `encoders/onnx_encoder.py` et `encoders/export.py`, qui
 demandent respectivement bacpipe (groupe `research`) et un modèle exporté.
 
-**Reste à faire avant M1** : écarter les enregistrements hors campagne (durée ≠ 2 min, dates
-hors relevé) ; décider du canal audio (stéréo, gains 6 et 18 dB, DECISIONS n° 44) ; valider
-l'adaptateur bacpipe contre la bibliothèque installée.
+Enregistrements de test et hors relevé signalés (149, jamais encodés, DECISIONS n° 51) ;
+canal audio fixé au premier micro, gain 6 dB (DECISIONS n° 50).
+
+**Reste à faire avant M1** : regrouper les enregistrements sur le disque du stage puis
+réinventorier (les labels suivent, DECISIONS n° 46) ; inventorier la phénologie 2023-2024 ;
+valider l'adaptateur bacpipe contre la bibliothèque installée.

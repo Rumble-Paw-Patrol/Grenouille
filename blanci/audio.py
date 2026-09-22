@@ -14,10 +14,21 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 
-def load_audio(source: Path | BinaryIO) -> tuple[np.ndarray, int]:
-    """Lit un fichier audio entier ; les canaux sont moyennés."""
+def load_audio(source: Path | BinaryIO, channel: int | str = "mean") -> tuple[np.ndarray, int]:
+    """Lit un fichier audio entier, mono : un canal (0, 1…) ou la moyenne (« mean »).
+
+    Les Song Meter du projet enregistrent deux micros distincts, à 6 et 18 dB de gain
+    (DECISIONS n° 50) : les moyenner mélange deux points d'écoute et hérite des saturations du
+    micro le plus amplifié. Un fichier mono est lu tel quel, quel que soit `channel`.
+    """
     wav, sr = sf.read(source, dtype="float32", always_2d=True)
-    return wav.mean(axis=1), sr
+    if channel == "mean":
+        return wav.mean(axis=1), sr
+    if wav.shape[1] == 1:
+        return wav[:, 0], sr
+    if not isinstance(channel, int) or not 0 <= channel < wav.shape[1]:
+        raise ValueError(f"canal {channel!r} absent : le fichier en a {wav.shape[1]}")
+    return wav[:, channel], sr
 
 
 def resample(wav: np.ndarray, sr: int, target_sr: int) -> np.ndarray:
