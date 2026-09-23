@@ -7,6 +7,7 @@ la future GUI appellera les mêmes fonctions (§4). `export-onnx` attend M5.
 from __future__ import annotations
 
 import csv
+import sqlite3
 import sys
 from collections import Counter
 from pathlib import Path
@@ -15,17 +16,18 @@ from typing import Annotated, Any
 import pandas as pd
 import typer
 
+from blanci.activity import write_activity_report
 from blanci.baselines import run_baselines, write_baseline_report
 from blanci.benchmark import run_benchmark, write_report
 from blanci.config import config_path, load_config
-from blanci.dataset import benchmark_recordings
+from blanci.dataset import benchmark_recordings, recordings_table, suspect_count, usable_labels
 from blanci.db import connect
 from blanci.embed import embed_recordings, select_recordings
 from blanci.encoders import get_encoder
 from blanci.frozen import freeze as freeze_recordings
 from blanci.grid import containing_windows, max_hop_without_cut, window_grid
 from blanci.ingest import ingest as run_ingest
-from blanci.labels import POSITIVE_LABELS, import_label_file
+from blanci.labels import POSITIVE_LABELS, import_detections, import_label_file
 from blanci.qc import (
     AUDIO_FLAGS,
     apply_annotation_flags,
@@ -35,6 +37,7 @@ from blanci.qc import (
 )
 from blanci.sequential import compute_onsets
 from blanci.service import (
+    activity_curves,
     append_label,
     compute_tokens,
     evaluate_frozen,
@@ -47,6 +50,7 @@ from blanci.service import (
     train_and_register,
     train_fusion,
 )
+from blanci.service import retrain as retrain_head
 from blanci.throughput import (
     machine_description,
     measure_in_subprocess,
@@ -58,7 +62,14 @@ from blanci.workbench import (
     congener_candidates,
     random_candidates,
     recording_candidates,
+    suspect_candidates,
 )
+
+# Console Windows en cp1252 : « ≥ », « → » ou « é » y feraient planter l'affichage (aide
+# comprise, écrite avant tout callback) quand la sortie est redirigée. La CLI écrit en UTF-8.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 app = typer.Typer(help="Détection acoustique d'Anomaloglossus blanci.", no_args_is_help=True)
 
@@ -85,11 +96,6 @@ def main(
         Path | None, typer.Option("--config", "-c", help="Fichier YAML surchargeant la config.")
     ] = None,
 ) -> None:
-    # Console Windows en cp1252 : « ≥ », « → » ou « é » y feraient planter l'affichage quand la
-    # sortie est redirigée. La CLI écrit toujours en UTF-8.
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8", errors="replace")
     ctx.obj = load_config(config)
 
 
@@ -220,6 +226,59 @@ def import_labels(
         raise typer.Exit(1)
 
 
+@app.command("import-detections")
+def import_detections_command(
+    ctx: typer.Context,
+    table: Annotated[Path, typer.Argument(help="Export des détections (Blancinet).")],
+    model: Annotated[str, typer.Option(help="Nom du détecteur dans la base.")] = "blancinet",
+) -> None:
+    """Range les détections d'un détecteur indépendant comme scores (pas comme labels).
+
+    Elles repèrent les négatifs suspects : un négatif annoté dont les fenêtres voisines
+    (± 3 s) contiennent une détection ≥ 0,5 que personne n'a écoutée est écarté de
+    l'entraînement et de l'évaluation, pour tous les encodeurs (DECISIONS n° 80).
+    """
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    report = import_detections(con, table, cfg, model)
+    typer.echo(
+        f"{report.stored} détections rangées sous « {model} » sur {report.rows} lignes "
+        f"({report.unverified} jamais écoutées) ; {report.not_found} fichiers hors inventaire, "
+        f"{report.ambiguous} ambigus, {report.unreadable} illisibles"
+    )
+    _echo_suspects(con)
+
+
+def _echo_suspects(con: sqlite3.Connection) -> None:
+    counts = suspect_count(con)
+    typer.echo(
+        f"négatifs annotés : {counts['negatives']}, dont {counts['suspect']} suspects "
+        "(A. blanci détecté à côté ; `candidates --suspects` pour écouter les voisins)"
+    )
+
+
+@app.command("export-labels")
+def export_labels(ctx: typer.Context) -> None:
+    """Fenêtres annotées, une ligne chacune : label, qualité, espèce, commentaire, suspect.
+
+    Le commentaire est celui de l'annotateur, tel qu'écrit (import ou poste d'annotation).
+    """
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    labels = usable_labels(con)
+    rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
+    table = labels.merge(rec, on="recording_id", how="left")
+    columns = [
+        "window_id", "path", "site", "mic_id", "start_utc", "offset_s", "dur_s", "label",
+        "quality", "species", "comment", "suspect", "source",
+    ]  # fmt: skip
+    _write_csv(
+        table[columns].sort_values(["path", "offset_s"]),
+        config_path(cfg, "reports") / "fenetres_annotees.csv",
+        f"{len(table)} fenêtres annotées",
+    )
+
+
 @app.command("check-grid")
 def check_grid(ctx: typer.Context) -> None:
     """Vérifie que chaque grille garde entières les notes des fenêtres positives annotées."""
@@ -269,9 +328,13 @@ def embed(
         typer.Option(help="« benchmark » : annotés + candidats aux négatifs appariés seulement."),
     ] = None,
     qc: Annotated[
-        bool,
-        typer.Option(help="Contrôle audio au passage des enregistrements qui ne l'ont pas eu."),
-    ] = True,
+        bool | None,
+        typer.Option(
+            "--qc/--no-qc",
+            help="Contrôle audio au passage des enregistrements qui ne l'ont pas eu "
+            "(défaut : qc.during_embed).",
+        ),
+    ] = None,
 ) -> None:
     """Extraction des embeddings → stock Parquet. Reprenable : ce qui est fait est sauté.
 
@@ -303,6 +366,7 @@ def embed(
         raise typer.Exit(1)
     typer.echo(f"{len(recordings)} enregistrements à traiter avec {encoder}")
     model = get_encoder(encoder, cfg)
+    check_qc = cfg["qc"].get("during_embed", True) if qc is None else qc
     report = embed_recordings(
         con,
         model,
@@ -312,7 +376,7 @@ def embed(
         hop_ratio=cfg["encoders"]["grid_hop_ratio"],
         channel=cfg["audio"]["channel"],
         signal_cfg=cfg["signal"],
-        qc_thresholds=cfg["qc"] if qc else None,
+        qc_thresholds=cfg["qc"] if check_qc else None,
     )
     if report.qc_checked:
         typer.echo(
@@ -404,7 +468,13 @@ def train(
 def score(
     ctx: typer.Context,
     encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
-    head: Annotated[str, typer.Option(help="Version de tête (v1, v2…) ou latest.")] = "latest",
+    head: Annotated[
+        str,
+        typer.Option(
+            help="Version de tête (v1, v2…), latest ou adopted. Défaut : la tête adoptée par "
+            "`blanci retrain`, sinon la plus récente."
+        ),
+    ] = "default",
     site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
     dataset: Annotated[str | None, typer.Option(help="Restreindre à un jeu.")] = None,
     fusion: Annotated[
@@ -476,6 +546,97 @@ def search(
     for r in found.head(10).itertuples():
         typer.echo(f"  {r.score:+.3f}  {r.path} @ {r.offset_s:.1f} s")
     _write_csv(found, config_path(cfg, "reports") / f"search_{encoder}.csv", "candidats")
+
+
+@app.command()
+def retrain(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
+    frozen: Annotated[
+        str | None, typer.Option(help="Jeu gelé qui juge (défaut : le plus récent).")
+    ] = None,
+    tolerance: Annotated[
+        float | None, typer.Option(help="Perte tolérée d'AP et de rappel (défaut : config).")
+    ] = None,
+    force: Annotated[bool, typer.Option(help="Adopter même si moins bonne.")] = False,
+) -> None:
+    """Réentraîne la tête sur tous les labels et ne l'adopte que si elle n'est pas moins
+    bonne sur le jeu gelé (§4, M5). La tête adoptée est celle de `blanci score`."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    out = retrain_head(con, encoder, cfg, frozen, tolerance, force)
+    typer.echo(
+        f"nouvelle tête {out['new_version']} (tête adoptée avant : {out['previous_version']})"
+    )
+    for key, name in (("new", "nouvelle"), ("previous", "adoptée")):
+        m = out.get(key)
+        if m:
+            typer.echo(
+                f"  {name} {m['head_version']} sur le jeu gelé : AP {m['ap_recording']:.3f} "
+                f"[{m['ap_lo']:.3f} ; {m['ap_hi']:.3f}], rappel au seuil "
+                f"{m['recall_at_threshold']:.2f}, {m['false_alarms_per_hour']:.1f} fausses "
+                "alarmes par heure"
+            )
+    if "previous_not_judged" in out:
+        typer.echo(f"  adoptée non jugeable : {out['previous_not_judged']}")
+    verdict = "ADOPTÉE" if out["adopted"] else "NON ADOPTÉE"
+    typer.echo(f"{verdict} : {out['reason']}")
+    if out["adopted"]:
+        typer.echo(f"suite : blanci score --encoder {encoder}")
+
+
+@app.command()
+def activity(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
+    head: Annotated[str, typer.Option(help="Version de tête (défaut : adoptée).")] = "default",
+    fusion: Annotated[bool, typer.Option(help="Décisions de la fusion.")] = False,
+    dataset: Annotated[str | None, typer.Option(help="Jeu, par exemple 2023.")] = None,
+    by: Annotated[str, typer.Option(help="site | mic_id.")] = "site",
+    reference_hours: Annotated[
+        Path | None,
+        typer.Option(help="Courbe horaire de référence numérisée (CSV : [site,] hour, value)."),
+    ] = None,
+    reference_months: Annotated[
+        Path | None,
+        typer.Option(help="Courbe mensuelle de référence (CSV : [site,] month, value)."),
+    ] = None,
+    suspects_detected: Annotated[
+        bool, typer.Option(help="Compter les enregistrements « suspect » comme détectés.")
+    ] = False,
+) -> None:
+    """Courbes d'activité journalières et saisonnières, confrontées aux patrons de Courtois
+    et al. 2025 (§6 niveau 3, M4). Demande les décisions de `blanci score`."""
+    if by not in ("site", "mic_id"):
+        raise typer.BadParameter("--by attend site ou mic_id")
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    reference = {
+        key: pd.read_csv(path)
+        for key, path in (("hour", reference_hours), ("month", reference_months))
+        if path is not None
+    }
+    out = activity_curves(
+        con, encoder, cfg, head, fusion, dataset, by, reference or None, suspects_detected
+    )
+    stem = f"activite_{encoder}_{out['head_version']}" + (f"_{dataset}" if dataset else "")
+    paths = write_activity_report(
+        config_path(cfg, "reports"),
+        stem,
+        out["diel"],
+        out["seasonal"],
+        out["checks"],
+        out["correlations"],
+        cfg["activity"]["min_correlation"],
+        f"{encoder} tête {out['head_version']}" + (f", jeu {dataset}" if dataset else ""),
+    )
+    for r in out["checks"].to_dict("records"):
+        typer.echo(
+            f"  {r[by]:<14} {r['recordings']:>6} enr.  pics/autres {r['peak_ratio']:.2f}  "
+            f"mois forts/creux {r['season_ratio']:.2f}  "
+            f"{'patrons retrouvés' if r['peaks_found'] and r['season_found'] else 'À EXAMINER'}"
+        )
+    typer.echo(f"rapport : {paths[0]}")
 
 
 @app.command()
@@ -866,6 +1027,10 @@ def candidates(
     reason: Annotated[
         str, typer.Option(help="Motif des enregistrements entiers : audit_aleatoire, jeu_gele…")
     ] = "audit_aleatoire",
+    suspects: Annotated[
+        bool,
+        typer.Option(help="Détections non écoutées voisines des négatifs suspects (n° 80)."),
+    ] = False,
     sites: Annotated[str | None, typer.Option(help="Sites, ex. « CDR,PatawaOuest ».")] = None,
     name: Annotated[str, typer.Option(help="Nom de la file : candidats_<nom>.csv.")] = "lot1",
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
@@ -884,8 +1049,12 @@ def candidates(
         parts.append(random_candidates(con, cfg, random, wanted, seed=seed))
     if whole:
         parts.append(recording_candidates(con, cfg, whole, wanted, reason=reason, seed=seed))
+    if suspects:
+        parts.append(suspect_candidates(con, seed=seed))
     if not parts:
-        raise typer.BadParameter("rien à tirer : --from, --congeners, --random ou --entiers")
+        raise typer.BadParameter(
+            "rien à tirer : --from, --congeners, --random, --entiers ou --suspects"
+        )
     queue = pd.concat(parts, ignore_index=True).sample(frac=1.0, random_state=seed)
     if queue.empty:
         typer.echo("aucun candidat")

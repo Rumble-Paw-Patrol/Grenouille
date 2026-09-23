@@ -9,10 +9,16 @@ Labels courants, transfert vers la grille, négatifs appariés.
   d'autres jours, dans des enregistrements sans label positif. Ce sont des négatifs *présumés*
   (colonne `presumed`) : jamais écrits dans la table labels. En saison, à l'heure de pic, une
   partie peut contenir A. blanci : bruit d'étiquette identique pour tous les encodeurs.
+- Négatifs suspects (DECISIONS n° 80) : un négatif annoté est jugé sur 3 s ; les encodeurs à
+  fenêtre de 5–6 s y ajoutent 1 à 3 s de contexte, jamais écoutées. Si A. blanci est détecté
+  dans les fenêtres voisines (± `SUSPECT_MARGIN_S`), le négatif est suspect : ni entraînement,
+  ni évaluation, pour tous les encodeurs (mêmes négatifs pour tous). Il redevient négatif dès
+  que les détections voisines ont été écoutées et ne sont pas A. blanci.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 import numpy as np
@@ -24,16 +30,107 @@ from blanci.store import EmbeddingStore
 
 EXCLUDED_LABELS = ("blanci_uncertain", "uncertain")
 
+# « A. blanci détecté » autour d'un négatif : détection non écoutée d'un détecteur indépendant
+# (Blancinet, `blanci import-detections`) à ce score au moins, ou positif annoté. Jamais les
+# scores de nos propres têtes : ils serviraient à choisir les labels qui les jugent.
+SUSPECT_DETECTORS = ("blancinet",)
+SUSPECT_MIN_SCORE = 0.5
+# Fenêtres voisines : ± 3 s autour de l'annotation, soit la fenêtre de 3 s de chaque côté.
+# Couvre le contexte ajouté par tous les encodeurs du §2 (fenêtres ≤ 6 s).
+SUSPECT_MARGIN_S = 3.0
+
+
+def _comment(conditions: str | None) -> str | None:
+    if not conditions:
+        return None
+    return json.loads(conditions).get("comment") or None
+
 
 def current_labels(con: sqlite3.Connection) -> pd.DataFrame:
-    """Dernier label de chaque fenêtre annotée (une correction est une ligne plus récente)."""
-    return pd.read_sql_query(
+    """Dernier label de chaque fenêtre annotée (une correction est une ligne plus récente),
+    avec le commentaire de l'annotateur (`comment`, texte brut, vide s'il n'y en a pas)."""
+    df = pd.read_sql_query(
         """SELECT l.label_id, l.window_id, l.label, l.quality, l.species, l.source,
-                  w.recording_id, w.offset_s, w.dur_s
+                  l.conditions, w.recording_id, w.offset_s, w.dur_s
            FROM labels l JOIN windows w USING (window_id)
            WHERE l.label_id IN (SELECT MAX(label_id) FROM labels GROUP BY window_id)""",
         con,
     )
+    df["comment"] = df["conditions"].map(_comment)
+    return df.drop(columns="conditions")
+
+
+def detected_blanci(
+    con: sqlite3.Connection,
+    labels: pd.DataFrame,
+    detectors: tuple[str, ...] = SUSPECT_DETECTORS,
+    min_score: float = SUSPECT_MIN_SCORE,
+    eps: float = 1e-6,
+) -> pd.DataFrame:
+    """Où A. blanci est détecté : positifs annotés, et détections ≥ `min_score` que personne
+    n'a écoutées (aucune fenêtre annotée ne les contient). window_id, recording_id,
+    offset_s, dur_s, score (vide pour un positif annoté)."""
+    marks = ", ".join("?" * len(detectors))
+    found = pd.read_sql_query(
+        f"""SELECT s.window_id, w.recording_id, w.offset_s, w.dur_s, s.score
+            FROM scores s JOIN windows w USING (window_id)
+            WHERE s.model_id IN ({marks}) AND s.score >= ?""",
+        con,
+        params=(*detectors, min_score),
+    )
+    if len(found) and len(labels):
+        pairs = found.reset_index(names="_row").merge(
+            labels[["recording_id", "offset_s", "dur_s"]], on="recording_id", suffixes=("", "_a")
+        )
+        heard = (pairs["offset_s_a"] <= pairs["offset_s"] + eps) & (
+            pairs["offset_s_a"] + pairs["dur_s_a"] >= pairs["offset_s"] + pairs["dur_s"] - eps
+        )
+        found = found.drop(index=pairs.loc[heard, "_row"].unique())
+    positives = labels[labels["label"].isin(POSITIVE_LABELS)].assign(score=np.nan)
+    columns = ["window_id", "recording_id", "offset_s", "dur_s", "score"]
+    parts = [part[columns] for part in (found, positives) if len(part)]
+    if not parts:
+        return pd.DataFrame(columns=columns)
+    return pd.concat(parts, ignore_index=True)
+
+
+def near_detection(
+    windows: pd.DataFrame, detected: pd.DataFrame, margin_s: float = SUSPECT_MARGIN_S
+) -> pd.Series:
+    """Fenêtres (recording_id, offset_s, dur_s) à moins de `margin_s` d'une détection."""
+    near = pd.Series(False, index=windows.index)
+    candidates = windows[windows["recording_id"].isin(set(detected["recording_id"]))]
+    if candidates.empty:
+        return near
+    pairs = candidates[["recording_id", "offset_s", "dur_s"]].reset_index(names="_row")
+    pairs = pairs.merge(detected, on="recording_id", suffixes=("", "_d"))
+    close = (pairs["offset_s_d"] < pairs["offset_s"] + pairs["dur_s"] + margin_s) & (
+        pairs["offset_s_d"] + pairs["dur_s_d"] > pairs["offset_s"] - margin_s
+    )
+    near[pairs.loc[close, "_row"].unique()] = True
+    return near
+
+
+def suspect_negatives(
+    labels: pd.DataFrame, detected: pd.DataFrame, margin_s: float = SUSPECT_MARGIN_S
+) -> pd.Series:
+    """Négatifs annotés dont les fenêtres voisines (± `margin_s`) contiennent une détection."""
+    negative = ~labels["label"].isin(POSITIVE_LABELS + EXCLUDED_LABELS)
+    return near_detection(labels, detected, margin_s) & negative
+
+
+def usable_labels(con: sqlite3.Connection) -> pd.DataFrame:
+    """Labels courants, colonne `suspect` en plus : les négatifs suspects ne servent ni à
+    l'entraînement ni à l'évaluation (`transfer_labels` les écarte)."""
+    labels = current_labels(con)
+    return labels.assign(suspect=suspect_negatives(labels, detected_blanci(con, labels)))
+
+
+def suspect_count(con: sqlite3.Connection) -> dict[str, int]:
+    """Bilan : négatifs annotés, dont suspects (écartés tant que les voisins sont à écouter)."""
+    labels = usable_labels(con)
+    negative = ~labels["label"].isin(POSITIVE_LABELS + EXCLUDED_LABELS)
+    return {"negatives": int(negative.sum()), "suspect": int(labels["suspect"].sum())}
 
 
 def recordings_table(con: sqlite3.Connection) -> pd.DataFrame:
@@ -57,6 +154,8 @@ def transfer_labels(
 ) -> pd.DataFrame:
     """Labels des fenêtres de grille. annotations : recording_id, offset_s, dur_s, label ;
     grid : window_id, recording_id, offset_s, dur_s (dur_s = fenêtre de l'encodeur)."""
+    if "suspect" in annotations:
+        annotations = annotations[~annotations["suspect"].astype(bool)]
     merged = grid.merge(annotations, on="recording_id", suffixes=("", "_ann"))
     g0, g1 = merged["offset_s"], merged["offset_s"] + merged["dur_s"]
     a0, a1 = merged["offset_s_ann"], merged["offset_s_ann"] + merged["dur_s_ann"]
@@ -70,6 +169,8 @@ def transfer_labels(
     columns = ["window_id", "recording_id", "offset_s", "label", "y"]
     if "quality" in kept:  # qualité A/B/C de l'annotation : rappel par qualité (§6)
         columns.append("quality")
+    if "comment" in kept:  # le commentaire de l'annotateur suit la fenêtre
+        columns.append("comment")
     return kept[columns].reset_index(drop=True)
 
 
@@ -131,13 +232,19 @@ def training_set(
     grid = grid.reset_index(drop=True)
     if exclude_recordings:
         grid = grid[~grid["recording_id"].isin(exclude_recordings)]
-    labeled = transfer_labels(current_labels(con), grid)
+    labels = current_labels(con)
+    detected = detected_blanci(con, labels)
+    labels = labels.assign(suspect=suspect_negatives(labels, detected))
+    labeled = transfer_labels(labels, grid)
     parts = [labeled.assign(presumed=False)]
     recordings = recordings_table(con)
     if per_positive > 0:
         positives = set(labeled.loc[labeled["y"] == 1, "recording_id"])
+        # Un négatif présumé non plus ne doit pas côtoyer une détection non écoutée.
+        pool = grid[~grid["window_id"].isin(labeled["window_id"])]
+        pool = pool[~near_detection(pool, detected)]
         negatives = paired_negatives(
-            grid[~grid["window_id"].isin(labeled["window_id"])],
+            pool,
             recordings,
             positives,
             per_positive,

@@ -28,12 +28,20 @@ import pandas as pd
 import soundfile as sf
 from scipy.signal import spectrogram
 
-from blanci.dataset import local_minutes, recordings_table
+from blanci.dataset import (
+    current_labels,
+    detected_blanci,
+    local_minutes,
+    near_detection,
+    recordings_table,
+    suspect_negatives,
+)
 from blanci.db import window_id_for
 from blanci.embed import select_recordings
 from blanci.grid import window_grid
 from blanci.labels import (
     _is_blank,
+    comment_fields,
     detect_columns,
     file_key,
     parse_offset,
@@ -296,6 +304,24 @@ def recording_candidates(
     return _finish(out, seed)
 
 
+def suspect_candidates(con: sqlite3.Connection, seed: int = 0) -> pd.DataFrame:
+    """Détections non écoutées voisines des négatifs suspects (DECISIONS n° 80).
+
+    Chacune écoutée lève le soupçon (pas A. blanci : le négatif redevient utilisable) ou le
+    confirme (A. blanci : un nouveau positif, et le négatif reste écarté).
+    """
+    labels = current_labels(con)
+    detected = detected_blanci(con, labels)
+    suspects = labels[suspect_negatives(labels, detected)]
+    near = detected[near_detection(detected, suspects) & detected["score"].notna()]
+    near = _drop_labelled(con, near.drop_duplicates("window_id"))
+    if near.empty:
+        return pd.DataFrame(columns=CANDIDATE_COLUMNS)
+    rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
+    out = near.merge(rec, on="recording_id").assign(reason="voisin_negatif_suspect", source="audit")
+    return _finish(out, seed)
+
+
 def _split_quota(n: int, parts: int) -> list[int]:
     """n réparti en `parts` entiers qui diffèrent d'au plus 1."""
     if parts <= 0:
@@ -441,7 +467,9 @@ def save_answer(
     wid = ensure_window(con, candidate["recording_id"], candidate["offset_s"], candidate["dur_s"])
     conditions: dict[str, Any] = {"candidate_reason": candidate.get("reason") or None}
     if comment:
-        conditions["comment"] = comment
+        # Le commentaire est gardé tel quel, et lu comme à l'import : « pluie » écrit ici
+        # pose le drapeau pluie de l'enregistrement, une espèce citée est retrouvée.
+        conditions |= comment_fields(comment) | {"comment": comment}
     if channel is not None:
         conditions["channel_listened"] = channel
     score = candidate.get("score")

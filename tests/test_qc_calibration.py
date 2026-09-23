@@ -26,11 +26,11 @@ def _indices(rows):
 
 
 def test_suggests_a_threshold_between_bagged_mics_and_blanci():
-    thresholds = load_config()["qc"]
+    thresholds = load_config()["qc"] | {"in_bag_hf_ratio": 0.02}  # seuil d'avant le n° 81
     indices = _indices(
         [
             ("sac1", "in_bag", 0.01, 0.1),
-            ("sac2", "in_bag", 0.04, 0.1),  # manqué par le seuil actuel (0,02)
+            ("sac2", "in_bag", 0.04, 0.1),  # manqué par un seuil à 0,02
             ("b1", "blanci", 0.30, 0.2),
             ("b2", "blanci", 0.10, 0.2),
             ("o1", "other", 0.05, 0.2),

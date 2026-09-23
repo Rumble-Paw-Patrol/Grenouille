@@ -171,6 +171,7 @@ def test_save_answer_creates_the_window_and_appends_labels(corpus):
     assert first == {
         "candidate_reason": "blancinet_0.7-1.0",
         "comment": "lointain",
+        "tags": ["distant"],  # lu comme à l'import (DECISIONS n° 82)
         "channel_listened": 1,
         "previous_model_score": 0.82,
     }

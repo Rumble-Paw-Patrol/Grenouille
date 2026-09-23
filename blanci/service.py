@@ -19,6 +19,13 @@ import numpy as np
 import pandas as pd
 
 from blanci.active import build_queue
+from blanci.activity import (
+    curve_correlation,
+    daily_probability,
+    detections_table,
+    diel_index,
+    reference_checks,
+)
 from blanci.aggregate import aggregate_recording, rank_points
 from blanci.config import config_path
 from blanci.dataset import (
@@ -196,7 +203,14 @@ def train_and_register(
 
 
 def load_head(con: sqlite3.Connection, encoder_id: str, version: str) -> tuple[Head, dict]:
-    """Tête sauvegardée + sa ligne de registre. `version` = 'latest' prend la plus récente."""
+    """Tête sauvegardée + sa ligne de registre. `version` : v1, v2…, « latest » (la plus
+    récente), « adopted » (celle qu'a retenue `blanci retrain`), « default » (l'adoptée s'il
+    y en a une, sinon la plus récente)."""
+    if version in ("adopted", "default"):
+        adopted = adopted_version(con, encoder_id)
+        if adopted is None and version == "adopted":
+            raise ValueError(f"aucune tête adoptée pour {encoder_id} (lancer `blanci retrain`)")
+        version = adopted or "latest"
     if version == "latest":
         row = con.execute(
             "SELECT version FROM models WHERE kind = 'head' AND name = ? "
@@ -945,3 +959,181 @@ def compute_tokens(con: sqlite3.Connection, encoder: Any, cfg: dict) -> dict[str
         report["windows"] += len(group)
         report["recordings"] += 1
     return report
+
+
+# --- Réentraînement sans intervention et adoption (§4, jalon M5) --------------------------------
+
+# Tête adoptée = celle que `blanci score` utilise par défaut. Une tête entraînée n'est adoptée
+# qu'après avoir été jugée sur le jeu gelé : une tête plus récente n'est pas forcément
+# meilleure (labels ajoutés bruités, tour d'annotation déséquilibré).
+
+
+def adopted_version(con: sqlite3.Connection, encoder_id: str) -> str | None:
+    """Version de la tête adoptée en dernier pour cet encodeur, ou None."""
+    row = con.execute(
+        "SELECT version FROM models WHERE kind = 'adoption' AND name = ? "
+        "ORDER BY rowid DESC LIMIT 1",
+        (encoder_id,),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def adopt_head(
+    con: sqlite3.Connection, encoder_id: str, version: str, reason: str, evidence: dict
+) -> str:
+    """Inscrit l'adoption d'une tête (historique gardé : une ligne par adoption)."""
+    load_head(con, encoder_id, version)  # la tête doit exister
+    n = con.execute(
+        "SELECT COUNT(*) FROM models WHERE kind = 'adoption' AND name = ?", (encoder_id,)
+    ).fetchone()[0]
+    model_id = f"{encoder_id}:adoption:{n + 1}"
+    register_model(
+        con,
+        model_id,
+        "adoption",
+        encoder_id,
+        version,
+        {"head_version": version, "reason": reason, "adopted_at": utc_now(), **evidence},
+    )
+    return model_id
+
+
+def _frozen_summary(result: dict[str, Any]) -> dict[str, Any]:
+    rec = result["recording"]
+    return {
+        "head_version": result["head_version"],
+        "ap_recording": rec["ap"],
+        "ap_lo": rec["ap_lo"],
+        "ap_hi": rec["ap_hi"],
+        "recall_at_threshold": result["recall_at_threshold"],
+        "false_alarms_per_hour": result["false_alarms_per_hour"],
+        "n_recordings": result["n_recordings"],
+    }
+
+
+def retrain(
+    con: sqlite3.Connection,
+    encoder_id: str,
+    cfg: dict,
+    frozen_version: str | None = None,
+    tolerance: float | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Réentraîne la tête et ne l'adopte que si elle n'est pas moins bonne (ONF, §4).
+
+    1. drapeaux posés à l'écoute recalculés (labels ajoutés depuis le dernier passage) ;
+    2. nouvelle tête sur tous les labels hors jeu gelé, seuil calibré hors-pli
+       (`train_and_register`) ;
+    3. nouvelle tête et tête adoptée jugées sur le même jeu gelé, à leur seuil ;
+    4. adoption si l'AP (niveau enregistrement) et le rappel au seuil de la nouvelle tête ne
+       sont pas inférieurs de plus de `tolerance` à ceux de la tête adoptée. Sinon la tête
+       adoptée reste en service ; la nouvelle reste en base, jamais effacée.
+
+    Sans jeu gelé, rien ne permet de juger : pas d'adoption, sauf `force`. Une tête adoptée
+    entraînée avant le gel ne peut pas être jugée dessus : la nouvelle est alors adoptée.
+    """
+    tolerance = cfg["retrain"]["tolerance"] if tolerance is None else tolerance
+    apply_annotation_flags(con)
+    trained = train_and_register(con, encoder_id, cfg)
+    new_version, previous = trained.version, adopted_version(con, encoder_id)
+    out: dict[str, Any] = {
+        "encoder_id": encoder_id,
+        "new_version": new_version,
+        "previous_version": previous,
+        "tolerance": tolerance,
+        "train_metrics": trained.metrics,
+    }
+    if not frozen_versions(cfg):
+        out["reason"] = "aucun jeu gelé : la nouvelle tête n'a pas pu être jugée"
+        out["adopted"] = force
+        if force:
+            adopt_head(con, encoder_id, new_version, "forcée, sans jeu gelé", {})
+        return out
+
+    new = _frozen_summary(evaluate_frozen(con, encoder_id, cfg, new_version, frozen_version))
+    out["new"] = new
+    old = None
+    if previous is not None:
+        try:
+            old = _frozen_summary(evaluate_frozen(con, encoder_id, cfg, previous, frozen_version))
+        except ValueError as exc:  # tête adoptée entraînée avant le gel : pas jugeable dessus
+            out["previous_not_judged"] = str(exc)
+    out["previous"] = old
+    if old is None:
+        adopted, reason = True, "aucune tête adoptée jugeable sur ce jeu gelé"
+    else:
+        worse = [
+            key
+            for key in ("ap_recording", "recall_at_threshold")
+            if new[key] < old[key] - tolerance
+        ]
+        adopted = not worse or force
+        reason = (
+            f"pas moins bonne que {previous} (tolérance {tolerance})"
+            if not worse
+            else f"moins bonne que {previous} sur {', '.join(worse)}"
+            + (" ; adoption forcée" if force else "")
+        )
+    out["adopted"], out["reason"] = adopted, reason
+    if adopted:
+        out["adoption_id"] = adopt_head(
+            con, encoder_id, new_version, reason, {"frozen_new": new, "frozen_previous": old}
+        )
+    return out
+
+
+# --- Courbes d'activité (§6 niveau 3, jalon M4) ---------------------------------------------------
+
+
+def activity_curves(
+    con: sqlite3.Connection,
+    encoder_id: str,
+    cfg: dict,
+    version: str = "default",
+    fusion: bool = False,
+    dataset: str | None = None,
+    by: str = "site",
+    reference: dict[str, pd.DataFrame] | None = None,
+    include_suspect: bool = False,
+) -> dict[str, Any]:
+    """Courbes journalières et saisonnières des décisions d'une tête (ou de sa fusion),
+    confrontées aux patrons publiés et, si fournies, à des courbes de référence numérisées
+    (`reference` : {"hour": ..., "month": ...})."""
+    _, params = load_head(con, encoder_id, version)
+    version = params["version"]
+    tid = params["threshold_id"]
+    if fusion:
+        tid = model_params(con, fusion_id(encoder_id, version), kind="fusion")["threshold_id"]
+    detections = detections_table(
+        con,
+        encoder_id,
+        version,
+        tid,
+        cfg["recorder"]["filename_utc_offset_h"],
+        dataset=dataset,
+        include_suspect=include_suspect,
+    )
+    diel = diel_index(detections, by)
+    seasonal = daily_probability(detections, by)
+    checks = reference_checks(diel, seasonal, cfg["activity"]["reference"], by)
+    correlations = None
+    if reference:
+        parts = [
+            curve_correlation(diel, reference["hour"], "hour", "index", by)
+            if "hour" in reference
+            else None,
+            curve_correlation(seasonal, reference["month"], "month", "probability", by)
+            if "month" in reference
+            else None,
+        ]
+        correlations = pd.concat([p for p in parts if p is not None], ignore_index=True)
+    return {
+        "encoder_id": encoder_id,
+        "head_version": version,
+        "threshold_id": tid,
+        "detections": detections,
+        "diel": diel,
+        "seasonal": seasonal,
+        "checks": checks,
+        "correlations": correlations,
+    }

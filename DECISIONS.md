@@ -616,3 +616,68 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     enregistrements annotés, 8 micro dans sac (aucun avec un positif), 5 pluie (dont 2 avec
     un positif). Seuil « micro dans sac » inchangé (0,02) tant que Léonard n'a pas tranché
     (n° 76).
+
+80. **Négatifs suspects** (23/09/2026, règle de Léonard). Un négatif annoté est jugé sur
+    3 s ; les encodeurs à fenêtre de 5–6 s y ajoutent 1 à 3 s jamais écoutées. Règle : un
+    négatif est **suspect** si A. blanci est détecté dans les fenêtres voisines (± 3 s, la
+    fenêtre de 3 s de chaque côté, ce qui couvre tous les encodeurs du §2) ; sinon il reste
+    négatif. « Détecté » = détection Blancinet de score ≥ 0,5 que personne n'a écoutée
+    (aucune fenêtre annotée ne la contient), ou positif annoté. Jamais les scores de nos
+    propres têtes (ils choisiraient les labels qui les jugent). Un suspect ne sert ni à
+    l'entraînement ni à l'évaluation, **pour tous les encodeurs** (mêmes négatifs pour tous,
+    benchmark comparable). Même règle pour les négatifs appariés présumés : aucun n'est tiré
+    à moins de 3 s d'une détection non écoutée. Les détections Blancinet (74 785, dont
+    74 286 jamais écoutées) sont rangées comme scores du détecteur « blancinet »
+    (`blanci import-detections`), pas comme labels. Au 23/09 : **46 négatifs suspects sur
+    149**. `candidates --suspects` tire les 52 détections voisines à écouter : une voisine
+    écoutée et non-blanci lève le soupçon, une voisine blanci le confirme (et donne un
+    positif). **Effet mesuré sur les baselines** (relancées, lecture seule) : écarter les
+    46 suspects annotés change peu l'AP (meilleure baseline, fenêtres : 0,368 → 0,374) ;
+    écarter aussi les négatifs présumés voisins d'une détection la fait passer à 0,543
+    (enregistrements : 0,155 → 0,263). Deux lectures : bruit d'étiquette retiré (au même
+    micro, même créneau, en saison, une détection Blancinet ≥ 0,5 est souvent un vrai
+    chant) ou négatifs difficiles retirés (évaluation optimiste). Le jeu gelé, écouté en
+    entier, tranchera. Revers constaté : les suspects annotés sont surtout les faux amis
+    principaux (*A. andreae* 12 sur 22, Fourmilier tacheté 11 sur 23), qui chantent en
+    continu et déclenchent Blancinet sur les fenêtres voisines : sans écoute des voisins,
+    la tête perd la moitié de ses exemples de ces faux amis. Écouter les 52 voisins avant
+    l'entraînement.
+
+81. **Seuil « micro dans sac » : 0,02 → 0,2** (accord de Léonard, calibration n° 76).
+    Signale 6 enregistrements « dans sac » annotés sur 8, aucun enregistrement à A. blanci
+    (le plus bas est à 0,265). Contrôle audio pendant `embed` réglable
+    (`qc.during_embed`), coupé pour AnuraSet : seuils calibrés sur les Song Meter ONF, et
+    positifs AnuraSet absents de la table labels, donc non protégés.
+
+82. **Commentaire accolé à chaque fenêtre annotée** (précision de Léonard sur le n° 79 : le
+    « drapeau » voulu est le commentaire de l'annotateur, en plus du label). Il était déjà
+    gardé tel quel dans chaque label (`conditions.comment`) ; il suit désormais la fenêtre :
+    `current_labels` et le jeu d'apprentissage (fenêtres de grille héritières) portent une
+    colonne `comment` ; `blanci export-labels` écrit toutes les fenêtres annotées avec label,
+    qualité, espèce, commentaire et suspect. Au poste d'annotation, le commentaire est lu
+    comme à l'import (conditions pluie, lointain, second plan ; espèces citées) : « pluie »
+    écrit au poste pose le drapeau pluie. Les drapeaux d'écoute par enregistrement (n° 79)
+    restent : ce sont eux qui écartent les 8 enregistrements « dans sac ».
+
+83. **Réentraînement sans intervention** (§4, M5, `blanci retrain`). Nouvelle tête sur
+    tous les labels hors jeu gelé, seuil hors-pli ; nouvelle tête et tête adoptée jugées
+    sur le même jeu gelé, à leur seuil ; adoption si l'AP (enregistrements) et le rappel au
+    seuil ne perdent pas plus de 0,02 (`retrain.tolerance`). Sans jeu gelé : pas
+    d'adoption, sauf `--force`. Tête adoptée non jugeable (entraînée avant le gel) : la
+    nouvelle est adoptée. Historique des adoptions dans `models` (kind `adoption`) ; une
+    tête refusée reste en base. `blanci score` prend par défaut la tête adoptée (sinon la
+    plus récente) : une tête refusée n'est jamais utilisée par mégarde. La fusion n'est pas
+    réentraînée par cette commande.
+
+84. **Courbes d'activité** (§6 niveau 3, M4, `blanci activity`). Depuis les décisions par
+    enregistrement : indice horaire (part des enregistrements détectés par heure locale,
+    l'effort au dénominateur) et probabilité journalière par mois (part des jours avec au
+    moins une détection), intervalles de Wilson, par site ou par micro. Confrontées aux
+    patrons de Courtois et al. 2025 (`activity.reference` : pics 7–9 h et 15–17 h, mois
+    forts janvier–avril, creux juillet–octobre) : un patron est « retrouvé » si les
+    intervalles de Wilson (pics contre autres heures, mois forts contre creux) sont
+    disjoints — un rapport > 1 seul se lève au hasard sur une activité plate. Avec des
+    courbes numérisées de la publication (`--reference-hours`, `--reference-months`),
+    corrélation de Pearson, alerte sous 0,5 (§11, risque 6). Enregistrements « suspect »
+    non comptés, sauf `--suspects-detected`. À lancer sur 2023 une fois la phénologie
+    inventoriée, encodée et scorée.

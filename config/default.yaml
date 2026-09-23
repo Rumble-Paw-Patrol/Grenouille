@@ -40,10 +40,14 @@ grids:
   w5: {window_s: 5.0, hop_s: 2.5}
 
 qc:
-  # Seuils provisoires, à calibrer sur les fichiers étiquetés pluie / micro dans sac.
+  # Drapeaux audio (DECISIONS n° 79) : silencieux et micro dans sac écartent du corpus,
+  # pluie et saturation sont des remarques. Calculés pendant `embed` (sur l'audio déjà lu).
+  during_embed: true
   silent_dbfs: -70.0               # RMS en dessous : enregistrement muet
   clip_fraction: 0.0001            # fraction d'échantillons saturés au-dessus : saturation
-  in_bag_hf_ratio: 0.02            # énergie > 2 kHz / énergie totale en dessous : micro dans sac
+  # Énergie > 2 kHz / énergie totale en dessous : micro dans sac. Calibré (DECISIONS n° 76,
+  # 81) : sac 0,001–0,30, enregistrements à A. blanci ≥ 0,265 ; 0,2 en signale 6 sur 8.
+  in_bag_hf_ratio: 0.2
   rain_flatness: 0.5               # platitude spectrale 1–10 kHz au-dessus...
   rain_min_dbfs: -35.0             # ...et niveau au-dessus : pluie
   # Drapeaux calculés sur l'inventaire seul (sans lire l'audio), recalculés après chaque
@@ -110,6 +114,19 @@ benchmark:
   slot_tolerance_min: 30           # même micro, créneau horaire à ± 30 min
   n_boot: 1000
   precisions: [0.1, 0.5]
+
+# Réentraînement sans intervention (§4, M5) : la nouvelle tête n'est adoptée que si, sur le
+# jeu gelé, son AP (enregistrements) et son rappel au seuil ne perdent pas plus que ceci.
+retrain:
+  tolerance: 0.02
+
+# Courbes d'activité (§6 niveau 3, M4) : patrons publiés par Courtois et al. 2025 (jeu 2023).
+activity:
+  reference:
+    peak_hours: [[7, 9], [15, 17]]     # heures locales de pic
+    high_months: [1, 2, 3, 4]          # activité forte
+    low_months: [7, 8, 9, 10]          # activité quasi nulle
+  min_correlation: 0.5                 # corrélation des courbes en dessous : alerte (§11, 6)
 
 aggregate:
   # Règle enregistrement (§1), à calibrer sur les 20 enregistrements écoutés en entier.

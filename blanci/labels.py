@@ -150,6 +150,22 @@ def find_species(norm: str) -> list[SpeciesRule]:
     return list(dict.fromkeys(rules))
 
 
+def comment_fields(comment: str | None) -> dict[str, Any]:
+    """Champs tirés d'un commentaire libre, sans rien décider du label : conditions (pluie,
+    lointain, second plan, bruit…) et espèces citées. Sert au poste d'annotation, où le label
+    est choisi par l'annotateur et le commentaire écrit à côté."""
+    if not comment or not str(comment).strip():
+        return {}
+    norm = normalize(comment)
+    fields: dict[str, Any] = {
+        "tags": [tag for tag, pattern in CONDITION_TAGS.items() if pattern.search(norm)]
+    }
+    species = [rule.name for rule in find_species(norm)]
+    if species:
+        fields["co_occurring"] = species
+    return fields
+
+
 def infer_quality(tags: list[str], co_occurring: list[str]) -> str:
     """Qualité A/B/C (Courtois et al. 2025) déduite du commentaire, faute de colonne.
 
@@ -567,4 +583,86 @@ def import_label_file(
             (digest, str(path), len(report.rows), created_at),
         )
     report.inserted = len(report.rows)
+    return report
+
+
+# --- Détections d'un détecteur indépendant (Blancinet) ----------------------------------------
+
+
+@dataclass
+class DetectionImportReport:
+    model_id: str
+    rows: int = 0
+    stored: int = 0
+    unverified: int = 0  # détections que personne n'a écoutées
+    not_found: int = 0  # fichier absent de l'inventaire (autre relevé, doublon écarté)
+    ambiguous: int = 0
+    unreadable: int = 0
+
+
+def import_detections(
+    con: sqlite3.Connection, path: Path, cfg: dict[str, Any], model_id: str = "blancinet"
+) -> DetectionImportReport:
+    """Range toutes les détections d'un export (vérifiées ou non) comme scores de `model_id`.
+
+    Ce ne sont pas des labels : un score dit où le détecteur a entendu A. blanci, pas ce qu'un
+    humain a entendu. Ils servent à repérer les négatifs suspects (`dataset.detected_blanci`)
+    et à tirer des files d'écoute. Réimporter remplace les scores, sans rien dupliquer.
+    Le fichier reçu n'est jamais modifié.
+    """
+    icfg = cfg["labels"]["import"]
+    df = read_annotation_table(Path(path))
+    columns = detect_columns(df, icfg["columns"])
+    for needed in ("file", "offset_s", "score"):
+        if needed not in columns:
+            raise ValueError(f"colonne {needed!r} introuvable dans {Path(path).name}")
+    recordings = _resolve_recordings(con)
+    window_s = float(icfg["window_s"])
+    report = DetectionImportReport(model_id, rows=len(df))
+    windows, scores = [], []
+    for record in df.to_dict("records"):
+        matches = recordings.get(file_key(str(record[columns["file"]])), [])
+        if len(matches) != 1:
+            report.not_found += not matches
+            report.ambiguous += len(matches) > 1
+            continue
+        score = record[columns["score"]]
+        try:
+            offset = parse_offset(record[columns["offset_s"]], icfg["offset_unit"], window_s)
+        except ValueError:
+            report.unreadable += 1
+            continue
+        if pd.isna(score):
+            report.unreadable += 1
+            continue
+        rid = matches[0]["recording_id"]
+        wid = window_id_for(rid, offset, window_s)
+        windows.append((wid, rid, round(offset, 2), window_s))
+        scores.append((wid, model_id, float(score)))
+        if "verdict" in columns and _is_blank(record[columns["verdict"]]):
+            report.unverified += 1
+    with con:
+        con.executemany(
+            "INSERT OR IGNORE INTO windows (window_id, recording_id, offset_s, dur_s) "
+            "VALUES (?, ?, ?, ?)",
+            windows,
+        )
+        con.executemany(
+            "INSERT INTO scores (window_id, model_id, score) VALUES (?, ?, ?) "
+            "ON CONFLICT(window_id, model_id) DO UPDATE SET score = excluded.score",
+            scores,
+        )
+        con.execute(
+            "INSERT INTO models (model_id, kind, name, version, params_json, created_at) "
+            "VALUES (?, 'detector', ?, ?, ?, ?) ON CONFLICT(model_id) DO UPDATE SET "
+            "params_json = excluded.params_json",
+            (
+                model_id,
+                model_id,
+                Path(path).stem,
+                json.dumps({"source": Path(path).name, "windows": len(scores)}),
+                utc_now(),
+            ),
+        )
+    report.stored = len(scores)
     return report
