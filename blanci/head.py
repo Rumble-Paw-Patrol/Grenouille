@@ -1,4 +1,5 @@
-"""Têtes sur embeddings gelés (§3) : prototype différentiel, kNN cosinus, régression logistique.
+"""Têtes sur embeddings gelés (§3) : prototypes simple et différentiel, kNN cosinus, régression
+logistique.
 
 La tête retenue (logistique L2) est stockée sans pickle (JSON + npz, calcul en numpy) : elle se
 recharge sur n'importe quelle machine, quelle que soit la version de scikit-learn.
@@ -43,6 +44,16 @@ def differential_prototype(E_pos: np.ndarray, E_neg_paired: np.ndarray) -> tuple
     mu_neg = l2_normalize(E_neg_paired).mean(axis=0)
     w = mu_pos - mu_neg
     return w, float(-w @ (mu_pos + mu_neg) / 2)
+
+
+def simple_prototype_scores(E_pos: np.ndarray, X: np.ndarray) -> np.ndarray:
+    """Cosinus au centroïde des positifs, sans négatifs (baseline de similarité du §3).
+
+    L'écart avec le prototype différentiel mesure le fond sonore capté par l'embedding : si
+    retrancher le centroïde des négatifs appariés aide beaucoup, les positifs se ressemblent
+    surtout par leur ambiance (même micro, même heure), pas par le chant.
+    """
+    return l2_normalize(X) @ l2_normalize(l2_normalize(E_pos).mean(axis=0, keepdims=True))[0]
 
 
 def prototype_scores(X: np.ndarray, w: np.ndarray, b: float) -> np.ndarray:
@@ -156,7 +167,9 @@ def oof_scores(
     C_grid: list[float] | None = None,
     seed: int = 0,
 ) -> OOFScores:
-    """Scores hors-pli sur plis groupés (par micro). Méthodes : logistic, prototype, knn.
+    """Scores hors-pli sur plis groupés (par micro).
+
+    Méthodes : logistic, prototype (différentiel), simple_prototype, knn.
 
     Pour `logistic`, le C est choisi dans chaque pli sur les seules données d'entraînement.
     """
@@ -173,6 +186,8 @@ def oof_scores(
         elif method == "prototype":
             w, b = differential_prototype(X[train][y[train] == 1], X[train][y[train] == 0])
             out[test] = prototype_scores(X[test], w, b)
+        elif method == "simple_prototype":
+            out[test] = simple_prototype_scores(X[train][y[train] == 1], X[test])
         elif method == "knn":
             out[test] = knn_scores(X[train], y[train], X[test])
         else:

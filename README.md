@@ -57,7 +57,15 @@ $B check-grid
 $B flag      # durées anormales et hors relevé : signalés, jamais encodés
 $B status
 
-# --- Embeddings et choix d'encodeur (§2) ---------------------------------
+# --- Baselines sans encodeur (§3) : lit l'audio, n'encode rien -------------
+$B baselines --channels 0,1                          # → data/reports/baselines.md
+
+# --- Annotation (§5) : uv sync --group app -------------------------------
+$B candidates --from documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx    --per-site 30 --random 12 --name lot1             # → data/reports/candidats_lot1.csv
+$B annotate                                          # poste d'écoute dans le navigateur
+
+# --- Embeddings et choix d'encodeur (§2) : uv sync --group research -------
+uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatifs appariés
 uv run blanci embed --encoder birdmae --peak-hours    # reprenable
 uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md
 
@@ -90,21 +98,21 @@ ligne doit désigner un enregistrement déjà inventorié.
 | Jalon | État |
 |---|---|
 | M0 dépôt, config, `ingest`, `import-labels` | **accepté sur données réelles** le 22/09 (DECISIONS n° 49) |
-| M1 `embed`, `benchmark` en plis par micro | écrits, testés, branchés sur la CLI ; **adaptateur bacpipe non validé** |
-| M2 `head`, `search`, `queue`, prototype Streamlit | `train`, `score`, `queue`, `search` en service et en CLI ; GUI Streamlit à faire |
+| M1 `embed`, `benchmark` en plis par micro | écrits, testés, branchés sur la CLI ; baselines sans encodeur mesurées (DECISIONS n° 62) ; **aucun encodage lancé** |
+| M2 `head`, `search`, `queue`, prototype Streamlit | `train`, `score`, `queue`, `search` en service et en CLI ; poste d'annotation Streamlit (`annotate`, `candidates`) |
 | M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | modules écrits et testés ; `aggregate` branché, `sequential`/`fusion` pas encore |
 
 Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 positifs et
 150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
 viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
 
-427 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
-`encoders/bacpipe_encoder.py`, `encoders/onnx_encoder.py` et `encoders/export.py`, qui
-demandent respectivement bacpipe (groupe `research`) et un modèle exporté.
+458 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+`encoders/onnx_encoder.py` et `encoders/export.py`, qui demandent un modèle exporté ;
+l'adaptateur bacpipe est validé sur birdnet et beats (DECISIONS n° 64).
 
 Enregistrements de test et hors relevé signalés (149, jamais encodés, DECISIONS n° 51) ;
-canal audio fixé au premier micro, gain 6 dB (DECISIONS n° 50).
+encodage sur le premier micro (gain 6 dB), les deux micros à l'écoute (DECISIONS n° 50, 58).
 
 **Reste à faire avant M1** : regrouper les enregistrements sur le disque du stage puis
 réinventorier (les labels suivent, DECISIONS n° 46) ; inventorier la phénologie 2023-2024 ;
-valider l'adaptateur bacpipe contre la bibliothèque installée.
+mesurer birdmae et perch_v2.

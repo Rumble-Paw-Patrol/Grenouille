@@ -1,9 +1,10 @@
 """Benchmark des encodeurs (§2) : mêmes labels, mêmes plis, sondes légères sur embeddings gelés.
 
-Sondes : kNN cosinus, prototype différentiel, régression logistique L2 (§3). Chacune est
-évaluée en scores hors-pli, groupés par point (site/micro) : un micro ne se retrouve jamais
-des deux côtés d'un pli (§6). Chaque encodeur est jugé au niveau fenêtre et au niveau
-enregistrement, avec AP (IC bootstrap par enregistrement) et rappel aux précisions plancher
+Sondes : kNN cosinus, prototype simple, prototype différentiel, régression logistique L2 (§3).
+L'écart entre les deux prototypes dit combien l'embedding capte le fond sonore partagé.
+Chaque sonde est évaluée en scores hors-pli, groupés par point (site/micro) : un micro ne se
+retrouve jamais des deux côtés d'un pli (§6). Chaque encodeur est jugé au niveau fenêtre et au
+niveau enregistrement, avec AP (IC bootstrap par enregistrement) et rappel aux précisions plancher
 (IC de Wilson en enregistrements).
 
 Les encodeurs se départagent sur les mêmes enregistrements par bootstrap apparié : « A meilleur
@@ -26,7 +27,7 @@ from blanci.head import oof_scores
 from blanci.index import l2_normalize
 from blanci.store import EmbeddingStore
 
-PROBES = ("knn", "prototype", "logistic")
+PROBES = ("knn", "simple_prototype", "prototype", "logistic")
 LEVELS = ("window", "recording")
 
 

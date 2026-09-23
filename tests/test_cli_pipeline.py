@@ -259,3 +259,63 @@ def test_status_summarizes_the_database(embedded):
     output = run(config, "status")
     assert "mataroni" in output and "tresor" in output
     assert "blanci_solo" in output
+
+
+# --- Sous-ensemble du benchmark et baselines ------------------------------------------------
+
+
+def test_embed_subset_benchmark_only_encodes_what_the_benchmark_needs(embedded):
+    """Annotés + candidats aux négatifs appariés (même micro, même créneau de 10 h)."""
+    tmp_path, config = embedded
+    con = connect(tmp_path / "db" / "blanci.sqlite")
+    # Un enregistrement hors créneau n'a rien à faire dans le benchmark.
+    con.execute(
+        "UPDATE recordings SET start_utc = '2026-02-12T20:00:00Z' WHERE path LIKE '%M1_%12_%'"
+    )
+    con.commit()
+    output = run(config, "embed", "--encoder", "toy", "--subset", "benchmark")
+    assert "19 enregistrements à traiter" in output
+
+
+def test_embed_rejects_an_unknown_subset(workspace):
+    tmp_path, config = workspace
+    run(config, "ingest", "--dataset", "2026", "--no-hash")
+    result = runner.invoke(
+        app, ["--config", str(config), "embed", "--encoder", "toy", "--subset", "tout"]
+    )
+    assert result.exit_code != 0
+
+
+def test_baselines_command_writes_the_report(embedded):
+    tmp_path, config = embedded
+    output = run(config, "baselines", "--channels", "0")
+    assert "band_contrast" in output and "template_max" in output
+    assert (tmp_path / "reports" / "baselines.md").exists()
+
+
+def test_candidates_command_writes_a_listening_queue(workspace):
+    tmp_path, config = workspace
+    run(config, "ingest", "--dataset", "2026", "--no-hash")
+    # Ni export ni strate aléatoire : rien à tirer, refus explicite.
+    result = runner.invoke(app, ["--config", str(config), "candidates", "--random", "0"])
+    assert result.exit_code != 0
+    output = run(config, "candidates", "--random", "0", "--from", str(_export(tmp_path)))
+    assert "candidats" in output
+    assert (tmp_path / "reports" / "candidats_lot1.csv").exists()
+
+
+def _export(tmp_path):
+    """Export Blancinet minimal : deux détections jamais écoutées."""
+    import pandas as pd
+
+    path = tmp_path / "export.xlsx"
+    pd.DataFrame(
+        {
+            "file_s3_key": ["1-m1_20260211_100000.flac", "2-t1_20260212_100000.flac"],
+            "station": ["mataroni", "tresor"],
+            "start_time": [3, 6],
+            "score": [0.2, 0.9],
+            "vérification": [None, None],
+        }
+    ).to_excel(path, index=False)
+    return path

@@ -360,3 +360,83 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
 57. **La machine de travail actuelle est la machine cible de l'ONF** (§7) : Intel Core
     i5-1145G7, 4 cœurs / 8 fils, 16 Go, Windows. Le débit des encodeurs (risque 5, question 8
     du §10) se mesure donc ici, sans attendre le Mac.
+
+## 2026-09-23 — Les deux micros, baselines, sous-ensemble du benchmark, poste d'annotation
+
+58. **Les deux canaux sont conservés** (décision de Léonard après écoute, complète n° 50 et 55).
+    Le micro 2 (18 dB) fait ressortir le chant à l'oreille ; sur un positif faible (chant
+    lointain, chevauchement), il peut aider l'annotateur. Donc :
+    - l'encodage reste sur `audio.channel` (0 par défaut), en attendant que le benchmark dise
+      si le canal 1 change quelque chose pour les modèles ;
+    - le poste d'annotation fait écouter **les deux micros côte à côte** et note dans
+      `conditions.channel_listened` le canal du spectrogramme affiché ;
+    - les baselines comparent déjà les deux canaux (`blanci baselines --channels 0,1`).
+    L'écart de quelques centimètres entre les deux micros est confirmé sur un enregistreur
+    (corrige la réserve du n° 54). Extrait d'écoute d'un positif faible (seul positif noté C,
+    RB04) ajouté dans `data/ecoute/3_faible_*`.
+
+59. **bacpipe sous Windows** : TensorFlow tire `tensorflow-io-gcs-filesystem`, sans roue Windows
+    depuis la 0.32. Contrainte `<0.32` sous Windows dans `[tool.uv]` (lecture de fichiers sur
+    Google Cloud, jamais utilisée ici). Groupes `research` et `app` installés sur la machine ONF.
+
+60. **Sous-ensemble du benchmark** (`dataset.benchmark_recordings`, `blanci embed --subset
+    benchmark`) : les enregistrements annotés + tous les candidats aux négatifs appariés (même
+    micro, créneau à ± 30 min, non signalés). Sur la base actuelle : 131 annotés + 716 candidats
+    = 847 enregistrements, 28 h d'audio au lieu de 980 h. Aucun encodage lancé : il attend
+    l'accord de Léonard, une fois le squelette complet.
+
+61. **Prototype simple ajouté aux sondes du benchmark** (§3 le liste comme baseline de
+    similarité ; §6/§13 l'avaient omis). L'écart prototype simple / différentiel mesure le fond
+    sonore capté par l'embedding (note de Léonard).
+
+62. **Baselines sans encodeur** (`blanci/baselines.py`, `blanci baselines`) : énergie en bande,
+    contraste bande / bandes voisines, onsets, rythme, template matching (gabarit moyen et
+    meilleur de 30 exemplaires, appris dans chaque pli sans le micro testé). Même jeu que le
+    benchmark : 345 positifs, 150 négatifs vérifiés, 1 020 négatifs appariés présumés (20 par
+    enregistrement positif), plis par micro. Premier passage le 23/09 (2 min 48 s, lecture seule
+    du disque D:) :
+    - **AP fenêtre 0,22 à 0,37** (hasard 0,23) ; niveau enregistrement 0,10 à 0,15 (hasard 0,08).
+      Aucune baseline n'approche le seuil du go/no-go ;
+    - contre les seuls faux amis vérifiés, le template matching sépare bien (AP 0,93 au canal 1,
+      hasard 0,70) ; contre les négatifs appariés, presque pas (0,33, hasard 0,25) ;
+    - 28 % des négatifs présumés dépassent le score médian des positifs (gabarit moyen). Soit
+      ils ressemblent au chant, soit **ils contiennent A. blanci** : à Mataroni, en saison, au
+      même créneau, c'est plausible. Le bruit d'étiquette des négatifs présumés (§2) est donc à
+      mesurer avant de juger les encodeurs : file d'audit `candidats_audit_negatifs.csv`
+      (20 présumés les mieux notés + 20 au hasard) ;
+    - canal 1 légèrement devant le canal 0 sur presque toutes les baselines (écarts dans les
+      intervalles de confiance) ;
+    - **le critère « rappel ≥ 0,8 à précision ≥ 0,1 » est vide au niveau fenêtre** avec ce jeu :
+      23 % de positifs, tout accepter donne déjà une précision de 0,23. Il ne départage qu'au
+      niveau enregistrement (8 % de positifs). À trancher avec le protocole figé (S3).
+
+63. **Poste d'annotation** (`blanci/workbench.py`, `blanci/app.py` Streamlit, `blanci annotate`,
+    `blanci candidates`). Files CSV dans `data/reports/candidats_*.csv` (aussi `queue_*` et
+    `search_*`). `candidates --from <export Blancinet>` tire les détections jamais écoutées,
+    `per_site` par site, à parts égales entre tranches de score (0–0,3 ; 0,3–0,7 ; 0,7–1) puis
+    entre micros, une fenêtre par enregistrement ; `--random` ajoute des fenêtres au hasard aux
+    heures de pic, à parts égales entre sites. Chaque réponse est un label en ajout seul
+    (source `active`, `random` ou `audit`) ; la fenêtre est créée si besoin. Lot 1 : 100
+    candidats (CDR 31, Mataroni 33, PatawaOuest 32, PatawaEst 2, RNRT 2). YAPAT n'est pas
+    essayé : le poste suffit pour les premiers lots, l'essai reste possible (§5).
+
+64. **Adaptateur bacpipe validé contre bacpipe 1.3.5** (torch 2.6, TensorFlow 2.15, Windows,
+    i5-1145G7) le 23/09. Trois corrections :
+    - les modèles sont dans `bacpipe.model_pipelines.feature_extractors.<nom>` (l'adaptateur
+      cherchait `embedding_generation_pipelines`) ;
+    - `Model(...)` ne lit ses réglages dans `bacpipe.settings` que si `device` est absent : on
+      les passe tous, classifieur désactivé, et `prepare_inference()` est appelé ;
+    - certains modèles rendent une séquence de jetons (birdmae) : moyennée pour l'embedding,
+      exposée par `embed_tokens`, `has_tokens` mesuré au chargement.
+    Poids dans `paths.models/bacpipe` (hors git), pas dans le dossier courant. Sous Windows,
+    `tensorflow-intel==2.15.1` doit être déclaré (uv oubliait cette dépendance de tensorflow).
+    Mesures sur bruit synthétique, CPU de la machine ONF (risque 5) :
+
+    | encodeur | fenêtre | f_e | dim | fenêtres/s | temps réel (grille pas = ½ fenêtre) |
+    |---|---|---|---|---|---|
+    | birdnet | 3 s | 48 kHz | 1 024 | 26,0 | ×39 |
+    | beats | 5 s | 16 kHz | 768 | 3,4 | ×8,5 |
+
+    Ordre de grandeur : le sous-ensemble du benchmark (28 h) prend ~45 min avec birdnet et
+    ~3 h 20 avec beats ; le disque entier (980 h), ~25 h et ~115 h. birdmae (version « Huge »,
+    plusieurs Go) et perch_v2 ne sont pas encore téléchargés : à mesurer avant de les retenir.

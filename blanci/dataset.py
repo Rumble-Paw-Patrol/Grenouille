@@ -13,6 +13,7 @@ Labels courants, transfert vers la grille, négatifs appariés.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 import numpy as np
@@ -172,3 +173,43 @@ def embedded_training_set(
     if data.empty:
         raise ValueError(f"aucune fenêtre étiquetée dans le stock de {store.encoder_id}")
     return data, emb[data["row"].to_numpy()].astype(np.float32)
+
+
+def benchmark_recordings(
+    con: sqlite3.Connection,
+    slot_tolerance_min: float = 30,
+    utc_offset_h: float = -3,
+    exclude_flags: tuple[str, ...] = ("in_bag", "silent", "duration_off", "off_campaign"),
+) -> pd.DataFrame:
+    """Enregistrements dont le benchmark a besoin : les annotés, plus les candidats aux
+    négatifs appariés (même micro, créneau horaire à ± `slot_tolerance_min`, sans positif).
+
+    C'est tout ce que `paired_negatives` peut tirer : encoder ce sous-ensemble suffit au §2,
+    sans passer les 29 000 enregistrements dans chaque encodeur. Colonne `role` ∈
+    {labelled, paired_candidate}. Un candidat signalé (drapeaux QC) est écarté.
+    """
+    recordings = recordings_table(con)
+    labels = current_labels(con)
+    labels = labels[~labels["label"].isin(EXCLUDED_LABELS)]
+    labelled = set(labels["recording_id"])
+    positives = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"])
+
+    flags = recordings["qc_flags"].map(lambda q: json.loads(q) if isinstance(q, str) else {})
+    flagged = flags.map(lambda f: any(f.get(k) for k in exclude_flags))
+    minutes = local_minutes(recordings["start_utc"], utc_offset_h)
+    candidates: set[str] = set()
+    for rid in positives:
+        this = recordings["recording_id"] == rid
+        if not this.any():
+            continue
+        gap = (minutes - minutes[this].iloc[0]).abs()
+        gap = np.minimum(gap, 24 * 60 - gap)
+        same_slot = (recordings["point"] == recordings.loc[this, "point"].iloc[0]) & (
+            gap <= slot_tolerance_min
+        )
+        candidates.update(recordings.loc[same_slot & ~flagged, "recording_id"])
+    candidates -= positives
+
+    out = recordings[recordings["recording_id"].isin(labelled | candidates)].copy()
+    out["role"] = np.where(out["recording_id"].isin(labelled), "labelled", "paired_candidate")
+    return out.sort_values("path").reset_index(drop=True)

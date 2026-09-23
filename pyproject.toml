@@ -26,9 +26,12 @@ dev = [
     "pytest>=8",
     "ruff>=0.6",
 ]
-# Recherche sur le Mac (M1+) : uv sync --group research. Jamais dans le livrable (§13.1).
+# Recherche (M1+) : uv sync --group research. Jamais dans le livrable (§13.1).
 research = [
     "bacpipe>=1.3.5",
+    # Sous Windows, tensorflow 2.15 n'est qu'une coquille qui dépend de tensorflow-intel ;
+    # uv lit les métadonnées d'une autre plateforme et l'oublie : on le déclare (DECISIONS n° 64).
+    "tensorflow-intel==2.15.1; sys_platform == 'win32'",
 ]
 # Prototype de vérification (M2) : uv sync --group app ; outil de travail, pas livrable.
 app = [
@@ -39,6 +42,13 @@ app = [
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]
 build-backend = "uv_build"
+
+[tool.uv]
+# bacpipe tire TensorFlow, dont tensorflow-io-gcs-filesystem n'a plus de roue Windows depuis
+# la 0.32 : la 0.31 suffit (lecture de fichiers sur Google Cloud, jamais utilisée ici).
+constraint-dependencies = [
+    "tensorflow-io-gcs-filesystem<0.32; sys_platform == 'win32'",
+]
 
 [tool.uv.build-backend]
 module-name = "blanci"

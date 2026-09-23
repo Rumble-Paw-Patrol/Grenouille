@@ -17,7 +17,11 @@ def get_encoder(name: str, cfg: dict[str, Any]) -> Encoder:
     if spec is not None and spec["backend"] == "bacpipe":
         from blanci.encoders.bacpipe_encoder import BacpipeEncoder
 
-        return BacpipeEncoder(spec["model"], batch_size=batch)
+        return BacpipeEncoder(
+            spec["model"],
+            batch_size=batch,
+            model_base_path=Path(cfg["paths"]["models"]) / "bacpipe",
+        )
     package = Path(cfg["paths"]["models"]) / "encoder" / name
     if (package / "manifest.json").exists():
         from blanci.encoders.onnx_encoder import OnnxEncoder

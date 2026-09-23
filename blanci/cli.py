@@ -15,8 +15,10 @@ from typing import Annotated, Any
 import pandas as pd
 import typer
 
+from blanci.baselines import run_baselines, write_baseline_report
 from blanci.benchmark import run_benchmark, write_report
 from blanci.config import config_path, load_config
+from blanci.dataset import benchmark_recordings
 from blanci.db import connect
 from blanci.embed import embed_recordings, select_recordings
 from blanci.encoders import get_encoder
@@ -33,6 +35,7 @@ from blanci.service import (
     similarity_search,
     train_and_register,
 )
+from blanci.workbench import blancinet_candidates, random_candidates
 
 app = typer.Typer(help="Détection acoustique d'Anomaloglossus blanci.", no_args_is_help=True)
 
@@ -215,6 +218,10 @@ def embed(
         bool, typer.Option(help="Ne traiter que les heures de pic locales (§5).")
     ] = False,
     batch: Annotated[int | None, typer.Option(help="Défaut : encoders.batch_size.")] = None,
+    subset: Annotated[
+        str | None,
+        typer.Option(help="« benchmark » : annotés + candidats aux négatifs appariés seulement."),
+    ] = None,
 ) -> None:
     """Extraction des embeddings → stock Parquet. Reprenable : ce qui est fait est sauté."""
     cfg = _cfg(ctx)
@@ -228,6 +235,15 @@ def embed(
         peak_hours=cfg["peak_hours_local"] if peak_hours else None,
         utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
     )
+    if subset == "benchmark":
+        wanted = benchmark_recordings(
+            con,
+            cfg["benchmark"]["slot_tolerance_min"],
+            cfg["recorder"]["filename_utc_offset_h"],
+        )
+        recordings = recordings[recordings["recording_id"].isin(wanted["recording_id"])]
+    elif subset is not None:
+        raise typer.BadParameter("attendu : benchmark", param_hint="--subset")
     if recordings.empty:
         typer.echo("aucun enregistrement retenu par ces filtres")
         raise typer.Exit(1)
@@ -270,6 +286,35 @@ def benchmark(
         for r in part.itertuples():
             typer.echo(
                 f"  {r.encoder_id:<16} {r.probe:<10} AP {r.ap:.3f} [{r.ap_lo:.3f} ; {r.ap_hi:.3f}]"
+            )
+    typer.echo(f"rapport : {paths['markdown']}")
+
+
+@app.command()
+def baselines(
+    ctx: typer.Context,
+    channels: Annotated[
+        str | None,
+        typer.Option(help="Canaux à comparer, ex. « 0,1 ». Défaut : audio.channel."),
+    ] = None,
+) -> None:
+    """Baselines sans encodeur (§3) sur les fenêtres annotées : lit l'audio, n'encode rien."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    if channels:
+        chosen = tuple(int(c) for c in _split(channels))
+    else:
+        default = cfg["audio"]["channel"]
+        chosen = (default if isinstance(default, int) else 0,)
+    table, scores = run_baselines(con, cfg, config_path(cfg, "raw"), chosen)
+    paths = write_baseline_report(table, scores, config_path(cfg, "reports"))
+    for level in ("window", "recording"):
+        typer.echo(f"Niveau {level} (AP décroissante) :")
+        for r in table[table["level"] == level].to_dict("records"):
+            typer.echo(
+                f"  {r['baseline']:<14} canal {r['channel']}  AP {r['ap']:.3f} "
+                f"[{r['ap_lo']:.3f} ; {r['ap_hi']:.3f}]  "
+                f"rappel à P>=0,1 {r.get('recall@p0.1', float('nan')):.2f}"
             )
     typer.echo(f"rapport : {paths['markdown']}")
 
@@ -390,6 +435,57 @@ def evaluate(
             f"  rappel à P≥{p} : {metrics[f'recall@p{p}']:.3f} "
             f"[{metrics[f'recall@p{p}_lo']:.3f} ; {metrics[f'recall@p{p}_hi']:.3f}]"
         )
+
+
+@app.command()
+def candidates(
+    ctx: typer.Context,
+    from_table: Annotated[
+        Path | None,
+        typer.Option("--from", help="Export Blancinet : ses détections jamais écoutées."),
+    ] = None,
+    per_site: Annotated[int, typer.Option(help="Détections Blancinet par site.")] = 30,
+    random: Annotated[int, typer.Option(help="Fenêtres tirées au hasard (heures de pic).")] = 10,
+    sites: Annotated[str | None, typer.Option(help="Sites, ex. « CDR,PatawaOuest ».")] = None,
+    name: Annotated[str, typer.Option(help="Nom de la file : candidats_<nom>.csv.")] = "lot1",
+    seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
+) -> None:
+    """File d'écoute pour le poste d'annotation (§5) : Blancinet réparti + strate aléatoire."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    wanted = _split(sites) or None
+    parts = []
+    if from_table is not None:
+        parts.append(blancinet_candidates(con, from_table, cfg, per_site, wanted, seed))
+    if random:
+        parts.append(random_candidates(con, cfg, random, wanted, seed=seed))
+    if not parts:
+        raise typer.BadParameter("rien à tirer : --from et/ou --random")
+    queue = pd.concat(parts, ignore_index=True).sample(frac=1.0, random_state=seed)
+    if queue.empty:
+        typer.echo("aucun candidat")
+        raise typer.Exit(1)
+    for (site, reason), n in queue.groupby(["site", "reason"]).size().items():
+        typer.echo(f"  {site:<14} {reason:<20} {n}")
+    _write_csv(
+        queue.reset_index(drop=True),
+        config_path(cfg, "reports") / f"candidats_{name}.csv",
+        f"{len(queue)} candidats",
+    )
+
+
+@app.command()
+def annotate(ctx: typer.Context) -> None:
+    """Ouvre le poste d'annotation dans le navigateur (groupe `app` : uv sync --group app)."""
+    import subprocess
+    import sys
+
+    app_file = Path(__file__).with_name("app.py")
+    command = [sys.executable, "-m", "streamlit", "run", str(app_file), "--"]
+    config = ctx.parent.params.get("config") if ctx.parent else None
+    if config:
+        command += ["--config", str(Path(config).resolve())]
+    raise typer.Exit(subprocess.call(command))
 
 
 @app.command("label")
