@@ -7,7 +7,6 @@ la future GUI appellera les mêmes fonctions (§4). `export-onnx` attend M5.
 from __future__ import annotations
 
 import csv
-import sqlite3
 import sys
 from collections import Counter
 from pathlib import Path
@@ -20,7 +19,7 @@ from blanci.activity import write_activity_report
 from blanci.baselines import run_baselines, write_baseline_report
 from blanci.benchmark import run_benchmark, write_report
 from blanci.config import config_path, load_config
-from blanci.dataset import benchmark_recordings, recordings_table, suspect_count, usable_labels
+from blanci.dataset import benchmark_recordings, current_labels, recordings_table
 from blanci.db import connect
 from blanci.embed import embed_recordings, select_recordings
 from blanci.encoders import get_encoder
@@ -62,7 +61,6 @@ from blanci.workbench import (
     congener_candidates,
     random_candidates,
     recording_candidates,
-    suspect_candidates,
 )
 
 # Console Windows en cp1252 : « ≥ », « → » ou « é » y feraient planter l'affichage (aide
@@ -234,9 +232,9 @@ def import_detections_command(
 ) -> None:
     """Range les détections d'un détecteur indépendant comme scores (pas comme labels).
 
-    Elles repèrent les négatifs suspects : un négatif annoté dont les fenêtres voisines
-    (± 3 s) contiennent une détection ≥ 0,5 que personne n'a écoutée est écarté de
-    l'entraînement et de l'évaluation, pour tous les encodeurs (DECISIONS n° 80).
+    Aucun négatif présumé n'est tiré à moins de 3 s d'une détection ≥ 0,5 que personne n'a
+    écoutée : ce serait prendre pour négatif une fenêtre où Blancinet entend A. blanci
+    (DECISIONS n° 80, 85).
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -246,31 +244,22 @@ def import_detections_command(
         f"({report.unverified} jamais écoutées) ; {report.not_found} fichiers hors inventaire, "
         f"{report.ambiguous} ambigus, {report.unreadable} illisibles"
     )
-    _echo_suspects(con)
-
-
-def _echo_suspects(con: sqlite3.Connection) -> None:
-    counts = suspect_count(con)
-    typer.echo(
-        f"négatifs annotés : {counts['negatives']}, dont {counts['suspect']} suspects "
-        "(A. blanci détecté à côté ; `candidates --suspects` pour écouter les voisins)"
-    )
 
 
 @app.command("export-labels")
 def export_labels(ctx: typer.Context) -> None:
-    """Fenêtres annotées, une ligne chacune : label, qualité, espèce, commentaire, suspect.
+    """Fenêtres annotées, une ligne chacune : label, qualité, espèce, commentaire.
 
     Le commentaire est celui de l'annotateur, tel qu'écrit (import ou poste d'annotation).
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
-    labels = usable_labels(con)
+    labels = current_labels(con)
     rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
     table = labels.merge(rec, on="recording_id", how="left")
     columns = [
         "window_id", "path", "site", "mic_id", "start_utc", "offset_s", "dur_s", "label",
-        "quality", "species", "comment", "suspect", "source",
+        "quality", "species", "comment", "source",
     ]  # fmt: skip
     _write_csv(
         table[columns].sort_values(["path", "offset_s"]),
@@ -1027,10 +1016,6 @@ def candidates(
     reason: Annotated[
         str, typer.Option(help="Motif des enregistrements entiers : audit_aleatoire, jeu_gele…")
     ] = "audit_aleatoire",
-    suspects: Annotated[
-        bool,
-        typer.Option(help="Détections non écoutées voisines des négatifs suspects (n° 80)."),
-    ] = False,
     sites: Annotated[str | None, typer.Option(help="Sites, ex. « CDR,PatawaOuest ».")] = None,
     name: Annotated[str, typer.Option(help="Nom de la file : candidats_<nom>.csv.")] = "lot1",
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
@@ -1049,12 +1034,8 @@ def candidates(
         parts.append(random_candidates(con, cfg, random, wanted, seed=seed))
     if whole:
         parts.append(recording_candidates(con, cfg, whole, wanted, reason=reason, seed=seed))
-    if suspects:
-        parts.append(suspect_candidates(con, seed=seed))
     if not parts:
-        raise typer.BadParameter(
-            "rien à tirer : --from, --congeners, --random, --entiers ou --suspects"
-        )
+        raise typer.BadParameter("rien à tirer : --from, --congeners, --random ou --entiers")
     queue = pd.concat(parts, ignore_index=True).sample(frac=1.0, random_state=seed)
     if queue.empty:
         typer.echo("aucun candidat")

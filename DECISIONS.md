@@ -681,3 +681,29 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     corrélation de Pearson, alerte sous 0,5 (§11, risque 6). Enregistrements « suspect »
     non comptés, sauf `--suspects-detected`. À lancer sur 2023 une fois la phénologie
     inventoriée, encodée et scorée.
+
+85. **Négatifs suspects abandonnés** (23/09/2026, Léonard ; remplace la partie « négatifs
+    annotés » du n° 80). Les voisins d'un négatif sont souvent le même faux ami (un
+    Fourmilier tacheté qui chante sur une fenêtre chante sur les suivantes) : écouter les
+    voisins en ferait écouter d'autres, sans fin. Règle : **un négatif annoté est négatif,
+    quel que soit le contexte** ajouté par les encodeurs à fenêtre de 5–6 s. Si A. blanci ne
+    chante pas pendant les 3 s écoutées, qu'elle commence juste après est peu probable.
+    **Biais possible, gardé en tête** : quelques fenêtres « négatives » de 5–6 s peuvent
+    contenir la fin d'un chant ; il pèserait sur les encodeurs à fenêtre longue. Supprimés :
+    colonne `suspect`, `candidates --suspects`. **Gardé** (question distincte, non
+    tranchée) : aucun négatif *présumé* n'est tiré à ± 3 s d'une détection Blancinet ≥ 0,5
+    non écoutée ; les détections restent rangées comme scores. Baselines relancées sous
+    cette règle.
+
+86. **AnuraSet extrait et profilé** (23/09/2026, lecture et extraction seules, rien
+    d'encodé). 1 612 enregistrements d'une minute, 4 sites, archive vérifiée. Aucune espèce
+    ne remplit tous les critères (note ≤ 0,3 s, dominante 3–6 kHz, ≥ 300 chants, ≥ 2
+    sites) : les durées sont celles des segments annotés, qui regroupent souvent plusieurs
+    notes, et la plupart des espèces n'est présente que sur un site. Seule candidate
+    multi-sites dans la bande : **DENMIN** (*Dendropsophus minutus*, 1 724 chants, 3 sites,
+    ~5,3 kHz, segment médian 0,61 s). Mono-site dans la bande : LEPPOD (761, ~5,8 kHz,
+    0,33 s), PHYDIS (419, ~5,3 kHz, 0,33 s), DENNAN (596, ~4,4 kHz, 0,44 s) ; elles
+    imposeraient des plis par enregistrement, qui ne disent rien du transfert entre sites.
+    Fréquence dominante mesurée sur l'intervalle annoté : peut être captée par des
+    insectes (PHYCUV à 6,3 kHz est suspect). Choix des espèces (`anuraset.species`) :
+    Léonard.

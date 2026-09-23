@@ -1,4 +1,5 @@
-"""Négatifs suspects (DECISIONS n° 80) et commentaires accolés aux fenêtres annotées."""
+"""Détections Blancinet (scores, pas labels), négatifs présumés tirés loin d'elles
+(DECISIONS n° 80, 85), commentaires accolés aux fenêtres annotées (n° 82)."""
 
 import json
 
@@ -7,18 +8,11 @@ import pandas as pd
 import pytest
 
 from blanci.config import load_config
-from blanci.dataset import (
-    current_labels,
-    detected_blanci,
-    suspect_count,
-    suspect_negatives,
-    training_set,
-    usable_labels,
-)
+from blanci.dataset import current_labels, detected_blanci, training_set
 from blanci.db import connect, recording_id_for, window_id_for
 from blanci.labels import comment_fields, import_detections
 from blanci.service import append_label
-from blanci.workbench import save_answer, suspect_candidates
+from blanci.workbench import save_answer
 
 CFG = load_config()
 
@@ -63,49 +57,42 @@ def detection(con, rid, offset, score):
     con.commit()
 
 
-# --- Règle ----------------------------------------------------------------------------------
+def grid_of(*recordings, dur=5.0):
+    return pd.DataFrame(
+        [
+            {"window_id": window_id_for(r, o, dur), "recording_id": r, "offset_s": o, "dur_s": dur}
+            for r in recordings
+            for o in np.arange(0, 115, 2.5)
+        ]
+    )
 
 
-def test_negative_next_to_an_unheard_detection_is_suspect(con):
+# --- Négatifs annotés : négatifs, quel que soit le voisinage (n° 85) ------------------------
+
+
+def test_annotated_negative_stays_negative_next_to_a_detection(con):
     rid = add_recording(con, "a")
     label(con, rid, 30.0, "bird")
     detection(con, rid, 33.0, 0.9)  # fenêtre voisine, jamais écoutée
-    assert usable_labels(con)["suspect"].tolist() == [True]
-    assert suspect_count(con) == {"negatives": 1, "suspect": 1}
+    data = training_set(con, grid_of(rid))
+    assert data["label"].tolist() == ["bird"] and data["y"].tolist() == [0]
 
 
-@pytest.mark.parametrize(
-    "offset, score, suspect",
-    [
-        (33.0, 0.3, False),  # score trop bas : Blancinet n'y croit pas
-        (36.0, 0.9, False),  # deux fenêtres plus loin : hors du voisinage
-        (27.0, 0.9, True),  # voisine avant
-        (30.0, 0.9, False),  # la fenêtre elle-même : écoutée, c'est le négatif
-    ],
-)
-def test_neighbourhood_and_score(con, offset, score, suspect):
+# --- Où A. blanci est détecté ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("score, counted", [(0.9, True), (0.3, False)])
+def test_only_confident_detections_count(con, score, counted):
     rid = add_recording(con, "a")
-    label(con, rid, 30.0, "bird")
-    detection(con, rid, offset, score)
-    assert bool(usable_labels(con)["suspect"].iloc[0]) is suspect
+    detection(con, rid, 33.0, score)
+    assert (len(detected_blanci(con, current_labels(con))) == 1) is counted
 
 
-def test_listened_neighbour_lifts_the_suspicion(con):
+def test_a_listened_detection_no_longer_counts(con):
     rid = add_recording(con, "a")
-    label(con, rid, 30.0, "bird")
     detection(con, rid, 33.0, 0.9)
-    label(con, rid, 33.0, "background")  # voisin écouté : pas A. blanci
-    labels = usable_labels(con)
-    assert not labels["suspect"].any()
-
-
-def test_blanci_heard_next_door_keeps_it_suspect(con):
-    rid = add_recording(con, "a")
-    label(con, rid, 30.0, "bird")
-    detection(con, rid, 33.0, 0.9)
-    label(con, rid, 33.0, "blanci")  # voisin écouté : c'est A. blanci
-    labels = usable_labels(con).set_index("offset_s")
-    assert labels.at[30.0, "suspect"] and not labels.at[33.0, "suspect"]
+    label(con, rid, 33.0, "background")  # écoutée : pas A. blanci
+    assert detected_blanci(con, current_labels(con)).empty
 
 
 def test_whole_recording_listened_covers_its_detections(con):
@@ -113,43 +100,22 @@ def test_whole_recording_listened_covers_its_detections(con):
     rid = add_recording(con, "a")
     label(con, rid, 0.0, "background", dur=120.0)
     detection(con, rid, 33.0, 0.9)
-    labels = current_labels(con)
-    assert detected_blanci(con, labels).empty
-    assert not suspect_negatives(labels, detected_blanci(con, labels)).any()
+    assert detected_blanci(con, current_labels(con)).empty
 
 
-def test_suspect_negative_leaves_training_and_paired_pool(con):
+# --- Négatifs présumés ----------------------------------------------------------------------
+
+
+def test_presumed_negatives_are_drawn_away_from_unheard_detections(con):
     pos = add_recording(con, "pos", start="2026-02-10T13:00:00Z")
-    neg = add_recording(con, "neg", start="2026-02-11T13:00:00Z")
+    other = add_recording(con, "autre", start="2026-02-11T13:00:00Z")
     label(con, pos, 30.0, "blanci")
-    label(con, neg, 30.0, "bird")
-    detection(con, neg, 33.0, 0.9)
-    offsets = np.arange(0, 115, 2.5)
-    grid = pd.DataFrame(
-        [
-            {"window_id": window_id_for(r, o, 5.0), "recording_id": r, "offset_s": o, "dur_s": 5.0}
-            for r in (pos, neg)
-            for o in offsets
-        ]
-    )
-    data = training_set(con, grid, per_positive=100)
-    kept = data[~data["presumed"]]
-    assert set(kept["label"]) == {"blanci"}  # le négatif suspect n'est plus là
+    detection(con, other, 33.0, 0.9)
+    data = training_set(con, grid_of(pos, other), per_positive=100)
     presumed = data[data["presumed"]]
     # Aucun négatif présumé à moins de 3 s de la détection non écoutée (33–36 s).
     near = (presumed["offset_s"] < 39.0) & (presumed["offset_s"] + 5.0 > 30.0)
     assert len(presumed) > 0 and not near.any()
-
-
-def test_suspect_queue_lists_the_unheard_neighbours(con):
-    rid = add_recording(con, "a")
-    label(con, rid, 30.0, "bird")
-    detection(con, rid, 33.0, 0.9)
-    detection(con, rid, 60.0, 0.9)  # loin de tout négatif : pas dans la file
-    queue = suspect_candidates(con)
-    assert queue["offset_s"].tolist() == [33.0]
-    assert queue["reason"].iloc[0] == "voisin_negatif_suspect"
-    assert queue["score"].iloc[0] == pytest.approx(0.9)
 
 
 # --- Import des détections ------------------------------------------------------------------

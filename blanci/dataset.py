@@ -9,11 +9,12 @@ Labels courants, transfert vers la grille, négatifs appariés.
   d'autres jours, dans des enregistrements sans label positif. Ce sont des négatifs *présumés*
   (colonne `presumed`) : jamais écrits dans la table labels. En saison, à l'heure de pic, une
   partie peut contenir A. blanci : bruit d'étiquette identique pour tous les encodeurs.
-- Négatifs suspects (DECISIONS n° 80) : un négatif annoté est jugé sur 3 s ; les encodeurs à
-  fenêtre de 5–6 s y ajoutent 1 à 3 s de contexte, jamais écoutées. Si A. blanci est détecté
-  dans les fenêtres voisines (± `SUSPECT_MARGIN_S`), le négatif est suspect : ni entraînement,
-  ni évaluation, pour tous les encodeurs (mêmes négatifs pour tous). Il redevient négatif dès
-  que les détections voisines ont été écoutées et ne sont pas A. blanci.
+  Aucun n'est tiré à moins de `DETECTION_MARGIN_S` d'une détection Blancinet non écoutée
+  (DECISIONS n° 80, 85) : ce serait prendre pour négatif une fenêtre où un détecteur
+  indépendant entend A. blanci.
+- Négatifs annotés : négatifs quel que soit le contexte ajouté par les encodeurs à fenêtre
+  de 5–6 s (DECISIONS n° 85). Si A. blanci ne chante pas pendant les 3 s écoutées, qu'elle
+  commence juste après est peu probable ; biais possible, gardé en tête.
 """
 
 from __future__ import annotations
@@ -30,14 +31,13 @@ from blanci.store import EmbeddingStore
 
 EXCLUDED_LABELS = ("blanci_uncertain", "uncertain")
 
-# « A. blanci détecté » autour d'un négatif : détection non écoutée d'un détecteur indépendant
-# (Blancinet, `blanci import-detections`) à ce score au moins, ou positif annoté. Jamais les
-# scores de nos propres têtes : ils serviraient à choisir les labels qui les jugent.
-SUSPECT_DETECTORS = ("blancinet",)
-SUSPECT_MIN_SCORE = 0.5
-# Fenêtres voisines : ± 3 s autour de l'annotation, soit la fenêtre de 3 s de chaque côté.
-# Couvre le contexte ajouté par tous les encodeurs du §2 (fenêtres ≤ 6 s).
-SUSPECT_MARGIN_S = 3.0
+# « A. blanci détecté » : détection non écoutée d'un détecteur indépendant (Blancinet,
+# `blanci import-detections`) à ce score au moins, ou positif annoté. Jamais les scores de
+# nos propres têtes : ils serviraient à choisir les labels qui les jugent.
+INDEPENDENT_DETECTORS = ("blancinet",)
+DETECTION_MIN_SCORE = 0.5
+# Voisinage d'une détection : la fenêtre de 3 s de chaque côté.
+DETECTION_MARGIN_S = 3.0
 
 
 def _comment(conditions: str | None) -> str | None:
@@ -63,8 +63,8 @@ def current_labels(con: sqlite3.Connection) -> pd.DataFrame:
 def detected_blanci(
     con: sqlite3.Connection,
     labels: pd.DataFrame,
-    detectors: tuple[str, ...] = SUSPECT_DETECTORS,
-    min_score: float = SUSPECT_MIN_SCORE,
+    detectors: tuple[str, ...] = INDEPENDENT_DETECTORS,
+    min_score: float = DETECTION_MIN_SCORE,
     eps: float = 1e-6,
 ) -> pd.DataFrame:
     """Où A. blanci est détecté : positifs annotés, et détections ≥ `min_score` que personne
@@ -95,7 +95,7 @@ def detected_blanci(
 
 
 def near_detection(
-    windows: pd.DataFrame, detected: pd.DataFrame, margin_s: float = SUSPECT_MARGIN_S
+    windows: pd.DataFrame, detected: pd.DataFrame, margin_s: float = DETECTION_MARGIN_S
 ) -> pd.Series:
     """Fenêtres (recording_id, offset_s, dur_s) à moins de `margin_s` d'une détection."""
     near = pd.Series(False, index=windows.index)
@@ -109,28 +109,6 @@ def near_detection(
     )
     near[pairs.loc[close, "_row"].unique()] = True
     return near
-
-
-def suspect_negatives(
-    labels: pd.DataFrame, detected: pd.DataFrame, margin_s: float = SUSPECT_MARGIN_S
-) -> pd.Series:
-    """Négatifs annotés dont les fenêtres voisines (± `margin_s`) contiennent une détection."""
-    negative = ~labels["label"].isin(POSITIVE_LABELS + EXCLUDED_LABELS)
-    return near_detection(labels, detected, margin_s) & negative
-
-
-def usable_labels(con: sqlite3.Connection) -> pd.DataFrame:
-    """Labels courants, colonne `suspect` en plus : les négatifs suspects ne servent ni à
-    l'entraînement ni à l'évaluation (`transfer_labels` les écarte)."""
-    labels = current_labels(con)
-    return labels.assign(suspect=suspect_negatives(labels, detected_blanci(con, labels)))
-
-
-def suspect_count(con: sqlite3.Connection) -> dict[str, int]:
-    """Bilan : négatifs annotés, dont suspects (écartés tant que les voisins sont à écouter)."""
-    labels = usable_labels(con)
-    negative = ~labels["label"].isin(POSITIVE_LABELS + EXCLUDED_LABELS)
-    return {"negatives": int(negative.sum()), "suspect": int(labels["suspect"].sum())}
 
 
 def recordings_table(con: sqlite3.Connection) -> pd.DataFrame:
@@ -154,8 +132,6 @@ def transfer_labels(
 ) -> pd.DataFrame:
     """Labels des fenêtres de grille. annotations : recording_id, offset_s, dur_s, label ;
     grid : window_id, recording_id, offset_s, dur_s (dur_s = fenêtre de l'encodeur)."""
-    if "suspect" in annotations:
-        annotations = annotations[~annotations["suspect"].astype(bool)]
     merged = grid.merge(annotations, on="recording_id", suffixes=("", "_ann"))
     g0, g1 = merged["offset_s"], merged["offset_s"] + merged["dur_s"]
     a0, a1 = merged["offset_s_ann"], merged["offset_s_ann"] + merged["dur_s_ann"]
@@ -233,16 +209,14 @@ def training_set(
     if exclude_recordings:
         grid = grid[~grid["recording_id"].isin(exclude_recordings)]
     labels = current_labels(con)
-    detected = detected_blanci(con, labels)
-    labels = labels.assign(suspect=suspect_negatives(labels, detected))
     labeled = transfer_labels(labels, grid)
     parts = [labeled.assign(presumed=False)]
     recordings = recordings_table(con)
     if per_positive > 0:
         positives = set(labeled.loc[labeled["y"] == 1, "recording_id"])
-        # Un négatif présumé non plus ne doit pas côtoyer une détection non écoutée.
+        # Pas de négatif présumé à côté d'une détection non écoutée (DECISIONS n° 80, 85).
         pool = grid[~grid["window_id"].isin(labeled["window_id"])]
-        pool = pool[~near_detection(pool, detected)]
+        pool = pool[~near_detection(pool, detected_blanci(con, labels))]
         negatives = paired_negatives(
             pool,
             recordings,

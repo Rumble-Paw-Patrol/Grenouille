@@ -28,14 +28,7 @@ import pandas as pd
 import soundfile as sf
 from scipy.signal import spectrogram
 
-from blanci.dataset import (
-    current_labels,
-    detected_blanci,
-    local_minutes,
-    near_detection,
-    recordings_table,
-    suspect_negatives,
-)
+from blanci.dataset import local_minutes, recordings_table
 from blanci.db import window_id_for
 from blanci.embed import select_recordings
 from blanci.grid import window_grid
@@ -301,24 +294,6 @@ def recording_candidates(
         part = recordings[recordings["mic_id"] == mic]
         picked.append(_round_robin(part, "stratum", quota, rng))
     out = pd.concat(picked).assign(score=np.nan, reason=reason, source="audit")
-    return _finish(out, seed)
-
-
-def suspect_candidates(con: sqlite3.Connection, seed: int = 0) -> pd.DataFrame:
-    """Détections non écoutées voisines des négatifs suspects (DECISIONS n° 80).
-
-    Chacune écoutée lève le soupçon (pas A. blanci : le négatif redevient utilisable) ou le
-    confirme (A. blanci : un nouveau positif, et le négatif reste écarté).
-    """
-    labels = current_labels(con)
-    detected = detected_blanci(con, labels)
-    suspects = labels[suspect_negatives(labels, detected)]
-    near = detected[near_detection(detected, suspects) & detected["score"].notna()]
-    near = _drop_labelled(con, near.drop_duplicates("window_id"))
-    if near.empty:
-        return pd.DataFrame(columns=CANDIDATE_COLUMNS)
-    rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
-    out = near.merge(rec, on="recording_id").assign(reason="voisin_negatif_suspect", source="audit")
     return _finish(out, seed)
 
 

@@ -51,10 +51,10 @@ $B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "D:/Projet blanci 202
 # Import des annotations ; --dry-run d'abord pour relire verdicts, espèces et lignes signalées
 $B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx --dry-run
 $B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
-# Toutes les détections Blancinet, comme scores (pas comme labels) : repèrent les négatifs
-# suspects, A. blanci détecté à ± 3 s d'un négatif annoté (DECISIONS n° 80)
+# Toutes les détections Blancinet, comme scores (pas comme labels) : aucun négatif présumé
+# n'est tiré à ± 3 s d'une détection non écoutée (DECISIONS n° 80, 85)
 $B import-detections documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
-$B export-labels     # fenêtres annotées : label, qualité, espèce, commentaire, suspect
+$B export-labels     # fenêtres annotées : label, qualité, espèce, commentaire
 
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid
@@ -74,8 +74,6 @@ $B annotate                                          # poste d'écoute dans le n
 # Enregistrements entiers (audit aléatoire, jeu gelé) ; accord entre deux annotateurs
 $B candidates --entiers 300 --sites Mataroni --reason audit_aleatoire --random 0 --name audit
 $B agreement --annotators léonard,tuteur
-# Voisines non écoutées des négatifs suspects : les écouter lève ou confirme le soupçon
-$B candidates --suspects --random 0 --name suspects
 
 # --- Relevé des encodeurs (§2, §7) : bruit synthétique, rien n'est lu -----
 $B throughput --encoders birdnet,beats,perch_v2,birdmae_base   # → debit.md
@@ -143,7 +141,7 @@ Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 po
 150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
 viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
 
-555 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+551 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
 `encoders/onnx_encoder.py` et `encoders/export.py`, qui demandent un modèle exporté ;
 les neuf encodeurs bacpipe du §2 sont installés et mesurés (DECISIONS n° 64, 72).
 
