@@ -7,7 +7,6 @@ la future GUI appellera les mêmes fonctions (§4). `export-onnx` attend M5.
 from __future__ import annotations
 
 import csv
-import json
 import sys
 from collections import Counter
 from pathlib import Path
@@ -27,7 +26,13 @@ from blanci.frozen import freeze as freeze_recordings
 from blanci.grid import containing_windows, max_hop_without_cut, window_grid
 from blanci.ingest import ingest as run_ingest
 from blanci.labels import POSITIVE_LABELS, import_label_file
-from blanci.qc import apply_metadata_flags
+from blanci.qc import (
+    AUDIO_FLAGS,
+    apply_annotation_flags,
+    apply_audio_flags,
+    apply_metadata_flags,
+    parse_flags,
+)
 from blanci.sequential import compute_onsets
 from blanci.service import (
     append_label,
@@ -153,16 +158,33 @@ def _echo_flags(flagged: dict[str, int]) -> None:
     )
 
 
+def _echo_annotated(counts: dict[str, int]) -> None:
+    typer.echo(
+        f"posés à l'écoute, sur {counts['annotated']} enregistrements annotés : "
+        f"{counts['in_bag']} micro dans sac (jamais encodés), {counts['rain']} pluie (remarque)"
+    )
+
+
 @app.command()
 def flag(ctx: typer.Context) -> None:
-    """Recalcule les drapeaux d'inventaire (durée anormale, hors relevé) sans lire l'audio.
+    """Recalcule tous les drapeaux, sans lire l'audio : inventaire (durée anormale, hors
+    relevé), audio depuis les indices déjà calculés (seuils actuels de `qc`), écoute.
 
-    Un enregistrement signalé reste dans la base et sur le disque ; il n'est simplement jamais
-    encodé, donc jamais tiré comme négatif ni proposé à la vérification.
+    Écartent du corpus : silencieux, micro dans sac, durée anormale, hors relevé. Pluie et
+    saturation sont des remarques. Un enregistrement signalé reste dans la base et sur le
+    disque ; s'il est écarté, il n'est jamais encodé, donc jamais tiré comme négatif ni
+    proposé à la vérification. Un enregistrement où A. blanci a été entendu n'est jamais
+    écarté.
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     _echo_flags(apply_metadata_flags(con, cfg["qc"]))
+    audio = apply_audio_flags(con, cfg["qc"])
+    typer.echo(
+        "audio (enregistrements déjà contrôlés) : "
+        + ", ".join(f"{k} {audio[k]}" for k in AUDIO_FLAGS)
+    )
+    _echo_annotated(apply_annotation_flags(con))
 
 
 @app.command("import-labels")
@@ -190,6 +212,7 @@ def import_labels(
         typer.echo(report.summary())
         if report.inserted:
             typer.echo(f"  {report.inserted} labels ajoutés")
+            _echo_annotated(apply_annotation_flags(con))
         elif report.unresolved and not dry_run:
             typer.echo("  rien n'est importé (--allow-partial pour importer les lignes résolues)")
             failed = True
@@ -245,8 +268,16 @@ def embed(
         str | None,
         typer.Option(help="« benchmark » : annotés + candidats aux négatifs appariés seulement."),
     ] = None,
+    qc: Annotated[
+        bool,
+        typer.Option(help="Contrôle audio au passage des enregistrements qui ne l'ont pas eu."),
+    ] = True,
 ) -> None:
-    """Extraction des embeddings → stock Parquet. Reprenable : ce qui est fait est sauté."""
+    """Extraction des embeddings → stock Parquet. Reprenable : ce qui est fait est sauté.
+
+    Avec le contrôle audio (défaut), un enregistrement jamais contrôlé l'est sur l'audio déjà
+    lu ; silencieux ou micro dans sac, il n'est pas encodé (sauf s'il contient un positif).
+    """
     cfg = _cfg(ctx)
     if batch:
         cfg["encoders"]["batch_size"] = batch
@@ -281,7 +312,13 @@ def embed(
         hop_ratio=cfg["encoders"]["grid_hop_ratio"],
         channel=cfg["audio"]["channel"],
         signal_cfg=cfg["signal"],
+        qc_thresholds=cfg["qc"] if qc else None,
     )
+    if report.qc_checked:
+        typer.echo(
+            f"contrôle audio : {report.qc_checked} enregistrements, {report.qc_excluded} écartés "
+            "(silencieux ou micro dans sac)"
+        )
     typer.echo(
         f"{report.encoder_id} : {report.recordings} encodés, {report.skipped} déjà faits, "
         f"{report.errors} illisibles ; {report.windows} fenêtres, "
@@ -910,11 +947,18 @@ def status(ctx: typer.Context) -> None:
             f"{r['hours']:.1f} h, {sr}"
         )
     flags: Counter[str] = Counter()
+    heard: Counter[str] = Counter()
     for (qc,) in con.execute("SELECT qc_flags FROM recordings WHERE qc_flags IS NOT NULL"):
-        flags.update(k for k, v in json.loads(qc).items() if v is True)
+        parsed = parse_flags(qc)
+        flags.update(k for k, v in parsed.items() if v is True)
+        if "annotated" in parsed:
+            heard.update(["annotated", *parsed["annotated"]])
     if flags:
+        typer.echo("Drapeaux calculés : " + ", ".join(f"{k}={v}" for k, v in flags.items()))
+    if heard:
         typer.echo(
-            "Drapeaux QC (seuils provisoires) : " + ", ".join(f"{k}={v}" for k, v in flags.items())
+            f"Drapeaux posés à l'écoute ({heard.pop('annotated')} enregistrements annotés) : "
+            + (", ".join(f"{k}={v}" for k, v in heard.items()) or "aucun")
         )
     typer.echo("Labels :")
     for r in con.execute(

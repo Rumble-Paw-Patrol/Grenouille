@@ -667,7 +667,9 @@ def test_moving_to_a_new_disk_keeps_labels(tmp_path, cfg):
     row = con.execute("SELECT * FROM recordings").fetchone()
     assert row["recording_id"] == before["recording_id"]
     assert row["path"] == f"2026/Mataroni/2LA04530/{STEMS[0].upper()}.wav"
-    assert row["qc_flags"] == before["qc_flags"]  # QC déjà calculé : pas effacé
+    after = json.loads(row["qc_flags"])
+    assert after.pop("annotated") == []  # annoté à l'écoute, rien de signalé
+    assert after == json.loads(before["qc_flags"])  # QC déjà calculé : pas effacé
     labelled = con.execute(
         "SELECT COUNT(*) FROM labels l JOIN windows w USING (window_id) "
         "JOIN recordings r USING (recording_id)"

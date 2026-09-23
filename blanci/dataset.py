@@ -13,13 +13,13 @@ Labels courants, transfert vers la grille, négatifs appariés.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 
 import numpy as np
 import pandas as pd
 
 from blanci.labels import POSITIVE_LABELS
+from blanci.qc import EXCLUDING_FLAGS, is_excluded
 from blanci.store import EmbeddingStore
 
 EXCLUDED_LABELS = ("blanci_uncertain", "uncertain")
@@ -189,7 +189,7 @@ def benchmark_recordings(
     con: sqlite3.Connection,
     slot_tolerance_min: float = 30,
     utc_offset_h: float = -3,
-    exclude_flags: tuple[str, ...] = ("in_bag", "silent", "duration_off", "off_campaign"),
+    exclude_flags: tuple[str, ...] = EXCLUDING_FLAGS,
 ) -> pd.DataFrame:
     """Enregistrements dont le benchmark a besoin : les annotés, plus les candidats aux
     négatifs appariés (même micro, créneau horaire à ± `slot_tolerance_min`, sans positif).
@@ -204,8 +204,7 @@ def benchmark_recordings(
     labelled = set(labels["recording_id"])
     positives = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"])
 
-    flags = recordings["qc_flags"].map(lambda q: json.loads(q) if isinstance(q, str) else {})
-    flagged = flags.map(lambda f: any(f.get(k) for k in exclude_flags))
+    flagged = recordings["qc_flags"].map(lambda q: is_excluded(q, exclude_flags))
     minutes = local_minutes(recordings["start_utc"], utc_offset_h)
     candidates: set[str] = set()
     for rid in positives:

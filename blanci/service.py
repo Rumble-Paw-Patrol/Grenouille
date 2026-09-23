@@ -43,6 +43,7 @@ from blanci.fusion import FusionWeights, fit_fusion, fusion_oof
 from blanci.head import Head, OOFScores, fit_logistic, oof_scores, select_C, train_head
 from blanci.index import search
 from blanci.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
+from blanci.qc import apply_annotation_flags, is_excluded
 from blanci.sequential import load_onsets, recording_persistence, window_rhythm
 from blanci.store import EmbeddingStore
 
@@ -406,7 +407,10 @@ def append_label(
         raise ValueError(f"qualité inconnue : {quality!r} (attendues : {', '.join(QUALITIES)})")
     if source not in SOURCES:
         raise ValueError(f"source inconnue : {source!r} (attendues : {', '.join(SOURCES)})")
-    if con.execute("SELECT 1 FROM windows WHERE window_id = ?", (window_id,)).fetchone() is None:
+    row = con.execute(
+        "SELECT recording_id FROM windows WHERE window_id = ?", (window_id,)
+    ).fetchone()
+    if row is None:
         raise ValueError(f"fenêtre inconnue : {window_id}")
     cursor = con.execute(
         "INSERT INTO labels (window_id, label, quality, species, conditions, annotator, "
@@ -423,6 +427,7 @@ def append_label(
         ),
     )
     con.commit()
+    apply_annotation_flags(con, [row[0]])  # micro dans sac, pluie : drapeaux posés à l'écoute
     return int(cursor.lastrowid)
 
 
@@ -569,8 +574,7 @@ def evaluate_holdout(
 
 
 def _qc_flagged(qc: Any, keys: tuple[str, ...] = ("saturation", "rain", "in_bag")) -> bool:
-    flags = json.loads(qc) if isinstance(qc, str) else {}
-    return any(flags.get(k) for k in keys)
+    return is_excluded(qc, keys)
 
 
 def run_clustering(

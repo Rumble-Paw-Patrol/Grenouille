@@ -1,4 +1,7 @@
-"""Jeu gelé (§6) : enregistrements écoutés en entier, mis de côté pour toujours.
+"""Jeu gelé (§6) : le jeu de test, enregistrements écoutés en entier, mis de côté pour toujours.
+
+La validation croisée (plis groupés par micro) sert à choisir : C, seuil, encodeur, fusion.
+Le jeu gelé ne sert qu'à juger, une fois les choix faits.
 
 Un jeu gelé est une liste d'enregistrements figée à une date, versionnée
 (`paths.frozen_test/jeu_gele_<version>.csv`, en lecture seule). Ses enregistrements :

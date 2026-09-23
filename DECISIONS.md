@@ -598,3 +598,21 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     chant coupé = écartée ; négatifs tirés par site (1:20) ; plis par site (4 sites).
     Espèces à choisir avec `anuraset-profile` (note brève, dominante 3–6 kHz, ≥ 300 chants,
     ≥ 2 sites). Encodage d'AnuraSet (~27 h d'audio) : avec celui des données ONF, ce week-end.
+
+79. **Drapeaux : trois origines, une règle d'exclusion** (23/09/2026, avec Léonard). Un
+    drapeau est une remarque sur un enregistrement (`recordings.qc_flags`, le fichier n'est
+    jamais touché). Origines : inventaire (durée anormale, hors relevé), audio (silencieux,
+    saturation, micro dans sac, pluie), **écoute** (nouvelle clé `annotated` : présente sur
+    tout enregistrement annoté à la main, avec les drapeaux que l'annotateur y a posés —
+    label `artefact_in_bag` → micro dans sac ; label `rain` ou mention de pluie → pluie).
+    **Seuls silencieux, micro dans sac, durée anormale et hors relevé écartent du corpus**
+    (jamais encodés) ; pluie et saturation sont des remarques : un micro sous la pluie
+    enregistre son milieu, ces enregistrements font partie du jeu de données. **Un
+    enregistrement où A. blanci a été entendu n'est jamais écarté** : l'écoute prime sur le
+    calcul. Le contrôle audio se fait pendant `embed` sur l'audio déjà lu (option `--no-qc`
+    pour s'en passer), une fois par enregistrement ; ses indices sont gardés, `blanci flag`
+    réapplique un seuil changé sans relire l'audio et recalcule les drapeaux d'écoute (aussi
+    recalculés à chaque label ajouté et après chaque import). Sur la base au 23/09 : 131
+    enregistrements annotés, 8 micro dans sac (aucun avec un positif), 5 pluie (dont 2 avec
+    un positif). Seuil « micro dans sac » inchangé (0,02) tant que Léonard n'a pas tranché
+    (n° 76).

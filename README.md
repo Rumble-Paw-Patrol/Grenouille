@@ -54,7 +54,10 @@ $B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
 
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid
-$B flag      # durées anormales et hors relevé : signalés, jamais encodés
+# Drapeaux (remarques sur un enregistrement, DECISIONS n° 79) : écartent du corpus
+# silencieux, micro dans sac, durée anormale, hors relevé ; pluie et saturation restent.
+# Recalcule inventaire, audio (seuils actuels, sans relire l'audio) et drapeaux d'écoute.
+$B flag
 $B status
 
 # --- Baselines sans encodeur (§3) : lit l'audio, n'encode rien -------------
@@ -73,6 +76,7 @@ $B throughput --encoders birdnet,beats,perch_v2,birdmae_base   # → debit.md
 
 # --- Embeddings et choix d'encodeur (§2) : uv sync --group research -------
 uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatifs appariés
+# (contrôle audio au passage : silencieux et micro dans sac écartés ; --no-qc pour s'en passer)
 uv run blanci embed --encoder birdmae --peak-hours    # reprenable
 $B cluster --encoder birdmae-bacpipe1.3.5 --mode c1   # clustering C0/C1 (§5 bis)
 $B candidates --congeners perch_v2-bacpipe1.3.5       # logits des congénères de Perch
@@ -126,11 +130,13 @@ Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 po
 150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
 viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
 
-512 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+531 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
 `encoders/onnx_encoder.py` et `encoders/export.py`, qui demandent un modèle exporté ;
 les neuf encodeurs bacpipe du §2 sont installés et mesurés (DECISIONS n° 64, 72).
 
 Enregistrements de test et hors relevé signalés (149, jamais encodés, DECISIONS n° 51) ;
+drapeaux posés à l'écoute sur les 131 enregistrements annotés (8 micro dans sac, 5 pluie,
+DECISIONS n° 79) ;
 encodage sur le premier micro (gain 6 dB), les deux micros à l'écoute (DECISIONS n° 50, 58).
 
 **Reste à faire avant M1** : regrouper les enregistrements sur le disque du stage puis

@@ -1,8 +1,11 @@
 """Extraction des embeddings : enregistrements → grille → encodeur → stock Parquet (§4).
 
 Reprenable : un enregistrement déjà présent dans sa partition est sauté ; le stock est écrit
-tous les `flush_every` enregistrements. Le débit mesuré (fenêtres/s, facteur temps réel) est
-enregistré dans la table models : c'est la colonne « vitesse » du benchmark (§2).
+tous les `flush_every` enregistrements. L'audio lu sert aussi au contrôle qualité (drapeaux
+audio) des enregistrements qui ne l'ont pas encore eu : un enregistrement silencieux ou
+micro dans sac est alors écarté avant d'être encodé. Le débit mesuré (fenêtres/s, facteur
+temps réel) est enregistré dans la table models : c'est la colonne « vitesse » du benchmark
+(§2).
 """
 
 from __future__ import annotations
@@ -21,6 +24,15 @@ from blanci.audio import cut_windows, load_audio
 from blanci.db import utc_now, window_id_for
 from blanci.encoders.base import Encoder, encoder_id
 from blanci.grid import window_grid
+from blanci.qc import (
+    EXCLUDING_FLAGS,
+    is_excluded,
+    merge_audio_flags,
+    parse_flags,
+    positive_recordings,
+    qc_flags,
+    qc_indices,
+)
 from blanci.sequential import recording_onsets, store_onsets
 from blanci.store import EmbeddingStore
 
@@ -34,6 +46,8 @@ class EmbedReport:
     audio_s: float = 0.0
     encode_s: float = 0.0
     errors: int = 0
+    qc_checked: int = 0  # contrôle audio fait pendant ce passage
+    qc_excluded: int = 0  # écartés par ce contrôle (silencieux, micro dans sac)
 
     @property
     def windows_per_s(self) -> float:
@@ -50,12 +64,14 @@ def select_recordings(
     site: str | None = None,
     peak_hours: list[list[int]] | None = None,
     utc_offset_h: float = -3,
-    exclude_flags: tuple[str, ...] = ("in_bag", "silent", "duration_off", "off_campaign"),
+    exclude_flags: tuple[str, ...] = EXCLUDING_FLAGS,
 ) -> pd.DataFrame:
     """Enregistrements à encoder, filtrés par jeu, site, heures de pic locales et drapeaux QC.
 
-    Un enregistrement signalé n'est jamais encodé : il ne peut donc devenir ni négatif apparié,
-    ni candidat de file de vérification, ni score. Le fichier, lui, n'est pas touché.
+    Un enregistrement signalé (`EXCLUDING_FLAGS`) n'est jamais encodé : il ne peut donc
+    devenir ni négatif apparié, ni candidat de file de vérification, ni score. Le fichier,
+    lui, n'est pas touché. Exception : un enregistrement où A. blanci a été entendu est
+    toujours gardé.
     """
     df = pd.read_sql_query("SELECT * FROM recordings ORDER BY path", con)
     if dataset:
@@ -67,8 +83,8 @@ def select_recordings(
             pd.to_datetime(df["start_utc"], utc=True) + pd.Timedelta(hours=utc_offset_h)
         ).dt.hour
         df = df[np.logical_or.reduce([(hours >= a) & (hours < b) for a, b in peak_hours])]
-    flags = df["qc_flags"].map(lambda q: json.loads(q) if isinstance(q, str) else {})
-    bad = flags.map(lambda f: any(f.get(k) for k in exclude_flags))
+    bad = df["qc_flags"].map(lambda q: is_excluded(q, exclude_flags))
+    bad &= ~df["recording_id"].isin(positive_recordings(con))
     return df[~bad].reset_index(drop=True)
 
 
@@ -124,11 +140,16 @@ def embed_recordings(
     progress_every: int = 100,
     channel: int | str = "mean",
     signal_cfg: dict | None = None,
+    qc_thresholds: dict | None = None,
 ) -> EmbedReport:
-    """Encode les enregistrements. Avec `signal_cfg`, calcule aussi au passage les débuts de
-    notes de chaque enregistrement qui n'en a pas encore (module séquentiel, §3) : l'audio
-    est déjà en mémoire, une seule lecture sert aux deux."""
+    """Encode les enregistrements. L'audio est déjà en mémoire, une seule lecture sert aussi :
+    - avec `signal_cfg`, aux débuts de notes de chaque enregistrement qui n'en a pas encore
+      (module séquentiel, §3) ;
+    - avec `qc_thresholds`, au contrôle audio de chaque enregistrement qui ne l'a pas encore
+      eu ; s'il lève un drapeau d'exclusion (silencieux, micro dans sac), l'enregistrement
+      n'est pas encodé, sauf si A. blanci y a été entendu."""
     eid = encoder_id(encoder)
+    protected = positive_recordings(con) if qc_thresholds is not None else set()
     with_onsets = {row[0] for row in con.execute("SELECT recording_id FROM onsets")}
     store = EmbeddingStore(store_root, eid)
     window_s = round(encoder.window_s, 2)
@@ -151,6 +172,13 @@ def embed_recordings(
             except Exception:  # fichier illisible : déjà signalé à l'inventaire
                 report.errors += 1
                 continue
+            if qc_thresholds is not None and "indices" not in parse_flags(rec.qc_flags):
+                audio = qc_flags(qc_indices(wav, sr), qc_thresholds)
+                merged = merge_audio_flags(con, rec.recording_id, audio)
+                report.qc_checked += 1
+                if is_excluded(merged) and rec.recording_id not in protected:
+                    report.qc_excluded += 1
+                    continue
             if signal_cfg is not None and rec.recording_id not in with_onsets:
                 store_onsets(con, rec.recording_id, recording_onsets(wav, sr, signal_cfg), channel)
                 with_onsets.add(rec.recording_id)
