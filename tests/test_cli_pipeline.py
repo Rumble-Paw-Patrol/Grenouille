@@ -87,6 +87,7 @@ def workspace(tmp_path, monkeypatch):
                 # Enregistrements de synthèse de 12 s : sans cela, tous seraient signalés
                 # « durée anormale » et jamais encodés.
                 "qc": {"expected_duration_s": DURATION_S},
+                "cluster": {"min_cluster_size": 5, "pca_components": 4, "c1_site": "mataroni"},
             }
         ),
         encoding="utf-8",
@@ -223,6 +224,8 @@ def test_evaluate_grouped_by_mic(embedded):
     output = run(config, "evaluate", "--encoder", "toy-1")
     assert "plis groupés par micro" in output
     assert "AP" in output and "rappel à P≥0.1" in output
+    # Rappel ventilé par qualité (non renseignée ici : « ? ») et par site (§6).
+    assert "rappel par strate" in output and "site mataroni" in output and "qualité ?" in output
 
 
 def test_evaluate_holds_out_a_site(embedded):
@@ -319,3 +322,23 @@ def _export(tmp_path):
         }
     ).to_excel(path, index=False)
     return path
+
+
+# --- Clustering (§5 bis) ---------------------------------------------------------------------
+
+
+def test_cluster_c0_writes_groups_and_window_assignments(embedded):
+    tmp_path, config = embedded
+    output = run(config, "cluster", "--encoder", "toy-1", "--mode", "c0")
+    assert "groupes" in output and "AMI" in output
+    assert (tmp_path / "reports" / "cluster_c0_toy-1.csv").exists()
+    import pandas as pd
+
+    windows = pd.read_csv(tmp_path / "reports" / "cluster_c0_toy-1_fenetres.csv")
+    assert len(windows) > 0 and {"cluster", "point"} <= set(windows.columns)
+
+
+def test_cluster_c1_gives_a_verdict(embedded):
+    tmp_path, config = embedded
+    output = run(config, "cluster", "--encoder", "toy-1", "--mode", "c1", "--n", "20")
+    assert "C1 réussi" in output or "C1 échoué" in output

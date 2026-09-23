@@ -91,6 +91,11 @@ def main() -> None:
             return
         chosen = st.selectbox("File de candidats", queues, format_func=lambda p: p.name)
         skip_done = st.checkbox("Masquer les candidats déjà écoutés", value=True)
+        calibration = st.checkbox(
+            "Calibration : ne masquer que mes réponses",
+            value=False,
+            help="Deux annotateurs écoutent la même file sans voir les réponses de l'autre (§5).",
+        )
         channel = st.radio(
             "Spectrogramme",
             list(CHANNELS),
@@ -101,7 +106,7 @@ def main() -> None:
         gain_db = st.slider("Volume d'écoute (dB, n'agit que sur l'écoute)", 0, 30, 0, 3)
 
     queue = load_candidates(chosen, con)
-    done = progress(con, queue)
+    done = progress(con, queue, (annotator.strip() or None) if calibration else None)
     st.sidebar.metric("Écoutés", f"{int(done.notna().sum())} / {len(queue)}")
     todo = queue[done.isna()] if skip_done else queue
     if todo.empty:

@@ -74,16 +74,30 @@ labels:
     annotator: expert
 
 # Encodeurs (§2). La f_e et la durée de fenêtre sont lues dans le modèle ; la grille en découle
-# (pas = fenêtre × grid_hop_ratio). Noms bacpipe [À VÉRIFIER] à l'installation.
+# (pas = fenêtre × grid_hop_ratio). Noms vérifiés contre bacpipe 1.3.5 (DECISIONS n° 64).
 encoders:
   grid_hop_ratio: 0.5
   batch_size: 64
   models:
     birdmae: {backend: bacpipe, model: birdmae}
+    # bacpipe charge Bird-MAE-Huge (lent sur l'i5) ; le §7 prévoit la version Base.
+    birdmae_base: {backend: bacpipe, model: birdmae, checkpoint: DBD-research-group/Bird-MAE-Base}
     beats: {backend: bacpipe, model: beats}
     naturebeats: {backend: bacpipe, model: naturebeats}
-    perch_v2: {backend: bacpipe, model: perch_v2}
+    perch_v2:
+      backend: bacpipe
+      model: perch_v2
+      # Logits des congénères (§2) rangés dans `scores` pendant l'encodage : générateur de
+      # candidats (`blanci candidates --congeners`), sans seconde inférence.
+      logit_classes: [Anomaloglossus baeobatrachus, Anomaloglossus stepheni,
+                      Anomaloglossus surinamensis]
     birdnet: {backend: bacpipe, model: birdnet}     # référence du tuteur, non déployable
+    # Contrôle passe-bas (§2) : birdmae n'entendant que < 8 kHz, comme un modèle à 16 kHz.
+    birdmae_lp8k: {backend: bacpipe, model: birdmae, lowpass_hz: 8000}
+    # « Si sans effort » (§2) :
+    protoclr: {backend: bacpipe, model: protoclr}
+    perch_bird: {backend: bacpipe, model: perch_bird}
+    convnext_birdset: {backend: bacpipe, model: convnext_birdset}
 
 head:
   C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]
@@ -100,6 +114,19 @@ aggregate:
   # Règle enregistrement (§1), à calibrer sur les 20 enregistrements écoutés en entier.
   min_positive_windows: 3          # en dessous : « suspect » (détection isolée)
   min_span_s: 10.0                 # fenêtres positives étalées sur moins : « suspect »
+
+cluster:
+  # Voie non supervisée (§5 bis) : HDBSCAN sur ACP. Seuils de C1 : jugement de la feuille de route.
+  pca_components: 50
+  min_cluster_size: 15
+  min_samples: 5
+  seed: 0
+  c0_sample: 20000                 # fenêtres tirées dans tout le stock
+  c1_site: Mataroni
+  c1_negatives: 5000               # fenêtres des mêmes micros aux mêmes heures
+  c1_min_recall: 0.5               # le meilleur groupe rassemble la moitié des positifs...
+  c1_min_enrichment: 20            # ...avec 20 fois plus de positifs que la moyenne...
+  c1_max_ami_mic: 0.3              # ...et des groupes qui ne sont pas des micros
 
 active:
   batch_recordings: 40             # lots de 30–50 enregistrements (§5)

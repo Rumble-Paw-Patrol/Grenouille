@@ -148,6 +148,7 @@ def blancinet_candidates(
 
     found = pd.DataFrame(rows, columns=["row", "offset_s", "score"])
     found = found.join(recordings, on="row").drop(columns="row")
+    found["dur_s"] = float(icfg["window_s"])
     found = _drop_labelled(con, found)
     if sites:
         wanted = {s.lower() for s in sites}
@@ -164,7 +165,6 @@ def blancinet_candidates(
             picked.append(_round_robin(part[part["bin"] == b], "mic_id", q, rng, used))
     out = pd.concat(picked) if picked else found.iloc[:0]
     out = out.assign(
-        dur_s=float(icfg["window_s"]),
         reason="blancinet_" + out["bin"].map(lambda b: _bin_name(int(b))).astype(str),
         source="active",
     )
@@ -211,6 +211,91 @@ def random_candidates(
     return _finish(_drop_labelled(con, out), seed)
 
 
+def congener_candidates(
+    con: sqlite3.Connection,
+    encoder_id: str,
+    per_site: int = 30,
+    sites: list[str] | None = None,
+) -> pd.DataFrame:
+    """Fenêtres où Perch 2.0 entend le plus un *Anomaloglossus* congénère (§2, §5).
+
+    Score d'une fenêtre = le plus grand des logits de congénères rangés par `embed`
+    (`<encodeur>:logit:<espèce>`). Logits non calibrés : ils ne servent qu'à classer. Par
+    site, la meilleure fenêtre de chaque enregistrement, puis les meilleurs enregistrements en
+    alternant les micros (le meilleur de chaque micro d'abord) : un micro bruyant ne remplit
+    pas la file à lui seul.
+    """
+    scores = pd.read_sql_query(
+        "SELECT s.window_id, MAX(s.score) AS score, w.recording_id, w.offset_s, w.dur_s "
+        "FROM scores s JOIN windows w USING (window_id) WHERE s.model_id LIKE ? "
+        "GROUP BY s.window_id",
+        con,
+        params=(f"{encoder_id}:logit:%",),
+    )
+    if scores.empty:
+        raise ValueError(f"aucun logit de congénère pour {encoder_id} (encoder avec perch_v2)")
+    recordings = select_recordings(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
+    found = scores.merge(recordings, on="recording_id")  # sans les enregistrements signalés
+    found = _drop_labelled(con, found)
+    if sites:
+        wanted = {s.lower() for s in sites}
+        found = found[found["site"].str.lower().isin(wanted)]
+    best = found.sort_values("score", ascending=False).drop_duplicates("recording_id")
+    picked = []
+    for _, part in best.groupby("site"):
+        part = part.assign(rank=part.groupby("mic_id").cumcount())
+        picked.append(part.sort_values(["rank", "score"], ascending=[True, False]).head(per_site))
+    out = pd.concat(picked) if picked else best.iloc[:0]
+    out = out.assign(reason="congeneres_perch", source="active")
+    return out.reindex(columns=CANDIDATE_COLUMNS).reset_index(drop=True)
+
+
+def recording_candidates(
+    con: sqlite3.Connection,
+    cfg: dict,
+    n: int,
+    sites: list[str] | None = None,
+    peak_hours: bool = False,
+    reason: str = "audit",
+    seed: int = 0,
+) -> pd.DataFrame:
+    """`n` enregistrements à écouter en entier, à parts égales entre micros puis heures locales.
+
+    Sert à l'audit aléatoire (§6 : 300 enregistrements de Mataroni, seule mesure du rappel qui
+    ne dépend pas du détecteur Biophonia) et au jeu gelé (§6 : 60 enregistrements stratifiés
+    par micro et heure). La fenêtre couvre tout l'enregistrement : son label vaut pour toutes
+    les fenêtres de la grille (annotation par enregistrement, §5). Source « audit ».
+    Les enregistrements qui portent déjà un label d'enregistrement entier sont écartés.
+    """
+    rng = np.random.default_rng(seed)
+    recordings = select_recordings(
+        con,
+        peak_hours=cfg["peak_hours_local"] if peak_hours else None,
+        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+    )
+    if sites:
+        wanted = {s.lower() for s in sites}
+        recordings = recordings[recordings["site"].str.lower().isin(wanted)]
+    recordings = recordings.assign(
+        offset_s=0.0, dur_s=recordings["duration_s"].astype(float).round(2)
+    )
+    recordings = _drop_labelled(con, recordings)
+    if recordings.empty:
+        return pd.DataFrame(columns=CANDIDATE_COLUMNS)
+    hours = local_minutes(recordings["start_utc"], cfg["recorder"]["filename_utc_offset_h"]) // 60
+    recordings = recordings.assign(
+        stratum=recordings["mic_id"].astype(str) + "@" + hours.astype(str)
+    )
+    # Parts égales entre micros ; dans chaque micro, les heures les moins servies d'abord.
+    picked = []
+    mics = sorted(recordings["mic_id"].dropna().unique())
+    for mic, quota in zip(mics, _split_quota(n, len(mics)), strict=True):
+        part = recordings[recordings["mic_id"] == mic]
+        picked.append(_round_robin(part, "stratum", quota, rng))
+    out = pd.concat(picked).assign(score=np.nan, reason=reason, source="audit")
+    return _finish(out, seed)
+
+
 def _split_quota(n: int, parts: int) -> list[int]:
     """n réparti en `parts` entiers qui diffèrent d'au plus 1."""
     if parts <= 0:
@@ -225,11 +310,14 @@ def _bin_name(b: int) -> str:
 
 def _drop_labelled(con: sqlite3.Connection, candidates: pd.DataFrame) -> pd.DataFrame:
     done = {row[0] for row in con.execute("SELECT DISTINCT window_id FROM labels")}
-    ids = [
-        window_id_for(r, o)
-        for r, o in zip(candidates["recording_id"], candidates["offset_s"], strict=True)
+    return candidates[[i not in done for i in _window_ids(candidates)]]
+
+
+def _window_ids(frame: pd.DataFrame) -> list[str]:
+    return [
+        window_id_for(r, o, d)
+        for r, o, d in zip(frame["recording_id"], frame["offset_s"], frame["dur_s"], strict=True)
     ]
-    return candidates[[i not in done for i in ids]]
 
 
 def _finish(candidates: pd.DataFrame, seed: int) -> pd.DataFrame:
@@ -258,18 +346,27 @@ def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
     return queue
 
 
-def progress(con: sqlite3.Connection, queue: pd.DataFrame) -> pd.Series:
-    """Pour chaque candidat : son dernier label s'il a déjà été écouté, sinon None."""
-    latest = dict(
-        con.execute(
+def progress(
+    con: sqlite3.Connection, queue: pd.DataFrame, annotator: str | None = None
+) -> pd.Series:
+    """Pour chaque candidat : son dernier label s'il a déjà été écouté, sinon None.
+
+    Avec `annotator` (calibration entre annotateurs, §5), seules ses propres réponses
+    comptent : chacun écoute la même file sans voir ce que l'autre a répondu.
+    """
+    if annotator is None:
+        rows = con.execute(
             "SELECT window_id, label FROM labels WHERE label_id IN "
             "(SELECT MAX(label_id) FROM labels GROUP BY window_id)"
-        ).fetchall()
-    )
-    ids = [
-        window_id_for(r, o) for r, o in zip(queue["recording_id"], queue["offset_s"], strict=True)
-    ]
-    return pd.Series([latest.get(i) for i in ids], index=queue.index, dtype=object)
+        )
+    else:
+        rows = con.execute(
+            "SELECT window_id, label FROM labels WHERE label_id IN "
+            "(SELECT MAX(label_id) FROM labels WHERE annotator = ? GROUP BY window_id)",
+            (annotator,),
+        )
+    latest = dict(rows.fetchall())
+    return pd.Series([latest.get(i) for i in _window_ids(queue)], index=queue.index, dtype=object)
 
 
 # --- Écoute ---------------------------------------------------------------------------------------
@@ -322,7 +419,7 @@ def wav_bytes(wav: np.ndarray, sr: int, gain_db: float = 0.0) -> bytes:
 
 def ensure_window(con: sqlite3.Connection, recording_id: str, offset_s: float, dur_s: float) -> str:
     """Identifiant de la fenêtre, créée si besoin (même règle que l'import)."""
-    wid = window_id_for(recording_id, offset_s)
+    wid = window_id_for(recording_id, offset_s, dur_s)
     con.execute(
         "INSERT OR IGNORE INTO windows (window_id, recording_id, offset_s, dur_s) "
         "VALUES (?, ?, ?, ?)",
@@ -369,3 +466,46 @@ def local_time(start_utc: str | None, utc_offset_h: float) -> str:
     minutes = local_minutes(pd.Series([start_utc]), utc_offset_h).iloc[0]
     day = (pd.to_datetime(start_utc, utc=True) + pd.Timedelta(hours=utc_offset_h)).date()
     return f"{day} {int(minutes) // 60:02d}:{int(minutes) % 60:02d}"
+
+
+# --- Accord entre annotateurs ---------------------------------------------------------------------
+
+
+def agreement(
+    con: sqlite3.Connection, first: str, second: str
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    """Accord de deux annotateurs sur les fenêtres qu'ils ont tous deux écoutées (§5).
+
+    Dernière réponse de chacun. Rapporte l'accord brut sur le label, l'accord sur la question
+    « A. blanci ou non » (un « A. blanci ? » compte comme non) et l'accord sur les positifs,
+    2a / (2a + b + c), qui ne se laisse pas gonfler par les nombreux négatifs faciles. Renvoie
+    aussi le tableau croisé des labels.
+    """
+    from blanci.labels import POSITIVE_LABELS
+
+    def latest(name: str) -> pd.Series:
+        rows = con.execute(
+            "SELECT window_id, label FROM labels WHERE label_id IN "
+            "(SELECT MAX(label_id) FROM labels WHERE annotator = ? GROUP BY window_id)",
+            (name,),
+        ).fetchall()
+        return pd.Series(dict(rows), dtype=object)
+
+    a, b = latest(first), latest(second)
+    shared = a.index.intersection(b.index)
+    a, b = a.loc[shared], b.loc[shared]
+    pos_a, pos_b = a.isin(POSITIVE_LABELS), b.isin(POSITIVE_LABELS)
+    both, only = int((pos_a & pos_b).sum()), int((pos_a ^ pos_b).sum())
+    n = len(shared)
+    summary = {
+        "first": first,
+        "second": second,
+        "n_windows": n,
+        "label_agreement": float((a == b).mean()) if n else float("nan"),
+        "blanci_agreement": float((pos_a == pos_b).mean()) if n else float("nan"),
+        "positive_agreement": 2 * both / (2 * both + only) if (both + only) else float("nan"),
+        "n_blanci_first": int(pos_a.sum()),
+        "n_blanci_second": int(pos_b.sum()),
+    }
+    table = pd.crosstab(a.rename(first), b.rename(second), dropna=False) if n else pd.DataFrame()
+    return summary, table

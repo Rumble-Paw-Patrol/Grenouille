@@ -67,7 +67,10 @@ def transfer_labels(
     conflicts = kept.groupby("window_id")["y"].nunique()
     kept = kept[~kept["window_id"].isin(conflicts[conflicts > 1].index)]
     kept = kept.sort_values("y", ascending=False).drop_duplicates("window_id")
-    return kept[["window_id", "recording_id", "offset_s", "label", "y"]].reset_index(drop=True)
+    columns = ["window_id", "recording_id", "offset_s", "label", "y"]
+    if "quality" in kept:  # qualité A/B/C de l'annotation : rappel par qualité (§6)
+        columns.append("quality")
+    return kept[columns].reset_index(drop=True)
 
 
 def paired_negatives(

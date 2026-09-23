@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Annotated, Any
@@ -31,11 +32,23 @@ from blanci.service import (
     evaluate_holdout,
     make_queue,
     ranked_points,
+    run_clustering,
     score_and_decide,
     similarity_search,
     train_and_register,
 )
-from blanci.workbench import blancinet_candidates, random_candidates
+from blanci.throughput import (
+    machine_description,
+    measure_in_subprocess,
+    write_throughput_report,
+)
+from blanci.workbench import agreement as annotator_agreement
+from blanci.workbench import (
+    blancinet_candidates,
+    congener_candidates,
+    random_candidates,
+    recording_candidates,
+)
 
 app = typer.Typer(help="Détection acoustique d'Anomaloglossus blanci.", no_args_is_help=True)
 
@@ -62,6 +75,11 @@ def main(
         Path | None, typer.Option("--config", "-c", help="Fichier YAML surchargeant la config.")
     ] = None,
 ) -> None:
+    # Console Windows en cp1252 : « ≥ », « → » ou « é » y feraient planter l'affichage quand la
+    # sortie est redirigée. La CLI écrit toujours en UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ctx.obj = load_config(config)
 
 
@@ -435,6 +453,100 @@ def evaluate(
             f"  rappel à P≥{p} : {metrics[f'recall@p{p}']:.3f} "
             f"[{metrics[f'recall@p{p}_lo']:.3f} ; {metrics[f'recall@p{p}_hi']:.3f}]"
         )
+    typer.echo(
+        f"  rappel par strate, fenêtres, au seuil de précision ≥ {metrics['stratum_precision']} :"
+    )
+    for r in metrics["by_stratum"].to_dict("records"):
+        typer.echo(
+            f"    {r['by']} {r['stratum']:<12} {r['n_pos']:>4} positifs  rappel {r['recall']:.2f} "
+            f"[{r['recall_lo']:.2f} ; {r['recall_hi']:.2f}]"
+        )
+
+
+@app.command()
+def cluster(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur (nom-version).")],
+    mode: Annotated[str, typer.Option(help="c0 : exploration globale ; c1 : détection ?")] = "c0",
+    n: Annotated[
+        int | None, typer.Option(help="C0 : fenêtres tirées ; C1 : négatifs appariés.")
+    ] = None,
+) -> None:
+    """Clustering HDBSCAN sur ACP (§5 bis) : groupes, AMI avec les micros, verdict C1."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    if mode not in ("c0", "c1"):
+        raise typer.BadParameter("c0 ou c1", param_hint="--mode")
+    summary, table, windows = run_clustering(con, encoder, cfg, mode, n)
+    typer.echo(
+        f"{summary['n_windows']} fenêtres, {summary['n_clusters']} groupes, "
+        f"{summary['noise_share']:.0%} de bruit, AMI groupes/micros {summary['ami_mic']:.2f}"
+    )
+    if mode == "c1":
+        typer.echo(
+            f"meilleur groupe : rappel {summary['best_recall']:.2f}, enrichissement "
+            f"{summary['best_enrichment']:.1f} → C1 {'réussi' if summary['passed'] else 'échoué'}"
+        )
+    reports = config_path(cfg, "reports")
+    _write_csv(table, reports / f"cluster_{mode}_{encoder}.csv", "groupes")
+    _write_csv(windows, reports / f"cluster_{mode}_{encoder}_fenetres.csv", "fenêtres")
+
+
+@app.command()
+def agreement(
+    ctx: typer.Context,
+    annotators: Annotated[str, typer.Option(help="Deux annotateurs, ex. « léonard,tuteur ».")],
+) -> None:
+    """Accord de deux annotateurs sur les fenêtres écoutées par les deux (§5, calibration)."""
+    names = _split(annotators)
+    if len(names) != 2:
+        raise typer.BadParameter("deux noms séparés par une virgule", param_hint="--annotators")
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    summary, table = annotator_agreement(con, *names)
+    if not summary["n_windows"]:
+        typer.echo("aucune fenêtre écoutée par les deux")
+        raise typer.Exit(1)
+    typer.echo(
+        f"{summary['n_windows']} fenêtres communes : même label {summary['label_agreement']:.0%}, "
+        f"même réponse blanci/non {summary['blanci_agreement']:.0%}, accord sur les positifs "
+        f"{summary['positive_agreement']:.2f} ({summary['n_blanci_first']} contre "
+        f"{summary['n_blanci_second']} positifs)"
+    )
+    _write_csv(
+        table.reset_index(),
+        config_path(cfg, "reports") / f"accord_{names[0]}_{names[1]}.csv",
+        "tableau croisé",
+    )
+
+
+@app.command()
+def throughput(
+    ctx: typer.Context,
+    encoders: Annotated[str, typer.Option(help="Noms séparés par des virgules.")],
+    n_windows: Annotated[int, typer.Option(help="Fenêtres de bruit par mesure.")] = 64,
+) -> None:
+    """Débit, mémoire, dimension et jetons de chaque encodeur (§2), projetés sur une campagne.
+
+    Bruit synthétique : aucun enregistrement n'est lu. Un processus par encodeur.
+    """
+    cfg = _cfg(ctx)
+    config = ctx.parent.params.get("config") if ctx.parent else None
+    rows = []
+    for name in _split(encoders):
+        typer.echo(f"{name} : chargement et mesure…")
+        row = measure_in_subprocess(name, Path(config).resolve() if config else None, n_windows)
+        rows.append(row)
+        if "error" in row:
+            typer.echo(f"  échec : {row['error']}")
+        else:
+            typer.echo(
+                f"  {row['windows_per_s']:.1f} fenêtres/s, ×{row['realtime_factor']:.0f} temps "
+                f"réel, campagne {row['campaign_h']:.0f} h, {row['peak_memory_mb']:.0f} Mo, "
+                f"dim {row['dim']}{' (jetons)' if row['has_tokens'] else ''}"
+            )
+    paths = write_throughput_report(rows, config_path(cfg, "reports"), machine_description())
+    typer.echo(f"rapport : {paths['markdown']}")
 
 
 @app.command()
@@ -444,23 +556,42 @@ def candidates(
         Path | None,
         typer.Option("--from", help="Export Blancinet : ses détections jamais écoutées."),
     ] = None,
-    per_site: Annotated[int, typer.Option(help="Détections Blancinet par site.")] = 30,
+    congeners: Annotated[
+        str | None,
+        typer.Option(help="Encodeur perch_v2 encodé : fenêtres où il entend un congénère."),
+    ] = None,
+    per_site: Annotated[int, typer.Option(help="Candidats Blancinet ou Perch par site.")] = 30,
     random: Annotated[int, typer.Option(help="Fenêtres tirées au hasard (heures de pic).")] = 10,
+    whole: Annotated[
+        int,
+        typer.Option(
+            "--entiers",
+            help="Enregistrements à écouter en entier, par micro et heure (audit, jeu gelé).",
+        ),
+    ] = 0,
+    reason: Annotated[
+        str, typer.Option(help="Motif des enregistrements entiers : audit_aleatoire, jeu_gele…")
+    ] = "audit_aleatoire",
     sites: Annotated[str | None, typer.Option(help="Sites, ex. « CDR,PatawaOuest ».")] = None,
     name: Annotated[str, typer.Option(help="Nom de la file : candidats_<nom>.csv.")] = "lot1",
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
 ) -> None:
-    """File d'écoute pour le poste d'annotation (§5) : Blancinet réparti + strate aléatoire."""
+    """File d'écoute pour le poste d'annotation (§5) : Blancinet réparti, strate aléatoire,
+    enregistrements entiers (audit aléatoire et jeu gelé, §6)."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     wanted = _split(sites) or None
     parts = []
     if from_table is not None:
         parts.append(blancinet_candidates(con, from_table, cfg, per_site, wanted, seed))
+    if congeners:
+        parts.append(congener_candidates(con, congeners, per_site, wanted))
     if random:
         parts.append(random_candidates(con, cfg, random, wanted, seed=seed))
+    if whole:
+        parts.append(recording_candidates(con, cfg, whole, wanted, reason=reason, seed=seed))
     if not parts:
-        raise typer.BadParameter("rien à tirer : --from et/ou --random")
+        raise typer.BadParameter("rien à tirer : --from, --congeners, --random ou --entiers")
     queue = pd.concat(parts, ignore_index=True).sample(frac=1.0, random_state=seed)
     if queue.empty:
         typer.echo("aucun candidat")
@@ -478,7 +609,6 @@ def candidates(
 def annotate(ctx: typer.Context) -> None:
     """Ouvre le poste d'annotation dans le navigateur (groupe `app` : uv sync --group app)."""
     import subprocess
-    import sys
 
     app_file = Path(__file__).with_name("app.py")
     command = [sys.executable, "-m", "streamlit", "run", str(app_file), "--"]

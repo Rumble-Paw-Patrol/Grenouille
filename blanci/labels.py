@@ -543,7 +543,7 @@ def import_label_file(
     annotator = annotator or icfg["annotator"]
     with con:
         for row in report.rows:
-            wid = window_id_for(row["recording_id"], row["offset_s"])
+            wid = window_id_for(row["recording_id"], row["offset_s"], window_s)
             con.execute(
                 "INSERT OR IGNORE INTO windows (window_id, recording_id, offset_s, dur_s) "
                 "VALUES (?, ?, ?, ?)",

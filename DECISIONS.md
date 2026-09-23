@@ -440,3 +440,99 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     Ordre de grandeur : le sous-ensemble du benchmark (28 h) prend ~45 min avec birdnet et
     ~3 h 20 avec beats ; le disque entier (980 h), ~25 h et ~115 h. birdmae (version « Huge »,
     plusieurs Go) et perch_v2 ne sont pas encore téléchargés : à mesurer avant de les retenir.
+
+## 2026-09-23 (après-midi) — Encodeurs, clustering, audit, congénères
+
+65. **L'identifiant d'une fenêtre contient sa durée** (sauf 3 s, forme historique inchangée :
+    les 495 fenêtres de la base gardent leur identifiant). Sans la durée, une fenêtre de 5 s
+    (grille de beats, naturebeats, perch_v2) et une annotation de 3 s au même décalage, ou un
+    label d'enregistrement entier (0 s, 120 s) et la fenêtre de 3 s à 0 s, partageaient une
+    seule ligne de `windows` : la seconde héritait de la durée de la première, et le transfert
+    des labels vers la grille devenait faux. Corrigé avant tout encodage : `<enr>:<décalage>`
+    pour 3 s, `<enr>:<décalage>/<durée>` sinon (`db.window_id_for`).
+
+66. **Relevé des encodeurs** (`blanci throughput`, §2 et §7) : débit, mémoire, dimension,
+    jetons, projection sur une campagne (575 h) et sur les heures de pic seules. Bruit
+    synthétique à 48 kHz, un processus par encodeur, rien n'est lu sur les disques. Premier
+    relevé, i5-1145G7, **provisoire** (téléchargement de birdmae en parallèle : beats y tombe à
+    2,1 fenêtres/s contre 3,4 mesurées seul, DECISIONS n° 64) :
+
+    | encodeur | f_e | fenêtre | dim | temps réel | campagne 575 h | mémoire |
+    |---|---|---|---|---|---|---|
+    | birdnet | 48 kHz | 3 s | 1 024 | ×60 | 10 h | 2,0 Go |
+    | perch_v2 | 32 kHz | 5 s | 1 536 | ×14 | 41 h | 4,1 Go |
+    | beats | 16 kHz | 5 s | 768 | ×5 | 109 h | 2,2 Go |
+    | naturebeats | 16 kHz | 5 s | 768 | ×5 | 106 h | 2,2 Go |
+
+    **perch_v2 tourne en ONNX Runtime, sans TensorFlow** (`perch_v2_no_dft.onnx` fourni par
+    bacpipe) : le repli (2) du §2 fonctionne sur la cible ; risque 7 levé pour l'exécution,
+    la conformité aux embeddings de référence reste à vérifier. Il expose aussi des jetons
+    spatiaux (16 × 4 × 1 536) que l'adaptateur n'utilise pas encore (attentive probing, P2).
+    birdmae (Bird-MAE-**Huge** dans bacpipe, pas la version Base du §7) : téléchargement en
+    cours ; protoclr, perch_bird, convnext_birdset ensuite.
+
+67. **Contrôle passe-bas du §2** : `birdmae_lp8k` = birdmae sur l'audio filtré à 8 kHz
+    (Butterworth d'ordre 8, phase nulle, à la f_e d'origine). Si son AP égale celle de
+    birdmae, l'objection « 16 kHz, très limite » ne vaut pas pour la note de 4,4–5,5 kHz.
+    Toute entrée de `encoders.models` accepte `lowpass_hz`.
+
+68. **Clustering C0/C1** (`blanci cluster --mode c0|c1`, §5 bis) : normalisation L2, ACP
+    (50 composantes), HDBSCAN (scikit-learn). C0 : échantillon du stock (tirage au prorata des
+    partitions, une à la fois en mémoire), AMI groupes/micros, part de fenêtres signalées par
+    groupe. C1 : positifs de Mataroni + 5 000 fenêtres des mêmes micros aux mêmes heures ;
+    verdict sur le meilleur groupe (rappel ≥ 0,5, enrichissement ≥ 20, AMI micro ≤ 0,3 :
+    seuils de jugement, dans `cluster` de la config). Les affectations par fenêtre sont
+    écrites pour C2 (étiquetage en bloc). Fenêtres recadrées sur les onsets : pas encore.
+
+69. **Écoute d'enregistrements entiers** (`blanci candidates --entiers N --reason …`) : audit
+    aléatoire (§6, 300 enregistrements de Mataroni) et jeu gelé (60, stratifiés). Parts
+    égales entre micros, puis heures locales les moins servies d'abord ; source `audit` ;
+    le label vaut pour toute la grille (annotation par enregistrement, §5). Le jeu gelé n'est
+    pas encore **exclu de l'entraînement** : à faire avant d'en écouter un (M4).
+    **Calibration entre annotateurs** (§5) : case « ne masquer que mes réponses » dans le
+    poste, et `blanci agreement --annotators a,b` : accord brut sur le label, accord
+    blanci/non (« A. blanci ? » compte non), accord sur les positifs 2a/(2a+b+c), tableau
+    croisé.
+
+70. **Logits des congénères de Perch 2.0** (§2, §3, §5) : pendant `embed` avec perch_v2,
+    l'adaptateur garde les logits d'*A. baeobatrachus*, *A. stepheni* et *A. surinamensis*
+    (`logit_classes` de la config ; vérifié sur le vrai modèle) et `embed` les range dans
+    `scores` (`<encodeur>:logit:<espèce>`), sans seconde inférence. `blanci candidates
+    --congeners <perch_v2-…>` en tire une file : meilleure fenêtre par enregistrement, le
+    meilleur de chaque micro d'abord. Logits non calibrés : classement seulement.
+
+71. **Métriques du §6 complétées** : `evaluate.recall_by_group` (rappel au seuil de précision
+    plancher par qualité A/B/C, site, tranche de RSB, avec Wilson), affiché par
+    `blanci evaluate` ; `false_alarms_per_hour` (réservé aux ensembles exhaustifs : audit,
+    jeu gelé) ; `sequential.note_snr_db` (énergie en bande pendant les notes contre les 0,5 s
+    voisines). La qualité de l'annotation suit désormais la fenêtre jusqu'au jeu d'évaluation.
+    La CLI écrit en UTF-8 : la console Windows en cp1252 plantait sur « ≥ ».
+
+72. **Relevé des encodeurs, machine au repos** (i5-1145G7, CPU seul, bruit synthétique à
+    48 kHz ; remplace les chiffres provisoires du n° 66). Campagne = une semaine de pose,
+    575 h d'audio ; pas de la grille = ½ fenêtre ; `data/reports/debit.md` :
+
+    | encodeur | f_e | fenêtre | dim | fenêtres/s | temps réel | campagne | heures de pic | mémoire |
+    |---|---|---|---|---|---|---|---|---|
+    | birdnet | 48 kHz | 3 s | 1 024 | 43,3 | ×65 | 9 h | 2,5 h | 2,0 Go |
+    | protoclr | 16 kHz | 6 s | 384 | 17,5 | ×52 | 11 h | 3 h | 1,7 Go |
+    | perch_v2 | 32 kHz | 5 s | 1 536 | 7,0 | ×17 | 33 h | 9 h | 4,1 Go |
+    | birdmae_base | 32 kHz | 5 s | 768 | 3,7 | ×9 | 62 h | 17 h | 1,5 Go |
+    | convnext_birdset | 32 kHz | 5 s | 1 024 | 3,7 | ×9 | 62 h | 17 h | 2,7 Go |
+    | beats | 16 kHz | 5 s | 768 | 2,9 | ×7 | 81 h | 22 h | 2,2 Go |
+    | naturebeats | 16 kHz | 5 s | 768 | 2,8 | ×7 | 82 h | 23 h | 2,3 Go |
+    | perch_bird | 32 kHz | 5 s | 1 280 | 1,8 | ×4,5 | 129 h | 36 h | 2,4 Go |
+    | birdmae (Huge) | 32 kHz | 5 s | 1 280 | 0,5 | ×1,2 | 494 h | 137 h | 4,2 Go |
+
+    - **birdmae tel que bacpipe le charge (Bird-MAE-Huge) est hors de portée de l'i5**, même
+      aux heures de pic seules. Variante `birdmae_base` ajoutée (Bird-MAE-Base, 768
+      dimensions, le modèle que le §7 chiffrait) ; le benchmark dira si Base tient l'AP de
+      Huge. Encoder le sous-ensemble du benchmark (28 h) avec Huge prendrait ~23 h ici : à
+      faire sur le Mac, ou à remplacer par Base.
+    - Seuil du risque 5 (> 15 h par campagne après leviers) : seuls birdnet (non déployable,
+      licence et TensorFlow) et protoclr passent sans levier ; perch_v2 (33 h, 9 h aux
+      heures de pic) passe avec les heures de pic ; les autres demandent aussi la
+      quantification int8 et le sous-échantillonnage des fenêtres (§7).
+    - perch_bird a échoué au premier téléchargement (délai dépassé chez Kaggle), réussi au
+      second. Tous les encodeurs du §2 sont désormais installés (`data/models/bacpipe`, cache
+      Hugging Face), 12 à 40 s de chargement chacun.

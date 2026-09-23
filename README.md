@@ -64,9 +64,18 @@ $B baselines --channels 0,1                          # → data/reports/baseline
 $B candidates --from documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx    --per-site 30 --random 12 --name lot1             # → data/reports/candidats_lot1.csv
 $B annotate                                          # poste d'écoute dans le navigateur
 
+# Enregistrements entiers (audit aléatoire, jeu gelé) ; accord entre deux annotateurs
+$B candidates --entiers 300 --sites Mataroni --reason audit_aleatoire --random 0 --name audit
+$B agreement --annotators léonard,tuteur
+
+# --- Relevé des encodeurs (§2, §7) : bruit synthétique, rien n'est lu -----
+$B throughput --encoders birdnet,beats,perch_v2,birdmae_base   # → debit.md
+
 # --- Embeddings et choix d'encodeur (§2) : uv sync --group research -------
 uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatifs appariés
 uv run blanci embed --encoder birdmae --peak-hours    # reprenable
+$B cluster --encoder birdmae-bacpipe1.3.5 --mode c1   # clustering C0/C1 (§5 bis)
+$B candidates --congeners perch_v2-bacpipe1.3.5       # logits des congénères de Perch
 uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md
 
 # --- Détection (§1, §5) --------------------------------------------------
@@ -106,13 +115,13 @@ Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 po
 150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
 viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
 
-458 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+488 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
 `encoders/onnx_encoder.py` et `encoders/export.py`, qui demandent un modèle exporté ;
-l'adaptateur bacpipe est validé sur birdnet et beats (DECISIONS n° 64).
+les neuf encodeurs bacpipe du §2 sont installés et mesurés (DECISIONS n° 64, 72).
 
 Enregistrements de test et hors relevé signalés (149, jamais encodés, DECISIONS n° 51) ;
 encodage sur le premier micro (gain 6 dB), les deux micros à l'écoute (DECISIONS n° 50, 58).
 
 **Reste à faire avant M1** : regrouper les enregistrements sur le disque du stage puis
 réinventorier (les labels suivent, DECISIONS n° 46) ; inventorier la phénologie 2023-2024 ;
-mesurer birdmae et perch_v2.
+exclure le jeu gelé de l'entraînement avant de l'écouter.

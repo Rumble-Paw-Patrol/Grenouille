@@ -168,3 +168,23 @@ def test_sequential_features_merge_rhythm_and_persistence():
     assert set(features) >= {"ioi_median_s", "frac_ioi_blanci", "frac_windows", "longest_run"}
     assert features["ioi_median_s"] == pytest.approx(IOI_S, abs=0.02)
     assert features["frac_windows"] == 1.0
+
+
+def test_note_snr_tracks_the_note_level():
+    """Plus la note est forte par rapport au fond, plus le RSB estimé est élevé."""
+    from blanci.sequential import note_snr_db
+
+    sr = 24_000
+    rng = np.random.default_rng(0)
+    note = np.hanning(int(0.1 * sr)) * np.sin(2 * np.pi * 4900 * np.arange(int(0.1 * sr)) / sr)
+
+    def song(level):
+        x = rng.normal(0, 0.02, 3 * sr)
+        for start in (0.4, 1.8):
+            i = int(start * sr)
+            x[i : i + len(note)] += level * note
+        return x
+
+    weak, strong = note_snr_db(song(0.08), sr), note_snr_db(song(0.5), sr)
+    assert 0 < weak < strong
+    assert np.isnan(note_snr_db(rng.normal(0, 0.02, 3 * sr), sr))  # pas de note

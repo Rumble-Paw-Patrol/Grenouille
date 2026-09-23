@@ -193,3 +193,64 @@ def evaluate(
             f"threshold@p{p}": threshold,
         }
     return out
+
+
+# --- Rappel par strate et fausses alarmes (§6) ------------------------------------------------
+
+
+def recall_by_group(
+    scores: np.ndarray,
+    labels: np.ndarray,
+    strata: np.ndarray,
+    threshold: float,
+) -> pd.DataFrame:
+    """Rappel au seuil de décision, positif par positif, dans chaque strate (qualité A/B/C,
+    tranche de RSB, site…), avec intervalle de Wilson. Les négatifs sont ignorés : la strate
+    décrit un chant. Une strate manquante (qualité non renseignée) apparaît comme « ? »."""
+    scores, labels = np.asarray(scores, dtype=float), np.asarray(labels).astype(int)
+    strata = pd.Series(strata).fillna("?").astype(str).to_numpy()
+    rows = []
+    for stratum in sorted(set(strata[labels == 1])):
+        hit = (scores >= threshold)[(labels == 1) & (strata == stratum)]
+        lo, hi = wilson_interval(int(hit.sum()), len(hit))
+        rows.append(
+            {
+                "stratum": stratum,
+                "n_pos": len(hit),
+                "recall": float(hit.mean()),
+                "recall_lo": lo,
+                "recall_hi": hi,
+            }
+        )
+    return pd.DataFrame(rows, columns=["stratum", "n_pos", "recall", "recall_lo", "recall_hi"])
+
+
+def false_alarms_per_hour(
+    scores: np.ndarray, labels: np.ndarray, threshold: float, audio_hours: float
+) -> float:
+    """Négatifs au-dessus du seuil par heure d'audio examinée (§6).
+
+    N'a de sens que sur un ensemble **exhaustif** (enregistrements écoutés en entier, audit,
+    jeu gelé) : sur des négatifs tirés, le dénominateur ne représente pas l'audio réel.
+    """
+    if audio_hours <= 0:
+        return float("nan")
+    scores, labels = np.asarray(scores, dtype=float), np.asarray(labels).astype(int)
+    return float(((scores >= threshold) & (labels == 0)).sum() / audio_hours)
+
+
+def snr_bins(snr_db: np.ndarray, edges: tuple[float, ...] = (6.0, 12.0)) -> np.ndarray:
+    """Tranches de RSB lisibles : « <6 dB », « 6–12 dB », « ≥12 dB » ; « ? » si inconnu."""
+    snr_db = np.asarray(snr_db, dtype=float)
+    names = [f"<{edges[0]:g} dB"]
+    names += [f"{a:g}–{b:g} dB" for a, b in zip(edges[:-1], edges[1:], strict=True)]
+    names += [f"≥{edges[-1]:g} dB"]
+    out = np.array(
+        [
+            names[int(np.searchsorted(edges, v, side="right"))]
+            for v in np.nan_to_num(snr_db, nan=-np.inf)
+        ],
+        dtype=object,
+    )
+    out[np.isnan(snr_db)] = "?"
+    return out

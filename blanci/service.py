@@ -23,10 +23,10 @@ from blanci.aggregate import aggregate_recording, rank_points
 from blanci.config import config_path
 from blanci.dataset import current_labels, embedded_training_set, local_minutes, recordings_table
 from blanci.db import encoder_params, model_params, next_version, register_model, utc_now
-from blanci.evaluate import evaluate, recall_at_precision
+from blanci.evaluate import evaluate, recall_at_precision, recall_by_group
 from blanci.head import Head, oof_scores, train_head
 from blanci.index import search
-from blanci.labels import LABELS, QUALITIES, SOURCES
+from blanci.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
 from blanci.store import EmbeddingStore
 
 SCORE_CHUNK = 200_000
@@ -492,10 +492,107 @@ def evaluate_holdout(
         n_boot=bench["n_boot"],
         seed=head_cfg["seed"],
     )
+    # Rappel par qualité A/B/C et par site, fenêtre par fenêtre, au seuil de précision
+    # plancher (§6) : un rappel global cache souvent des chants lointains tous manqués.
+    floor = min(bench["precisions"])
+    _, threshold = recall_at_precision(y[mask], scores[mask], floor)
+    frame = data.loc[mask]
+    strata = {
+        "qualité": frame["quality"].to_numpy() if "quality" in frame else np.full(len(frame), None),
+        "site": frame["site"].to_numpy(),
+    }
+    by_stratum = pd.concat(
+        [
+            recall_by_group(scores[mask], y[mask], values, threshold).assign(by=name)
+            for name, values in strata.items()
+        ],
+        ignore_index=True,
+    )
     return {
         "encoder_id": encoder_id,
         "protocol": protocol,
         "holdout": sorted(wanted),  # normalisés en minuscules, comme la comparaison
         "n_windows": int(mask.sum()),
         **metrics,
+        "stratum_threshold": threshold,
+        "stratum_precision": floor,
+        "by_stratum": by_stratum,
     }
+
+
+# --- Clustering (§5 bis) ----------------------------------------------------------------------
+
+
+def _qc_flagged(qc: Any, keys: tuple[str, ...] = ("saturation", "rain", "in_bag")) -> bool:
+    flags = json.loads(qc) if isinstance(qc, str) else {}
+    return any(flags.get(k) for k in keys)
+
+
+def run_clustering(
+    con: sqlite3.Connection,
+    encoder_id: str,
+    cfg: dict,
+    mode: str = "c0",
+    n: int | None = None,
+) -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame]:
+    """C0 : échantillon global du stock. C1 : positifs du site de `cluster.c1_site` + fenêtres
+    des mêmes micros aux mêmes heures (négatifs appariés présumés).
+
+    Renvoie (résumé, tableau par groupe, groupe de chaque fenêtre).
+    """
+    from blanci.cluster import c0_summary, c1_verdict, cluster_embeddings, cluster_table
+
+    ccfg = cfg["cluster"]
+    store = store_for(cfg, encoder_id)
+    recordings = recordings_table(con).set_index("recording_id")
+    if mode == "c0":
+        meta, X = store.sample(n or ccfg["c0_sample"], seed=ccfg["seed"])
+        if not len(meta):
+            raise ValueError(f"aucun embedding pour {encoder_id}")
+        meta = meta.assign(y=np.nan)
+    elif mode == "c1":
+        params = encoder_params(con, encoder_id)
+        n_neg = n or ccfg["c1_negatives"]
+        labels = current_labels(con)
+        n_pos_rec = labels[labels["label"].isin(POSITIVE_LABELS)]["recording_id"].nunique()
+        meta, X = embedded_training_set(
+            con,
+            store,
+            params["window_s"],
+            per_positive=max(1, -(-n_neg // max(1, n_pos_rec))),
+            slot_tolerance_min=cfg["benchmark"]["slot_tolerance_min"],
+            utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+            seed=ccfg["seed"],
+            filters={"site": ccfg["c1_site"]},
+        )
+    else:
+        raise ValueError(f"mode inconnu : {mode!r} (c0 ou c1)")
+
+    rec = recordings.loc[meta["recording_id"]]
+    mics = rec["point"].to_numpy()
+    flagged = rec["qc_flags"].map(_qc_flagged).to_numpy()
+    assignments = cluster_embeddings(
+        X,
+        n_components=ccfg["pca_components"],
+        min_cluster_size=ccfg["min_cluster_size"],
+        min_samples=ccfg["min_samples"],
+        seed=ccfg["seed"],
+    )
+    y = meta["y"].to_numpy() if mode == "c1" else None
+    table = cluster_table(assignments, mics, y, flagged)
+    if mode == "c1":
+        summary = c1_verdict(
+            assignments,
+            y,
+            mics,
+            ccfg["c1_min_recall"],
+            ccfg["c1_min_enrichment"],
+            ccfg["c1_max_ami_mic"],
+        )
+    else:
+        summary = c0_summary(assignments, mics)
+    summary = {"encoder_id": encoder_id, "mode": mode} | summary
+    windows = meta[["window_id", "recording_id", "offset_s", "y"]].assign(
+        point=mics, cluster=assignments
+    )
+    return summary, table, windows

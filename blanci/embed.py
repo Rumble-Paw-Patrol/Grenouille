@@ -93,6 +93,25 @@ def _flush(
     embs.clear()
 
 
+def _store_logits(
+    con: sqlite3.Connection, encoder: Encoder, encoder_id: str, window_ids: list[str]
+) -> None:
+    """Logits de classes gardés par l'encodeur pendant `embed` (perch_v2 : congénères, §2),
+    rangés dans `scores` sous `<encodeur>:logit:<classe>`. Sans effet pour les autres."""
+    pop = getattr(encoder, "pop_logits", None)
+    logits = pop() if pop else None
+    if logits is None or len(logits) != len(window_ids):
+        return
+    rows = [
+        (wid, f"{encoder_id}:logit:{name}", float(value))
+        for j, name in enumerate(encoder.logit_names)
+        for wid, value in zip(window_ids, logits[:, j], strict=True)
+    ]
+    con.executemany(
+        "INSERT OR REPLACE INTO scores (window_id, model_id, score) VALUES (?, ?, ?)", rows
+    )
+
+
 def embed_recordings(
     con: sqlite3.Connection,
     encoder: Encoder,
@@ -130,7 +149,7 @@ def embed_recordings(
             start = perf_counter()
             emb = encoder.embed(cut_windows(wav, sr, windows), sr)
             report.encode_s += perf_counter() - start
-            ids = [window_id_for(rec.recording_id, offset) for offset, _ in windows]
+            ids = [window_id_for(rec.recording_id, offset, dur) for offset, dur in windows]
             con.executemany(
                 "INSERT OR IGNORE INTO windows (window_id, recording_id, offset_s, dur_s) "
                 "VALUES (?, ?, ?, ?)",
@@ -139,6 +158,7 @@ def embed_recordings(
                     for wid, (offset, dur) in zip(ids, windows, strict=True)
                 ],
             )
+            _store_logits(con, encoder, report.encoder_id, ids)
             metas.append(
                 pd.DataFrame(
                     {

@@ -13,14 +13,17 @@ from blanci.ingest import ingest
 from blanci.workbench import (
     ANSWERS,
     CANDIDATE_COLUMNS,
+    agreement,
     blancinet_candidates,
     clip_spectrogram,
+    congener_candidates,
     ensure_window,
     load_candidates,
     local_time,
     progress,
     random_candidates,
     read_clip,
+    recording_candidates,
     save_answer,
     wav_bytes,
 )
@@ -104,7 +107,7 @@ def test_blancinet_candidates_skip_verified_rows_and_labelled_windows(corpus, tm
     save_answer(con, first, "background", "léonard")
     again = blancinet_candidates(con, export, cfg, per_site=50)
     pairs = zip(again["recording_id"], again["offset_s"], strict=True)
-    ids = {window_id_for(r, o) for r, o in pairs}
+    ids = {window_id_for(r, o) for r, o in pairs}  # fenêtres de 3 s
     assert window_id_for(first["recording_id"], first["offset_s"]) not in ids
 
 
@@ -218,3 +221,130 @@ def test_spectrogram_and_player_bytes():
 def test_local_time_is_shown_in_guiana_time():
     assert local_time("2026-01-10T10:00:00Z", -3) == "2026-01-10 07:00"
     assert local_time(None, -3) == "?"
+
+
+# --- Enregistrements entiers, identifiants, accord ---------------------------------------------
+
+
+def test_window_ids_keep_the_duration_apart_from_the_legacy_3_s():
+    assert window_id_for("r", 0.0) == window_id_for("r", 0.0, 3.0) == "r:0.00"
+    assert window_id_for("r", 0.0, 120.0) == "r:0.00/120.00"
+    assert window_id_for("r", 5.0, 5.0) != window_id_for("r", 5.0, 3.0)
+
+
+def test_a_whole_recording_label_does_not_land_on_the_first_3_s_window(corpus):
+    con, _, _ = corpus
+    rid = con.execute("SELECT recording_id FROM recordings LIMIT 1").fetchone()[0]
+    short = ensure_window(con, rid, 0.0, 3.0)
+    whole = ensure_window(con, rid, 0.0, DURATION_S)
+    assert short != whole
+    durations = dict(con.execute("SELECT window_id, dur_s FROM windows").fetchall())
+    assert durations == {short: 3.0, whole: DURATION_S}
+
+
+def test_recording_candidates_cover_every_mic_and_the_whole_file(corpus):
+    con, cfg, _ = corpus
+    queue = recording_candidates(con, cfg, n=10, sites=["cdr"], reason="jeu_gele", seed=2)
+    # 3 micros × 4 enregistrements disponibles : 10 répartis en 4 + 3 + 3.
+    assert len(queue) == 10
+    assert sorted(queue.groupby("mic_id").size()) == [3, 3, 4]
+    assert (queue["offset_s"] == 0).all() and (queue["dur_s"] == DURATION_S).all()
+    assert (queue["source"] == "audit").all() and (queue["reason"] == "jeu_gele").all()
+    # Chaque micro : ses heures les moins servies d'abord, donc 7 h et 12 h représentées.
+    assert queue.groupby("mic_id")["start_utc"].apply(lambda s: s.str[11:13].nunique()).min() == 2
+
+
+def test_recording_candidates_skip_recordings_already_heard_in_full(corpus):
+    con, cfg, _ = corpus
+    first = recording_candidates(con, cfg, n=2, sites=["patawa"]).iloc[0].to_dict()
+    save_answer(con, first, "background", "léonard")
+    again = recording_candidates(con, cfg, n=50, sites=["patawa"])
+    assert first["recording_id"] not in set(again["recording_id"])
+
+
+def test_calibration_hides_only_my_own_answers(corpus):
+    con, _, _ = corpus
+    rid = con.execute("SELECT recording_id FROM recordings LIMIT 1").fetchone()[0]
+    candidate = {"recording_id": rid, "offset_s": 3.0, "dur_s": 3.0, "source": "audit"}
+    save_answer(con, candidate, "blanci", "tuteur")
+    queue = pd.DataFrame([candidate])
+    assert progress(con, queue).tolist() == ["blanci"]
+    assert progress(con, queue, annotator="léonard").tolist() == [None]
+    assert progress(con, queue, annotator="tuteur").tolist() == ["blanci"]
+
+
+def test_agreement_between_two_annotators(corpus):
+    con, _, _ = corpus
+    rid = con.execute("SELECT recording_id FROM recordings LIMIT 1").fetchone()[0]
+    answers = [  # (léonard, tuteur)
+        ("blanci", "blanci"),
+        ("blanci", "blanci_chorus"),
+        ("blanci", "bird"),
+        ("bird", "bird"),
+        ("background", "background"),
+        ("blanci_uncertain", "background"),
+    ]
+    for k, (first, second) in enumerate(answers):
+        candidate = {"recording_id": rid, "offset_s": 1.5 * k, "dur_s": 3.0, "source": "audit"}
+        save_answer(con, candidate, first, "léonard")
+        save_answer(con, candidate, second, "tuteur")
+    summary, table = agreement(con, "léonard", "tuteur")
+    assert summary["n_windows"] == 6
+    assert summary["label_agreement"] == pytest.approx(3 / 6)
+    assert summary["blanci_agreement"] == pytest.approx(5 / 6)  # l'incertain compte comme non
+    assert summary["positive_agreement"] == pytest.approx(2 * 2 / (2 * 2 + 1))
+    assert table.loc["blanci", "bird"] == 1
+
+
+# --- Congénères de Perch 2.0 ---------------------------------------------------------------------
+
+
+class LogitToy:
+    """Encodeur factice qui, comme perch_v2, garde des logits de congénères pendant `embed`."""
+
+    name, version, sample_rate, window_s, dim, has_tokens = "perchtoy", "1", SR, 3.0, 2, False
+    logit_names = ["Anomaloglossus stepheni", "Anomaloglossus surinamensis"]
+
+    def __init__(self):
+        self._pending = []
+
+    def embed(self, wav, sr):
+        wav = np.atleast_2d(wav)
+        # « Logits » : niveau du canal lu, et son opposé ; le micro P2 sera le plus « congénère ».
+        level = wav.std(axis=1)
+        self._pending.append(np.stack([level, -level], axis=1))
+        return np.stack([wav.mean(axis=1), level], axis=1).astype(np.float32)
+
+    def embed_tokens(self, wav, sr):
+        return None
+
+    def pop_logits(self):
+        out = np.concatenate(self._pending) if self._pending else np.zeros((0, 2))
+        self._pending = []
+        return out
+
+
+def test_embed_stores_congener_logits_and_they_rank_candidates(corpus, tmp_path):
+    from blanci.embed import embed_recordings, select_recordings
+
+    con, cfg, raw = corpus
+    report = embed_recordings(
+        con, LogitToy(), select_recordings(con), raw, tmp_path / "emb", channel=1
+    )
+    n_scores = con.execute(
+        "SELECT COUNT(*) FROM scores WHERE model_id LIKE 'perchtoy-1:logit:%'"
+    ).fetchone()[0]
+    assert n_scores == 2 * report.windows
+
+    queue = congener_candidates(con, "perchtoy-1", per_site=3)
+    assert queue.groupby("site").size().to_dict() == {"CDR": 3, "Patawa": 3}
+    assert not queue.duplicated("recording_id").any()
+    assert (queue["reason"] == "congeneres_perch").all()
+    # Le meilleur de chaque micro d'abord : trois micros différents à CDR.
+    assert queue[queue["site"] == "CDR"]["mic_id"].nunique() == 3
+
+
+def test_congener_candidates_need_logits(corpus):
+    con, _, _ = corpus
+    with pytest.raises(ValueError, match="aucun logit"):
+        congener_candidates(con, "perch_v2-bacpipe1.3.5")

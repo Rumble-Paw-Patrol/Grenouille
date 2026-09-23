@@ -89,7 +89,7 @@ def evaluation_windows(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
     w3 = cfg["grids"]["w3"]
     grid = pd.DataFrame(
         [
-            (window_id_for(r.recording_id, o), r.recording_id, o)
+            (window_id_for(r.recording_id, o, w3["window_s"]), r.recording_id, o)
             for r in candidates.itertuples()
             for o, _ in window_grid(r.duration_s or 0.0, w3["window_s"], w3["hop_s"])
         ],

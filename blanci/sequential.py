@@ -98,3 +98,36 @@ def sequential_features(
     return rhythm_features(onsets, duration_s, ioi_range_s) | persistence_features(
         window_scores, threshold, offsets_s
     )
+
+
+def note_snr_db(
+    wav: np.ndarray,
+    sr: int,
+    band: tuple[int, int] = (4400, 5500),
+    note_dur_s: tuple[float, float] = (0.07, 0.13),
+    k_mad: float = 4.0,
+    neighbour_s: float = 0.5,
+) -> float:
+    """RSB estimé du chant (§6) : énergie en bande pendant les notes détectées, contre les
+    `neighbour_s` voisines de part et d'autre (notes exclues). NaN sans note détectée.
+
+    Sert à ventiler le rappel par RSB : un détecteur qui ne rate que les chants à < 6 dB
+    n'a pas le même défaut qu'un détecteur qui rate des chants nets.
+    """
+    wav = np.asarray(wav, dtype=np.float64)
+    onsets = detect_onsets(wav, sr, band, note_dur_s, k_mad)
+    if not len(onsets):
+        return float("nan")
+    env = 10 ** (band_envelope_db(wav, sr, band) / 10)  # puissance d'enveloppe
+    note_n = round(note_dur_s[1] * sr)
+    near_n = round(neighbour_s * sr)
+    in_note = np.zeros(len(env), dtype=bool)
+    near = np.zeros(len(env), dtype=bool)
+    for t in onsets:
+        i = round(t * sr)
+        in_note[i : i + note_n] = True
+        near[max(0, i - near_n) : i + note_n + near_n] = True
+    near &= ~in_note
+    if not near.any():
+        return float("nan")
+    return float(10 * np.log10(env[in_note].mean() / env[near].mean()))
