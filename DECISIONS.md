@@ -337,3 +337,26 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     (DECISIONS n° 35 confirmé). D'autres annotations suivront, sur plus de sites. Le second
     export (`..._dataset2_verifBV.xlsx`) n'est pas importé : même format, aucune fenêtre
     vérifiée.
+
+## 2026-09-23 — Corrections et précisions
+
+54. **Correction de DECISIONS n° 50 : l'écart entre les deux micros est inconnu.** « Décalés de
+    quelques centimètres » était une supposition, pas une mesure. Ce qui est établi : ce sont
+    deux entrées sonores distinctes (aucune superposition des canaux, même en cherchant un
+    décalage jusqu'à ±250 ms : corrélation maximale 0,07 à 0,42) ; le GUANO ne décrit pas les
+    micros. L'argument contre la moyenne tient sans connaître l'écart : additionner deux micros
+    distants crée des annulations à des fréquences qui dépendent de l'écart et de la direction
+    du son. Écart à vérifier sur un enregistreur (deux ouvertures de micro sur le boîtier ?).
+    Extraits d'écoute comparée : `data/ecoute/` (hors git), produits le 23/09.
+
+55. **Le gain est fixé à l'enregistrement.** Il s'applique au signal analogique avant la
+    numérisation : impossible de le changer après coup. Multiplier un canal sur ordinateur
+    change son volume, pas son rapport signal/bruit, et ne rend pas ce qu'une saturation a
+    coupé. Les deux canaux étant enregistrés, le choix se fait à la lecture (`audio.channel`).
+
+56. **« Mares » et « SM_MaraisKaw_sd1/sd2 » (disque D:) n'appartiennent pas au projet** :
+    autre étude sur le même disque. À ne jamais inventorier.
+
+57. **La machine de travail actuelle est la machine cible de l'ONF** (§7) : Intel Core
+    i5-1145G7, 4 cœurs / 8 fils, 16 Go, Windows. Le débit des encodeurs (risque 5, question 8
+    du §10) se mesure donc ici, sans attendre le Mac.
