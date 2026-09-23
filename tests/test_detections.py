@@ -1,5 +1,5 @@
-"""Détections Blancinet (scores, pas labels), négatifs présumés tirés loin d'elles
-(DECISIONS n° 80, 85), commentaires accolés aux fenêtres annotées (n° 82)."""
+"""Détections Blancinet (scores, pas labels), négatifs annotés négatifs quel que soit le
+voisinage (DECISIONS n° 85, 87), commentaires accolés aux fenêtres annotées (n° 82)."""
 
 import json
 
@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from blanci.config import load_config
-from blanci.dataset import current_labels, detected_blanci, training_set
+from blanci.dataset import current_labels, training_set
 from blanci.db import connect, recording_id_for, window_id_for
 from blanci.labels import comment_fields, import_detections
 from blanci.service import append_label
@@ -76,46 +76,6 @@ def test_annotated_negative_stays_negative_next_to_a_detection(con):
     detection(con, rid, 33.0, 0.9)  # fenêtre voisine, jamais écoutée
     data = training_set(con, grid_of(rid))
     assert data["label"].tolist() == ["bird"] and data["y"].tolist() == [0]
-
-
-# --- Où A. blanci est détecté ---------------------------------------------------------------
-
-
-@pytest.mark.parametrize("score, counted", [(0.9, True), (0.3, False)])
-def test_only_confident_detections_count(con, score, counted):
-    rid = add_recording(con, "a")
-    detection(con, rid, 33.0, score)
-    assert (len(detected_blanci(con, current_labels(con))) == 1) is counted
-
-
-def test_a_listened_detection_no_longer_counts(con):
-    rid = add_recording(con, "a")
-    detection(con, rid, 33.0, 0.9)
-    label(con, rid, 33.0, "background")  # écoutée : pas A. blanci
-    assert detected_blanci(con, current_labels(con)).empty
-
-
-def test_whole_recording_listened_covers_its_detections(con):
-    """Jeu gelé, audit : l'enregistrement entier a été écouté, ses détections aussi."""
-    rid = add_recording(con, "a")
-    label(con, rid, 0.0, "background", dur=120.0)
-    detection(con, rid, 33.0, 0.9)
-    assert detected_blanci(con, current_labels(con)).empty
-
-
-# --- Négatifs présumés ----------------------------------------------------------------------
-
-
-def test_presumed_negatives_are_drawn_away_from_unheard_detections(con):
-    pos = add_recording(con, "pos", start="2026-02-10T13:00:00Z")
-    other = add_recording(con, "autre", start="2026-02-11T13:00:00Z")
-    label(con, pos, 30.0, "blanci")
-    detection(con, other, 33.0, 0.9)
-    data = training_set(con, grid_of(pos, other), per_positive=100)
-    presumed = data[data["presumed"]]
-    # Aucun négatif présumé à moins de 3 s de la détection non écoutée (33–36 s).
-    near = (presumed["offset_s"] < 39.0) & (presumed["offset_s"] + 5.0 > 30.0)
-    assert len(presumed) > 0 and not near.any()
 
 
 # --- Import des détections ------------------------------------------------------------------

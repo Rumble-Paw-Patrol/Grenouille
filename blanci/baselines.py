@@ -40,8 +40,6 @@ from blanci.dataset import (
     EXCLUDED_LABELS,
     benchmark_recordings,
     current_labels,
-    detected_blanci,
-    near_detection,
     paired_negatives,
     recordings_table,
 )
@@ -82,9 +80,6 @@ def evaluation_windows(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
 
     frozen = frozen_recordings(cfg)  # jeu gelé : jamais vu en développement (§6)
     labels = current_labels(con)
-    # Mêmes négatifs présumés que les encodeurs : aucun à côté d'une détection non écoutée
-    # (DECISIONS n° 80, 85). Sinon baselines et encodeurs ne se comparent pas.
-    detected = detected_blanci(con, labels)
     labels = labels[~labels["label"].isin(EXCLUDED_LABELS)]
     labels = labels[~labels["recording_id"].isin(frozen)].copy()
     labels["y"] = labels["label"].isin(POSITIVE_LABELS).astype(int)
@@ -106,7 +101,6 @@ def evaluation_windows(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
         columns=["window_id", "recording_id", "offset_s"],
     )
     positives = set(labelled.loc[labelled["y"] == 1, "recording_id"])
-    grid = grid[~near_detection(grid.assign(dur_s=w3["window_s"]), detected)]
     negatives = paired_negatives(
         grid,
         recordings,

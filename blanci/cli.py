@@ -230,12 +230,8 @@ def import_detections_command(
     table: Annotated[Path, typer.Argument(help="Export des détections (Blancinet).")],
     model: Annotated[str, typer.Option(help="Nom du détecteur dans la base.")] = "blancinet",
 ) -> None:
-    """Range les détections d'un détecteur indépendant comme scores (pas comme labels).
-
-    Aucun négatif présumé n'est tiré à moins de 3 s d'une détection ≥ 0,5 que personne n'a
-    écoutée : ce serait prendre pour négatif une fenêtre où Blancinet entend A. blanci
-    (DECISIONS n° 80, 85).
-    """
+    """Range les détections d'un détecteur indépendant comme scores (pas comme labels),
+    pour les comparer à celles de nos têtes sur les mêmes fenêtres."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     report = import_detections(con, table, cfg, model)

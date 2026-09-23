@@ -707,3 +707,9 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     Fréquence dominante mesurée sur l'intervalle annoté : peut être captée par des
     insectes (PHYCUV à 6,3 kHz est suspect). Choix des espèces (`anuraset.species`) :
     Léonard.
+
+87. **Règle des négatifs présumés voisins supprimée** (23/09/2026, Léonard). Plus aucune
+    règle liée aux détections Blancinet dans la construction des jeux : négatifs annotés et
+    présumés sont tirés comme avant le n° 80. Les détections restent rangées comme scores
+    du détecteur « blancinet » (`import-detections`), pour comparer Blancinet et nos têtes
+    sur les mêmes fenêtres. Baselines relancées : de nouveau celles d'avant le n° 80.

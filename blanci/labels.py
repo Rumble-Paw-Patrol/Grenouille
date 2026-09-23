@@ -606,9 +606,9 @@ def import_detections(
     """Range toutes les détections d'un export (vérifiées ou non) comme scores de `model_id`.
 
     Ce ne sont pas des labels : un score dit où le détecteur a entendu A. blanci, pas ce qu'un
-    humain a entendu. Ils servent à ne pas tirer de négatif présumé là où le détecteur
-    entend A. blanci (`dataset.detected_blanci`). Réimporter remplace les scores, sans rien
-    dupliquer. Le fichier reçu n'est jamais modifié.
+    humain a entendu. Rangés dans `scores`, ils se comparent à ceux de nos têtes sur les
+    mêmes fenêtres. Réimporter remplace les scores, sans rien dupliquer. Le fichier reçu
+    n'est jamais modifié.
     """
     icfg = cfg["labels"]["import"]
     df = read_annotation_table(Path(path))
