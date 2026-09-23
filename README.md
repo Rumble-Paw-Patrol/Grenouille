@@ -78,16 +78,27 @@ $B cluster --encoder birdmae-bacpipe1.3.5 --mode c1   # clustering C0/C1 (§5 bi
 $B candidates --congeners perch_v2-bacpipe1.3.5       # logits des congénères de Perch
 uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md
 
+# --- Pré-benchmark AnuraSet (§2) : base et stocks à part -----------------
+A="uv run blanci --config config/anuraset.yaml"
+$A anuraset-prepare && $A anuraset-profile            # extraction, inventaire, espèces
+$A embed --encoder perch_v2 && $A anuraset-benchmark --encoders perch_v2-bacpipe1.3.5
+
 # --- Détection (§1, §5) --------------------------------------------------
 uv run blanci train --encoder birdmae-1               # tête + seuil à précision ≥ 0,1
 uv run blanci score --encoder birdmae-1               # décisions + points classés
 uv run blanci queue --encoder birdmae-1 --n 40        # file de vérification 60/20/20
 uv run blanci search --encoder birdmae-1 --site tresor --k 300   # récolte de positifs
 uv run blanci label <window_id> --label blanci_solo --source active
+$B fusion --encoder birdmae_base-bacpipe1.3.5        # tête + rythme + persistance (§3)
+$B score --encoder birdmae_base-bacpipe1.3.5 --fusion
+$B tokens --encoder perch_v2                         # jetons pour la sonde attentive
+$B qc-calibrate                                      # seuils QC mesurés, config inchangée
 
 # --- Évaluation (§6) -----------------------------------------------------
 uv run blanci evaluate --encoder birdmae-1                       # plis par micro
 uv run blanci evaluate --encoder birdmae-1 --holdout tresor,kaw  # sites tenus à l'écart
+$B freeze data/reports/candidats_gele.csv --version v1   # jeu gelé : jamais entraîné
+$B evaluate --encoder birdmae-1 --frozen last            # la tête jugée sur le jeu gelé
 ```
 
 Les colonnes du fichier d'annotations sont reconnues automatiquement, y compris sous forme
@@ -109,13 +120,13 @@ ligne doit désigner un enregistrement déjà inventorié.
 | M0 dépôt, config, `ingest`, `import-labels` | **accepté sur données réelles** le 22/09 (DECISIONS n° 49) |
 | M1 `embed`, `benchmark` en plis par micro | écrits, testés, branchés sur la CLI ; baselines sans encodeur mesurées (DECISIONS n° 62) ; **aucun encodage lancé** |
 | M2 `head`, `search`, `queue`, prototype Streamlit | `train`, `score`, `queue`, `search` en service et en CLI ; poste d'annotation Streamlit (`annotate`, `candidates`) |
-| M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | modules écrits et testés ; `aggregate` branché, `sequential`/`fusion` pas encore |
+| M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | branchés : `onsets`, `fusion`, `score --fusion` ; audit par `candidates --entiers` |
 
 Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 positifs et
 150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
 viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
 
-488 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+512 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
 `encoders/onnx_encoder.py` et `encoders/export.py`, qui demandent un modèle exporté ;
 les neuf encodeurs bacpipe du §2 sont installés et mesurés (DECISIONS n° 64, 72).
 
@@ -124,4 +135,4 @@ encodage sur le premier micro (gain 6 dB), les deux micros à l'écoute (DECISIO
 
 **Reste à faire avant M1** : regrouper les enregistrements sur le disque du stage puis
 réinventorier (les labels suivent, DECISIONS n° 46) ; inventorier la phénologie 2023-2024 ;
-exclure le jeu gelé de l'entraînement avant de l'écouter.
+encoder (ce week-end) les données ONF et AnuraSet.

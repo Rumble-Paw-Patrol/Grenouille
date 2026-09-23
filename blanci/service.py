@@ -21,12 +21,29 @@ import pandas as pd
 from blanci.active import build_queue
 from blanci.aggregate import aggregate_recording, rank_points
 from blanci.config import config_path
-from blanci.dataset import current_labels, embedded_training_set, local_minutes, recordings_table
+from blanci.dataset import (
+    current_labels,
+    embedded_training_set,
+    local_minutes,
+    recordings_table,
+    training_set,
+)
 from blanci.db import encoder_params, model_params, next_version, register_model, utc_now
-from blanci.evaluate import evaluate, recall_at_precision, recall_by_group
-from blanci.head import Head, oof_scores, train_head
+from blanci.evaluate import (
+    evaluate,
+    false_alarms_per_hour,
+    grouped_folds,
+    paired_bootstrap,
+    recall_at_precision,
+    recall_by_group,
+    to_recordings,
+)
+from blanci.frozen import frozen_recordings, frozen_versions
+from blanci.fusion import FusionWeights, fit_fusion, fusion_oof
+from blanci.head import Head, OOFScores, fit_logistic, oof_scores, select_C, train_head
 from blanci.index import search
 from blanci.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
+from blanci.sequential import load_onsets, recording_persistence, window_rhythm
 from blanci.store import EmbeddingStore
 
 SCORE_CHUNK = 200_000
@@ -98,6 +115,7 @@ def train_and_register(
         utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
         seed=head_cfg["seed"],
         filters=filters,
+        exclude_recordings=frozen_recordings(cfg),
     )
     y = data["y"].to_numpy()
     if len(np.unique(y)) < 2:
@@ -136,6 +154,8 @@ def train_and_register(
         "min_precision": min_precision,
         "recall_at_threshold": recall,
         "trained_at": utc_now(),
+        # Jeux gelés exclus à l'entraînement : seuls eux peuvent juger cette tête (§6).
+        "frozen_excluded": sorted(frozen_versions(cfg)),
     }
     directory = head_directory(cfg, encoder_id, version)
     head.save(directory)
@@ -199,6 +219,7 @@ class ScoreResult:
     threshold: float
     windows: int
     decisions: pd.DataFrame
+    threshold_id: str = ""
 
     def summary(self) -> str:
         counts = self.decisions["status"].value_counts().to_dict()
@@ -212,9 +233,12 @@ def score_and_decide(
     cfg: dict,
     version: str = "latest",
     filters: dict | None = None,
+    fusion: bool = False,
 ) -> ScoreResult:
     """Score toutes les fenêtres du stock, puis décide par enregistrement (§1).
 
+    Avec `fusion`, le score de décision est celui de la fusion enregistrée pour cette tête
+    (`blanci fusion`) : tête + rythme + persistance, à son propre seuil.
     Les décisions du même triplet (encodeur, tête, seuil) sont remplacées : elles sont
     reproductibles, contrairement aux labels qui ne s'écrasent jamais (§13.7).
     """
@@ -241,6 +265,19 @@ def score_and_decide(
         raise ValueError(f"aucun embedding pour {encoder_id} (filtres : {filters})")
 
     scored = pd.concat(frames, ignore_index=True)
+    if fusion:
+        fusion_params = model_params(con, fusion_id(encoder_id, version), kind="fusion")
+        window_s = encoder_params(con, encoder_id)["window_s"]
+        scored["score"] = fused_scores(con, cfg, fusion_params, scored, window_s)
+        threshold, tid = fusion_params["threshold"], fusion_params["threshold_id"]
+        con.executemany(
+            "INSERT INTO scores (window_id, model_id, score) VALUES (?, ?, ?) "
+            "ON CONFLICT(window_id, model_id) DO UPDATE SET score = excluded.score",
+            [
+                (w, fusion_id(encoder_id, version), float(s))
+                for w, s in zip(scored["window_id"], scored["score"], strict=True)
+            ],
+        )
     rows = []
     for recording_id, group in scored.groupby("recording_id"):
         group = group.sort_values("offset_s")
@@ -267,13 +304,19 @@ def score_and_decide(
         ],
     )
     con.commit()
-    return ScoreResult(encoder_id, version, threshold, total, decisions)
+    return ScoreResult(encoder_id, version, threshold, total, decisions, tid)
 
 
 def ranked_points(
-    con: sqlite3.Connection, encoder_id: str, version: str = "latest"
+    con: sqlite3.Connection,
+    encoder_id: str,
+    version: str = "latest",
+    threshold_id: str | None = None,
 ) -> pd.DataFrame:
-    """Classement des points à partir des décisions enregistrées (§1)."""
+    """Classement des points à partir des décisions enregistrées (§1).
+
+    `threshold_id` sépare les décisions de la tête seule de celles de la fusion.
+    """
     if version == "latest":
         row = con.execute(
             "SELECT head_version FROM decisions WHERE encoder_id = ? "
@@ -286,9 +329,9 @@ def ranked_points(
     decisions = pd.read_sql_query(
         "SELECT d.recording_id, d.fraction, d.status, r.dataset, r.site, r.mic_id, r.start_utc "
         "FROM decisions d JOIN recordings r USING (recording_id) "
-        "WHERE d.encoder_id = ? AND d.head_version = ?",
+        "WHERE d.encoder_id = ? AND d.head_version = ? AND (? IS NULL OR d.threshold_id = ?)",
         con,
-        params=(encoder_id, version),
+        params=(encoder_id, version, threshold_id, threshold_id),
     )
     if decisions.empty:
         raise ValueError(f"aucune décision pour {encoder_id} {version}")
@@ -410,6 +453,7 @@ def similarity_search(
         slot_tolerance_min=bench["slot_tolerance_min"],
         utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
         seed=cfg["head"]["seed"],
+        exclude_recordings=frozen_recordings(cfg),
     )
     y = data["y"].to_numpy()
     if not (y == 1).any():
@@ -448,6 +492,7 @@ def evaluate_holdout(
         slot_tolerance_min=bench["slot_tolerance_min"],
         utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
         seed=head_cfg["seed"],
+        exclude_recordings=frozen_recordings(cfg),
     )
     y = data["y"].to_numpy()
     recordings = data["recording_id"].to_numpy()
@@ -564,6 +609,7 @@ def run_clustering(
             utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
             seed=ccfg["seed"],
             filters={"site": ccfg["c1_site"]},
+            exclude_recordings=frozen_recordings(cfg),
         )
     else:
         raise ValueError(f"mode inconnu : {mode!r} (c0 ou c1)")
@@ -596,3 +642,302 @@ def run_clustering(
         point=mics, cluster=assignments
     )
     return summary, table, windows
+
+
+# --- Jeu gelé (§6) --------------------------------------------------------------------------
+
+
+def evaluate_frozen(
+    con: sqlite3.Connection,
+    encoder_id: str,
+    cfg: dict,
+    version: str = "latest",
+    frozen_version: str | None = None,
+) -> dict[str, Any]:
+    """Juge une tête enregistrée sur un jeu gelé qu'elle n'a jamais vu.
+
+    Refuse une tête entraînée avant le gel (le jeu gelé aurait servi à l'entraîner). Le seuil
+    est celui de la tête : on mesure l'outil tel qu'il serait livré. Les enregistrements gelés
+    sont écoutés en entier : les fausses alarmes par heure y ont un sens.
+    """
+    head, params = load_head(con, encoder_id, version)
+    frozen = frozen_versions(cfg)
+    if not frozen:
+        raise ValueError("aucun jeu gelé (blanci freeze)")
+    frozen_version = frozen_version or sorted(frozen)[-1]
+    if frozen_version not in frozen:
+        raise ValueError(f"jeu gelé inconnu : {frozen_version} (existants : {sorted(frozen)})")
+    if frozen_version not in params.get("frozen_excluded", []):
+        raise ValueError(
+            f"la tête {params['version']} a été entraînée avant le gel de {frozen_version} : "
+            "réentraîner (blanci train) avant de l'évaluer dessus"
+        )
+    ids = set(frozen[frozen_version]["recording_id"])
+    store = store_for(cfg, encoder_id)
+    meta, emb = store.load()
+    keep = meta["recording_id"].isin(ids).to_numpy()
+    if not keep.any():
+        raise ValueError(
+            f"aucun enregistrement du jeu gelé {frozen_version} encodé par {encoder_id}"
+        )
+    grid = (
+        meta[keep].reset_index(drop=True).assign(dur_s=encoder_params(con, encoder_id)["window_s"])
+    )
+    data = training_set(con, grid, per_positive=0)
+    if data.empty or data["y"].nunique() < 2:
+        raise ValueError(f"jeu gelé {frozen_version} : labels absents ou d'une seule classe")
+    scores = head.decision(emb[keep][data["row"].to_numpy()].astype(np.float32))
+    y = data["y"].to_numpy()
+    recordings = data["recording_id"].to_numpy()
+    bench = cfg["benchmark"]
+    out: dict[str, Any] = {
+        "encoder_id": encoder_id,
+        "head_version": params["version"],
+        "frozen_version": frozen_version,
+        "n_recordings": int(len(set(recordings))),
+    }
+    for level in ("recording", "window"):
+        out[level] = evaluate(
+            scores,
+            y,
+            recordings,
+            level=level,
+            precisions=tuple(bench["precisions"]),
+            n_boot=bench["n_boot"],
+            seed=cfg["head"]["seed"],
+        )
+    threshold = params["threshold"]
+    hours = recordings_table(con).set_index("recording_id").loc[list(set(recordings)), "duration_s"]
+    out["threshold"] = threshold
+    out["recall_at_threshold"] = float((scores[y == 1] >= threshold).mean())
+    out["false_alarms_per_hour"] = false_alarms_per_hour(scores, y, threshold, hours.sum() / 3600)
+    strata = {
+        "qualité": data["quality"].to_numpy() if "quality" in data else np.full(len(data), None),
+        "site": data["site"].to_numpy(),
+    }
+    out["by_stratum"] = pd.concat(
+        [recall_by_group(scores, y, v, threshold).assign(by=k) for k, v in strata.items()],
+        ignore_index=True,
+    )
+    return out
+
+
+# --- Module séquentiel et fusion (§3) -----------------------------------------------------------
+
+# Frontière de décision de la tête logistique (classes équilibrées) : sert à compter les
+# fenêtres « positives » des descripteurs de persistance, à l'entraînement comme au score.
+PERSISTENCE_THRESHOLD = 0.0
+
+
+def fusion_id(encoder_id: str, head_version: str) -> str:
+    return f"{encoder_id}:fusion:{head_version}"
+
+
+def _store_rows(store: EmbeddingStore, recording_ids: set[str]) -> tuple[pd.DataFrame, np.ndarray]:
+    """Toutes les fenêtres encodées de ces enregistrements (persistance = tout l'enregistrement)."""
+    metas, embs = [], []
+    for path in store.fragments():
+        meta, emb = store.read(path)
+        keep = meta["recording_id"].isin(recording_ids).to_numpy()
+        if keep.any():
+            metas.append(meta[keep])
+            embs.append(emb[keep])
+    if not metas:
+        return pd.DataFrame(columns=["window_id", "recording_id", "offset_s"]), np.zeros((0, 0))
+    return pd.concat(metas, ignore_index=True), np.concatenate(embs).astype(np.float32)
+
+
+def _sequential_features(
+    windows: pd.DataFrame, persistence: pd.DataFrame, onsets: dict, cfg: dict
+) -> pd.DataFrame:
+    rhythm = window_rhythm(windows, onsets, tuple(cfg["signal"]["ioi_range_s"]))
+    persist = persistence.reindex(windows["recording_id"]).set_index(windows.index)
+    return pd.concat([rhythm, persist], axis=1)
+
+
+def train_fusion(
+    con: sqlite3.Connection, encoder_id: str, cfg: dict, version: str = "latest"
+) -> dict[str, Any]:
+    """Évalue puis enregistre la fusion (stacking, §3) au-dessus d'une tête enregistrée.
+
+    1. Plis groupés par micro : dans chaque pli, une tête entraînée sans le micro donne le
+       score hors-pli des fenêtres étiquetées **et** de toutes les fenêtres de leurs
+       enregistrements (persistance) ;
+    2. descripteurs : rythme dans la fenêtre (débuts de notes) + persistance de
+       l'enregistrement ; colonnes retenues : `fusion.columns` ;
+    3. fusion évaluée hors-pli sur les mêmes plis, comparée à la tête seule (bootstrap apparié
+       par enregistrement) ; seuil de la fusion pris sur ses scores hors-pli ;
+    4. fusion finale ajustée sur tout le jeu de développement, enregistrée en JSON.
+    """
+    _, params = load_head(con, encoder_id, version)
+    version = params["version"]
+    enc = encoder_params(con, encoder_id)
+    bench, head_cfg = cfg["benchmark"], cfg["head"]
+    columns = list(cfg["fusion"]["columns"])
+    data, X = embedded_training_set(
+        con,
+        store_for(cfg, encoder_id),
+        enc["window_s"],
+        per_positive=bench["negatives_per_positive"],
+        slot_tolerance_min=bench["slot_tolerance_min"],
+        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+        seed=head_cfg["seed"],
+        exclude_recordings=frozen_recordings(cfg),
+    )
+    y, groups = data["y"].to_numpy(), data["point"].to_numpy()
+    recordings = data["recording_id"].to_numpy()
+    onsets = load_onsets(con, set(recordings))
+    if not onsets:
+        raise ValueError(
+            "aucun début de note calculé pour ces enregistrements : ils se calculent pendant "
+            "`blanci embed`, ou avec `blanci onsets`"
+        )
+    meta_all, emb_all = _store_rows(store_for(cfg, encoder_id), set(recordings))
+
+    folds = grouped_folds(y, groups, head_cfg["n_splits"], head_cfg["seed"])
+    head_oof = np.full(len(y), np.nan)
+    persistence_parts = []
+    for train, test in folds:
+        if len(np.unique(groups[train])) >= 2:
+            C, _ = select_C(
+                X[train],
+                y[train],
+                groups[train],
+                head_cfg["C_grid"],
+                head_cfg["n_splits"],
+                head_cfg["seed"],
+            )
+        else:
+            C = head_cfg["C_grid"][0]
+        fold_head = fit_logistic(X[train], y[train], C, head_cfg["seed"])
+        head_oof[test] = fold_head.decision(X[test])
+        mask = meta_all["recording_id"].isin(set(recordings[test])).to_numpy()
+        scored = meta_all[mask].assign(score=fold_head.decision(emb_all[mask]))
+        persistence_parts.append(recording_persistence(scored, PERSISTENCE_THRESHOLD))
+    persistence = pd.concat(persistence_parts)
+    windows = data.assign(dur_s=enc["window_s"])
+    features = _sequential_features(windows, persistence, onsets, cfg)
+
+    head_scores = OOFScores(head_oof, tuple(folds), "logistic")
+    fused = fusion_oof(
+        head_scores, features, y, groups, columns, head_cfg["n_splits"], head_cfg["seed"]
+    )
+    floor = min(bench["precisions"])
+    recall, threshold = recall_at_precision(y, fused.values, floor)
+    comparison = {}
+    for level in ("recording", "window"):
+        for name, values in (("head", head_oof), ("fusion", fused.values)):
+            comparison[f"{name}_{level}"] = evaluate(
+                values,
+                y,
+                recordings,
+                level=level,
+                precisions=tuple(bench["precisions"]),
+                n_boot=bench["n_boot"],
+                seed=head_cfg["seed"],
+            )
+    rec_head = to_recordings(head_oof, y, recordings).set_index("recording_id")
+    rec_fused = to_recordings(fused.values, y, recordings)
+    paired = paired_bootstrap(
+        rec_fused["y"].to_numpy(),
+        rec_fused["score"].to_numpy(),
+        rec_head.loc[rec_fused["recording_id"], "score"].to_numpy(),
+        rec_fused["recording_id"].to_numpy(),
+        n_boot=bench["n_boot"],
+        seed=head_cfg["seed"],
+    )
+
+    final = FusionWeights.from_fusion(fit_fusion(head_scores, features, y, columns))
+    model_id = fusion_id(encoder_id, version)
+    register_model(
+        con,
+        model_id,
+        "fusion",
+        encoder_id,
+        version,
+        {
+            "weights": final.to_dict(),
+            "threshold": threshold,
+            "threshold_id": f"{model_id}:p{floor}",
+            "min_precision": floor,
+            "recall_at_threshold": recall,
+            "persistence_threshold": PERSISTENCE_THRESHOLD,
+            "head_model_id": head_id(encoder_id, version),
+            "frozen_excluded": sorted(frozen_versions(cfg)),
+            "ap_recording": {
+                "head": comparison["head_recording"]["ap"],
+                "fusion": comparison["fusion_recording"]["ap"],
+            },
+            "trained_at": utc_now(),
+        },
+    )
+    return {
+        "model_id": model_id,
+        "columns": columns,
+        "coefficients": dict(zip(["head", *columns], final.coef.tolist(), strict=True)),
+        "threshold": threshold,
+        "recall_at_threshold": recall,
+        "comparison": comparison,
+        "paired": paired,
+        "n_with_onsets": int(pd.Series(recordings).isin(list(onsets)).sum()),
+        "n_windows": len(y),
+    }
+
+
+def fused_scores(
+    con: sqlite3.Connection,
+    cfg: dict,
+    fusion_params: dict,
+    scored: pd.DataFrame,
+    window_s: float,
+) -> np.ndarray:
+    """Scores de fusion de fenêtres déjà scorées par la tête (recording_id, offset_s, score)."""
+    weights = FusionWeights.from_dict(fusion_params["weights"])
+    persistence = recording_persistence(scored, fusion_params["persistence_threshold"])
+    onsets = load_onsets(con, set(scored["recording_id"]))
+    windows = scored.assign(dur_s=window_s)
+    features = _sequential_features(windows, persistence, onsets, cfg)
+    return weights.decision(scored["score"].to_numpy(), features)
+
+
+# --- Jetons pour l'attentive probing (§3) --------------------------------------------------------
+
+
+def compute_tokens(con: sqlite3.Connection, encoder: Any, cfg: dict) -> dict[str, int]:
+    """Jetons des fenêtres du benchmark (étiquetées + négatifs appariés, jeu gelé exclu) pour
+    un encodeur déjà passé par `embed` : seules ces fenêtres servent à la sonde attentive.
+
+    Relit l'audio des enregistrements concernés (lecture seule) et repasse ces fenêtres dans
+    l'encodeur : c'est un encodage, limité à ~1 500 fenêtres.
+    """
+    from blanci.attentive import TokenStore
+    from blanci.audio import cut_windows, load_audio
+    from blanci.encoders import encoder_id as make_encoder_id
+
+    if not encoder.has_tokens:
+        raise ValueError(f"{encoder.name} n'expose pas de jetons (seul perch_v2 aujourd'hui)")
+    eid = make_encoder_id(encoder)
+    bench = cfg["benchmark"]
+    data, _ = embedded_training_set(
+        con,
+        store_for(cfg, eid),
+        encoder.window_s,
+        per_positive=bench["negatives_per_positive"],
+        slot_tolerance_min=bench["slot_tolerance_min"],
+        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+        seed=cfg["head"]["seed"],
+        exclude_recordings=frozen_recordings(cfg),
+    )
+    store = TokenStore(config_path(cfg, "tokens"), eid)
+    done = set(store.read()[0]) if store.path.exists() else set()
+    todo = data[~data["window_id"].isin(done)]
+    paths = recordings_table(con).set_index("recording_id")["path"]
+    report = {"windows": 0, "recordings": 0, "skipped": len(data) - len(todo)}
+    for rid, group in todo.groupby("recording_id"):
+        wav, sr = load_audio(config_path(cfg, "raw") / paths[rid], cfg["audio"]["channel"])
+        windows = [(o, encoder.window_s) for o in group["offset_s"]]
+        tokens = encoder.embed_tokens(cut_windows(wav, sr, windows), sr)
+        store.write(group["window_id"].tolist(), tokens)
+        report["windows"] += len(group)
+        report["recordings"] += 1
+    return report

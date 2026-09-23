@@ -20,9 +20,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from blanci.attentive import TokenStore
+from blanci.config import config_path
 from blanci.dataset import embedded_training_set
 from blanci.db import encoder_params
 from blanci.evaluate import average_precision, evaluate, paired_bootstrap, to_recordings
+from blanci.frozen import frozen_recordings
 from blanci.head import oof_scores
 from blanci.index import l2_normalize
 from blanci.store import EmbeddingStore
@@ -62,11 +65,18 @@ def probe_table(
     precisions: tuple[float, ...] = (0.1, 0.5),
     n_boot: int = 1000,
     seed: int = 0,
+    tokens: np.ndarray | None = None,
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
-    """Une ligne par (sonde, niveau) ; renvoie aussi les scores hors-pli de chaque sonde."""
+    """Une ligne par (sonde, niveau) ; renvoie aussi les scores hors-pli de chaque sonde.
+
+    Avec `tokens` (fenêtres, jetons, dim), ajoute la sonde « attentive » (§3).
+    """
     rows, scores = [], {}
-    for probe in PROBES:
-        oof = oof_scores(X, y, groups, n_splits=n_splits, method=probe, C_grid=C_grid, seed=seed)
+    probes = [(p, X) for p in PROBES] + ([("attentive", tokens)] if tokens is not None else [])
+    for probe, inputs in probes:
+        oof = oof_scores(
+            inputs, y, groups, n_splits=n_splits, method=probe, C_grid=C_grid, seed=seed
+        )
         scores[probe] = oof.values
         for level in LEVELS:
             metrics = evaluate(
@@ -104,6 +114,7 @@ def benchmark_encoder(
         utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
         seed=head["seed"],
         filters=filters,
+        exclude_recordings=frozen_recordings(cfg),
     )
     if data["y"].nunique() < 2:
         raise ValueError(f"{encoder_id} : une seule classe dans le jeu étiqueté")
@@ -122,6 +133,7 @@ def benchmark_encoder(
         precisions=tuple(bench["precisions"]),
         n_boot=bench["n_boot"],
         seed=head["seed"],
+        tokens=TokenStore(config_path(cfg, "tokens"), encoder_id).load(data["window_id"].tolist()),
     )
     last_run = params.get("last_run", {})
     table.insert(0, "encoder_id", encoder_id)

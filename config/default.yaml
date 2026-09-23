@@ -5,6 +5,7 @@ paths:
   raw: data/raw                    # data/raw/{2023,2026}/<site>/<micro>/*.wav — lecture seule
   db: data/db/blanci.sqlite
   embeddings: data/embeddings
+  tokens: data/tokens               # jetons des fenêtres du benchmark (sonde attentive)
   label_imports: data/labels/imports   # fichiers reçus, jamais modifiés
   models: data/models
   frozen_test: data/frozen_test        # jeu gelé, lecture seule
@@ -114,6 +115,13 @@ aggregate:
   # Règle enregistrement (§1), à calibrer sur les 20 enregistrements écoutés en entier.
   min_positive_windows: 3          # en dessous : « suspect » (détection isolée)
   min_span_s: 10.0                 # fenêtres positives étalées sur moins : « suspect »
+
+fusion:
+  # Descripteurs du module séquentiel ajoutés au score de la tête (§3) : ≤ 4, car il faut
+  # ~10 enregistrements positifs indépendants par coefficient (51 aujourd'hui → 5 coefficients).
+  # Rythme (fenêtre) : onset_rate_hz, ioi_median_s, ioi_cv, frac_ioi_blanci, frac_ioi_short.
+  # Persistance (enregistrement) : frac_windows, n_positive, longest_run, n_isolated, span.
+  columns: [frac_ioi_blanci, onset_rate_hz, frac_windows, longest_run]
 
 cluster:
   # Voie non supervisée (§5 bis) : HDBSCAN sur ACP. Seuils de C1 : jugement de la feuille de route.

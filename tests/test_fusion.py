@@ -111,3 +111,24 @@ def test_fusion_uses_only_the_declared_columns():
     assert fusion.columns == COLUMNS
     without = features.drop(columns="piege")
     assert np.allclose(fusion.decision(head, features), fusion.decision(head, without))
+
+
+def test_saved_fusion_weights_reproduce_the_sklearn_decision():
+    """Fusion enregistrée en JSON, rechargée et appliquée en numpy : même score (§7)."""
+    import json
+
+    from blanci.fusion import FusionWeights, fit_fusion
+    from blanci.head import OOFScores
+
+    rng = np.random.default_rng(0)
+    y = np.r_[np.ones(60), np.zeros(140)].astype(int)
+    head = OOFScores(rng.normal(y * 2, 1.0), (), "logistic")
+    features = pd.DataFrame({"a": rng.normal(y, 1.0), "b": rng.normal(0, 1.0, len(y))})
+    features.loc[3, "a"] = np.nan  # descripteur manquant : 0 comme à l'entraînement
+    fusion = fit_fusion(head, features, y, ["a", "b"])
+    saved = FusionWeights.from_dict(
+        json.loads(json.dumps(FusionWeights.from_fusion(fusion).to_dict()))
+    )
+    assert np.allclose(
+        saved.decision(head.values, features), fusion.decision(head.values, features)
+    )

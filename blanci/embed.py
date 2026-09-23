@@ -21,6 +21,7 @@ from blanci.audio import cut_windows, load_audio
 from blanci.db import utc_now, window_id_for
 from blanci.encoders.base import Encoder, encoder_id
 from blanci.grid import window_grid
+from blanci.sequential import recording_onsets, store_onsets
 from blanci.store import EmbeddingStore
 
 
@@ -122,8 +123,13 @@ def embed_recordings(
     flush_every: int = 50,
     progress_every: int = 100,
     channel: int | str = "mean",
+    signal_cfg: dict | None = None,
 ) -> EmbedReport:
+    """Encode les enregistrements. Avec `signal_cfg`, calcule aussi au passage les débuts de
+    notes de chaque enregistrement qui n'en a pas encore (module séquentiel, §3) : l'audio
+    est déjà en mémoire, une seule lecture sert aux deux."""
     eid = encoder_id(encoder)
+    with_onsets = {row[0] for row in con.execute("SELECT recording_id FROM onsets")}
     store = EmbeddingStore(store_root, eid)
     window_s = round(encoder.window_s, 2)
     hop_s = round(window_s * hop_ratio, 2)
@@ -145,6 +151,9 @@ def embed_recordings(
             except Exception:  # fichier illisible : déjà signalé à l'inventaire
                 report.errors += 1
                 continue
+            if signal_cfg is not None and rec.recording_id not in with_onsets:
+                store_onsets(con, rec.recording_id, recording_onsets(wav, sr, signal_cfg), channel)
+                with_onsets.add(rec.recording_id)
             windows = window_grid(len(wav) / sr, window_s, hop_s)
             start = perf_counter()
             emb = encoder.embed(cut_windows(wav, sr, windows), sr)

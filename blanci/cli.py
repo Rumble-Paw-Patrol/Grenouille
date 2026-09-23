@@ -23,12 +23,16 @@ from blanci.dataset import benchmark_recordings
 from blanci.db import connect
 from blanci.embed import embed_recordings, select_recordings
 from blanci.encoders import get_encoder
+from blanci.frozen import freeze as freeze_recordings
 from blanci.grid import containing_windows, max_hop_without_cut, window_grid
 from blanci.ingest import ingest as run_ingest
 from blanci.labels import POSITIVE_LABELS, import_label_file
 from blanci.qc import apply_metadata_flags
+from blanci.sequential import compute_onsets
 from blanci.service import (
     append_label,
+    compute_tokens,
+    evaluate_frozen,
     evaluate_holdout,
     make_queue,
     ranked_points,
@@ -36,6 +40,7 @@ from blanci.service import (
     score_and_decide,
     similarity_search,
     train_and_register,
+    train_fusion,
 )
 from blanci.throughput import (
     machine_description,
@@ -275,6 +280,7 @@ def embed(
         config_path(cfg, "embeddings"),
         hop_ratio=cfg["encoders"]["grid_hop_ratio"],
         channel=cfg["audio"]["channel"],
+        signal_cfg=cfg["signal"],
     )
     typer.echo(
         f"{report.encoder_id} : {report.recordings} encodés, {report.skipped} déjà faits, "
@@ -364,14 +370,19 @@ def score(
     head: Annotated[str, typer.Option(help="Version de tête (v1, v2…) ou latest.")] = "latest",
     site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
     dataset: Annotated[str | None, typer.Option(help="Restreindre à un jeu.")] = None,
+    fusion: Annotated[
+        bool, typer.Option(help="Décider avec la fusion (tête + rythme + persistance).")
+    ] = False,
 ) -> None:
     """Score toutes les fenêtres du stock, puis décide par enregistrement (§1)."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     filters = {k: v for k, v in (("site", site), ("dataset", dataset)) if v}
-    result = score_and_decide(con, encoder, cfg, version=head, filters=filters or None)
+    result = score_and_decide(
+        con, encoder, cfg, version=head, filters=filters or None, fusion=fusion
+    )
     typer.echo(result.summary())
-    points = ranked_points(con, encoder, result.version)
+    points = ranked_points(con, encoder, result.version, result.threshold_id)
     _write_csv(
         points,
         config_path(cfg, "reports") / f"points_{encoder}_{result.version}.csv",
@@ -438,12 +449,44 @@ def evaluate(
     holdout: Annotated[
         str | None, typer.Option(help="Sites tenus à l'écart, par exemple tresor,kaw (§6).")
     ] = None,
+    frozen: Annotated[
+        str | None,
+        typer.Option(help="Juger la dernière tête sur un jeu gelé (version, ou « last »)."),
+    ] = None,
 ) -> None:
-    """Évalue sur des sites tenus à l'écart, ou en plis groupés par micro si aucun n'est donné."""
+    """Évalue sur des sites tenus à l'écart, ou en plis groupés par micro si aucun n'est donné.
+
+    Avec --frozen : la tête enregistrée, à son seuil, sur un jeu gelé jamais vu (§6).
+    """
     if level not in ("window", "recording"):
         raise typer.BadParameter("--level attend window ou recording")
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
+    if frozen:
+        result = evaluate_frozen(
+            con, encoder, cfg, frozen_version=None if frozen == "last" else frozen
+        )
+        typer.echo(
+            f"{encoder} tête {result['head_version']} — jeu gelé {result['frozen_version']} "
+            f"({result['n_recordings']} enregistrements écoutés en entier)"
+        )
+        for lvl in ("recording", "window"):
+            m = result[lvl]
+            typer.echo(
+                f"  {lvl} : {m['n_pos']} positifs, {m['n_neg']} négatifs, AP {m['ap']:.3f} "
+                f"[{m['ap_lo']:.3f} ; {m['ap_hi']:.3f}]"
+            )
+        typer.echo(
+            f"  au seuil de la tête ({result['threshold']:.3f}) : rappel fenêtres "
+            f"{result['recall_at_threshold']:.2f}, "
+            f"{result['false_alarms_per_hour']:.1f} fausses alarmes par heure"
+        )
+        for r in result["by_stratum"].to_dict("records"):
+            typer.echo(
+                f"    {r['by']} {r['stratum']:<12} {r['n_pos']:>4} positifs  "
+                f"rappel {r['recall']:.2f}"
+            )
+        return
     metrics = evaluate_holdout(con, encoder, cfg, _split(holdout), level=level)
     typer.echo(f"{metrics['encoder_id']} — {metrics['protocol']}, niveau {metrics['level']}")
     typer.echo(f"  {metrics['n_pos']} positifs, {metrics['n_neg']} négatifs")
@@ -461,6 +504,220 @@ def evaluate(
             f"    {r['by']} {r['stratum']:<12} {r['n_pos']:>4} positifs  rappel {r['recall']:.2f} "
             f"[{r['recall_lo']:.2f} ; {r['recall_hi']:.2f}]"
         )
+
+
+@app.command()
+def freeze(
+    ctx: typer.Context,
+    source: Annotated[Path, typer.Argument(help="File CSV (recording_id) : candidats_gele.csv…")],
+    version: Annotated[str, typer.Option(help="Nom de la version : v1, v2…")],
+) -> None:
+    """Gèle des enregistrements (§6) : jamais entraînés, seulement jugés. Irréversible."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    path, report = freeze_recordings(con, cfg, source, version)
+    typer.echo(
+        f"jeu gelé {version} : {report['n_recordings']} enregistrements ({path}, lecture seule)"
+    )
+    if report["labels_withdrawn"]:
+        typer.echo(
+            f"  {report['labels_withdrawn']} labels existants sortent de l'entraînement, dont "
+            f"{report['positive_labels_withdrawn']} positifs"
+        )
+    if report["already_frozen"]:
+        typer.echo(f"  {report['already_frozen']} déjà gelés dans une autre version")
+
+
+@app.command()
+def onsets(
+    ctx: typer.Context,
+    subset: Annotated[
+        str | None, typer.Option(help="« benchmark » : annotés + négatifs appariés seulement.")
+    ] = None,
+    site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
+) -> None:
+    """Débuts de notes par enregistrement (module séquentiel, §3). Lit l'audio, n'encode rien.
+
+    `blanci embed` les calcule déjà au passage ; cette commande sert aux enregistrements
+    qu'on ne veut pas encoder. Reprenable : les enregistrements traités sont sautés.
+    """
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    recordings = select_recordings(con, site=site)
+    if subset == "benchmark":
+        wanted = benchmark_recordings(
+            con, cfg["benchmark"]["slot_tolerance_min"], cfg["recorder"]["filename_utc_offset_h"]
+        )
+        recordings = recordings[recordings["recording_id"].isin(wanted["recording_id"])]
+    report = compute_onsets(
+        con, recordings, config_path(cfg, "raw"), cfg["signal"], cfg["audio"]["channel"]
+    )
+    typer.echo(
+        f"{report['computed']} enregistrements traités, {report['skipped']} déjà faits, "
+        f"{report['errors']} illisibles ; {report['onsets']} débuts de notes"
+    )
+
+
+@app.command()
+def fusion(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
+    head: Annotated[str, typer.Option(help="Version de tête (v1, v2…) ou latest.")] = "latest",
+) -> None:
+    """Fusion (§3) : évaluée hors-pli contre la tête seule, puis enregistrée pour `score`."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    result = train_fusion(con, encoder, cfg, head)
+    typer.echo(
+        f"{result['model_id']} : {result['n_windows']} fenêtres, "
+        f"{result['n_with_onsets']} avec débuts de notes"
+    )
+    for level in ("recording", "window"):
+        h, f = result["comparison"][f"head_{level}"], result["comparison"][f"fusion_{level}"]
+        typer.echo(
+            f"  {level} : AP tête {h['ap']:.3f} → fusion {f['ap']:.3f} ; "
+            f"rappel à P≥0.1 {h['recall@p0.1']:.2f} → {f['recall@p0.1']:.2f}"
+        )
+    p = result["paired"]
+    typer.echo(
+        f"  écart d'AP par enregistrement {p['diff']:+.3f} [{p['lo']:+.3f} ; {p['hi']:+.3f}] : "
+        f"{'significatif' if p['significant'] else 'non significatif'}"
+    )
+    coefs = ", ".join(f"{k} {v:+.2f}" for k, v in result["coefficients"].items())
+    typer.echo(f"  coefficients (standardisés) : {coefs}")
+    typer.echo(
+        f"  seuil {result['threshold']:.3f} (rappel {result['recall_at_threshold']:.2f}) ; "
+        "décider avec : blanci score --fusion"
+    )
+
+
+@app.command("qc-calibrate")
+def qc_calibrate(ctx: typer.Context) -> None:
+    """Seuils du contrôle qualité mesurés sur les fenêtres étiquetées (lit l'audio, n'écrit
+    rien dans la config) : effet des seuils actuels et seuils proposés."""
+    from blanci.qc_calibration import (
+        calibration_indices,
+        current_flags,
+        labelled_windows,
+        suggest_thresholds,
+    )
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    windows = labelled_windows(con)
+    typer.echo(
+        f"{len(windows)} fenêtres étiquetées, {windows['recording_id'].nunique()} "
+        f"enregistrements lus en entier : "
+        + ", ".join(f"{g} {n}" for g, n in windows["group"].value_counts().items())
+    )
+    indices = calibration_indices(windows, config_path(cfg, "raw"), cfg["audio"]["channel"])
+    table = suggest_thresholds(indices, cfg["qc"])
+    for r in table.to_dict("records"):
+        typer.echo(
+            f"  {r['flag']:<10} {r['index']} {r['direction']} {r['current']:g} : "
+            f"cibles signalées {r['targets_flagged_now']}/{r['targets']}, enregistrements à "
+            f"A. blanci signalés {r['blanci_flagged_now']}/{r['blanci_recordings']} ; "
+            f"proposé {r['suggested']:.4g} → cibles {r['targets_flagged_suggested']}/"
+            f"{r['targets']} ({r['reason']})"
+        )
+    reports = config_path(cfg, "reports")
+    _write_csv(indices.drop(columns=["path"]), reports / "qc_indices.csv", "indices")
+    _write_csv(table, reports / "qc_calibration.csv", "seuils")
+    _write_csv(current_flags(indices, cfg["qc"]), reports / "qc_drapeaux_actuels.csv", "drapeaux")
+
+
+@app.command()
+def tokens(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Nom dans encoders.models (perch_v2).")],
+) -> None:
+    """Jetons des fenêtres du benchmark pour la sonde attentive (§3). Encode ~1 500 fenêtres."""
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    report = compute_tokens(con, get_encoder(encoder, cfg), cfg)
+    typer.echo(
+        f"{report['windows']} fenêtres ({report['recordings']} enregistrements), "
+        f"{report['skipped']} déjà faites ; `blanci benchmark` ajoute alors la sonde attentive"
+    )
+
+
+@app.command("anuraset-prepare")
+def anuraset_prepare(ctx: typer.Context) -> None:
+    """AnuraSet (§2) : extrait raw_data.zip et l'inventorie (--config config/anuraset.yaml)."""
+    from blanci.anuraset import prepare
+
+    cfg = _cfg(ctx)
+    if "anuraset" not in cfg:
+        raise typer.BadParameter("lancer avec --config config/anuraset.yaml")
+    report = prepare(connect(config_path(cfg, "db")), cfg)
+    typer.echo(
+        f"{report['extracted']} fichiers extraits, {report['added']} inventoriés, "
+        f"{report['errors']} illisibles"
+    )
+
+
+@app.command("anuraset-profile")
+def anuraset_profile(
+    ctx: typer.Context,
+    audio: Annotated[
+        bool, typer.Option(help="Mesurer la fréquence dominante (lit quelques chants).")
+    ] = True,
+) -> None:
+    """Profil des espèces d'AnuraSet et suggestion d'espèces proches d'A. blanci (§2)."""
+    from blanci.anuraset import (
+        dominant_frequencies,
+        read_strong_labels,
+        species_profile,
+        suggest_species,
+    )
+
+    cfg = _cfg(ctx)
+    acfg = cfg["anuraset"]
+    calls = read_strong_labels(Path(acfg["labels"]))
+    profile = species_profile(calls, acfg["max_call_s"])
+    if audio:
+        con = connect(config_path(cfg, "db"))
+        recordings = pd.read_sql_query("SELECT path FROM recordings", con)
+        freqs = dominant_frequencies(
+            calls, config_path(cfg, "raw"), recordings, acfg["profile_per_species"]
+        )
+        profile = profile.merge(freqs, left_on="species", right_index=True, how="left")
+        chosen = suggest_species(profile)  # note brève, 3–6 kHz, ≥ 300 chants, ≥ 2 sites
+        typer.echo("Espèces proches d'A. blanci (note brève, 3–6 kHz, ≥ 2 sites) :")
+        for r in chosen.to_dict("records"):
+            typer.echo(
+                f"  {r['species']:<8} {r['n_calls']:>6} chants, {r['n_sites']} sites, "
+                f"{r['duration_median_s']:.2f} s, {r['dominant_hz']:.0f} Hz"
+            )
+    _write_csv(profile, config_path(cfg, "reports") / "anuraset_especes.csv", "profil")
+
+
+@app.command("anuraset-benchmark")
+def anuraset_benchmark(
+    ctx: typer.Context,
+    encoders: Annotated[str, typer.Option(help="Identifiants séparés par des virgules.")],
+    species: Annotated[
+        str | None, typer.Option(help="Codes AnuraSet ; défaut : anuraset.species.")
+    ] = None,
+) -> None:
+    """Pré-benchmark AnuraSet (§2) : sondes par encodeur et par espèce, plis par site."""
+    from blanci.anuraset import (
+        read_strong_labels,
+        run_anuraset_benchmark,
+        write_anuraset_report,
+    )
+
+    cfg = _cfg(ctx)
+    chosen = _split(species) or list(cfg["anuraset"]["species"])
+    if not chosen:
+        raise typer.BadParameter("aucune espèce : --species ou anuraset.species (voir profile)")
+    con = connect(config_path(cfg, "db"))
+    calls = read_strong_labels(Path(cfg["anuraset"]["labels"]))
+    results, comparisons = run_anuraset_benchmark(con, cfg, _split(encoders), chosen, calls)
+    path = write_anuraset_report(results, comparisons, config_path(cfg, "reports"))
+    for r in results[results["level"] == "window"].to_dict("records"):
+        typer.echo(f"  {r['encoder_id']:<24} {r['species']:<8} {r['probe']:<16} AP {r['ap']:.3f}")
+    typer.echo(f"rapport : {path}")
 
 
 @app.command()

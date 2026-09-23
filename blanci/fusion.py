@@ -83,3 +83,48 @@ def fusion_oof(
             fusion = fit_fusion(part, features.iloc[train], y[train], columns)
         out[test] = fusion.decision(head_oof.values[test], features.iloc[test])
     return OOFScores(out, tuple(folds), f"fusion({head_oof.method})")
+
+
+@dataclass
+class FusionWeights:
+    """Fusion enregistrée sans pickle (JSON) et appliquée en numpy : se recharge partout (§7)."""
+
+    columns: list[str]
+    mean: np.ndarray
+    scale: np.ndarray
+    coef: np.ndarray
+    intercept: float
+
+    @classmethod
+    def from_fusion(cls, fusion: Fusion) -> FusionWeights:
+        scale = np.where(fusion.scaler.scale_ > 0, fusion.scaler.scale_, 1.0)
+        return cls(
+            list(fusion.columns),
+            fusion.scaler.mean_.astype(float),
+            scale.astype(float),
+            fusion.model.coef_[0].astype(float),
+            float(fusion.model.intercept_[0]),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "columns": self.columns,
+            "mean": self.mean.tolist(),
+            "scale": self.scale.tolist(),
+            "coef": self.coef.tolist(),
+            "intercept": self.intercept,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> FusionWeights:
+        return cls(
+            list(d["columns"]),
+            np.asarray(d["mean"], dtype=float),
+            np.asarray(d["scale"], dtype=float),
+            np.asarray(d["coef"], dtype=float),
+            float(d["intercept"]),
+        )
+
+    def decision(self, head_score: np.ndarray, features: pd.DataFrame) -> np.ndarray:
+        X = _design(head_score, features, self.columns)
+        return ((X - self.mean) / self.scale) @ self.coef + self.intercept

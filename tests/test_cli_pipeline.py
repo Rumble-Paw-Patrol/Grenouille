@@ -76,6 +76,7 @@ def workspace(tmp_path, monkeypatch):
                     "raw": str(raw),
                     "db": str(tmp_path / "db" / "blanci.sqlite"),
                     "embeddings": str(tmp_path / "embeddings"),
+                    "tokens": str(tmp_path / "tokens"),
                     "label_imports": str(tmp_path / "imports"),
                     "models": str(tmp_path / "models"),
                     "frozen_test": str(tmp_path / "frozen"),
@@ -342,3 +343,44 @@ def test_cluster_c1_gives_a_verdict(embedded):
     tmp_path, config = embedded
     output = run(config, "cluster", "--encoder", "toy-1", "--mode", "c1", "--n", "20")
     assert "C1 réussi" in output or "C1 échoué" in output
+
+
+# --- Module séquentiel et fusion (§3) --------------------------------------------------------
+
+
+def test_embed_computes_onsets_once(embedded):
+    tmp_path, config = embedded
+    con = connect(tmp_path / "db" / "blanci.sqlite")
+    assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 20
+    output = run(config, "onsets")
+    assert "0 enregistrements traités, 20 déjà faits" in output
+
+
+@pytest.mark.filterwarnings("ignore:.*fusion instable")  # jeu jouet : 35 positifs
+def test_fusion_is_evaluated_registered_and_used_to_decide(embedded):
+    tmp_path, config = embedded
+    run(config, "train", "--encoder", "toy-1")
+    output = run(config, "fusion", "--encoder", "toy-1")
+    assert "AP tête" in output and "fusion" in output and "coefficients" in output
+    output = run(config, "score", "--encoder", "toy-1", "--fusion")
+    assert "fenêtres scorées" in output
+    con = connect(tmp_path / "db" / "blanci.sqlite")
+    tids = {r[0] for r in con.execute("SELECT DISTINCT threshold_id FROM decisions")}
+    assert any(":fusion:" in t for t in tids)
+    assert (
+        con.execute("SELECT COUNT(*) FROM scores WHERE model_id = 'toy-1:fusion:v1'").fetchone()[0]
+        == 20 * 7
+    )  # 7 fenêtres de 3 s par enregistrement de 12 s
+
+
+def test_fusion_needs_onsets(workspace):
+    tmp_path, config = workspace
+    run(config, "ingest", "--dataset", "2026", "--no-hash")
+    run(config, "embed", "--encoder", "toy")
+    label_positives(config, tmp_path)
+    con = connect(tmp_path / "db" / "blanci.sqlite")
+    con.execute("DELETE FROM onsets")
+    con.commit()
+    run(config, "train", "--encoder", "toy-1")
+    result = runner.invoke(app, ["--config", str(config), "fusion", "--encoder", "toy-1"])
+    assert result.exit_code != 0 and "début de note" in str(result.exception)

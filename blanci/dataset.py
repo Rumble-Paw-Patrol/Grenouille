@@ -119,13 +119,18 @@ def training_set(
     slot_tolerance_min: float = 30,
     utc_offset_h: float = -3,
     seed: int = 0,
+    exclude_recordings: set[str] | None = None,
 ) -> pd.DataFrame:
     """Fenêtres étiquetées de la grille (+ négatifs appariés présumés si per_positive > 0).
 
     `grid` = métadonnées du stock d'embeddings (window_id, recording_id, offset_s), avec dur_s.
     Renvoie aussi `row` (indice dans `grid`), `point` (groupe des plis) et `site`.
+    `exclude_recordings` (le jeu gelé, §6) : ni leurs labels, ni leurs fenêtres comme
+    négatifs appariés. `row` reste l'indice dans la grille complète.
     """
     grid = grid.reset_index(drop=True)
+    if exclude_recordings:
+        grid = grid[~grid["recording_id"].isin(exclude_recordings)]
     labeled = transfer_labels(current_labels(con), grid)
     parts = [labeled.assign(presumed=False)]
     recordings = recordings_table(con)
@@ -142,7 +147,7 @@ def training_set(
         )
         parts.append(negatives.assign(presumed=True))
     data = pd.concat(parts, ignore_index=True)
-    row_of = pd.Series(np.arange(len(grid)), index=grid["window_id"])
+    row_of = pd.Series(grid.index.to_numpy(), index=grid["window_id"])
     data["row"] = row_of.loc[data["window_id"]].to_numpy()
     return data.merge(recordings[["recording_id", "point", "site"]], on="recording_id", how="left")
 
@@ -156,6 +161,7 @@ def embedded_training_set(
     utc_offset_h: float = -3,
     seed: int = 0,
     filters: dict | None = None,
+    exclude_recordings: set[str] | None = None,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """Fenêtres étiquetées du stock d'un encodeur, avec leurs embeddings alignés.
 
@@ -172,6 +178,7 @@ def embedded_training_set(
         slot_tolerance_min=slot_tolerance_min,
         utc_offset_h=utc_offset_h,
         seed=seed,
+        exclude_recordings=exclude_recordings,
     )
     if data.empty:
         raise ValueError(f"aucune fenêtre étiquetée dans le stock de {store.encoder_id}")

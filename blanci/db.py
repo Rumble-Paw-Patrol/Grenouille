@@ -88,6 +88,15 @@ MIGRATIONS = [
         imported_at TEXT NOT NULL
     );
     """,
+    # 2 — débuts de notes par enregistrement (module séquentiel, §3), calculés une fois.
+    """
+    CREATE TABLE onsets (
+        recording_id TEXT PRIMARY KEY REFERENCES recordings(recording_id),
+        channel      TEXT NOT NULL,          -- micro lu (0, 1 ou mean)
+        onsets_json  TEXT NOT NULL,          -- secondes depuis le début, liste JSON
+        computed_at  TEXT NOT NULL
+    );
+    """,
 ]
 
 

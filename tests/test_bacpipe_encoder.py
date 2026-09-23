@@ -81,3 +81,28 @@ def test_an_unknown_congener_class_is_refused():
     enc._model, enc.name = FakePerch(tokens=False), "perch"
     with pytest.raises(ValueError, match="Anomaloglossus blanci"):
         enc._resolve_classes(["Anomaloglossus blanci"])
+
+
+class FakeSpatialPerch(FakeModel):
+    """Comme perch_v2 : jetons spatiaux (lot, temps, fréquence, dim) gardés après l'appel."""
+
+    def __call__(self, x):
+        out = super().__call__(x)
+        self.results = {
+            "spatial_embeddings": torch.ones(len(x), 16, 4, 2) * x.mean(1)[:, None, None, None]
+        }
+        return out
+
+
+def test_spatial_tokens_are_exposed_for_attentive_probing():
+    enc = BacpipeEncoder.__new__(BacpipeEncoder)
+    enc._model = FakeSpatialPerch(tokens=False)
+    enc.sample_rate, enc.window_s, enc.batch_size = 100, 1.0, 4
+    probe = enc._raw(np.zeros((1, 100), np.float32))  # comme __init__
+    enc.has_tokens, enc.dim = probe.ndim == 3 or enc._last_tokens is not None, probe.shape[-1]
+    assert enc.has_tokens
+    x = np.random.default_rng(0).normal(size=(6, 100)).astype(np.float32)
+    assert enc.embed(x, 100).shape == (6, 2)  # l'embedding reste la sortie mise en commun
+    tokens = enc.embed_tokens(x, 100)
+    assert tokens.shape == (6, 16, 2)
+    assert np.allclose(tokens[:, 0, 0], x.mean(axis=1), atol=1e-6)

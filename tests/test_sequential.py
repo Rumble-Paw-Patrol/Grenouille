@@ -188,3 +188,53 @@ def test_note_snr_tracks_the_note_level():
     weak, strong = note_snr_db(song(0.08), sr), note_snr_db(song(0.5), sr)
     assert 0 < weak < strong
     assert np.isnan(note_snr_db(rng.normal(0, 0.02, 3 * sr), sr))  # pas de note
+
+
+# --- Débuts de notes stockés, rythme par fenêtre, persistance par enregistrement --------------
+
+
+def test_onsets_round_trip_through_the_database(tmp_path):
+    from blanci.db import connect
+    from blanci.sequential import load_onsets, store_onsets
+
+    con = connect(tmp_path / "db.sqlite")
+    con.execute(
+        "INSERT INTO recordings (recording_id, path, dataset) VALUES ('r1', 'a.wav', '2026')"
+    )
+    store_onsets(con, "r1", np.array([0.5, 1.9, 3.3]), 0)
+    assert load_onsets(con)["r1"].tolist() == [0.5, 1.9, 3.3]
+    assert load_onsets(con, {"autre"}) == {}
+
+
+def test_window_rhythm_counts_only_notes_inside_the_window():
+    import pandas as pd
+
+    from blanci.sequential import window_rhythm
+
+    onsets = {"r1": np.array([0.5, 1.9, 3.3, 4.7, 10.0])}
+    windows = pd.DataFrame(
+        {"recording_id": ["r1", "r1", "r2"], "offset_s": [0.0, 6.0, 0.0], "dur_s": [5.0, 5.0, 5.0]}
+    )
+    rhythm = window_rhythm(windows, onsets)
+    assert rhythm.loc[0, "onset_rate_hz"] == pytest.approx(4 / 5)
+    assert rhythm.loc[0, "frac_ioi_blanci"] == 1.0  # IOI de 1,4 s : A. blanci
+    assert rhythm.loc[1, "onset_rate_hz"] == pytest.approx(1 / 5)  # la note à 10 s
+    assert np.isnan(rhythm.loc[2, "onset_rate_hz"])  # pas de débuts de notes calculés
+
+
+def test_recording_persistence_uses_every_window_of_the_recording():
+    import pandas as pd
+
+    from blanci.sequential import recording_persistence
+
+    scores = pd.DataFrame(
+        {
+            "recording_id": ["a"] * 6 + ["b"] * 3,
+            "offset_s": [0, 1.5, 3, 4.5, 6, 7.5, 0, 1.5, 3],
+            "score": [1, 1, 1, -1, 1, -1, -1, 2, -1],
+        }
+    )
+    table = recording_persistence(scores, threshold=0.0)
+    assert table.loc["a", "frac_windows"] == pytest.approx(4 / 6)
+    assert table.loc["a", "longest_run"] == 3 and table.loc["a", "n_isolated"] == 1
+    assert table.loc["b", "n_positive"] == 1 and table.loc["b", "n_isolated"] == 1

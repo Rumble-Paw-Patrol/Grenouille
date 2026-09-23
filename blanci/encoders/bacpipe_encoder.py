@@ -9,8 +9,9 @@ Validé contre bacpipe 1.3.5 (torch 2.6, TensorFlow 2.15, Windows) le 23/09/2026
 - `Model(model_name=..., **réglages)` lit ses réglages (device, dossier des poids, classifieur…)
   dans `bacpipe.settings` seulement si `device` n'est pas donné : on les passe donc tous ;
 - `model.preprocess(lot torch)` puis `model(lot prétraité)` → tenseur torch ou TensorFlow ;
-- certains modèles rendent la séquence de jetons (lot × jetons × dim, ex. birdmae) : elle est
-  moyennée ici, et l'encodeur est déclaré `has_tokens` ;
+- certains modèles rendent la séquence de jetons (lot × jetons × dim) : elle est moyennée
+  ici, et l'encodeur est déclaré `has_tokens` ; perch_v2 garde en plus ses jetons spatiaux
+  (16 temps × 4 fréquences × 1 536), moyennés sur la fréquence pour l'attentive probing ;
 - les poids sont téléchargés par `bacpipe.ensure_models_exist` dans `paths.models/bacpipe`
   (pas dans le dossier courant, défaut de bacpipe) ; birdmae passe par le cache Hugging Face ;
 - perch_v2 (ONNX, sans TensorFlow) garde les logits de ses 14 795 classes après chaque appel
@@ -115,6 +116,7 @@ def _to_numpy(out) -> np.ndarray:
 class BacpipeEncoder(BaseEncoder):
     logit_names: tuple[str, ...] | list[str] = ()
     _logit_index: tuple[int, ...] | list[int] = ()  # aucun logit gardé par défaut
+    _last_tokens: np.ndarray | None = None
 
     def __init__(
         self,
@@ -139,11 +141,12 @@ class BacpipeEncoder(BaseEncoder):
         )
         self.sample_rate = int(module.SAMPLE_RATE)
         self.window_s = module.LENGTH_IN_SAMPLES / module.SAMPLE_RATE
+        self._last_tokens: np.ndarray | None = None
         self.logit_names = list(logit_classes or [])
         self._logit_index = self._resolve_classes(self.logit_names)
         self._logits: list[np.ndarray] = []
         probe = self._raw(np.zeros((1, module.LENGTH_IN_SAMPLES), np.float32))
-        self.has_tokens = probe.ndim == 3
+        self.has_tokens = probe.ndim == 3 or self._last_tokens is not None
         self.dim = int(probe.shape[-1])
         self._logits.clear()
 
@@ -178,6 +181,11 @@ class BacpipeEncoder(BaseEncoder):
         if self._logit_index:
             logits = _to_numpy(self._model.results["logits"]).reshape(len(batch), -1)
             self._logits.append(logits[:, self._logit_index])
+        results = getattr(self._model, "results", None)
+        if isinstance(results, dict) and "spatial_embeddings" in results:
+            # perch_v2 : (lot, temps, fréquence, dim) → jetons temporels (lot, temps, dim).
+            spatial = _to_numpy(results["spatial_embeddings"])
+            self._last_tokens = spatial.mean(axis=2) if spatial.ndim == 4 else spatial
         if out.ndim == 1:
             out = out[None, :]
         if out.ndim > 3:
@@ -192,4 +200,6 @@ class BacpipeEncoder(BaseEncoder):
 
     def _forward_tokens(self, batch: np.ndarray) -> np.ndarray | None:
         out = self._raw(batch)
-        return out if out.ndim == 3 else None
+        if out.ndim == 3:
+            return out
+        return self._last_tokens  # jetons spatiaux du dernier appel (perch_v2), ou None

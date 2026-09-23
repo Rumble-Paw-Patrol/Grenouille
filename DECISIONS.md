@@ -536,3 +536,65 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     - perch_bird a échoué au premier téléchargement (délai dépassé chez Kaggle), réussi au
       second. Tous les encodeurs du §2 sont désormais installés (`data/models/bacpipe`, cache
       Hugging Face), 12 à 40 s de chargement chacun.
+
+## 2026-09-23 (fin d'après-midi) — Jeu gelé, fusion, contrôle qualité, attentive, AnuraSet
+
+73. **Fenêtres des encodeurs à 5–6 s : règle actuelle conservée** (décision de Léonard).
+    Une fenêtre de la grille de l'encodeur hérite du label d'une annotation de 3 s si elle la
+    contient entière (DECISIONS n° 4) ; vérifié : les 495 annotations tiennent entières dans
+    une fenêtre de 3, 5 et 6 s. Pas de fenêtres recentrées sur les annotations.
+    **Risque mesuré sur le contexte ajouté** : aucun des 150 négatifs n'est dans un
+    enregistrement qui contient un positif annoté, mais pour 42 d'entre eux (5 s) et 28
+    (6 s), Blancinet a une détection non écoutée de score ≥ 0,5 dans les 2–3 s ajoutées.
+    Si du chant s'y trouve, la fenêtre est un négatif faux : la tête apprend à baisser le
+    score d'un chant vrai, et le benchmark compte une fausse alarme là où l'encodeur avait
+    raison. Le bruit touche les encodeurs à fenêtre longue, pas birdnet (3 s).
+
+74. **Jeu gelé programmé** (`blanci/frozen.py`, `blanci freeze`, `blanci evaluate --frozen`).
+    Une version = liste d'enregistrements figée (`paths.frozen_test/jeu_gele_<v>.csv`, en
+    lecture seule, jamais réécrite). Ses enregistrements sont exclus de tout ce qui apprend
+    ou règle : tête, seuil, benchmark, baselines, recherche de similarité, clustering C1,
+    fusion, jetons. Chaque tête enregistre les versions exclues ; `evaluate --frozen` refuse
+    une tête entraînée avant le gel. Mesures sur le jeu gelé : AP (enregistrement, fenêtre),
+    rappel au seuil de la tête, fausses alarmes par heure (le jeu est écouté en entier), rappel
+    par qualité et par site.
+
+75. **Module séquentiel et fusion branchés** (§3). Débuts de notes calculés une fois par
+    enregistrement pendant `embed` (l'audio est déjà en mémoire), rangés dans la table
+    `onsets` (migration 2 de la base, ajout seul) ; `blanci onsets` pour les autres.
+    `blanci fusion` : dans chaque pli par micro, une tête sans le micro score les fenêtres
+    étiquetées et toutes les fenêtres de leurs enregistrements (persistance) ; fusion
+    évaluée hors-pli contre la tête seule (bootstrap apparié par enregistrement), puis
+    enregistrée en JSON avec son seuil. `blanci score --fusion` décide avec elle. Colonnes :
+    `fusion.columns` (frac_ioi_blanci, onset_rate_hz, frac_windows, longest_run : 4, pour
+    ~10 enregistrements positifs par coefficient). Le seuil de persistance est la frontière
+    de la tête logistique (0).
+
+76. **Calibration du contrôle qualité** (`blanci qc-calibrate`, lecture seule, 131
+    enregistrements, 2 à 3 min). Indice « micro dans sac » = part d'énergie au-dessus de
+    2 kHz : enregistrements avec fenêtres « micro dans sac » 0,001 à 0,30 ; enregistrements
+    à A. blanci 0,265 à 1 (médiane 0,98) ; autres 0,30 à 1. **Le seuil actuel (0,02) ne
+    signale qu'un enregistrement « dans sac » sur 8.** 0,2 en signalerait 6/8 avec une marge
+    sous le positif le plus bas ; non appliqué, décision de Léonard. Pluie : trop peu de
+    cibles (3 enregistrements) pour calibrer, seuil gardé. Silence et saturation : aucune
+    fenêtre étiquetée. Rappel : l'inventaire a été fait sans contrôle audio (`--no-qc`),
+    ces drapeaux ne sont donc calculés sur aucun enregistrement réel aujourd'hui.
+
+77. **Attentive probing** (`blanci/attentive.py`) : une requête apprise pondère les jetons
+    d'une fenêtre avant le classement (2d + 1 paramètres). Entraîné avec torch, appliqué en
+    numpy, sauvegardé sans pickle. Seul perch_v2 expose des jetons (16 temps × 4 fréquences
+    × 1 536, moyennés sur la fréquence). `blanci tokens --encoder perch_v2` calcule les
+    jetons des seules fenêtres du benchmark (~1 500) ; `blanci benchmark` ajoute alors la
+    sonde « attentive ». Sur données synthétiques (note dans 1 jeton sur 16), AP hors-pli
+    ~0,67–0,8 contre ~0,53 pour la moyenne des jetons.
+
+78. **Pré-benchmark AnuraSet préparé** (`blanci/anuraset.py`, `config/anuraset.yaml`,
+    commandes `anuraset-prepare`, `anuraset-profile`, `anuraset-benchmark`). Licence
+    **CC BY** (la feuille de route disait CC0). Téléchargé : `raw_data.zip` (7,2 Go,
+    enregistrements bruts d'une minute) + `strong_labels.zip` (chants datés), pas
+    `anuraset.zip` (extraits de 3 s, trop courts pour les encodeurs à 5–6 s). Base, stocks et
+    rapports séparés des données ONF. Fenêtre positive = contient un chant entier de l'espèce
+    (ou tient dans un chœur annoté d'un seul tenant) ; négative = aucun chant de l'espèce ;
+    chant coupé = écartée ; négatifs tirés par site (1:20) ; plis par site (4 sites).
+    Espèces à choisir avec `anuraset-profile` (note brève, dominante 3–6 kHz, ≥ 300 chants,
+    ≥ 2 sites). Encodage d'AnuraSet (~27 h d'audio) : avec celui des données ONF, ce week-end.

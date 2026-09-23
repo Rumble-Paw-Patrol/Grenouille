@@ -169,7 +169,8 @@ def oof_scores(
 ) -> OOFScores:
     """Scores hors-pli sur plis groupés (par micro).
 
-    Méthodes : logistic, prototype (différentiel), simple_prototype, knn.
+    Méthodes : logistic, prototype (différentiel), simple_prototype, knn, attentive (X = jetons
+    en (fenêtres, jetons, dim), `blanci/attentive.py`).
 
     Pour `logistic`, le C est choisi dans chaque pli sur les seules données d'entraînement.
     """
@@ -186,6 +187,10 @@ def oof_scores(
         elif method == "prototype":
             w, b = differential_prototype(X[train][y[train] == 1], X[train][y[train] == 0])
             out[test] = prototype_scores(X[test], w, b)
+        elif method == "attentive":  # X = jetons (fenêtres, jetons, dim)
+            from blanci.attentive import fit_attentive
+
+            out[test] = fit_attentive(X[train], y[train], seed=seed).decision(X[test])
         elif method == "simple_prototype":
             out[test] = simple_prototype_scores(X[train][y[train] == 1], X[test])
         elif method == "knn":

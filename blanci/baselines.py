@@ -45,6 +45,7 @@ from blanci.dataset import (
 )
 from blanci.db import window_id_for
 from blanci.evaluate import evaluate, grouped_folds
+from blanci.frozen import frozen_recordings
 from blanci.grid import window_grid
 from blanci.labels import POSITIVE_LABELS
 from blanci.sequential import detect_onsets
@@ -77,15 +78,19 @@ def evaluation_windows(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
     recordings = recordings_table(con)
 
+    frozen = frozen_recordings(cfg)  # jeu gelé : jamais vu en développement (§6)
     labels = current_labels(con)
-    labels = labels[~labels["label"].isin(EXCLUDED_LABELS)].copy()
+    labels = labels[~labels["label"].isin(EXCLUDED_LABELS)]
+    labels = labels[~labels["recording_id"].isin(frozen)].copy()
     labels["y"] = labels["label"].isin(POSITIVE_LABELS).astype(int)
     labelled = labels[["window_id", "recording_id", "offset_s", "dur_s", "label", "y"]].assign(
         presumed=False
     )
 
     candidates = benchmark_recordings(con, bench["slot_tolerance_min"], offset_h)
-    candidates = candidates[candidates["role"] == "paired_candidate"]
+    candidates = candidates[
+        (candidates["role"] == "paired_candidate") & ~candidates["recording_id"].isin(frozen)
+    ]
     w3 = cfg["grids"]["w3"]
     grid = pd.DataFrame(
         [
