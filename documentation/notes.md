@@ -1,5 +1,7 @@
 ## À prompter une fois le squelette terminé
 
+### ajouter un script pour l'encodage, empêchant l'ordi de s'éteindre ou quoi ou qu'est-ce
+
 ###Le prototype simple apparaît au §3 comme « baseline de similarité », mais il n'est repris ni au §6 ni dans la spécification du §13. Il est sur la carte, pas dans le plan d'exécution. Ça vaut une ligne dans DECISIONS.md pour trancher.
 
 Et garde bien la seconde fonction du différentiel mentionnée dans ta feuille de route : l'écart de score entre prototype simple et prototype différentiel mesure la part de fond sonore captée par l'embedding. Si les deux donnent le même classement, l'ambiance de Mataroni ne pollue pas ; si le différentiel fait nettement mieux, c'est qu'elle pollue, et tu le sais avant d'avoir entraîné quoi que ce soit.
@@ -21,6 +23,9 @@ print(cos(e, h[:, 0], dim=-1).mean())            # token de classe ?
 print(cos(e, h.max(1).values, dim=-1).mean())    # maximum ?
 
 La candidate dont la similarité approche 1 est la bonne. Si aucune n'y arrive exactement, c'est souvent qu'une normalisation ou une projection s'applique après l'agrégation — il faut alors remonter dans le code.
+
+### négatifs appariés peuvent autant être le micro à la même heure un autre jour que le micro le même jour mais à une distance temporelle proche. 
+
 
 ##Benchmark des méthodes pour head - Choix de w
 
@@ -58,15 +63,19 @@ Annoter manuellement un max de données d'un max de points d'écoutes différent
 
 ## Questions en suspens
 
+Pk on mets pas des micros là où on suspecte qu'elle ait disparue ? De mémoire, les endroits où elle est suggérée disparu c'est parce qu'elle n'est plus observée, mais elle pourrait être entendue ? Quelle est la fiabilité de l'observation par rapport à l'écoute ? 
 les fichiers sont en stéréo avec deux gains (6 et 18 dB) et le canal à 18 dB sature parfois. Faut-il garder la moyenne des deux canaux ou un suel ?
 
 c'est quoi le pb avec tensorflow ?
 
 trouver les enregistrements annotés de 2023. J'ai seulement 2026 à ce jour. -> réunion avec le collègue de trésor lundi
 
+perspective post-stage : Peut-être phénologie différente de blanci à Mataroni par rapport à Kaw et Molokoï ? À Kaw et Molokoï, blanci vit dans des criques bien dessinées, rocheuses alors qu'à Mataroni le lit de la crique est plutôt évasé, marécageux.
 ## Autres
 
 check pb pluie et coup de feu. La signature sonore du coup de feu, diffus lorsque le micro est loin du point de tir, se fond dans le bruit de pluie omniprésent. Quelle solution ? 
+
+stage M2 exploratoire -> perspectives futures à développer en fin de stage. Important
 
 ## Extra pro
 location colocation guyane
