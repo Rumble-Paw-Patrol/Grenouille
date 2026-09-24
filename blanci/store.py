@@ -93,3 +93,30 @@ class EmbeddingStore:
             pd.concat([m for m, _ in parts], ignore_index=True),
             np.concatenate([e for _, e in parts]),
         )
+
+    def sample(
+        self, n: int, filters: dict | None = None, seed: int = 0
+    ) -> tuple[pd.DataFrame, np.ndarray]:
+        """`n` fenêtres tirées au hasard, réparties entre partitions au prorata de leur taille.
+
+        Une partition à la fois en mémoire : l'échantillon d'un stock de plusieurs millions de
+        fenêtres (clustering C0, §5 bis) tient dans la mémoire du portable.
+        """
+        rng = np.random.default_rng(seed)
+        paths = list(self.fragments(filters))
+        sizes = np.array([pq.ParquetFile(p).metadata.num_rows for p in paths], dtype=float)
+        if not len(paths) or sizes.sum() == 0:
+            return pd.DataFrame(columns=META_COLUMNS), np.zeros((0, 0), dtype=np.float16)
+        n = min(n, int(sizes.sum()))
+        quota = np.floor(n * sizes / sizes.sum()).astype(int)
+        for i in rng.choice(len(paths), n - quota.sum(), replace=False, p=sizes / sizes.sum()):
+            quota[i] += 1
+        metas, embs = [], []
+        for path, k in zip(paths, quota, strict=True):
+            if k == 0:
+                continue
+            meta, emb = self.read(path)
+            rows = np.sort(rng.choice(len(meta), size=min(k, len(meta)), replace=False))
+            metas.append(meta.iloc[rows])
+            embs.append(emb[rows])
+        return pd.concat(metas, ignore_index=True), np.concatenate(embs)

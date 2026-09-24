@@ -203,3 +203,36 @@ def test_evaluate_reports_both_levels():
     assert set(window) == set(recording)
     for key in ("recall@p0.1", "recall@p0.5", "threshold@p0.1", "ap"):
         assert key in window
+
+
+# --- Rappel par strate et fausses alarmes (§6) ------------------------------------------------
+
+
+def test_recall_by_quality_counts_positives_only():
+    from blanci.evaluate import recall_by_group
+
+    scores = np.array([0.9, 0.8, 0.2, 0.9, 0.1, 0.7, 0.95])
+    labels = np.array([1, 1, 1, 1, 1, 0, 0])
+    quality = np.array(["A", "A", "B", "B", None, "A", "C"])
+    table = recall_by_group(scores, labels, quality, threshold=0.5).set_index("stratum")
+    assert table.loc["A", "n_pos"] == 2 and table.loc["A", "recall"] == 1.0
+    assert table.loc["B", "recall"] == 0.5
+    assert table.loc["?", "recall"] == 0.0  # qualité non renseignée
+    assert "C" not in table.index  # que des négatifs
+    assert (table["recall_lo"] <= table["recall"]).all()
+
+
+def test_false_alarms_per_hour():
+    from blanci.evaluate import false_alarms_per_hour
+
+    scores = np.array([0.9, 0.8, 0.2, 0.7])
+    labels = np.array([1, 0, 0, 0])
+    assert false_alarms_per_hour(scores, labels, 0.5, audio_hours=2.0) == 1.0
+    assert np.isnan(false_alarms_per_hour(scores, labels, 0.5, audio_hours=0))
+
+
+def test_snr_bins():
+    from blanci.evaluate import snr_bins
+
+    bins = snr_bins(np.array([3.0, 6.0, 11.9, 12.0, np.nan]))
+    assert bins.tolist() == ["<6 dB", "6–12 dB", "6–12 dB", "≥12 dB", "?"]

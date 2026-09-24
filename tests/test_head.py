@@ -13,6 +13,7 @@ from blanci.head import (
     oof_scores,
     prototype_scores,
     select_C,
+    simple_prototype_scores,
     train_head,
 )
 
@@ -72,6 +73,28 @@ def test_prototype_is_blind_to_a_shared_background():
     w_shifted, _ = differential_prototype(X[y == 1] + background, X[y == 0] + background)
     cosine = w_plain @ w_shifted / (np.linalg.norm(w_plain) * np.linalg.norm(w_shifted))
     assert cosine > 0.9
+
+
+# --- Prototype simple ------------------------------------------------------------------------
+
+
+def test_simple_prototype_ranks_positives_first():
+    X, y = two_clusters()
+    scores = simple_prototype_scores(X[y == 1], X)
+    assert average_precision(y, scores) > 0.95
+
+
+def test_simple_prototype_suffers_from_a_shared_background_where_the_differential_does_not():
+    """Fond commun fort et variable : le cosinus au centroïde des positifs le suit, la
+    différence des centroïdes l'annule. C'est l'écart que le benchmark mesure (§3)."""
+    rng = np.random.default_rng(1)
+    X, y = two_clusters(sep=0.6)
+    X = X + rng.normal(0, 1.0, (len(X), 1)) * np.r_[0, np.ones(DIM - 1)].astype(np.float32) * 2
+    X = X + np.r_[0, np.full(DIM - 1, 3.0)].astype(np.float32)
+    simple = average_precision(y, simple_prototype_scores(X[y == 1], X))
+    w, b = differential_prototype(X[y == 1], X[y == 0])
+    differential = average_precision(y, prototype_scores(X, w, b))
+    assert differential > simple + 0.1
 
 
 # --- kNN ------------------------------------------------------------------------------------
@@ -141,7 +164,7 @@ def test_train_head_records_provenance():
 # --- Scores hors-pli -------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method", ["logistic", "prototype", "knn"])
+@pytest.mark.parametrize("method", ["logistic", "prototype", "simple_prototype", "knn"])
 def test_oof_scores_cover_every_window_without_nan(method):
     X, y = two_clusters(n=60)
     out = oof_scores(X, y, mics(60), n_splits=3, method=method)
@@ -151,7 +174,7 @@ def test_oof_scores_cover_every_window_without_nan(method):
     assert out.method == method
 
 
-@pytest.mark.parametrize("method", ["logistic", "prototype", "knn"])
+@pytest.mark.parametrize("method", ["logistic", "prototype", "simple_prototype", "knn"])
 def test_oof_scores_rank_positives_above_negatives(method):
     X, y = two_clusters(n=60)
     out = oof_scores(X, y, mics(60), n_splits=3, method=method)

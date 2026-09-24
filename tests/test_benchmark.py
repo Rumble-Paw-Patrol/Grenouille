@@ -198,10 +198,10 @@ def probe_case(separation=2.0, n_recordings=60, per_recording=4, seed=0):
 def test_probe_table_covers_every_probe_and_level():
     X, y, groups, recordings = probe_case()
     table, scores = probe_table(X, y, groups, recordings, n_splits=3, n_boot=20)
-    assert len(table) == 6  # 3 sondes × 2 niveaux
-    assert set(table["probe"]) == {"knn", "prototype", "logistic"}
+    assert len(table) == 8  # 4 sondes × 2 niveaux
+    assert set(table["probe"]) == {"knn", "simple_prototype", "prototype", "logistic"}
     assert set(table["level"]) == {"window", "recording"}
-    assert set(scores) == {"knn", "prototype", "logistic"}
+    assert set(scores) == {"knn", "simple_prototype", "prototype", "logistic"}
 
 
 def test_probe_table_reports_the_roadmap_metrics():
@@ -233,7 +233,7 @@ def test_benchmark_encoder_builds_the_full_row(con, tmp_path, cfg):
     write_embeddings(con, tmp_path, "good-1", build_recordings(con), separation=3.0)
     table, scores, y, recordings = benchmark_encoder(con, "good-1", tmp_path / "embeddings", cfg)
     assert set(table["encoder_id"]) == {"good-1"}
-    assert len(table) == 6
+    assert len(table) == 8
     assert table["dim"].eq(DIM).all()
     assert table["window_s"].eq(WINDOW_S).all()
     assert table["windows_per_s"].eq(12.5).all()

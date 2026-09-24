@@ -88,6 +88,15 @@ MIGRATIONS = [
         imported_at TEXT NOT NULL
     );
     """,
+    # 2 — débuts de notes par enregistrement (module séquentiel, §3), calculés une fois.
+    """
+    CREATE TABLE onsets (
+        recording_id TEXT PRIMARY KEY REFERENCES recordings(recording_id),
+        channel      TEXT NOT NULL,          -- micro lu (0, 1 ou mean)
+        onsets_json  TEXT NOT NULL,          -- secondes depuis le début, liste JSON
+        computed_at  TEXT NOT NULL
+    );
+    """,
 ]
 
 
@@ -177,8 +186,21 @@ def recording_id_for(path: str) -> str:
     return hashlib.sha256(recording_key(path).encode("utf-8")).hexdigest()[:16]
 
 
-def window_id_for(recording_id: str, offset_s: float) -> str:
-    return f"{recording_id}:{offset_s:.2f}"
+# Durée des fenêtres annotées (Biophonia) et de la grille w3 : leur identifiant garde la forme
+# historique « <enregistrement>:<décalage> ». Toute autre durée est écrite dans l'identifiant.
+LEGACY_WINDOW_S = 3.0
+
+
+def window_id_for(recording_id: str, offset_s: float, dur_s: float = LEGACY_WINDOW_S) -> str:
+    """Identifiant d'une fenêtre : enregistrement, décalage et durée (DECISIONS n° 65).
+
+    Sans la durée, une fenêtre de 5 s (grille de beats) et une annotation de 3 s au même
+    décalage, ou un label d'enregistrement entier (0 s, 120 s) et la fenêtre de 3 s à 0 s,
+    partageraient la même ligne de `windows`, et la seconde hériterait de la durée de la
+    première.
+    """
+    base = f"{recording_id}:{offset_s:.2f}"
+    return base if abs(dur_s - LEGACY_WINDOW_S) < 1e-6 else f"{base}/{dur_s:.2f}"
 
 
 def utc_now() -> str:

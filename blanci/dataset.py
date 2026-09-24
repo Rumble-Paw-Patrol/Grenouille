@@ -9,30 +9,44 @@ Labels courants, transfert vers la grille, négatifs appariés.
   d'autres jours, dans des enregistrements sans label positif. Ce sont des négatifs *présumés*
   (colonne `presumed`) : jamais écrits dans la table labels. En saison, à l'heure de pic, une
   partie peut contenir A. blanci : bruit d'étiquette identique pour tous les encodeurs.
+- Négatifs annotés : négatifs quel que soit le contexte ajouté par les encodeurs à fenêtre
+  de 5–6 s (DECISIONS n° 85). Si A. blanci ne chante pas pendant les 3 s écoutées, qu'elle
+  commence juste après est peu probable ; biais possible, gardé en tête.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 import numpy as np
 import pandas as pd
 
 from blanci.labels import POSITIVE_LABELS
+from blanci.qc import EXCLUDING_FLAGS, is_excluded
 from blanci.store import EmbeddingStore
 
 EXCLUDED_LABELS = ("blanci_uncertain", "uncertain")
 
 
+def _comment(conditions: str | None) -> str | None:
+    if not conditions:
+        return None
+    return json.loads(conditions).get("comment") or None
+
+
 def current_labels(con: sqlite3.Connection) -> pd.DataFrame:
-    """Dernier label de chaque fenêtre annotée (une correction est une ligne plus récente)."""
-    return pd.read_sql_query(
+    """Dernier label de chaque fenêtre annotée (une correction est une ligne plus récente),
+    avec le commentaire de l'annotateur (`comment`, texte brut, vide s'il n'y en a pas)."""
+    df = pd.read_sql_query(
         """SELECT l.label_id, l.window_id, l.label, l.quality, l.species, l.source,
-                  w.recording_id, w.offset_s, w.dur_s
+                  l.conditions, w.recording_id, w.offset_s, w.dur_s
            FROM labels l JOIN windows w USING (window_id)
            WHERE l.label_id IN (SELECT MAX(label_id) FROM labels GROUP BY window_id)""",
         con,
     )
+    df["comment"] = df["conditions"].map(_comment)
+    return df.drop(columns="conditions")
 
 
 def recordings_table(con: sqlite3.Connection) -> pd.DataFrame:
@@ -66,7 +80,12 @@ def transfer_labels(
     conflicts = kept.groupby("window_id")["y"].nunique()
     kept = kept[~kept["window_id"].isin(conflicts[conflicts > 1].index)]
     kept = kept.sort_values("y", ascending=False).drop_duplicates("window_id")
-    return kept[["window_id", "recording_id", "offset_s", "label", "y"]].reset_index(drop=True)
+    columns = ["window_id", "recording_id", "offset_s", "label", "y"]
+    if "quality" in kept:  # qualité A/B/C de l'annotation : rappel par qualité (§6)
+        columns.append("quality")
+    if "comment" in kept:  # le commentaire de l'annotateur suit la fenêtre
+        columns.append("comment")
+    return kept[columns].reset_index(drop=True)
 
 
 def paired_negatives(
@@ -115,13 +134,18 @@ def training_set(
     slot_tolerance_min: float = 30,
     utc_offset_h: float = -3,
     seed: int = 0,
+    exclude_recordings: set[str] | None = None,
 ) -> pd.DataFrame:
     """Fenêtres étiquetées de la grille (+ négatifs appariés présumés si per_positive > 0).
 
     `grid` = métadonnées du stock d'embeddings (window_id, recording_id, offset_s), avec dur_s.
     Renvoie aussi `row` (indice dans `grid`), `point` (groupe des plis) et `site`.
+    `exclude_recordings` (le jeu gelé, §6) : ni leurs labels, ni leurs fenêtres comme
+    négatifs appariés. `row` reste l'indice dans la grille complète.
     """
     grid = grid.reset_index(drop=True)
+    if exclude_recordings:
+        grid = grid[~grid["recording_id"].isin(exclude_recordings)]
     labeled = transfer_labels(current_labels(con), grid)
     parts = [labeled.assign(presumed=False)]
     recordings = recordings_table(con)
@@ -138,7 +162,7 @@ def training_set(
         )
         parts.append(negatives.assign(presumed=True))
     data = pd.concat(parts, ignore_index=True)
-    row_of = pd.Series(np.arange(len(grid)), index=grid["window_id"])
+    row_of = pd.Series(grid.index.to_numpy(), index=grid["window_id"])
     data["row"] = row_of.loc[data["window_id"]].to_numpy()
     return data.merge(recordings[["recording_id", "point", "site"]], on="recording_id", how="left")
 
@@ -152,6 +176,7 @@ def embedded_training_set(
     utc_offset_h: float = -3,
     seed: int = 0,
     filters: dict | None = None,
+    exclude_recordings: set[str] | None = None,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """Fenêtres étiquetées du stock d'un encodeur, avec leurs embeddings alignés.
 
@@ -168,7 +193,47 @@ def embedded_training_set(
         slot_tolerance_min=slot_tolerance_min,
         utc_offset_h=utc_offset_h,
         seed=seed,
+        exclude_recordings=exclude_recordings,
     )
     if data.empty:
         raise ValueError(f"aucune fenêtre étiquetée dans le stock de {store.encoder_id}")
     return data, emb[data["row"].to_numpy()].astype(np.float32)
+
+
+def benchmark_recordings(
+    con: sqlite3.Connection,
+    slot_tolerance_min: float = 30,
+    utc_offset_h: float = -3,
+    exclude_flags: tuple[str, ...] = EXCLUDING_FLAGS,
+) -> pd.DataFrame:
+    """Enregistrements dont le benchmark a besoin : les annotés, plus les candidats aux
+    négatifs appariés (même micro, créneau horaire à ± `slot_tolerance_min`, sans positif).
+
+    C'est tout ce que `paired_negatives` peut tirer : encoder ce sous-ensemble suffit au §2,
+    sans passer les 29 000 enregistrements dans chaque encodeur. Colonne `role` ∈
+    {labelled, paired_candidate}. Un candidat signalé (drapeaux QC) est écarté.
+    """
+    recordings = recordings_table(con)
+    labels = current_labels(con)
+    labels = labels[~labels["label"].isin(EXCLUDED_LABELS)]
+    labelled = set(labels["recording_id"])
+    positives = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"])
+
+    flagged = recordings["qc_flags"].map(lambda q: is_excluded(q, exclude_flags))
+    minutes = local_minutes(recordings["start_utc"], utc_offset_h)
+    candidates: set[str] = set()
+    for rid in positives:
+        this = recordings["recording_id"] == rid
+        if not this.any():
+            continue
+        gap = (minutes - minutes[this].iloc[0]).abs()
+        gap = np.minimum(gap, 24 * 60 - gap)
+        same_slot = (recordings["point"] == recordings.loc[this, "point"].iloc[0]) & (
+            gap <= slot_tolerance_min
+        )
+        candidates.update(recordings.loc[same_slot & ~flagged, "recording_id"])
+    candidates -= positives
+
+    out = recordings[recordings["recording_id"].isin(labelled | candidates)].copy()
+    out["role"] = np.where(out["recording_id"].isin(labelled), "labelled", "paired_candidate")
+    return out.sort_values("path").reset_index(drop=True)

@@ -1,0 +1,35 @@
+# Pré-benchmark AnuraSet (§2) : base, stocks et rapports séparés des données ONF.
+#   uv run blanci --config config/anuraset.yaml anuraset-prepare
+#   uv run blanci --config config/anuraset.yaml anuraset-profile
+#   uv run blanci --config config/anuraset.yaml embed --encoder perch_v2
+#   uv run blanci --config config/anuraset.yaml anuraset-benchmark --encoders perch_v2-bacpipe1.3.5
+paths:
+  raw: data/external/anuraset          # l'archive est extraite sous anuraset/<site>/
+  db: data/db/anuraset.sqlite
+  embeddings: data/embeddings_anuraset
+  tokens: data/tokens_anuraset
+  reports: data/reports/anuraset
+  models: data/models                  # poids des encodeurs : partagés avec le projet
+
+recorder:
+  filename_utc_offset_h: -3            # Brésil (sites INCT), sans importance ici
+
+audio:
+  channel: 0
+
+qc:
+  # Pas de contrôle audio : les seuils sont calibrés sur les Song Meter ONF, et les positifs
+  # d'AnuraSet ne sont pas dans la table labels, donc pas protégés d'une exclusion.
+  during_embed: false
+  expected_duration_s: 60.0            # enregistrements d'une minute
+  duration_tolerance_s: 1.0
+  campaign_gap_days: 100000            # pas de notion de relevé ici
+
+anuraset:
+  archive: data/external/anuraset/raw_data.zip
+  labels: data/external/anuraset/strong_labels.zip
+  # Deux ou trois anoures à note brève en 3–6 kHz (§2) : à fixer après `anuraset-profile`.
+  species: []
+  negatives_per_positive: 20
+  max_call_s: 5.0                      # au-delà : chœur continu, compté à part
+  profile_per_species: 30              # chants lus pour la fréquence dominante

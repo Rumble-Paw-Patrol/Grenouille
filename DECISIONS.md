@@ -337,3 +337,379 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     (DECISIONS n° 35 confirmé). D'autres annotations suivront, sur plus de sites. Le second
     export (`..._dataset2_verifBV.xlsx`) n'est pas importé : même format, aucune fenêtre
     vérifiée.
+
+## 2026-09-23 — Corrections et précisions
+
+54. **Correction de DECISIONS n° 50 : l'écart entre les deux micros est inconnu.** « Décalés de
+    quelques centimètres » était une supposition, pas une mesure. Ce qui est établi : ce sont
+    deux entrées sonores distinctes (aucune superposition des canaux, même en cherchant un
+    décalage jusqu'à ±250 ms : corrélation maximale 0,07 à 0,42) ; le GUANO ne décrit pas les
+    micros. L'argument contre la moyenne tient sans connaître l'écart : additionner deux micros
+    distants crée des annulations à des fréquences qui dépendent de l'écart et de la direction
+    du son. Écart à vérifier sur un enregistreur (deux ouvertures de micro sur le boîtier ?).
+    Extraits d'écoute comparée : `data/ecoute/` (hors git), produits le 23/09.
+
+55. **Le gain est fixé à l'enregistrement.** Il s'applique au signal analogique avant la
+    numérisation : impossible de le changer après coup. Multiplier un canal sur ordinateur
+    change son volume, pas son rapport signal/bruit, et ne rend pas ce qu'une saturation a
+    coupé. Les deux canaux étant enregistrés, le choix se fait à la lecture (`audio.channel`).
+
+56. **« Mares » et « SM_MaraisKaw_sd1/sd2 » (disque D:) n'appartiennent pas au projet** :
+    autre étude sur le même disque. À ne jamais inventorier.
+
+57. **La machine de travail actuelle est la machine cible de l'ONF** (§7) : Intel Core
+    i5-1145G7, 4 cœurs / 8 fils, 16 Go, Windows. Le débit des encodeurs (risque 5, question 8
+    du §10) se mesure donc ici, sans attendre le Mac.
+
+## 2026-09-23 — Les deux micros, baselines, sous-ensemble du benchmark, poste d'annotation
+
+58. **Les deux canaux sont conservés** (décision de Léonard après écoute, complète n° 50 et 55).
+    Le micro 2 (18 dB) fait ressortir le chant à l'oreille ; sur un positif faible (chant
+    lointain, chevauchement), il peut aider l'annotateur. Donc :
+    - l'encodage reste sur `audio.channel` (0 par défaut), en attendant que le benchmark dise
+      si le canal 1 change quelque chose pour les modèles ;
+    - le poste d'annotation fait écouter **les deux micros côte à côte** et note dans
+      `conditions.channel_listened` le canal du spectrogramme affiché ;
+    - les baselines comparent déjà les deux canaux (`blanci baselines --channels 0,1`).
+    L'écart de quelques centimètres entre les deux micros est confirmé sur un enregistreur
+    (corrige la réserve du n° 54). Extrait d'écoute d'un positif faible (seul positif noté C,
+    RB04) ajouté dans `data/ecoute/3_faible_*`.
+
+59. **bacpipe sous Windows** : TensorFlow tire `tensorflow-io-gcs-filesystem`, sans roue Windows
+    depuis la 0.32. Contrainte `<0.32` sous Windows dans `[tool.uv]` (lecture de fichiers sur
+    Google Cloud, jamais utilisée ici). Groupes `research` et `app` installés sur la machine ONF.
+
+60. **Sous-ensemble du benchmark** (`dataset.benchmark_recordings`, `blanci embed --subset
+    benchmark`) : les enregistrements annotés + tous les candidats aux négatifs appariés (même
+    micro, créneau à ± 30 min, non signalés). Sur la base actuelle : 131 annotés + 716 candidats
+    = 847 enregistrements, 28 h d'audio au lieu de 980 h. Aucun encodage lancé : il attend
+    l'accord de Léonard, une fois le squelette complet.
+
+61. **Prototype simple ajouté aux sondes du benchmark** (§3 le liste comme baseline de
+    similarité ; §6/§13 l'avaient omis). L'écart prototype simple / différentiel mesure le fond
+    sonore capté par l'embedding (note de Léonard).
+
+62. **Baselines sans encodeur** (`blanci/baselines.py`, `blanci baselines`) : énergie en bande,
+    contraste bande / bandes voisines, onsets, rythme, template matching (gabarit moyen et
+    meilleur de 30 exemplaires, appris dans chaque pli sans le micro testé). Même jeu que le
+    benchmark : 345 positifs, 150 négatifs vérifiés, 1 020 négatifs appariés présumés (20 par
+    enregistrement positif), plis par micro. Premier passage le 23/09 (2 min 48 s, lecture seule
+    du disque D:) :
+    - **AP fenêtre 0,22 à 0,37** (hasard 0,23) ; niveau enregistrement 0,10 à 0,15 (hasard 0,08).
+      Aucune baseline n'approche le seuil du go/no-go ;
+    - contre les seuls faux amis vérifiés, le template matching sépare bien (AP 0,93 au canal 1,
+      hasard 0,70) ; contre les négatifs appariés, presque pas (0,33, hasard 0,25) ;
+    - 28 % des négatifs présumés dépassent le score médian des positifs (gabarit moyen). Soit
+      ils ressemblent au chant, soit **ils contiennent A. blanci** : à Mataroni, en saison, au
+      même créneau, c'est plausible. Le bruit d'étiquette des négatifs présumés (§2) est donc à
+      mesurer avant de juger les encodeurs : file d'audit `candidats_audit_negatifs.csv`
+      (20 présumés les mieux notés + 20 au hasard) ;
+    - canal 1 légèrement devant le canal 0 sur presque toutes les baselines (écarts dans les
+      intervalles de confiance) ;
+    - **le critère « rappel ≥ 0,8 à précision ≥ 0,1 » est vide au niveau fenêtre** avec ce jeu :
+      23 % de positifs, tout accepter donne déjà une précision de 0,23. Il ne départage qu'au
+      niveau enregistrement (8 % de positifs). À trancher avec le protocole figé (S3).
+
+63. **Poste d'annotation** (`blanci/workbench.py`, `blanci/app.py` Streamlit, `blanci annotate`,
+    `blanci candidates`). Files CSV dans `data/reports/candidats_*.csv` (aussi `queue_*` et
+    `search_*`). `candidates --from <export Blancinet>` tire les détections jamais écoutées,
+    `per_site` par site, à parts égales entre tranches de score (0–0,3 ; 0,3–0,7 ; 0,7–1) puis
+    entre micros, une fenêtre par enregistrement ; `--random` ajoute des fenêtres au hasard aux
+    heures de pic, à parts égales entre sites. Chaque réponse est un label en ajout seul
+    (source `active`, `random` ou `audit`) ; la fenêtre est créée si besoin. Lot 1 : 100
+    candidats (CDR 31, Mataroni 33, PatawaOuest 32, PatawaEst 2, RNRT 2). YAPAT n'est pas
+    essayé : le poste suffit pour les premiers lots, l'essai reste possible (§5).
+
+64. **Adaptateur bacpipe validé contre bacpipe 1.3.5** (torch 2.6, TensorFlow 2.15, Windows,
+    i5-1145G7) le 23/09. Trois corrections :
+    - les modèles sont dans `bacpipe.model_pipelines.feature_extractors.<nom>` (l'adaptateur
+      cherchait `embedding_generation_pipelines`) ;
+    - `Model(...)` ne lit ses réglages dans `bacpipe.settings` que si `device` est absent : on
+      les passe tous, classifieur désactivé, et `prepare_inference()` est appelé ;
+    - certains modèles rendent une séquence de jetons (birdmae) : moyennée pour l'embedding,
+      exposée par `embed_tokens`, `has_tokens` mesuré au chargement.
+    Poids dans `paths.models/bacpipe` (hors git), pas dans le dossier courant. Sous Windows,
+    `tensorflow-intel==2.15.1` doit être déclaré (uv oubliait cette dépendance de tensorflow).
+    Mesures sur bruit synthétique, CPU de la machine ONF (risque 5) :
+
+    | encodeur | fenêtre | f_e | dim | fenêtres/s | temps réel (grille pas = ½ fenêtre) |
+    |---|---|---|---|---|---|
+    | birdnet | 3 s | 48 kHz | 1 024 | 26,0 | ×39 |
+    | beats | 5 s | 16 kHz | 768 | 3,4 | ×8,5 |
+
+    Ordre de grandeur : le sous-ensemble du benchmark (28 h) prend ~45 min avec birdnet et
+    ~3 h 20 avec beats ; le disque entier (980 h), ~25 h et ~115 h. birdmae (version « Huge »,
+    plusieurs Go) et perch_v2 ne sont pas encore téléchargés : à mesurer avant de les retenir.
+
+## 2026-09-23 (après-midi) — Encodeurs, clustering, audit, congénères
+
+65. **L'identifiant d'une fenêtre contient sa durée** (sauf 3 s, forme historique inchangée :
+    les 495 fenêtres de la base gardent leur identifiant). Sans la durée, une fenêtre de 5 s
+    (grille de beats, naturebeats, perch_v2) et une annotation de 3 s au même décalage, ou un
+    label d'enregistrement entier (0 s, 120 s) et la fenêtre de 3 s à 0 s, partageaient une
+    seule ligne de `windows` : la seconde héritait de la durée de la première, et le transfert
+    des labels vers la grille devenait faux. Corrigé avant tout encodage : `<enr>:<décalage>`
+    pour 3 s, `<enr>:<décalage>/<durée>` sinon (`db.window_id_for`).
+
+66. **Relevé des encodeurs** (`blanci throughput`, §2 et §7) : débit, mémoire, dimension,
+    jetons, projection sur une campagne (575 h) et sur les heures de pic seules. Bruit
+    synthétique à 48 kHz, un processus par encodeur, rien n'est lu sur les disques. Premier
+    relevé, i5-1145G7, **provisoire** (téléchargement de birdmae en parallèle : beats y tombe à
+    2,1 fenêtres/s contre 3,4 mesurées seul, DECISIONS n° 64) :
+
+    | encodeur | f_e | fenêtre | dim | temps réel | campagne 575 h | mémoire |
+    |---|---|---|---|---|---|---|
+    | birdnet | 48 kHz | 3 s | 1 024 | ×60 | 10 h | 2,0 Go |
+    | perch_v2 | 32 kHz | 5 s | 1 536 | ×14 | 41 h | 4,1 Go |
+    | beats | 16 kHz | 5 s | 768 | ×5 | 109 h | 2,2 Go |
+    | naturebeats | 16 kHz | 5 s | 768 | ×5 | 106 h | 2,2 Go |
+
+    **perch_v2 tourne en ONNX Runtime, sans TensorFlow** (`perch_v2_no_dft.onnx` fourni par
+    bacpipe) : le repli (2) du §2 fonctionne sur la cible ; risque 7 levé pour l'exécution,
+    la conformité aux embeddings de référence reste à vérifier. Il expose aussi des jetons
+    spatiaux (16 × 4 × 1 536) que l'adaptateur n'utilise pas encore (attentive probing, P2).
+    birdmae (Bird-MAE-**Huge** dans bacpipe, pas la version Base du §7) : téléchargement en
+    cours ; protoclr, perch_bird, convnext_birdset ensuite.
+
+67. **Contrôle passe-bas du §2** : `birdmae_lp8k` = birdmae sur l'audio filtré à 8 kHz
+    (Butterworth d'ordre 8, phase nulle, à la f_e d'origine). Si son AP égale celle de
+    birdmae, l'objection « 16 kHz, très limite » ne vaut pas pour la note de 4,4–5,5 kHz.
+    Toute entrée de `encoders.models` accepte `lowpass_hz`.
+
+68. **Clustering C0/C1** (`blanci cluster --mode c0|c1`, §5 bis) : normalisation L2, ACP
+    (50 composantes), HDBSCAN (scikit-learn). C0 : échantillon du stock (tirage au prorata des
+    partitions, une à la fois en mémoire), AMI groupes/micros, part de fenêtres signalées par
+    groupe. C1 : positifs de Mataroni + 5 000 fenêtres des mêmes micros aux mêmes heures ;
+    verdict sur le meilleur groupe (rappel ≥ 0,5, enrichissement ≥ 20, AMI micro ≤ 0,3 :
+    seuils de jugement, dans `cluster` de la config). Les affectations par fenêtre sont
+    écrites pour C2 (étiquetage en bloc). Fenêtres recadrées sur les onsets : pas encore.
+
+69. **Écoute d'enregistrements entiers** (`blanci candidates --entiers N --reason …`) : audit
+    aléatoire (§6, 300 enregistrements de Mataroni) et jeu gelé (60, stratifiés). Parts
+    égales entre micros, puis heures locales les moins servies d'abord ; source `audit` ;
+    le label vaut pour toute la grille (annotation par enregistrement, §5). Le jeu gelé n'est
+    pas encore **exclu de l'entraînement** : à faire avant d'en écouter un (M4).
+    **Calibration entre annotateurs** (§5) : case « ne masquer que mes réponses » dans le
+    poste, et `blanci agreement --annotators a,b` : accord brut sur le label, accord
+    blanci/non (« A. blanci ? » compte non), accord sur les positifs 2a/(2a+b+c), tableau
+    croisé.
+
+70. **Logits des congénères de Perch 2.0** (§2, §3, §5) : pendant `embed` avec perch_v2,
+    l'adaptateur garde les logits d'*A. baeobatrachus*, *A. stepheni* et *A. surinamensis*
+    (`logit_classes` de la config ; vérifié sur le vrai modèle) et `embed` les range dans
+    `scores` (`<encodeur>:logit:<espèce>`), sans seconde inférence. `blanci candidates
+    --congeners <perch_v2-…>` en tire une file : meilleure fenêtre par enregistrement, le
+    meilleur de chaque micro d'abord. Logits non calibrés : classement seulement.
+
+71. **Métriques du §6 complétées** : `evaluate.recall_by_group` (rappel au seuil de précision
+    plancher par qualité A/B/C, site, tranche de RSB, avec Wilson), affiché par
+    `blanci evaluate` ; `false_alarms_per_hour` (réservé aux ensembles exhaustifs : audit,
+    jeu gelé) ; `sequential.note_snr_db` (énergie en bande pendant les notes contre les 0,5 s
+    voisines). La qualité de l'annotation suit désormais la fenêtre jusqu'au jeu d'évaluation.
+    La CLI écrit en UTF-8 : la console Windows en cp1252 plantait sur « ≥ ».
+
+72. **Relevé des encodeurs, machine au repos** (i5-1145G7, CPU seul, bruit synthétique à
+    48 kHz ; remplace les chiffres provisoires du n° 66). Campagne = une semaine de pose,
+    575 h d'audio ; pas de la grille = ½ fenêtre ; `data/reports/debit.md` :
+
+    | encodeur | f_e | fenêtre | dim | fenêtres/s | temps réel | campagne | heures de pic | mémoire |
+    |---|---|---|---|---|---|---|---|---|
+    | birdnet | 48 kHz | 3 s | 1 024 | 43,3 | ×65 | 9 h | 2,5 h | 2,0 Go |
+    | protoclr | 16 kHz | 6 s | 384 | 17,5 | ×52 | 11 h | 3 h | 1,7 Go |
+    | perch_v2 | 32 kHz | 5 s | 1 536 | 7,0 | ×17 | 33 h | 9 h | 4,1 Go |
+    | birdmae_base | 32 kHz | 5 s | 768 | 3,7 | ×9 | 62 h | 17 h | 1,5 Go |
+    | convnext_birdset | 32 kHz | 5 s | 1 024 | 3,7 | ×9 | 62 h | 17 h | 2,7 Go |
+    | beats | 16 kHz | 5 s | 768 | 2,9 | ×7 | 81 h | 22 h | 2,2 Go |
+    | naturebeats | 16 kHz | 5 s | 768 | 2,8 | ×7 | 82 h | 23 h | 2,3 Go |
+    | perch_bird | 32 kHz | 5 s | 1 280 | 1,8 | ×4,5 | 129 h | 36 h | 2,4 Go |
+    | birdmae (Huge) | 32 kHz | 5 s | 1 280 | 0,5 | ×1,2 | 494 h | 137 h | 4,2 Go |
+
+    - **birdmae tel que bacpipe le charge (Bird-MAE-Huge) est hors de portée de l'i5**, même
+      aux heures de pic seules. Variante `birdmae_base` ajoutée (Bird-MAE-Base, 768
+      dimensions, le modèle que le §7 chiffrait) ; le benchmark dira si Base tient l'AP de
+      Huge. Encoder le sous-ensemble du benchmark (28 h) avec Huge prendrait ~23 h ici : à
+      faire sur le Mac, ou à remplacer par Base.
+    - Seuil du risque 5 (> 15 h par campagne après leviers) : seuls birdnet (non déployable,
+      licence et TensorFlow) et protoclr passent sans levier ; perch_v2 (33 h, 9 h aux
+      heures de pic) passe avec les heures de pic ; les autres demandent aussi la
+      quantification int8 et le sous-échantillonnage des fenêtres (§7).
+    - perch_bird a échoué au premier téléchargement (délai dépassé chez Kaggle), réussi au
+      second. Tous les encodeurs du §2 sont désormais installés (`data/models/bacpipe`, cache
+      Hugging Face), 12 à 40 s de chargement chacun.
+
+## 2026-09-23 (fin d'après-midi) — Jeu gelé, fusion, contrôle qualité, attentive, AnuraSet
+
+73. **Fenêtres des encodeurs à 5–6 s : règle actuelle conservée** (décision de Léonard).
+    Une fenêtre de la grille de l'encodeur hérite du label d'une annotation de 3 s si elle la
+    contient entière (DECISIONS n° 4) ; vérifié : les 495 annotations tiennent entières dans
+    une fenêtre de 3, 5 et 6 s. Pas de fenêtres recentrées sur les annotations.
+    **Risque mesuré sur le contexte ajouté** : aucun des 150 négatifs n'est dans un
+    enregistrement qui contient un positif annoté, mais pour 42 d'entre eux (5 s) et 28
+    (6 s), Blancinet a une détection non écoutée de score ≥ 0,5 dans les 2–3 s ajoutées.
+    Si du chant s'y trouve, la fenêtre est un négatif faux : la tête apprend à baisser le
+    score d'un chant vrai, et le benchmark compte une fausse alarme là où l'encodeur avait
+    raison. Le bruit touche les encodeurs à fenêtre longue, pas birdnet (3 s).
+
+74. **Jeu gelé programmé** (`blanci/frozen.py`, `blanci freeze`, `blanci evaluate --frozen`).
+    Une version = liste d'enregistrements figée (`paths.frozen_test/jeu_gele_<v>.csv`, en
+    lecture seule, jamais réécrite). Ses enregistrements sont exclus de tout ce qui apprend
+    ou règle : tête, seuil, benchmark, baselines, recherche de similarité, clustering C1,
+    fusion, jetons. Chaque tête enregistre les versions exclues ; `evaluate --frozen` refuse
+    une tête entraînée avant le gel. Mesures sur le jeu gelé : AP (enregistrement, fenêtre),
+    rappel au seuil de la tête, fausses alarmes par heure (le jeu est écouté en entier), rappel
+    par qualité et par site.
+
+75. **Module séquentiel et fusion branchés** (§3). Débuts de notes calculés une fois par
+    enregistrement pendant `embed` (l'audio est déjà en mémoire), rangés dans la table
+    `onsets` (migration 2 de la base, ajout seul) ; `blanci onsets` pour les autres.
+    `blanci fusion` : dans chaque pli par micro, une tête sans le micro score les fenêtres
+    étiquetées et toutes les fenêtres de leurs enregistrements (persistance) ; fusion
+    évaluée hors-pli contre la tête seule (bootstrap apparié par enregistrement), puis
+    enregistrée en JSON avec son seuil. `blanci score --fusion` décide avec elle. Colonnes :
+    `fusion.columns` (frac_ioi_blanci, onset_rate_hz, frac_windows, longest_run : 4, pour
+    ~10 enregistrements positifs par coefficient). Le seuil de persistance est la frontière
+    de la tête logistique (0).
+
+76. **Calibration du contrôle qualité** (`blanci qc-calibrate`, lecture seule, 131
+    enregistrements, 2 à 3 min). Indice « micro dans sac » = part d'énergie au-dessus de
+    2 kHz : enregistrements avec fenêtres « micro dans sac » 0,001 à 0,30 ; enregistrements
+    à A. blanci 0,265 à 1 (médiane 0,98) ; autres 0,30 à 1. **Le seuil actuel (0,02) ne
+    signale qu'un enregistrement « dans sac » sur 8.** 0,2 en signalerait 6/8 avec une marge
+    sous le positif le plus bas ; non appliqué, décision de Léonard. Pluie : trop peu de
+    cibles (3 enregistrements) pour calibrer, seuil gardé. Silence et saturation : aucune
+    fenêtre étiquetée. Rappel : l'inventaire a été fait sans contrôle audio (`--no-qc`),
+    ces drapeaux ne sont donc calculés sur aucun enregistrement réel aujourd'hui.
+
+77. **Attentive probing** (`blanci/attentive.py`) : une requête apprise pondère les jetons
+    d'une fenêtre avant le classement (2d + 1 paramètres). Entraîné avec torch, appliqué en
+    numpy, sauvegardé sans pickle. Seul perch_v2 expose des jetons (16 temps × 4 fréquences
+    × 1 536, moyennés sur la fréquence). `blanci tokens --encoder perch_v2` calcule les
+    jetons des seules fenêtres du benchmark (~1 500) ; `blanci benchmark` ajoute alors la
+    sonde « attentive ». Sur données synthétiques (note dans 1 jeton sur 16), AP hors-pli
+    ~0,67–0,8 contre ~0,53 pour la moyenne des jetons.
+
+78. **Pré-benchmark AnuraSet préparé** (`blanci/anuraset.py`, `config/anuraset.yaml`,
+    commandes `anuraset-prepare`, `anuraset-profile`, `anuraset-benchmark`). Licence
+    **CC BY** (la feuille de route disait CC0). Téléchargé : `raw_data.zip` (7,2 Go,
+    enregistrements bruts d'une minute) + `strong_labels.zip` (chants datés), pas
+    `anuraset.zip` (extraits de 3 s, trop courts pour les encodeurs à 5–6 s). Base, stocks et
+    rapports séparés des données ONF. Fenêtre positive = contient un chant entier de l'espèce
+    (ou tient dans un chœur annoté d'un seul tenant) ; négative = aucun chant de l'espèce ;
+    chant coupé = écartée ; négatifs tirés par site (1:20) ; plis par site (4 sites).
+    Espèces à choisir avec `anuraset-profile` (note brève, dominante 3–6 kHz, ≥ 300 chants,
+    ≥ 2 sites). Encodage d'AnuraSet (~27 h d'audio) : avec celui des données ONF, ce week-end.
+
+79. **Drapeaux : trois origines, une règle d'exclusion** (23/09/2026, avec Léonard). Un
+    drapeau est une remarque sur un enregistrement (`recordings.qc_flags`, le fichier n'est
+    jamais touché). Origines : inventaire (durée anormale, hors relevé), audio (silencieux,
+    saturation, micro dans sac, pluie), **écoute** (nouvelle clé `annotated` : présente sur
+    tout enregistrement annoté à la main, avec les drapeaux que l'annotateur y a posés —
+    label `artefact_in_bag` → micro dans sac ; label `rain` ou mention de pluie → pluie).
+    **Seuls silencieux, micro dans sac, durée anormale et hors relevé écartent du corpus**
+    (jamais encodés) ; pluie et saturation sont des remarques : un micro sous la pluie
+    enregistre son milieu, ces enregistrements font partie du jeu de données. **Un
+    enregistrement où A. blanci a été entendu n'est jamais écarté** : l'écoute prime sur le
+    calcul. Le contrôle audio se fait pendant `embed` sur l'audio déjà lu (option `--no-qc`
+    pour s'en passer), une fois par enregistrement ; ses indices sont gardés, `blanci flag`
+    réapplique un seuil changé sans relire l'audio et recalcule les drapeaux d'écoute (aussi
+    recalculés à chaque label ajouté et après chaque import). Sur la base au 23/09 : 131
+    enregistrements annotés, 8 micro dans sac (aucun avec un positif), 5 pluie (dont 2 avec
+    un positif). Seuil « micro dans sac » inchangé (0,02) tant que Léonard n'a pas tranché
+    (n° 76).
+
+80. **Négatifs suspects** (23/09/2026, règle de Léonard). Un négatif annoté est jugé sur
+    3 s ; les encodeurs à fenêtre de 5–6 s y ajoutent 1 à 3 s jamais écoutées. Règle : un
+    négatif est **suspect** si A. blanci est détecté dans les fenêtres voisines (± 3 s, la
+    fenêtre de 3 s de chaque côté, ce qui couvre tous les encodeurs du §2) ; sinon il reste
+    négatif. « Détecté » = détection Blancinet de score ≥ 0,5 que personne n'a écoutée
+    (aucune fenêtre annotée ne la contient), ou positif annoté. Jamais les scores de nos
+    propres têtes (ils choisiraient les labels qui les jugent). Un suspect ne sert ni à
+    l'entraînement ni à l'évaluation, **pour tous les encodeurs** (mêmes négatifs pour tous,
+    benchmark comparable). Même règle pour les négatifs appariés présumés : aucun n'est tiré
+    à moins de 3 s d'une détection non écoutée. Les détections Blancinet (74 785, dont
+    74 286 jamais écoutées) sont rangées comme scores du détecteur « blancinet »
+    (`blanci import-detections`), pas comme labels. Au 23/09 : **46 négatifs suspects sur
+    149**. `candidates --suspects` tire les 52 détections voisines à écouter : une voisine
+    écoutée et non-blanci lève le soupçon, une voisine blanci le confirme (et donne un
+    positif). **Effet mesuré sur les baselines** (relancées, lecture seule) : écarter les
+    46 suspects annotés change peu l'AP (meilleure baseline, fenêtres : 0,368 → 0,374) ;
+    écarter aussi les négatifs présumés voisins d'une détection la fait passer à 0,543
+    (enregistrements : 0,155 → 0,263). Deux lectures : bruit d'étiquette retiré (au même
+    micro, même créneau, en saison, une détection Blancinet ≥ 0,5 est souvent un vrai
+    chant) ou négatifs difficiles retirés (évaluation optimiste). Le jeu gelé, écouté en
+    entier, tranchera. Revers constaté : les suspects annotés sont surtout les faux amis
+    principaux (*A. andreae* 12 sur 22, Fourmilier tacheté 11 sur 23), qui chantent en
+    continu et déclenchent Blancinet sur les fenêtres voisines : sans écoute des voisins,
+    la tête perd la moitié de ses exemples de ces faux amis. Écouter les 52 voisins avant
+    l'entraînement.
+
+81. **Seuil « micro dans sac » : 0,02 → 0,2** (accord de Léonard, calibration n° 76).
+    Signale 6 enregistrements « dans sac » annotés sur 8, aucun enregistrement à A. blanci
+    (le plus bas est à 0,265). Contrôle audio pendant `embed` réglable
+    (`qc.during_embed`), coupé pour AnuraSet : seuils calibrés sur les Song Meter ONF, et
+    positifs AnuraSet absents de la table labels, donc non protégés.
+
+82. **Commentaire accolé à chaque fenêtre annotée** (précision de Léonard sur le n° 79 : le
+    « drapeau » voulu est le commentaire de l'annotateur, en plus du label). Il était déjà
+    gardé tel quel dans chaque label (`conditions.comment`) ; il suit désormais la fenêtre :
+    `current_labels` et le jeu d'apprentissage (fenêtres de grille héritières) portent une
+    colonne `comment` ; `blanci export-labels` écrit toutes les fenêtres annotées avec label,
+    qualité, espèce, commentaire et suspect. Au poste d'annotation, le commentaire est lu
+    comme à l'import (conditions pluie, lointain, second plan ; espèces citées) : « pluie »
+    écrit au poste pose le drapeau pluie. Les drapeaux d'écoute par enregistrement (n° 79)
+    restent : ce sont eux qui écartent les 8 enregistrements « dans sac ».
+
+83. **Réentraînement sans intervention** (§4, M5, `blanci retrain`). Nouvelle tête sur
+    tous les labels hors jeu gelé, seuil hors-pli ; nouvelle tête et tête adoptée jugées
+    sur le même jeu gelé, à leur seuil ; adoption si l'AP (enregistrements) et le rappel au
+    seuil ne perdent pas plus de 0,02 (`retrain.tolerance`). Sans jeu gelé : pas
+    d'adoption, sauf `--force`. Tête adoptée non jugeable (entraînée avant le gel) : la
+    nouvelle est adoptée. Historique des adoptions dans `models` (kind `adoption`) ; une
+    tête refusée reste en base. `blanci score` prend par défaut la tête adoptée (sinon la
+    plus récente) : une tête refusée n'est jamais utilisée par mégarde. La fusion n'est pas
+    réentraînée par cette commande.
+
+84. **Courbes d'activité** (§6 niveau 3, M4, `blanci activity`). Depuis les décisions par
+    enregistrement : indice horaire (part des enregistrements détectés par heure locale,
+    l'effort au dénominateur) et probabilité journalière par mois (part des jours avec au
+    moins une détection), intervalles de Wilson, par site ou par micro. Confrontées aux
+    patrons de Courtois et al. 2025 (`activity.reference` : pics 7–9 h et 15–17 h, mois
+    forts janvier–avril, creux juillet–octobre) : un patron est « retrouvé » si les
+    intervalles de Wilson (pics contre autres heures, mois forts contre creux) sont
+    disjoints — un rapport > 1 seul se lève au hasard sur une activité plate. Avec des
+    courbes numérisées de la publication (`--reference-hours`, `--reference-months`),
+    corrélation de Pearson, alerte sous 0,5 (§11, risque 6). Enregistrements « suspect »
+    non comptés, sauf `--suspects-detected`. À lancer sur 2023 une fois la phénologie
+    inventoriée, encodée et scorée.
+
+85. **Négatifs suspects abandonnés** (23/09/2026, Léonard ; remplace la partie « négatifs
+    annotés » du n° 80). Les voisins d'un négatif sont souvent le même faux ami (un
+    Fourmilier tacheté qui chante sur une fenêtre chante sur les suivantes) : écouter les
+    voisins en ferait écouter d'autres, sans fin. Règle : **un négatif annoté est négatif,
+    quel que soit le contexte** ajouté par les encodeurs à fenêtre de 5–6 s. Si A. blanci ne
+    chante pas pendant les 3 s écoutées, qu'elle commence juste après est peu probable.
+    **Biais possible, gardé en tête** : quelques fenêtres « négatives » de 5–6 s peuvent
+    contenir la fin d'un chant ; il pèserait sur les encodeurs à fenêtre longue. Supprimés :
+    colonne `suspect`, `candidates --suspects`. **Gardé** (question distincte, non
+    tranchée) : aucun négatif *présumé* n'est tiré à ± 3 s d'une détection Blancinet ≥ 0,5
+    non écoutée ; les détections restent rangées comme scores. Baselines relancées sous
+    cette règle.
+
+86. **AnuraSet extrait et profilé** (23/09/2026, lecture et extraction seules, rien
+    d'encodé). 1 612 enregistrements d'une minute, 4 sites, archive vérifiée. Aucune espèce
+    ne remplit tous les critères (note ≤ 0,3 s, dominante 3–6 kHz, ≥ 300 chants, ≥ 2
+    sites) : les durées sont celles des segments annotés, qui regroupent souvent plusieurs
+    notes, et la plupart des espèces n'est présente que sur un site. Seule candidate
+    multi-sites dans la bande : **DENMIN** (*Dendropsophus minutus*, 1 724 chants, 3 sites,
+    ~5,3 kHz, segment médian 0,61 s). Mono-site dans la bande : LEPPOD (761, ~5,8 kHz,
+    0,33 s), PHYDIS (419, ~5,3 kHz, 0,33 s), DENNAN (596, ~4,4 kHz, 0,44 s) ; elles
+    imposeraient des plis par enregistrement, qui ne disent rien du transfert entre sites.
+    Fréquence dominante mesurée sur l'intervalle annoté : peut être captée par des
+    insectes (PHYCUV à 6,3 kHz est suspect). Choix des espèces (`anuraset.species`) :
+    Léonard.
+
+87. **Règle des négatifs présumés voisins supprimée** (23/09/2026, Léonard). Plus aucune
+    règle liée aux détections Blancinet dans la construction des jeux : négatifs annotés et
+    présumés sont tirés comme avant le n° 80. Les détections restent rangées comme scores
+    du détecteur « blancinet » (`import-detections`), pour comparer Blancinet et nos têtes
+    sur les mêmes fenêtres. Baselines relancées : de nouveau celles d'avant le n° 80.

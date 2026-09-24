@@ -5,6 +5,7 @@ paths:
   raw: data/raw                    # data/raw/{2023,2026}/<site>/<micro>/*.wav — lecture seule
   db: data/db/blanci.sqlite
   embeddings: data/embeddings
+  tokens: data/tokens               # jetons des fenêtres du benchmark (sonde attentive)
   label_imports: data/labels/imports   # fichiers reçus, jamais modifiés
   models: data/models
   frozen_test: data/frozen_test        # jeu gelé, lecture seule
@@ -39,10 +40,14 @@ grids:
   w5: {window_s: 5.0, hop_s: 2.5}
 
 qc:
-  # Seuils provisoires, à calibrer sur les fichiers étiquetés pluie / micro dans sac.
+  # Drapeaux audio (DECISIONS n° 79) : silencieux et micro dans sac écartent du corpus,
+  # pluie et saturation sont des remarques. Calculés pendant `embed` (sur l'audio déjà lu).
+  during_embed: true
   silent_dbfs: -70.0               # RMS en dessous : enregistrement muet
   clip_fraction: 0.0001            # fraction d'échantillons saturés au-dessus : saturation
-  in_bag_hf_ratio: 0.02            # énergie > 2 kHz / énergie totale en dessous : micro dans sac
+  # Énergie > 2 kHz / énergie totale en dessous : micro dans sac. Calibré (DECISIONS n° 76,
+  # 81) : sac 0,001–0,30, enregistrements à A. blanci ≥ 0,265 ; 0,2 en signale 6 sur 8.
+  in_bag_hf_ratio: 0.2
   rain_flatness: 0.5               # platitude spectrale 1–10 kHz au-dessus...
   rain_min_dbfs: -35.0             # ...et niveau au-dessus : pluie
   # Drapeaux calculés sur l'inventaire seul (sans lire l'audio), recalculés après chaque
@@ -74,16 +79,30 @@ labels:
     annotator: expert
 
 # Encodeurs (§2). La f_e et la durée de fenêtre sont lues dans le modèle ; la grille en découle
-# (pas = fenêtre × grid_hop_ratio). Noms bacpipe [À VÉRIFIER] à l'installation.
+# (pas = fenêtre × grid_hop_ratio). Noms vérifiés contre bacpipe 1.3.5 (DECISIONS n° 64).
 encoders:
   grid_hop_ratio: 0.5
   batch_size: 64
   models:
     birdmae: {backend: bacpipe, model: birdmae}
+    # bacpipe charge Bird-MAE-Huge (lent sur l'i5) ; le §7 prévoit la version Base.
+    birdmae_base: {backend: bacpipe, model: birdmae, checkpoint: DBD-research-group/Bird-MAE-Base}
     beats: {backend: bacpipe, model: beats}
     naturebeats: {backend: bacpipe, model: naturebeats}
-    perch_v2: {backend: bacpipe, model: perch_v2}
+    perch_v2:
+      backend: bacpipe
+      model: perch_v2
+      # Logits des congénères (§2) rangés dans `scores` pendant l'encodage : générateur de
+      # candidats (`blanci candidates --congeners`), sans seconde inférence.
+      logit_classes: [Anomaloglossus baeobatrachus, Anomaloglossus stepheni,
+                      Anomaloglossus surinamensis]
     birdnet: {backend: bacpipe, model: birdnet}     # référence du tuteur, non déployable
+    # Contrôle passe-bas (§2) : birdmae n'entendant que < 8 kHz, comme un modèle à 16 kHz.
+    birdmae_lp8k: {backend: bacpipe, model: birdmae, lowpass_hz: 8000}
+    # « Si sans effort » (§2) :
+    protoclr: {backend: bacpipe, model: protoclr}
+    perch_bird: {backend: bacpipe, model: perch_bird}
+    convnext_birdset: {backend: bacpipe, model: convnext_birdset}
 
 head:
   C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]
@@ -96,10 +115,43 @@ benchmark:
   n_boot: 1000
   precisions: [0.1, 0.5]
 
+# Réentraînement sans intervention (§4, M5) : la nouvelle tête n'est adoptée que si, sur le
+# jeu gelé, son AP (enregistrements) et son rappel au seuil ne perdent pas plus que ceci.
+retrain:
+  tolerance: 0.02
+
+# Courbes d'activité (§6 niveau 3, M4) : patrons publiés par Courtois et al. 2025 (jeu 2023).
+activity:
+  reference:
+    peak_hours: [[7, 9], [15, 17]]     # heures locales de pic
+    high_months: [1, 2, 3, 4]          # activité forte
+    low_months: [7, 8, 9, 10]          # activité quasi nulle
+  min_correlation: 0.5                 # corrélation des courbes en dessous : alerte (§11, 6)
+
 aggregate:
   # Règle enregistrement (§1), à calibrer sur les 20 enregistrements écoutés en entier.
   min_positive_windows: 3          # en dessous : « suspect » (détection isolée)
   min_span_s: 10.0                 # fenêtres positives étalées sur moins : « suspect »
+
+fusion:
+  # Descripteurs du module séquentiel ajoutés au score de la tête (§3) : ≤ 4, car il faut
+  # ~10 enregistrements positifs indépendants par coefficient (51 aujourd'hui → 5 coefficients).
+  # Rythme (fenêtre) : onset_rate_hz, ioi_median_s, ioi_cv, frac_ioi_blanci, frac_ioi_short.
+  # Persistance (enregistrement) : frac_windows, n_positive, longest_run, n_isolated, span.
+  columns: [frac_ioi_blanci, onset_rate_hz, frac_windows, longest_run]
+
+cluster:
+  # Voie non supervisée (§5 bis) : HDBSCAN sur ACP. Seuils de C1 : jugement de la feuille de route.
+  pca_components: 50
+  min_cluster_size: 15
+  min_samples: 5
+  seed: 0
+  c0_sample: 20000                 # fenêtres tirées dans tout le stock
+  c1_site: Mataroni
+  c1_negatives: 5000               # fenêtres des mêmes micros aux mêmes heures
+  c1_min_recall: 0.5               # le meilleur groupe rassemble la moitié des positifs...
+  c1_min_enrichment: 20            # ...avec 20 fois plus de positifs que la moyenne...
+  c1_max_ami_mic: 0.3              # ...et des groupes qui ne sont pas des micros
 
 active:
   batch_recordings: 40             # lots de 30–50 enregistrements (§5)
