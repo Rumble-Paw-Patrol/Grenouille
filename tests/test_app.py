@@ -1,5 +1,7 @@
 """Poste d'annotation Streamlit : l'écran s'affiche et un clic ajoute un label."""
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,6 +13,9 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 
 from blanci.db import connect  # noqa: E402
 from blanci.ingest import ingest  # noqa: E402
+
+# Chemin absolu : Streamlit ≥ 1.5x résout un chemin relatif depuis le fichier de test.
+APP = str(Path(__file__).resolve().parents[1] / "blanci" / "app.py")
 
 SR = 16_000
 
@@ -51,7 +56,7 @@ def _button(at, label):
 
 def test_app_shows_a_candidate_and_saves_an_answer(app_config):
     """Classe, espèce, commentaire, puis « Envoyer » : un label, et la fenêtre suivante."""
-    at = AppTest.from_file("blanci/app.py", default_timeout=60).run()
+    at = AppTest.from_file(APP, default_timeout=60).run()
     assert not at.exception
     assert "CDR" in at.subheader[0].value
     at.sidebar.text_input[0].input("léonard").run()
@@ -67,7 +72,7 @@ def test_app_shows_a_candidate_and_saves_an_answer(app_config):
 
 
 def test_sending_without_an_annotator_is_refused(app_config):
-    at = AppTest.from_file("blanci/app.py", default_timeout=60).run()
+    at = AppTest.from_file(APP, default_timeout=60).run()
     _button(at, "Envoyer ▶").click().run()
     assert any("annotateur" in e.value for e in at.error)
     con = connect(app_config["paths"]["db"])
@@ -78,7 +83,7 @@ def test_a_queue_is_drawn_in_the_app_and_opened(app_config):
     """Mode de sélection « fenêtres au hasard » : la file est écrite puis ouverte sur place."""
     from pathlib import Path
 
-    at = AppTest.from_file("blanci/app.py", default_timeout=60).run()
+    at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.selectbox(key="mode").set_value("random").run()
     at.sidebar.number_input(key="n::random").set_value(1).run()
     _button(at, "Générer la file").click().run()
@@ -90,7 +95,7 @@ def test_a_queue_is_drawn_in_the_app_and_opened(app_config):
 
 
 def test_modes_needing_an_encoder_say_so(app_config):
-    at = AppTest.from_file("blanci/app.py", default_timeout=60).run()
+    at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.selectbox(key="mode").set_value("map").run()
     assert not at.exception
     assert any("encodeur" in i.value.lower() for i in at.info)

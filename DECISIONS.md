@@ -1015,8 +1015,30 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      Léonard, R23) : pour les 8 encodeurs du projet et les 17 autres de bacpipe 1.3.5,
      framework, f_e, fenêtre, ce que bacpipe rend, accès aux jetons et aux couches
      intermédiaires. Relevé dans le code, sans exécuter les modèles (tailles de grille à
-     mesurer). **Correction du n° 77** : Bird-MAE rend lui aussi ses jetons (`last_hidden_state`),
-     que l'adaptateur moyenne et déclare `has_tokens` ; `blanci tokens` les stocke déjà.
-     BEATs et NatureBEATs : jetons par `avg_pooling = False`, sans hook ; BirdNET (Keras),
+     mesurer). Bird-MAE : son `last_hidden_state` est la sortie *agrégée* (moyenne des
+     patchs, jeton de classe exclu, puis `fc_norm`), malgré le nom — lu dans
+     `modeling_bird_mae.py` ; une première version de ce numéro concluait à tort que bacpipe
+     rendait ses jetons : le n° 77 était juste. Jetons par `output_hidden_states=True`
+     (1 + 32 temps × 8 fréquences). BEATs et NatureBEATs : jetons par `avg_pooling = False`, sans hook ; BirdNET (Keras),
      ProtoCLR et ConvNeXt-BirdSet : faciles ; Perch v1 et v2 : couches intermédiaires
      difficiles (modèles exportés). Rien n'est encore branché dans l'adaptateur.
+
+## 2026-09-25 (fin d'après-midi) — Pertes, échantillon versionné, poste d'annotation
+
+112. **Benchmark des pertes** (R34, R35 ; `blanci/losses.py`, têtes `loss:<nom>`,
+     `blanci heads --methods losses`). Même tête linéaire (standardisation, classes
+     équilibrées, L2, C par validation groupée), sept pertes contre la logistique : hinge et
+     squared_hinge (`LinearSVC`), least_squares (`RidgeClassifier`, α = 1/2C), focal (γ = 2),
+     gce (q = 0,7), sce (α = 0,1, β = 1, A = −4), sigmoid (1 − p, bornée). Les quatre
+     dernières par L-BFGS, départ depuis la logistique de même C (gce, sce, sigmoid ne sont pas
+     convexes). Gradients vérifiés par différences finies ; focal à γ = 0 = logistique,
+     gce à q = 1 = sigmoid. Poids R13/R15 acceptés ; pénalités R27/R28 non (L2 seulement).
+     Pourquoi les pertes robustes : les négatifs présumés sont contaminés (n° 106), un positif
+     caché parmi eux pèse sans limite dans la logistique, au plus 1 dans sigmoid.
+
+114. **Poste d'annotation et R19 + R21** (demandes de Léonard). Streamlit reste : c'est le
+     poste d'annotation (`blanci annotate`, `blanci/app.py`), pas l'ancien
+     `app/streamlit_app.py` supprimé au n° 104. Les 4 échecs de `tests/test_app.py` venaient
+     de Streamlit 1.64, qui résout un chemin relatif depuis le fichier de test : chemin absolu.
+     Le refus de R19/R20 + R21 (n° 108–109) est levé : la combinaison se mesure au lieu d'être
+     interdite ; le mécanisme du n° 109 (b) reste l'hypothèse à vérifier.

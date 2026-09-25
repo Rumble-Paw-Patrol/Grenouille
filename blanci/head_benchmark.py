@@ -13,6 +13,7 @@ Têtes comparées sur les embeddings gelés d'un encodeur (`head.METHODS`, `pool
 | logistic_to_prototype | R30 : logistique tirée vers le prototype différentiel |
 | lda_shrunk | R31 : LDA à covariance rétrécie (Ledoit-Wolf) |
 | gated | R85 : poids de chaque dimension selon la fenêtre (porte de rang faible), torch |
+| loss:<nom> | R34, R35 : tête linéaire à une autre perte (`blanci/losses.py`) ; `losses` = toutes |
 | logistic:<pooling> | appris sur les jetons résumés par `pooling` (max, moyenne + max, gem…) |
 | attentive | appris sur les jetons, pondérés par une requête apprise |
 | cascade | logistic, puis attentive sur les meilleurs candidats |
@@ -86,6 +87,19 @@ def head_methods(tokens: np.ndarray | None, variants: list[str] | None = None) -
     if tokens is not None:
         base += [f"logistic:{p}" for p in available_poolings(tokens)] + list(TOKEN_METHODS)
     return base + [v for v in variants or [] if v not in base]
+
+
+def expand_methods(methods: list[str] | None) -> list[str] | None:
+    """« losses » → la logistique (référence) et toutes les têtes `loss:<nom>` (R34, R35)."""
+    if methods is None:
+        return None
+    from blanci.losses import LOSSES
+
+    out: list[str] = []
+    for spec in methods:
+        extra = ["logistic", *(f"loss:{name}" for name in LOSSES)] if spec == "losses" else [spec]
+        out += [m for m in extra if m not in out]
+    return out
 
 
 def regularization_context(
@@ -174,7 +188,7 @@ def run_head_benchmark(
     head_cfg, bench = cfg["head"], cfg["benchmark"]
     data, X, tokens = benchmark_data(con, cfg, encoder_id, filters)
     variants = (cfg.get("regularization", {}) or {}).get("variants", [])
-    methods = methods or head_methods(tokens, variants)
+    methods = expand_methods(methods) or head_methods(tokens, variants)
     context = regularization_context(con, cfg, encoder_id, data, methods, filters)
     y = data["y"].to_numpy()
     groups = data["point"].to_numpy()
@@ -319,7 +333,7 @@ def annotation_curve(
     chaque tête à la référence, par k, avec intervalle bootstrap)."""
     head_cfg = cfg["head"]
     curve = head_cfg.get("curve", {}) or {}
-    methods = methods or list(curve.get("methods", ["prototype", "logistic"]))
+    methods = expand_methods(methods) or list(curve.get("methods", ["prototype", "logistic"]))
     k_grid = sorted(k_grid or curve.get("k", [0, 1, 2, 5, 10, 20]))
     repeats = repeats or int(curve.get("repeats", 5))
     by = by or curve.get("by", "point")

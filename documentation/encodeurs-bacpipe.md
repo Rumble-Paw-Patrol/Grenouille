@@ -20,7 +20,7 @@ pour ce relevé : les tailles de grille marquées « à mesurer » se vérifient
 
 | Nom bacpipe | Framework | f_e | Fenêtre | Dim. | Ce que bacpipe rend | Jetons | Couches intermédiaires |
 |---|---|---|---|---|---|---|---|
-| `birdmae` (Huge ; `birdmae_base` : Base) | PyTorch, Hugging Face | 32 kHz | 5 s | 1 280 (Base : 768) | **les jetons** (`last_hidden_state`), que notre adaptateur moyenne | **Déjà disponibles** (`blanci tokens --encoder birdmae…`). À vérifier : présence d'un jeton de classe, ordre de la grille (`token_grid`) | Faciles : `output_hidden_states=True` (option Hugging Face) rend toutes les couches |
+| `birdmae` (Huge ; `birdmae_base` : Base) | PyTorch, Hugging Face (code du modèle fourni par DBD-research-group) | 32 kHz | 5 s | 1 280 (Base : 768) | l'embedding agrégé : malgré son nom, `last_hidden_state` est ici la moyenne des patchs (jeton de classe exclu) puis `fc_norm` | **Faciles** : `output_hidden_states=True` rend, par couche, 257 jetons = 1 jeton de classe + 256 patchs en grille **32 temps × 8 fréquences** (ordre temps d'abord : patch t·8 + f), avant `fc_norm` | Faciles : même option, toutes les couches (13 sorties pour le modèle Base) |
 | `beats` | PyTorch | 16 kHz | 5 s | 768 | la moyenne des jetons, faite *dans* bacpipe (`avg_pooling = True`) | **Faciles** : `avg_pooling = False` sur le modèle chargé, une ligne, sans hook. Grille ≈ 8 fréquences × 31 temps (patchs 16 × 16), à mesurer | Moyennes : hook sur les couches de l'encodeur transformer |
 | `naturebeats` | PyTorch (BEATs, poids NatureLM-audio) | 16 kHz | 5 s | 768 | idem BEATs | **Faciles**, même réglage que BEATs | Moyennes, idem BEATs |
 | `perch_v2` | ONNX (onnxruntime), sans TensorFlow | 32 kHz | 5 s | 1 536 | embedding, jetons spatiaux, spectrogramme, logits des 14 795 classes | **Déjà utilisés** : 16 temps × 4 fréquences × 1 536 (`spatial_embedding`) | Difficiles : le graphe ONNX ne sort que ces quatre tenseurs ; il faudrait le modifier pour exposer des nœuds internes (faisable avec la bibliothèque `onnx`, à valider) |
@@ -33,8 +33,10 @@ pour ce relevé : les tailles de grille marquées « à mesurer » se vérifient
 du modèle pour choisir la couche. « Difficile » : il faut modifier ou reconstruire le modèle
 exporté.
 
-**Correction** : DECISIONS n° 77 disait « seul perch_v2 expose des jetons ». C'est faux pour
-Bird-MAE, dont bacpipe rend les jetons et que notre adaptateur déclare `has_tokens` (n° 111).
+**Correction** (n° 111) : une première version de ce tableau disait que bacpipe rendait déjà
+les jetons de Bird-MAE. Faux : le code du modèle (`modeling_bird_mae.py` de Bird-MAE-Base, lu le 25/09 ; Huge à confirmer) nomme
+`last_hidden_state` la sortie agrégée. Le n° 77 avait raison : seul perch_v2 rend ses jetons
+tels quels aujourd'hui.
 
 ## Les autres modèles de bacpipe (hors projet)
 
@@ -56,10 +58,9 @@ Bird-MAE, dont bacpipe rend les jetons et que notre adaptateur déclare `has_tok
 
 ## Ce que ça change pour la suite
 
-- Les jetons de **Bird-MAE** sont utilisables tout de suite par l'attentive, la cascade et les
-  poolings (`logistic:max`, `logistic:gem`…), après vérification de la grille.
-- **BEATs, NatureBEATs, ProtoCLR et ConvNeXt-BirdSet** : une option ou un hook par modèle pour
-  les jetons, à ajouter à l'adaptateur (non fait).
+- **Bird-MAE, BEATs, NatureBEATs, ProtoCLR et ConvNeXt-BirdSet** : une option ou un hook par
+  modèle pour les jetons, à ajouter à l'adaptateur (non fait). Bird-MAE est le plus simple
+  (option Hugging Face, grille connue : 32 × 8).
 - **Couches intermédiaires** (R23) : faciles pour les modèles PyTorch et BirdNET, difficiles
   pour Perch v1 et v2. Le coût est ailleurs : stocker plusieurs couches multiplie le volume des
   embeddings, sur des centaines de milliers de fenêtres.

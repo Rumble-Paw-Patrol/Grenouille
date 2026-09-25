@@ -445,6 +445,58 @@ def heads(
     typer.echo(f"rapport : {reports / (stem + '.md')}")
 
 
+@app.command()
+def echantillon(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Encodeur (nom de encoders.models).")],
+    methods: Annotated[
+        str,
+        typer.Option(help="Têtes, régularisations comprises ; « losses » = toutes les pertes."),
+    ] = "prototype,simple_prototype,logistic,logistic_to_prototype,lda_shrunk",
+    by: Annotated[str, typer.Option(help="Groupe de R13/R19/R20/R21 : site ou point.")] = "site",
+    root: Annotated[Path, typer.Option(help="Dossier de l'échantillon.")] = Path("echantillon"),
+) -> None:
+    """Banc d'essai sur l'échantillon versionné (66 clips, DECISIONS n° 113) : la chaîne sur du
+    vrai son sans le disque. 10 positifs : de quoi voir si tout tourne, pas de quoi trancher."""
+    from blanci.benchmark import to_markdown
+    from blanci.echantillon import run
+
+    cfg = _cfg(ctx)
+    reports = config_path(cfg, "reports")
+    reports.mkdir(parents=True, exist_ok=True)
+    cache = Path(cfg["paths"]["embeddings"]).parent / "echantillon"
+    out = run(cfg, encoder, _split(methods), root, cache, by)
+    table = out["table"]
+    stem = f"echantillon_{encoder}".replace(":", "_")
+    table.to_csv(reports / f"{stem}.csv", index=False)
+    shown = [c for c in ["head", "n_pos", "n_neg", "ap", "ap_lo", "ap_hi"] if c in table]
+    text = [
+        f"# Échantillon : {encoder}",
+        "",
+        f"{out['n_pos']} positifs ({out['n_mics_pos']} micros), {out['n_neg']} négatifs ; "
+        f"{out['n_splits']} plis groupés par micro ; dimension {out['dim']}, "
+        f"jetons {out['tokens']}. Groupe des régularisations : {by}.",
+        "",
+        to_markdown(table[shown]),
+        "",
+    ]
+    if out["site"]:
+        site = out["site"]
+        text += [
+            "## Le site se lit-il dans l'embedding ? (négatifs, micros jamais vus)",
+            "",
+            f"Exactitude {site['accuracy']:.2f} contre {site['chance']:.2f} au hasard "
+            f"({site['sites']}) : {site['verdict']}.",
+            "",
+        ]
+    (reports / f"{stem}.md").write_text("\n".join(text), encoding="utf-8")
+    for row in table.itertuples():
+        typer.echo(f"  {row.head:<34} AP {row.ap:.3f} [{row.ap_lo:.3f} ; {row.ap_hi:.3f}]")
+    if out["site"]:
+        typer.echo(f"site : {out['site']['verdict']} ({out['site']['accuracy']:.2f})")
+    typer.echo(f"rapport : {reports / (stem + '.md')}")
+
+
 @app.command("heads-curve")
 def heads_curve(
     ctx: typer.Context,

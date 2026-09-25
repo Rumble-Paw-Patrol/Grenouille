@@ -70,7 +70,6 @@ def test_head_names_are_canonical():
         ("logistic+R99", "R99"),
         ("logistic+R19+R20", "R20"),
         ("logistic+R27+R28", "R27"),
-        ("logistic+R19+R21", "efface le chant"),
         ("prototype+R27", "pénalité"),
         ("knn+R13", "poids"),
         ("logistic:max+R19", "défaut"),

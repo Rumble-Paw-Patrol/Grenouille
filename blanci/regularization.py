@@ -53,7 +53,7 @@ DESCRIPTIONS = {
 }
 # Réglage principal de chaque R, celui que « =v » remplace.
 MAIN_PARAMETER = {15: "hard_weight", 18: "components", 21: "iterations", 28: "l1_ratio"}
-WEIGHTED_HEADS = ("logistic", "cascade", "logistic_to_prototype")
+WEIGHTED_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss")
 PENALIZED_HEADS = ("logistic", "cascade")
 _SUFFIX = re.compile(r"^R(\d+)(?:=([0-9.eE+-]+))?$")
 
@@ -100,19 +100,13 @@ def validate(base: str, regs: dict[int, float | None]) -> None:
         )
     if not regs:
         return
-    family = "logistic" if base.startswith("logistic:") else base
+    family = "logistic" if base.startswith("logistic:") else base.split(":")[0]
     if base == "attentive":
         raise ValueError("l'attentive lit les jetons bruts : aucune régularisation programmée")
     if {19, 20} <= set(regs):
         raise ValueError("R20 contient déjà le centrage de R19 : l'une ou l'autre")
     if {27, 28} <= set(regs):
         raise ValueError("R27 (L1) et R28 (Elastic Net) : l'une ou l'autre")
-    if 21 in regs and {19, 20} & set(regs):
-        raise ValueError(
-            "R21 après R19/R20 efface le chant : une fois chaque micro centré, les moyennes des "
-            "négatifs ne diffèrent plus que par le chant des micros riches en positifs "
-            "(mesuré sur données simulées, DECISIONS n° 108)"
-        )
     if base.startswith("logistic:") and {19, 20} & set(regs):
         raise ValueError(
             f"{base} : R19/R20 n'existent que pour l'embedding par défaut (statistiques du stock)"

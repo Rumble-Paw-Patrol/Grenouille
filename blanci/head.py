@@ -352,12 +352,28 @@ METHODS = (
     "attentive",
     "cascade",
 )
-# Têtes à C, et leur ajustement.
+# Têtes à C, et leur ajustement. `loss:<nom>` : benchmark des pertes (`blanci/losses.py`).
 FITTERS = {
     "logistic": fit_logistic,
     "cascade": fit_logistic,
     "logistic_to_prototype": fit_logistic_to_prototype,
 }
+
+
+def _loss_fitter(name: str):
+    from blanci.losses import fit_loss
+
+    def fitter(X, y, C, seed=0, sample_weight=None):
+        return fit_loss(X, y, C, seed, sample_weight, loss=name)
+
+    return fitter
+
+
+def _fitter(method: str):
+    """Ajustement d'une tête à C, ou None."""
+    if method.startswith("loss:"):
+        return _loss_fitter(method.split(":", 1)[1])
+    return FITTERS.get(method)
 
 
 def _choose_C(X, y, groups, C_grid, n_splits, seed, fitter=None, **fit_kw) -> float:
@@ -388,7 +404,8 @@ def choose_C(
 ) -> float | None:
     """C de la tête `method` choisi sur les fenêtres `rows`, régularisations comprises ; None
     pour une tête sans C."""
-    if method not in FITTERS:
+    fitter = _fitter(method)
+    if fitter is None:
         return None
     X, sw, fit_kw = _prepared(X, y, rows, regularizer, seed)
     return _choose_C(
@@ -398,7 +415,7 @@ def choose_C(
         C_grid,
         n_splits,
         seed,
-        FITTERS[method],
+        fitter,
         sample_weight=sw,
         **fit_kw,
     )
@@ -429,7 +446,8 @@ def fit_and_score(
     """
     X, sw, fit_kw = _prepared(X, y, train, regularizer, seed)
     Xtr, ytr = X[train], y[train]
-    if method in FITTERS and C is None:
+    fitter = _fitter(method)
+    if fitter is not None and C is None:
         C = _choose_C(
             Xtr,
             ytr,
@@ -437,7 +455,7 @@ def fit_and_score(
             C_grid,
             n_splits,
             seed,
-            FITTERS[method],
+            fitter,
             sample_weight=sw,
             **fit_kw,
         )
@@ -445,6 +463,8 @@ def fit_and_score(
         return fit_logistic(Xtr, ytr, C, seed, sample_weight=sw, **fit_kw).decision(X[test])
     if method == "logistic_to_prototype":
         return fit_logistic_to_prototype(Xtr, ytr, C, seed, sample_weight=sw).decision(X[test])
+    if method.startswith("loss:"):
+        return fitter(Xtr, ytr, C, seed, sample_weight=sw).decision(X[test])
     if method == "lda_shrunk":
         return lda_shrunk_scores(Xtr, ytr, X[test])
     if method == "gated":
