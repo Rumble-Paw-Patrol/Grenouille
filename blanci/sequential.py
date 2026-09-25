@@ -49,13 +49,15 @@ def detect_onsets(
     band: tuple[int, int] = (4400, 5500),
     note_dur_s: tuple[float, float] = (0.07, 0.13),
     k_mad: float = 4.0,
+    smooth_s: float = 0.01,
 ) -> np.ndarray:
     """Instants (s) de début des événements en bande dont la durée est celle d'une note.
 
     Seuil adaptatif : médiane + k × MAD de l'enveloppe en dB (robuste au fond de chaque
-    enregistrement). Sert au module séquentiel, jamais de filtre amont (bande saturée, §3).
+    enregistrement), enveloppe lissée sur `smooth_s`. Sert au module séquentiel, jamais de
+    filtre amont (bande saturée, §3).
     """
-    env = band_envelope_db(np.asarray(wav, dtype=np.float64), sr, band)
+    env = band_envelope_db(np.asarray(wav, dtype=np.float64), sr, band, smooth_s)
     median = np.median(env)
     mad = np.median(np.abs(env - median)) + 1e-6
     above = np.concatenate([[False], env > median + k_mad * mad, [False]])

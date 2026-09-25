@@ -38,6 +38,11 @@ app = [
     "matplotlib>=3.8",
     "streamlit>=1.35",
 ]
+# Notebooks d'exploration (notebooks/) : uv sync --group notebook ; outil de travail.
+notebook = [
+    "ipykernel>=6.29",
+    "matplotlib>=3.8",
+]
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]

@@ -892,3 +892,50 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      sans passer par la couche de service (ni validation, ni drapeaux d'écoute) ; le poste
      d'annotation est `blanci/app.py` (`blanci annotate`). La feuille de route (§13.2) le cite
      encore dans l'arborescence : document de référence, non modifié.
+
+## 2026-09-25 — Notebooks d'exploration ; ce que contiennent les négatifs présumés
+
+105. **Notebooks d'exploration** (demande de Léonard). `notebooks/01_explorer_une_fenetre`
+     (un enregistrement et une fenêtre à travers la chaîne : écoute, grille, portes, module
+     séquentiel en amont, en parallèle et en aval, négatif apparié, embeddings stockés ou
+     calculés à la volée, prototype différentiel dans le son, sur la paire et sur le stock),
+     `02_negatifs_apparies` (ce que tire chaque stratégie, feuille d'écoute et taux de
+     contamination avec IC de Wilson), `03_module_sequentiel` (réglage de la détection des
+     notes, valeurs et balayage des portes). Calculs dans `blanci/explore.py` (base ouverte en
+     `mode=ro`, audio lu), graphiques dans `blanci/explore_plots.py` ; groupe `notebook`
+     (ipykernel, matplotlib), installé avec `uv sync --inexact` pour garder research et app.
+     Les négatifs d'une fenêtre sont tirés par `paired_negatives` (partie « même
+     enregistrement » identique au benchmark, tirages au hasard possiblement différents).
+     `detect_onsets` prend le lissage de l'enveloppe en paramètre (`smooth_s`, défaut 0,01 s
+     inchangé). Sorties jamais committées : les lecteurs audio embarquent le son des
+     enregistrements (`tests/test_notebooks.py`). Les trois notebooks tournent sur les
+     données réelles (48 s, 3 min, 2 min).
+
+106. **Mesure : « non annotée » ne veut pas dire « négative »** (25/09/2026, lecture seule,
+     canal 0). 51 enregistrements positifs de 120 s : 3 fenêtres annotées en médiane (9 s sur
+     120), aucune annotée négative. Les 345 positives sont toutes des détections BlanciNet
+     validées ; 87 % des 1 695 tranches de 3 s non annotées de ces enregistrements sont aussi
+     détectées (score médian 0,93). L'expert a validé une partie des détections, il n'a pas
+     marqué tout le chant. `nearest` tire bien la fenêtre libre la plus proche d'une
+     annotation, mais elle n'est pas écoutée : sur 1 020 négatifs `nearest`, 965 sont dans
+     l'enregistrement positif et 80 % de ceux-là ont une détection BlanciNet ≥ 0,5 ; contraste
+     en bande médian 6,1 dB (annotées 8,9 ; 7,6 à moins de 6 s d'une annotation, 5,4–5,9
+     au-delà de 15 s). Les autres stratégies ne sont pas propres non plus : BlanciNet ≥ 0,5 sur
+     46 % des négatifs `same_day` et 43 % des `other_day` (janvier à Mataroni : A. blanci
+     chante aux mêmes heures d'un jour à l'autre). BlanciNet n'est pas la vérité (faux amis),
+     l'écoute tranchera (`02_negatifs_apparies`, section 4). Options soumises à Léonard, non
+     tranchées — le n° 87 a retiré toute règle liée à BlanciNet : (a) négatif présumé = ni
+     annoté, ni détecté par BlanciNet au-dessus d'un seuil ; (b) jamais dans un enregistrement
+     positif (« elle chante du début à la fin », notes de phénologie) ; (c) garder, et mesurer
+     la contamination à l'écoute.
+
+107. **Détection des notes trop stricte sur les données réelles** (mesure, réglage inchangé).
+     Au réglage actuel (`onset_k_mad` 4, enveloppe lissée sur 10 ms), 0 à 14 notes par
+     enregistrement positif de 2 min, 1 seule sur le plus annoté (36 fenêtres, chant tout du
+     long) : le seuil médiane + 4 MAD (≈ +6 dB) morcelle les notes en éclats de 2 à 20 ms,
+     rarement de 0,07–0,13 s. Sur 60 positives et 60 négatives (`03_module_sequentiel`),
+     l'AUC du nombre de notes vaut 0,53 à ce réglage, 0,65–0,68 au mieux (k 1–2). Portes
+     `notes` et `rhythm` : au seuil 1, 83 % des négatifs arrêtés mais 31 % des enregistrements
+     positifs gardés — inutilisables en l'état ; `band_contrast` à 3 dB : 12 % arrêtés, 92 %
+     gardés. Les descripteurs de rythme du module en parallèle sont presque toujours nuls.
+     À reprendre avec Léonard (bande, durées, seuil) avant toute porte de rythme.

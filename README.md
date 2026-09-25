@@ -151,6 +151,22 @@ label. « à vérif » / « à conf » sont mises de côté et listées. Toute a
 **bloque l'import** au lieu d'être rangée en négatif ; `--dry-run` les liste toutes. Chaque
 ligne doit désigner un enregistrement déjà inventorié.
 
+## Notebooks d'exploration
+
+`uv sync --inexact --group notebook` (`--inexact` garde les groupes research et app déjà
+installés), puis ouvrir dans VS Code avec le noyau du dépôt (`.venv`). La base est ouverte en
+lecture seule, l'audio des disques est lu, jamais écrit ; tout se règle dans la cellule
+« Réglages » (`config/local.yaml` pour le disque externe).
+
+| Notebook | Pour |
+|---|---|
+| `notebooks/01_explorer_une_fenetre.ipynb` | un enregistrement et une fenêtre à travers la chaîne : écoute, grille, portes, module séquentiel (amont, parallèle, aval), négatif apparié, embeddings, prototype différentiel |
+| `notebooks/02_negatifs_apparies.ipynb` | ce que contiennent les négatifs appariés de chaque stratégie ; feuille d'écoute et taux de contamination |
+| `notebooks/03_module_sequentiel.ipynb` | régler la détection des notes et les seuils des portes (banc d'essai amont sans encodeur) |
+
+**Ne jamais committer les sorties** : les lecteurs audio embarquent le son des
+enregistrements (*Clear All Outputs* avant un commit ; `tests/test_notebooks.py` le vérifie).
+
 ## Avancement
 
 | Jalon | État |
