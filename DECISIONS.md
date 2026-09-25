@@ -1036,6 +1036,34 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      Pourquoi les pertes robustes : les négatifs présumés sont contaminés (n° 106), un positif
      caché parmi eux pèse sans limite dans la logistique, au plus 1 dans sigmoid.
 
+113. **Banc d'essai sur l'échantillon versionné** (`echantillon/`, 66 clips de Léonard ;
+     `blanci/echantillon.py`, `blanci echantillon`). Fenêtre de l'encodeur centrée sur la
+     fenêtre étiquetée, canal `audio.channel`, cache `data/echantillon/<encodeur>.npz` ; plis
+     groupés par micro (5 : un par micro positif) ; R13/R19/R20/R21 groupés par **site** (1 à 3
+     clips par micro) ; diagnostic « le site se lit-il dans l'embedding d'un micro jamais vu ».
+     Poids de perch_v2 : `hf_hub_download` restait bloqué à 0 octet (transfert xet) ; archive
+     récupérée par `curl --http1.1 -C -` depuis le même dépôt, extraite dans
+     `data/models/bacpipe/perch_v2` (bacpipe la reconnaît ensuite).
+     **Mesure perch_v2, 25/09** (10 positifs de 5 micros, tous à Mataroni ; 55 négatifs
+     annotés, 3 sites ; aucun négatif présumé, donc plus facile que le vrai benchmark). La
+     plupart des têtes font AP 0,86–0,96, intervalles de ~0,8 à 1 : **aucun classement**.
+     Écarts appariés à la logistique (AP 0,957), bootstrap 2 000 :
+     - R19 + R21 : −0,54 [−0,74 ; −0,22] — premier appui réel au mécanisme du n° 109 (b),
+       exagéré ici (positifs = 10 des 48 clips de Mataroni, bien plus que dans le stock) ;
+     - R20 : −0,23 [−0,49 ; −0,05] — écart-type estimé sur 3 à 14 clips par site : artefact
+       de l'échantillon, R20 ne se juge pas ici ; R19 seul : −0,09 [−0,23 ; 0] ;
+     - cascade : −0,45 [−0,69 ; −0,14] — ses scores sont remis à l'échelle dans chaque pli
+       (plancher + 1 + …) ; l'AP poolée sur les plis la pénalise peut-être : à vérifier avant
+       de conclure ;
+     - `logistic:max` : −0,25 [−0,42 ; 0,00] (gem −0,23, non significatif) : sur les jetons
+       16 × 4 de perch_v2, le maximum fait moins bien que la moyenne ;
+     - `loss:hinge` : −0,10 [−0,25 ; −0,01] ;
+     - R21 seul : scores changés (corrélation de rang 0,89), ordre positifs/négatifs identique :
+       même AP.
+     Site : exactitude 0,76 contre 0,69 au hasard (38 Mataroni, 14 CDR, 3 Patawa) : pas de
+     conclusion à cet effectif. Ce qui est acquis : toute la chaîne (encodage, jetons, têtes,
+     régularisations, pertes) tourne sur le vrai son.
+
 114. **Poste d'annotation et R19 + R21** (demandes de Léonard). Streamlit reste : c'est le
      poste d'annotation (`blanci annotate`, `blanci/app.py`), pas l'ancien
      `app/streamlit_app.py` supprimé au n° 104. Les 4 échecs de `tests/test_app.py` venaient
