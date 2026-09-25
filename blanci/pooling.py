@@ -10,6 +10,11 @@ benchmark des têtes (`blanci/head_benchmark.py`) :
 - `meanstd` : moyenne et écart-type concaténés (statistics pooling) ;
 - `topk` : moyenne des k plus fortes valeurs de chaque dimension (k = 2 : la note occupe un ou
   deux jetons), entre la moyenne et le maximum ;
+- `gem` (R22, DECISIONS n° 108) : moyenne généralisée, (moyenne des x^p)^(1/p) par dimension ;
+  p = 1 moyenne, p → ∞ maximum, p = 3 par défaut (`gem2`, `gem5`… pour un autre p, à comparer
+  au benchmark : p n'est pas appris). Les jetons n'étant pas positifs, calculée sur x − min
+  (min des jetons de la fenêtre) puis recentrée : p = 1 et p → ∞ redonnent exactement la
+  moyenne et le maximum ;
 - `mean_f_max_t`, `max_f_mean_t` : sur une grille temps × fréquence seulement (perch_v2 :
   16 temps × 4 fréquences) — moyenne en fréquence puis maximum en temps, ou l'inverse.
 
@@ -22,7 +27,8 @@ from __future__ import annotations
 
 import numpy as np
 
-POOLINGS = ("mean", "max", "meanmax", "meanstd", "topk", "mean_f_max_t", "max_f_mean_t")
+POOLINGS = ("mean", "max", "meanmax", "meanstd", "topk", "gem", "mean_f_max_t", "max_f_mean_t")
+GEM_P = 3.0
 GRID_POOLINGS = ("mean_f_max_t", "max_f_mean_t")
 
 
@@ -76,6 +82,8 @@ def pool(tokens: np.ndarray, how: str, k: int = 2) -> np.ndarray:
     if how == "topk":
         k = max(1, min(k, x.shape[1]))
         return np.sort(x, axis=1)[:, -k:, :].mean(axis=1)
+    if how.startswith("gem"):
+        return gem(x, float(how[3:]) if how[3:] else GEM_P)
     raise ValueError(f"pooling inconnu : {how!r} (connus : {POOLINGS})")
 
 
@@ -83,3 +91,16 @@ def flat_tokens(tokens: np.ndarray) -> np.ndarray:
     """(n, temps, fréquence, dim) → (n, temps × fréquence, dim) ; 3-D inchangé (attentive)."""
     tokens = np.asarray(tokens)
     return tokens.reshape(len(tokens), -1, tokens.shape[-1]) if tokens.ndim == 4 else tokens
+
+
+def gem(tokens: np.ndarray, p: float = GEM_P) -> np.ndarray:
+    """R22 : moyenne généralisée des jetons (n, jetons, dim) → (n, dim), voir le module."""
+    if p <= 0:
+        raise ValueError(f"GeM : p > 0 attendu, reçu {p}")
+    x = np.asarray(tokens, dtype=np.float64)
+    floor = x.min(axis=1, keepdims=True)
+    z = x - floor
+    top = z.max(axis=1, keepdims=True)
+    top[top == 0] = 1.0  # jetons tous égaux : la moyenne, sans division par zéro
+    pooled = np.mean((z / top) ** p, axis=1) ** (1.0 / p) * top[:, 0]
+    return (pooled + floor[:, 0]).astype(np.float32)

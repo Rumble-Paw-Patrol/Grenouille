@@ -255,3 +255,58 @@ def test_curve_plot_is_written_when_matplotlib_is_there(corpus, cfg, tmp_path):
     con, eid = corpus
     summary = annotation_curve(con, cfg, eid)["summary"]
     assert plot_curve(summary, tmp_path / "courbe.png") and (tmp_path / "courbe.png").exists()
+
+
+# --- Régularisations (DECISIONS n° 108) -----------------------------------------------------------
+
+
+def test_regularized_heads_are_named_by_what_they_used(corpus, cfg):
+    con, eid = corpus
+    methods = [
+        "logistic",
+        "logistic+R18=4+R13",
+        "logistic+R19",
+        "prototype+R19",
+        "logistic+R21+R15",
+        "logistic_to_prototype",
+        "lda_shrunk",
+        "logistic:gem",
+    ]
+    out = run_head_benchmark(con, cfg, eid, methods)
+    names = {
+        "logistic",
+        "logistic+R13+R18=4",
+        "logistic+R19",
+        "prototype+R19",
+        "logistic+R15+R21",
+        "logistic_to_prototype",
+        "lda_shrunk",
+        "logistic:gem",
+    }
+    assert set(out["table"]["head"]) == names
+    assert not out["table"]["ap"].isna().any()
+    from blanci.oof import load_oof
+
+    assert set(load_oof(cfg)["source"]) == {f"{eid}/{m}" for m in names}
+
+
+def test_config_variants_join_the_default_heads(corpus, cfg):
+    con, eid = corpus
+    cfg["regularization"]["variants"] = ["logistic+R17"]
+    assert "logistic+R17" in head_methods(None, cfg["regularization"]["variants"])
+    out = run_head_benchmark(con, cfg, eid, None)
+    assert "logistic+R17" in set(out["table"]["head"])
+
+
+def test_reference_follows_its_regularizations(corpus, cfg):
+    con, eid = corpus
+    cfg["head"]["reference"] = "logistic+R19"
+    out = run_head_benchmark(con, cfg, eid, ["logistic+R19", "prototype"])
+    assert set(out["comparisons"]["reference"]) == {"logistic+R19"}
+
+
+def test_annotation_curve_accepts_regularized_heads(corpus, cfg):
+    con, eid = corpus
+    out = annotation_curve(con, cfg, eid, ["logistic", "logistic+R19", "lda_shrunk"])
+    assert set(out["runs"]["head"]) == {"logistic", "logistic+R19", "lda_shrunk"}
+    assert set(out["gaps"]["head"]) == {"logistic+R19", "lda_shrunk"}

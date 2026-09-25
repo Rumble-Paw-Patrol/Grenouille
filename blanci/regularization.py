@@ -1,0 +1,439 @@
+"""Régularisations des têtes (DECISIONS n° 108), numérotées comme la liste du 25/09/2026
+(R1–R84, `documentation/regularisation.md`).
+
+Toutes coupées par défaut. Une tête du benchmark les active dans son nom :
+`logistic+R18=16+R19` = régression logistique, ACP à 16 composantes (R18), centrage par micro
+(R19). « =v » remplace le réglage principal de la section `regularization` de la config. Le nom
+canonique (régularisations triées par numéro) est celui des rapports et des scores hors-pli :
+on sait toujours lesquelles ont servi.
+
+Programmées ici, appliquées dans cet ordre :
+
+| R | où | quoi |
+|---|---|---|
+| R19 | fenêtre | centrage par micro : − moyenne de tout le stock du micro (sans labels) |
+| R20 | fenêtre | AdaBN : (x − moyenne du micro) / écart-type du micro |
+| R17 | fenêtre | embedding ramené à la norme 1 |
+| R18 | pli | ACP ajustée sur l'entraînement du pli (`components`) |
+| R21 | pli | retrait des directions qui trahissent le micro (négatifs seulement) |
+| R13 | poids | chaque micro pèse autant dans sa classe |
+| R15 | poids | négatifs annotés (faux amis, espèces) × `hard_weight` face aux présumés |
+| R27 | pénalité | L1 (lasso) au lieu de L2 |
+| R28 | pénalité | Elastic Net (`l1_ratio`) |
+
+Ailleurs : R22 = pooling `gem` (`blanci/pooling.py`), R30 = tête `logistic_to_prototype`,
+R31 = tête `lda_shrunk` (`blanci/head.py`), R26 = la L2, déjà là.
+
+R19 et R20 lisent le stock d'embeddings entier du micro (`store_domain_statistics`) : aucune
+étiquette, ce que la chaîne aura aussi sur un nouveau site. Elles ne valent que pour
+l'embedding par défaut (pas pour les jetons résumés `logistic:<pooling>`). R18 et R21 sont
+ajustées dans chaque pli sur les seules fenêtres d'entraînement ; le C des têtes logistiques est
+ensuite choisi sur ces fenêtres transformées.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+
+IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28)
+DESCRIPTIONS = {
+    13: "chaque micro pèse autant dans sa classe",
+    15: "négatifs annotés surpondérés face aux présumés",
+    17: "normalisation L2 des embeddings",
+    18: "ACP avant la tête",
+    19: "centrage par micro",
+    20: "AdaBN : centrage et réduction par micro",
+    21: "retrait des directions du micro (INLP)",
+    27: "pénalité L1",
+    28: "pénalité Elastic Net",
+}
+# Réglage principal de chaque R, celui que « =v » remplace.
+MAIN_PARAMETER = {15: "hard_weight", 18: "components", 21: "iterations", 28: "l1_ratio"}
+WEIGHTED_HEADS = ("logistic", "cascade", "logistic_to_prototype")
+PENALIZED_HEADS = ("logistic", "cascade")
+_SUFFIX = re.compile(r"^R(\d+)(?:=([0-9.eE+-]+))?$")
+
+
+# --- Noms des têtes -------------------------------------------------------------------------
+
+
+def parse_head(spec: str) -> tuple[str, dict[int, float | None]]:
+    """« logistic:max+R18=16+R13 » → ("logistic:max", {13: None, 18: 16.0})."""
+    base, *suffixes = spec.split("+")
+    regs: dict[int, float | None] = {}
+    for suffix in suffixes:
+        match = _SUFFIX.match(suffix.strip())
+        if not match:
+            raise ValueError(f"régularisation illisible dans {spec!r} : {suffix!r} (ex. R18=16)")
+        regs[int(match.group(1))] = float(match.group(2)) if match.group(2) else None
+    return base.strip(), regs
+
+
+def head_name(base: str, regs: dict[int, float | None]) -> str:
+    """Nom canonique : régularisations triées par numéro."""
+    parts = [base]
+    for number in sorted(regs):
+        value = regs[number]
+        if value is None:
+            parts.append(f"R{number}")
+        else:
+            parts.append(f"R{number}={int(value) if float(value).is_integer() else value}")
+    return "+".join(parts)
+
+
+def canonical(spec: str) -> str:
+    return head_name(*parse_head(spec))
+
+
+def validate(base: str, regs: dict[int, float | None]) -> None:
+    """Refuse une régularisation inconnue ou sans objet pour cette tête."""
+    unknown = sorted(set(regs) - set(IMPLEMENTED))
+    if unknown:
+        raise ValueError(
+            f"R{unknown[0]} n'est pas programmée comme suffixe (programmées : "
+            f"{', '.join(f'R{n}' for n in IMPLEMENTED)} ; R22 = pooling gem, R30 = tête "
+            "logistic_to_prototype, R31 = tête lda_shrunk)"
+        )
+    if not regs:
+        return
+    family = "logistic" if base.startswith("logistic:") else base
+    if base == "attentive":
+        raise ValueError("l'attentive lit les jetons bruts : aucune régularisation programmée")
+    if {19, 20} <= set(regs):
+        raise ValueError("R20 contient déjà le centrage de R19 : l'une ou l'autre")
+    if {27, 28} <= set(regs):
+        raise ValueError("R27 (L1) et R28 (Elastic Net) : l'une ou l'autre")
+    if 21 in regs and {19, 20} & set(regs):
+        raise ValueError(
+            "R21 après R19/R20 efface le chant : une fois chaque micro centré, les moyennes des "
+            "négatifs ne diffèrent plus que par le chant des micros riches en positifs "
+            "(mesuré sur données simulées, DECISIONS n° 108)"
+        )
+    if base.startswith("logistic:") and {19, 20} & set(regs):
+        raise ValueError(
+            f"{base} : R19/R20 n'existent que pour l'embedding par défaut (statistiques du stock)"
+        )
+    if {13, 15} & set(regs) and family not in WEIGHTED_HEADS:
+        raise ValueError(f"R13/R15 (poids) : têtes {', '.join(WEIGHTED_HEADS)} seulement")
+    if {27, 28} & set(regs) and family not in PENALIZED_HEADS:
+        raise ValueError(f"R27/R28 (pénalité) : têtes {', '.join(PENALIZED_HEADS)} seulement")
+
+
+def needs_domain(specs: list[str]) -> bool:
+    return any({19, 20} & set(parse_head(s)[1]) for s in specs)
+
+
+# --- R19, R20 : statistiques par micro sur le stock entier ------------------------------------
+
+
+@dataclass(frozen=True)
+class DomainStats:
+    """Moyenne et écart-type des embeddings de chaque groupe (micro ou site), sans labels."""
+
+    by: str
+    names: np.ndarray  # (G,) noms des groupes
+    mean: np.ndarray  # (G, d)
+    std: np.ndarray  # (G, d)
+    count: np.ndarray  # (G,) fenêtres
+
+    def rows(self, groups: np.ndarray) -> np.ndarray:
+        """Indice du groupe de chaque fenêtre."""
+        index = {str(name): i for i, name in enumerate(self.names)}
+        missing = sorted({str(g) for g in groups} - set(index))
+        if missing:
+            raise ValueError(f"pas de statistiques de stock pour {missing[:3]} (R19/R20)")
+        return np.array([index[str(g)] for g in groups], dtype=int)
+
+
+class _Accumulator:
+    """Sommes par groupe, partition par partition (un stock entier ne tient pas en mémoire)."""
+
+    def __init__(self) -> None:
+        self.sums: dict[str, tuple[np.ndarray, np.ndarray, int]] = {}
+
+    def add(self, emb: np.ndarray, groups: np.ndarray) -> None:
+        for name in np.unique(groups):
+            block = emb[groups == name].astype(np.float64)
+            s, sq, n = self.sums.get(str(name), (0.0, 0.0, 0))
+            self.sums[str(name)] = (
+                s + block.sum(axis=0),
+                sq + (block**2).sum(axis=0),
+                n + len(block),
+            )
+
+    def stats(self, by: str) -> DomainStats:
+        names = sorted(self.sums)
+        count = np.array([self.sums[n][2] for n in names])
+        mean = np.stack([self.sums[n][0] / self.sums[n][2] for n in names])
+        var = np.stack([self.sums[n][1] / self.sums[n][2] for n in names]) - mean**2
+        return DomainStats(
+            by,
+            np.array(names, dtype=object),
+            mean.astype(np.float32),
+            np.sqrt(np.clip(var, 0.0, None)).astype(np.float32),
+            count,
+        )
+
+
+def domain_statistics(emb: np.ndarray, groups: np.ndarray, by: str = "point") -> DomainStats:
+    acc = _Accumulator()
+    acc.add(np.asarray(emb), np.asarray(groups).astype(str))
+    return acc.stats(by)
+
+
+def store_domain_statistics(con, store, filters: dict | None, by: str = "point") -> DomainStats:
+    """Statistiques de chaque micro (ou site) sur tout son stock, fenêtres arrêtées exclues."""
+    from blanci.dataset import recordings_table
+    from blanci.store import gated_mask
+
+    group_of = recordings_table(con).set_index("recording_id")[by].astype(str)
+    acc = _Accumulator()
+    for path in store.fragments(filters):
+        meta, emb = store.read(path)
+        keep = ~gated_mask(meta)
+        acc.add(emb[keep], group_of.loc[meta.loc[keep, "recording_id"]].to_numpy())
+    if not acc.sums:
+        raise ValueError(f"stock vide pour {store.encoder_id} : pas de statistiques (R19/R20)")
+    return acc.stats(by)
+
+
+# --- R21 : directions qui prédisent le micro ----------------------------------------------------
+
+
+def mean_directions(X: np.ndarray, groups: np.ndarray) -> np.ndarray:
+    """Base orthonormée (d, r ≤ G − 1) des écarts entre moyennes des groupes.
+
+    Une fois ce sous-espace retiré, tous les micros ont la même moyenne : aucun classifieur
+    linéaire ne les distingue plus par leur fond moyen (principe de LEACE, Belrose et al.
+    2023, ici en projection orthogonale). Solution fermée, au plus un micro − 1 directions.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    groups = np.asarray(groups).astype(str)
+    names = np.unique(groups)
+    if len(names) < 2:
+        return np.zeros((X.shape[1], 0))
+    means = np.stack([X[groups == g].mean(axis=0) for g in names])
+    U, S, _ = np.linalg.svd((means - X.mean(axis=0)).T, full_matrices=False)
+    return U[:, S > max(S[0], 1e-12) * 1e-6] if S[0] > 1e-12 else np.zeros((X.shape[1], 0))
+
+
+def nuisance_directions(
+    X: np.ndarray,
+    groups: np.ndarray,
+    iterations: int = 3,
+    max_directions: int = 128,
+    C: float = 1.0,
+    seed: int = 0,
+    tolerance: float = 0.05,
+) -> np.ndarray:
+    """INLP (Ravfogel et al. 2020) : base orthonormée (d, r) des directions qui prédisent le
+    groupe. À chaque tour, une régression logistique apprend à reconnaître le micro ; ses
+    directions sont retirées et l'on recommence sur ce qui reste.
+
+    Arrêt dès que le micro n'est plus prédit mieux que le hasard (exactitude en validation
+    croisée ≤ part du groupe majoritaire + `tolerance`). Limite constatée sur données simulées :
+    quand les micros sont très séparés, chaque tour en retire les normales mais il reste
+    toujours une direction qui les sépare, et l'INLP finit par retirer le chant ; d'où la
+    méthode `means` par défaut (`mean_directions`).
+    """
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import StratifiedKFold, cross_val_score
+
+    X = np.asarray(X, dtype=np.float64)
+    groups = np.asarray(groups).astype(str)
+    Q = np.zeros((X.shape[1], 0))
+    names, counts = np.unique(groups, return_counts=True)
+    if len(names) < 2:
+        return Q
+    chance = counts.max() / counts.sum()
+    n_folds = int(min(3, counts.min()))
+    Xc = X - X.mean(axis=0)
+    for _ in range(int(iterations)):
+        if Q.shape[1] >= max_directions:
+            break
+        R = Xc - (Xc @ Q) @ Q.T
+        scale = R.std(axis=0)
+        scale[scale < 1e-9] = 1.0
+        clf = LogisticRegression(C=C, max_iter=1000, random_state=seed)
+        if n_folds >= 2:
+            folds = StratifiedKFold(n_folds, shuffle=True, random_state=seed)
+            if cross_val_score(clf, R / scale, groups, cv=folds).mean() <= chance + tolerance:
+                break
+        clf.fit(R / scale, groups)
+        W = clf.coef_ / scale  # normales des frontières dans l'espace des embeddings
+        W = W - (W @ Q) @ Q.T
+        U, S, _ = np.linalg.svd(W.T, full_matrices=False)
+        if not len(S) or S[0] < 1e-12:
+            break
+        B = U[:, S > S[0] * 1e-6][:, : max_directions - Q.shape[1]]
+        Q = np.hstack([Q, B])
+    return Q
+
+
+# --- R13, R15 : poids des exemples ------------------------------------------------------------
+
+
+def sample_weights(
+    y: np.ndarray,
+    groups: np.ndarray,
+    hard: np.ndarray | None,
+    regs: dict[int, float | None],
+    hard_weight: float = 3.0,
+) -> np.ndarray | None:
+    """Poids par fenêtre, de moyenne 1 dans chaque classe (l'équilibre des classes reste celui
+    de `class_weight="balanced"`). None si ni R13 ni R15."""
+    if not {13, 15} & set(regs):
+        return None
+    y = np.asarray(y).astype(int)
+    w = np.ones(len(y))
+    if 13 in regs:
+        for c in (0, 1):
+            idx = np.flatnonzero(y == c)
+            _, inverse, counts = np.unique(
+                np.asarray(groups)[idx].astype(str), return_inverse=True, return_counts=True
+            )
+            w[idx] = 1.0 / counts[inverse]
+    if 15 in regs and hard is not None:
+        w[np.asarray(hard, dtype=bool) & (y == 0)] *= hard_weight
+    for c in (0, 1):
+        idx = y == c
+        if idx.any():
+            w[idx] *= idx.sum() / w[idx].sum()
+    return w
+
+
+# --- Assemblage -------------------------------------------------------------------------------
+
+
+@dataclass
+class Context:
+    """Ce que certaines régularisations savent de chaque fenêtre, hors embedding."""
+
+    groups: np.ndarray  # (n,) groupe `regularization.by` (R13, R21)
+    hard: np.ndarray | None = None  # (n,) négatif annoté (R15)
+    domain: DomainStats | None = None  # R19, R20
+    domain_rows: np.ndarray | None = None  # (n,) indice dans `domain`
+
+    def subset(self, rows: np.ndarray) -> Context:
+        return Context(
+            self.groups[rows],
+            None if self.hard is None else self.hard[rows],
+            self.domain,
+            None if self.domain_rows is None else self.domain_rows[rows],
+        )
+
+
+@dataclass
+class Regularizer:
+    """Les régularisations d'une tête, avec leurs réglages et le contexte des fenêtres."""
+
+    regs: dict[int, float | None]
+    params: dict[str, Any]
+    context: Context
+
+    def param(self, number: int, key: str, default: Any) -> Any:
+        value = self.regs.get(number)
+        if value is not None and MAIN_PARAMETER.get(number) == key:
+            return value
+        return (self.params.get(f"R{number}") or {}).get(key, default)
+
+    def window_transform(self, X: np.ndarray) -> np.ndarray:
+        """R19 / R20 puis R17 : fenêtre par fenêtre, sans apprentissage."""
+        X = np.asarray(X, dtype=np.float32)
+        if {19, 20} & set(self.regs):
+            ctx = self.context
+            if ctx.domain is None or ctx.domain_rows is None:
+                raise ValueError("R19/R20 demandent les statistiques du stock (Context.domain)")
+            X = X - ctx.domain.mean[ctx.domain_rows]
+            if 20 in self.regs:
+                eps = float(self.param(20, "eps", 1e-6))
+                X = X / (ctx.domain.std[ctx.domain_rows] + eps)
+        if 17 in self.regs:
+            from blanci.index import l2_normalize
+
+            X = l2_normalize(X)
+        return X.astype(np.float32)
+
+    def fit_projection(self, X: np.ndarray, y: np.ndarray, groups: np.ndarray, seed: int = 0):
+        """R18 puis R21, ajustées sur les fenêtres d'entraînement : renvoie x ↦ projection."""
+        steps = []
+        Z = np.asarray(X, dtype=np.float64)
+        if 18 in self.regs:
+            from sklearn.decomposition import PCA
+
+            k = int(self.param(18, "components", 32))
+            pca = PCA(n_components=max(1, min(k, *Z.shape)), random_state=seed).fit(Z)
+            steps.append(pca.transform)
+            Z = pca.transform(Z)
+        if 21 in self.regs:
+            negatives = np.asarray(y) == 0
+            how = self.param(21, "method", "means")
+            if how == "means":
+                Q = mean_directions(Z[negatives], np.asarray(groups)[negatives])
+            elif how == "inlp":
+                Q = nuisance_directions(
+                    Z[negatives],
+                    np.asarray(groups)[negatives],
+                    iterations=int(self.param(21, "iterations", 3)),
+                    max_directions=int(self.param(21, "max_directions", 128)),
+                    C=float(self.param(21, "C", 1.0)),
+                    seed=seed,
+                    tolerance=float(self.param(21, "tolerance", 0.05)),
+                )
+            else:
+                raise ValueError(f"R21 : méthode inconnue {how!r} (means ou inlp)")
+            steps.append(lambda A, Q=Q: A - (A @ Q) @ Q.T)
+        if not steps:
+            return None
+
+        def project(A: np.ndarray) -> np.ndarray:
+            A = np.asarray(A, dtype=np.float64)
+            for step in steps:
+                A = step(A)
+            return A.astype(np.float32)
+
+        return project
+
+    def fit_options(self) -> dict[str, float]:
+        """Pénalité de la logistique (R27, R28) : l1_ratio, 0 = L2 (R26)."""
+        if 27 in self.regs:
+            return {"l1_ratio": 1.0}
+        if 28 in self.regs:
+            return {"l1_ratio": float(self.param(28, "l1_ratio", 0.5))}
+        return {}
+
+    def prepare(
+        self, X: np.ndarray, y: np.ndarray, train: np.ndarray, seed: int = 0
+    ) -> tuple[np.ndarray, np.ndarray | None, dict[str, float]]:
+        """(X transformé, toutes fenêtres ; poids des fenêtres `train` ou None ; options de la
+        logistique)."""
+        X = self.window_transform(X)
+        project = self.fit_projection(X[train], y[train], self.context.groups[train], seed)
+        if project is not None:
+            X = project(X)
+        weights = sample_weights(
+            y[train],
+            self.context.groups[train],
+            None if self.context.hard is None else self.context.hard[train],
+            self.regs,
+            float(self.param(15, "hard_weight", 3.0)),
+        )
+        return X, weights, self.fit_options()
+
+
+def regularizer_for(
+    spec: str, cfg: dict, context: Context | None
+) -> tuple[str, str, Regularizer | None]:
+    """(nom canonique, tête de base, régularisation ou None) d'une tête du benchmark."""
+    base, regs = parse_head(spec)
+    validate(base, regs)
+    name = head_name(base, regs)
+    if not regs:
+        return name, base, None
+    if context is None:
+        raise ValueError(f"{name} : contexte des fenêtres manquant")
+    return name, base, Regularizer(regs, cfg.get("regularization", {}) or {}, context)

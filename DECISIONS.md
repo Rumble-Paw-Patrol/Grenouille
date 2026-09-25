@@ -939,3 +939,60 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      positifs gardés — inutilisables en l'état ; `band_contrast` à 3 dB : 12 % arrêtés, 92 %
      gardés. Les descripteurs de rythme du module en parallèle sont presque toujours nuls.
      À reprendre avec Léonard (bande, durées, seuil) avant toute porte de rythme.
+
+## 2026-09-25 (après-midi) — Régularisations des têtes
+
+108. **Régularisations programmées, coupées par défaut** (tri de Léonard du 25/09 sur la liste
+     R1–R84, `documentation/regularisation.md`). `blanci/regularization.py`, numéros conservés
+     partout dans le code et la config. Une tête du benchmark les active dans son nom :
+     `blanci heads --methods logistic,logistic+R18=16,logistic+R19` (« =v » remplace le réglage
+     principal) ; le nom canonique (R triées) est celui des rapports et des scores hors-pli,
+     `regularization.variants` en ajoute à la liste par défaut, `head.reference` les suit.
+     Ordre : R19/R20 → R17 → R18 → R21 → tête. Programmées :
+     - R13 (chaque micro pèse autant dans sa classe) et R15 (négatifs annotés × `hard_weight`,
+       3 par défaut, face aux présumés — d'autant plus utile que les présumés sont contaminés,
+       n° 106) : poids des fenêtres, de moyenne 1 par classe, `class_weight` inchangé ;
+     - R17 (norme 1), R19 (− moyenne du micro), R20 (AdaBN : centrage et réduction par micro).
+       R19/R20 lisent tout le stock du micro, partition par partition, sans labels
+       (`store_domain_statistics`) : ce que la chaîne aura sur un nouveau site. Embedding par
+       défaut seulement (pas les jetons résumés) ;
+     - R18 (ACP) et R21 (retrait des directions du micro, sur les négatifs) ajustées dans
+       chaque pli sur l'entraînement ; le C est ensuite choisi sur les fenêtres transformées.
+       R21 `means` (défaut) retire les écarts entre moyennes des micros (≤ micros − 1
+       directions, principe de LEACE) ; `inlp` itère un classifieur de micros, avec arrêt dès
+       qu'il ne fait plus mieux que le hasard. Sur données simulées à micros très séparés, l'INLP
+       retire presque toutes les dimensions, chant compris : d'où `means` par défaut ;
+     - R27 (L1), R28 (Elastic Net) : `l1_ratio` de scikit-learn (`penalty` est déprécié depuis
+       la 1.8 ; `penalty="elasticnet"` ajouté pour les versions antérieures), solveur saga ;
+     - R22 : pooling `gem` des jetons (`logistic:gem`, p = 3 ; `gem2`, `gem5`… pour un autre p).
+       Calculé sur x − min des jetons puis recentré (jetons non positifs) : p = 1 et p → ∞
+       redonnent la moyenne et le maximum. p n'est pas appris : on compare quelques valeurs ;
+     - R30 : tête `logistic_to_prototype`, perte ½‖w − w₀‖² + C·Σ perte logistique, w₀ = prototype
+       différentiel dans l'espace standardisé, mis à l'échelle par une logistique à une variable
+       (scipy L-BFGS). C petit : le prototype ; C grand : la logistique libre. Même grille de C ;
+     - R31 : tête `lda_shrunk`, LDA à covariance rétrécie de Ledoit-Wolf (scikit-learn,
+       `shrinkage="auto"`, qui rétrécit la matrice de corrélation), sans hyperparamètre.
+     R30 et R31 rejoignent la courbe selon le nombre d'annotations (`head.curve.methods`). La
+     courbe choisit désormais le C de chaque tête sur ses propres entrées (régularisations
+     comprises), et non plus une fois pour toutes sur l'embedding par défaut.
+     Combinaisons refusées : R19 + R20, R27 + R28, R21 + R19/R20 (n° 109), R19/R20 sur les
+     jetons résumés, poids et pénalités hors des têtes logistiques. Hors du benchmark des têtes
+     (`train`, `benchmark`, fusion, empilement), rien ne change : logistique L2 tant qu'aucune
+     n'est retenue. Environnement : un `uv run` sans `--no-sync` a retiré les groupes research,
+     app et notebook ; remis par `uv sync --inexact --group research --group app --group
+     notebook`.
+
+109. **Mesure sur données simulées : la validation croisée sur un seul site récompense les
+     raccourcis de micro** (`tests/test_regularization.py`). Corpus : micros « riches » (50 %
+     de positifs) et « pauvres » (5 %) séparés par un axe de fond commun ; 4 micros d'un
+     « nouveau site » inversent la relation. AP sur le nouveau site, 4 tirages : sans
+     régularisation 0,25–0,50 ; R21 0,50–0,79 ; R19 0,55–0,73 ; R20 0,51–0,69. En validation
+     croisée sur les micros d'entraînement, où le raccourci reste vrai, l'ordre s'inverse :
+     sans régularisation 0,68–0,82, R21 0,45–0,69, R19 0,50–0,62. Conséquences :
+     (a) R19, R20 et R21 ne se jugent pas sur les plis groupés de Mataroni, mais sur un site
+     tenu à l'écart (`blanci evaluate --holdout tresor`, `heads-curve --by site`) dès que Trésor
+     ou Kaw auront des positifs ; d'ici là, un recul en validation croisée n'est pas un verdict ;
+     (b) R19 + R21 : 0,29–0,41 partout — centrés par micro, les négatifs ne diffèrent plus que
+     par le chant qui fuit dans la moyenne des micros riches, et R21 efface l'espèce : refusé ;
+     (c) R19 retire aussi du chant là où A. blanci occupe beaucoup de fenêtres (la moyenne du
+     micro en contient) : à surveiller sur les micros à chœur.

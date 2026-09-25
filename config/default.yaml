@@ -122,7 +122,36 @@ head:
     by: point                      # point (micro) tant que les positifs sont tous à Mataroni
     k: [0, 1, 2, 5, 10, 20]        # enregistrements positifs du site cible à l'entraînement
     repeats: 5                     # tirages de la moitié de test par cible
-    methods: [prototype, logistic, simple_prototype, exemplar]
+    # logistic_to_prototype (R30) et lda_shrunk (R31) : entre prototype et logistique, candidats
+    # naturels des sites peu annotés (DECISIONS n° 108).
+    methods: [prototype, logistic, simple_prototype, exemplar, logistic_to_prototype, lda_shrunk]
+
+# Régularisations des têtes (DECISIONS n° 108, `blanci/regularization.py`), numérotées comme la
+# liste du 25/09/2026 (documentation/regularisation.md). Toutes coupées : on les active tête par
+# tête dans le nom, `blanci heads --methods logistic,logistic+R18,logistic+R19+R18=16` (« =v »
+# remplace le réglage principal, noté ◆). Le nom canonique (R triées) est celui des rapports et
+# des scores hors-pli : on sait toujours lesquelles ont servi. Ordre : R19/R20 → R17 → R18 →
+# R21 → tête (poids R13/R15, pénalité R27/R28). Benchmark des têtes seulement (heads,
+# heads-curve) : train, benchmark et fusion gardent la logistique L2 tant que rien n'est retenu.
+# Ailleurs : R22 = pooling `logistic:gem` (gem2, gem5… pour un autre p), R30 = tête
+# logistic_to_prototype, R31 = tête lda_shrunk, R26 = la L2 (défaut).
+regularization:
+  variants: []            # têtes ajoutées à `blanci heads` par défaut, ex. [logistic+R19, prototype+R19]
+  by: point               # groupe de R13, R19, R20, R21 : point (micro) ou site
+  R13: {}                 # pondération : chaque micro pèse autant dans sa classe
+  R15: {hard_weight: 3.0} # ◆ négatifs annotés (faux amis, espèces) × 3 face aux présumés (n° 106)
+  R17: {}                 # embeddings ramenés à la norme 1
+  R18: {components: 32}   # ◆ ACP ajustée sur l'entraînement de chaque pli
+  R19: {}                 # centrage : − moyenne de tout le stock du micro (sans labels)
+  R20: {eps: 1.0e-6}      # AdaBN : (x − moyenne du micro) / écart-type du micro
+  # Retrait des directions qui trahissent le micro, sur les négatifs du pli. means : les écarts
+  # entre moyennes des micros (solution fermée, ≤ micros − 1 directions, principe de LEACE) ;
+  # inlp : classifieur de micros itéré (◆ tours au plus, directions au plus, C, arrêt dès que le
+  # micro n'est plus prédit mieux que le hasard + tolerance). inlp retire trop de directions
+  # quand les micros sont très séparés (constaté sur données simulées) : means par défaut.
+  R21: {method: means, iterations: 3, max_directions: 128, C: 1.0, tolerance: 0.05}
+  R27: {}                 # pénalité L1 (lasso)
+  R28: {l1_ratio: 0.5}    # ◆ Elastic Net : part de L1 (0 = L2, 1 = L1)
 
 benchmark:
   negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)

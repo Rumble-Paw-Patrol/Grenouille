@@ -1,5 +1,6 @@
 """Têtes sur embeddings gelés (§3) : recherche par l'exemple, prototypes simple et différentiel,
-kNN cosinus, régression logistique, attentive probe et cascade (DECISIONS n° 92).
+kNN cosinus, régression logistique, attentive probe et cascade (DECISIONS n° 92) ; logistique
+tirée vers le prototype (R30) et LDA à covariance rétrécie (R31), DECISIONS n° 108.
 
 La tête retenue (logistique L2) est stockée sans pickle (JSON + npz, calcul en numpy) : elle se
 recharge sur n'importe quelle machine, quelle que soit la version de scikit-learn.
@@ -8,11 +9,13 @@ recharge sur n'importe quelle machine, quelle que soit la version de scikit-lear
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import sklearn
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
@@ -83,6 +86,7 @@ def cascade_scores(
     C: float = 1.0,
     fraction: float = 0.2,
     seed: int = 0,
+    **fit_kw,
 ) -> np.ndarray:
     """Cascade : un linear probe trie toutes les fenêtres, une attentive probe reclasse les
     `fraction` meilleures (candidats), seules à avoir besoin de leurs jetons (mémoire, §3).
@@ -95,7 +99,7 @@ def cascade_scores(
     from blanci.attentive import fit_attentive
     from blanci.pooling import flat_tokens
 
-    stage1 = fit_logistic(X_train, y_train, C, seed)
+    stage1 = fit_logistic(X_train, y_train, C, seed, **fit_kw)
     s_train, s_test = stage1.decision(X_train), stage1.decision(X_test)
     threshold = np.quantile(s_train, 1.0 - fraction)
     chosen = s_train >= threshold
@@ -162,19 +166,120 @@ class Head:
         return cls(weights["mean"], weights["scale"], weights["coef"], intercept, meta)
 
 
-def fit_logistic(X: np.ndarray, y: np.ndarray, C: float, seed: int = 0) -> Head:
+_SKLEARN = tuple(int(v) for v in re.match(r"(\d+)\.(\d+)", sklearn.__version__).groups())
+
+
+def _penalty(l1_ratio: float) -> dict[str, Any]:
+    """Arguments de pénalité : l1_ratio 0 = L2 (R26), 1 = L1 (R27), entre les deux = Elastic
+    Net (R28). `penalty` est déprécié depuis scikit-learn 1.8."""
+    if not l1_ratio:
+        return {"max_iter": 2000}
+    kw: dict[str, Any] = {"l1_ratio": float(l1_ratio), "solver": "saga", "max_iter": 5000}
+    if _SKLEARN < (1, 8):
+        kw["penalty"] = "elasticnet"
+    return kw
+
+
+def fit_logistic(
+    X: np.ndarray,
+    y: np.ndarray,
+    C: float,
+    seed: int = 0,
+    sample_weight: np.ndarray | None = None,
+    l1_ratio: float = 0.0,
+) -> Head:
+    """Standardisation + logistique à classes équilibrées. `sample_weight` : R13, R15 ;
+    `l1_ratio` : R27, R28 (`blanci/regularization.py`)."""
     scaler = StandardScaler().fit(X)
-    model = LogisticRegression(C=C, class_weight="balanced", max_iter=2000, random_state=seed).fit(
-        scaler.transform(X), y
-    )
+    model = LogisticRegression(
+        C=C, class_weight="balanced", random_state=seed, **_penalty(l1_ratio)
+    ).fit(scaler.transform(X), y, sample_weight=sample_weight)
     scale = np.where(scaler.scale_ > 0, scaler.scale_, 1.0)
+    meta: dict[str, Any] = {"C": C}
+    if l1_ratio:
+        meta["l1_ratio"] = float(l1_ratio)
     return Head(
         scaler.mean_.astype(np.float32),
         scale.astype(np.float32),
         model.coef_[0].astype(np.float32),
         float(model.intercept_[0]),
-        {"C": C},
+        meta,
     )
+
+
+def fit_logistic_to_prototype(
+    X: np.ndarray,
+    y: np.ndarray,
+    C: float,
+    seed: int = 0,
+    sample_weight: np.ndarray | None = None,
+) -> Head:
+    """R30 : logistique dont la pénalité tire w vers le prototype différentiel.
+
+    Perte = ½‖w − w₀‖² + C · Σ perte logistique (la L2 ordinaire tire vers w = 0). w₀ = α·u,
+    u = μ₊ − μ₋ normé, dans l'espace standardisé de la logistique ; α et le biais de départ
+    viennent d'une logistique à une variable sur la projection x·u. C petit : la tête est le
+    prototype différentiel (mis à l'échelle) ; C grand : la logistique libre ; entre les deux,
+    elle ne s'écarte du prototype que là où les données le justifient. Mêmes C que la
+    logistique, choisis de la même façon.
+    """
+    from scipy.optimize import minimize
+    from scipy.special import expit
+
+    y = np.asarray(y).astype(int)
+    scaler = StandardScaler().fit(X)
+    Z = scaler.transform(X).astype(np.float64)
+    u = Z[y == 1].mean(axis=0) - Z[y == 0].mean(axis=0)
+    u /= np.linalg.norm(u) or 1.0
+    projection = (Z @ u)[:, None]
+    start = LogisticRegression(C=1.0, class_weight="balanced").fit(
+        projection, y, sample_weight=sample_weight
+    )
+    alpha = float(start.coef_[0, 0])
+    w0 = alpha * u
+    counts = np.bincount(y, minlength=2)
+    sw = (len(y) / (2.0 * np.maximum(counts, 1)))[y]  # class_weight="balanced"
+    if sample_weight is not None:
+        sw = sw * np.asarray(sample_weight, dtype=np.float64)
+    t = 2.0 * y - 1.0
+
+    def objective(params: np.ndarray) -> tuple[float, np.ndarray]:
+        w, b = params[:-1], params[-1]
+        margin = t * (Z @ w + b)
+        g = -C * sw * t * expit(-margin)
+        diff = w - w0
+        loss = C * float(np.sum(sw * np.logaddexp(0.0, -margin))) + 0.5 * float(diff @ diff)
+        return loss, np.append(Z.T @ g + diff, g.sum())
+
+    result = minimize(
+        objective,
+        np.append(w0, start.intercept_[0]),
+        jac=True,
+        method="L-BFGS-B",
+        options={"maxiter": 2000},
+    )
+    scale = np.where(scaler.scale_ > 0, scaler.scale_, 1.0)
+    return Head(
+        scaler.mean_.astype(np.float32),
+        scale.astype(np.float32),
+        result.x[:-1].astype(np.float32),
+        float(result.x[-1]),
+        {"C": C, "shrink_to": "differential_prototype", "prototype_scale": alpha},
+    )
+
+
+def lda_shrunk_scores(X_train: np.ndarray, y_train: np.ndarray, X: np.ndarray) -> np.ndarray:
+    """R31 : analyse discriminante linéaire à covariance rétrécie (Ledoit-Wolf).
+
+    w = Σ⁻¹(μ₊ − μ₋) avec Σ = (1 − α)·Σ̂ + α·cible, α calculé sur les données (aucun
+    hyperparamètre, solution fermée). α = 1 : prototype différentiel (à la variance de chaque
+    dimension près : scikit-learn rétrécit la matrice de corrélation) ; α = 0 : LDA complète,
+    proche de la logistique.
+    """
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+    lda = LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto").fit(X_train, y_train)
+    return lda.decision_function(X)
 
 
 def select_C(
@@ -184,15 +289,23 @@ def select_C(
     C_grid: list[float],
     n_splits: int = 5,
     seed: int = 0,
+    fitter=None,
+    sample_weight: np.ndarray | None = None,
+    **fit_kw,
 ) -> tuple[float, dict[float, float]]:
-    """C maximisant l'AP moyenne en validation groupée (plis internes)."""
+    """C maximisant l'AP moyenne en validation groupée (plis internes).
+
+    `fitter` : fit_logistic (défaut) ou fit_logistic_to_prototype (R30) ; `sample_weight` et
+    `fit_kw` (l1_ratio) passent à chaque ajustement."""
+    fitter = fitter or fit_logistic
     folds = grouped_folds(y, groups, n_splits, seed)
     results = {}
     for C in C_grid:
-        aps = [
-            average_precision(y[test], fit_logistic(X[train], y[train], C, seed).decision(X[test]))
-            for train, test in folds
-        ]
+        aps = []
+        for train, test in folds:
+            sw = None if sample_weight is None else sample_weight[train]
+            head = fitter(X[train], y[train], C, seed, sample_weight=sw, **fit_kw)
+            aps.append(average_precision(y[test], head.decision(X[test])))
         results[C] = float(np.nanmean(aps))
     return max(results, key=results.get), results
 
@@ -232,17 +345,61 @@ METHODS = (
     "simple_prototype",
     "prototype",
     "logistic",
+    "logistic_to_prototype",  # R30
+    "lda_shrunk",  # R31
     "attentive",
     "cascade",
 )
+# Têtes à C, et leur ajustement.
+FITTERS = {
+    "logistic": fit_logistic,
+    "cascade": fit_logistic,
+    "logistic_to_prototype": fit_logistic_to_prototype,
+}
 
 
-def _choose_C(X, y, groups, C_grid, n_splits, seed) -> float:
+def _choose_C(X, y, groups, C_grid, n_splits, seed, fitter=None, **fit_kw) -> float:
     """C par validation groupée interne, si la grille a plusieurs valeurs et l'entraînement
     plusieurs groupes ; sinon la première valeur."""
     if C_grid and len(C_grid) > 1 and len(np.unique(groups)) >= 2:
-        return select_C(X, y, groups, C_grid, n_splits, seed)[0]
+        return select_C(X, y, groups, C_grid, n_splits, seed, fitter, **fit_kw)[0]
     return (C_grid or [1.0])[0]
+
+
+def _prepared(X, y, train, regularizer, seed):
+    """(X, poids des fenêtres `train`, options de la logistique) après les régularisations."""
+    if regularizer is None:
+        return X, None, {}
+    return regularizer.prepare(X, y, train, seed)
+
+
+def choose_C(
+    method: str,
+    X: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    rows: np.ndarray,
+    C_grid: list[float] | None,
+    n_splits: int = 5,
+    seed: int = 0,
+    regularizer=None,
+) -> float | None:
+    """C de la tête `method` choisi sur les fenêtres `rows`, régularisations comprises ; None
+    pour une tête sans C."""
+    if method not in FITTERS:
+        return None
+    X, sw, fit_kw = _prepared(X, y, rows, regularizer, seed)
+    return _choose_C(
+        X[rows],
+        y[rows],
+        groups[rows],
+        C_grid,
+        n_splits,
+        seed,
+        FITTERS[method],
+        sample_weight=sw,
+        **fit_kw,
+    )
 
 
 def fit_and_score(
@@ -258,18 +415,36 @@ def fit_and_score(
     seed: int = 0,
     tokens: np.ndarray | None = None,
     cascade_fraction: float = 0.2,
+    regularizer=None,
 ) -> np.ndarray:
     """Scores des fenêtres `test` par la tête `method` apprise sur les seules fenêtres `train`.
 
     `C` fixe le C des têtes logistiques ; sinon il est choisi sur `train` (validation groupée
     interne sur `C_grid`). Brique commune de la validation croisée (`oof_scores`) et de la
     courbe selon le nombre d'annotations (`head_benchmark.annotation_curve`).
+    `regularizer` (`blanci/regularization.py`) : transformations de X ajustées sur `train`,
+    poids des fenêtres et pénalité des têtes logistiques.
     """
+    X, sw, fit_kw = _prepared(X, y, train, regularizer, seed)
     Xtr, ytr = X[train], y[train]
-    if method in ("logistic", "cascade") and C is None:
-        C = _choose_C(Xtr, ytr, groups[train], C_grid, n_splits, seed)
+    if method in FITTERS and C is None:
+        C = _choose_C(
+            Xtr,
+            ytr,
+            groups[train],
+            C_grid,
+            n_splits,
+            seed,
+            FITTERS[method],
+            sample_weight=sw,
+            **fit_kw,
+        )
     if method == "logistic":
-        return fit_logistic(Xtr, ytr, C, seed).decision(X[test])
+        return fit_logistic(Xtr, ytr, C, seed, sample_weight=sw, **fit_kw).decision(X[test])
+    if method == "logistic_to_prototype":
+        return fit_logistic_to_prototype(Xtr, ytr, C, seed, sample_weight=sw).decision(X[test])
+    if method == "lda_shrunk":
+        return lda_shrunk_scores(Xtr, ytr, X[test])
     if method == "prototype":
         w, b = differential_prototype(Xtr[ytr == 1], Xtr[ytr == 0])
         return prototype_scores(X[test], w, b)
@@ -282,7 +457,16 @@ def fit_and_score(
         if tokens is None:
             raise ValueError("la cascade a besoin des jetons (tokens=…)")
         return cascade_scores(
-            Xtr, ytr, tokens[train], X[test], tokens[test], C, cascade_fraction, seed
+            Xtr,
+            ytr,
+            tokens[train],
+            X[test],
+            tokens[test],
+            C,
+            cascade_fraction,
+            seed,
+            sample_weight=sw,
+            **fit_kw,
         )
     if method == "exemplar":
         return exemplar_scores(Xtr[ytr == 1], X[test])
@@ -307,11 +491,13 @@ def oof_scores(
     assignment: dict[str, int] | None = None,
     tokens: np.ndarray | None = None,
     cascade_fraction: float = 0.2,
+    regularizer=None,
 ) -> OOFScores:
     """Scores hors-pli sur plis groupés (par micro).
 
     Méthodes (`METHODS`) : exemplar_medoid (un seul exemple), exemplar (plus proche positif),
-    knn, simple_prototype, prototype (différentiel), logistic, attentive (X = jetons en
+    knn, simple_prototype, prototype (différentiel), logistic, logistic_to_prototype (R30),
+    lda_shrunk (R31), attentive (X = jetons en
     (fenêtres, jetons, dim) ou (fenêtres, temps, fréquence, dim), `blanci/attentive.py`),
     cascade (X = embeddings, `tokens` = jetons des mêmes fenêtres).
 
@@ -337,6 +523,7 @@ def oof_scores(
             seed=seed,
             tokens=tokens,
             cascade_fraction=cascade_fraction,
+            regularizer=regularizer,
         )
     out[gated] = GATED_SCORE
     return OOFScores(out, tuple(folds), method)

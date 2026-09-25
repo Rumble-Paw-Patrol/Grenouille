@@ -113,6 +113,7 @@ $B upstream-bench --encoder birdmae-bacpipe1.3.5 --upstream notes,rhythm
 # --- Benchmarks (DECISIONS n° 91–98) : plis communs, scores hors-pli rangés -
 $B heads --encoder perch_v2-bacpipe1.3.5             # toutes les têtes, poolings, cascade
 $B heads-curve --encoder perch_v2-bacpipe1.3.5       # différentiel ou linear probe, selon k
+$B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R19,logistic+R18=32  # régularisations (n° 108)
 $B fusion-bench --encoder birdmae-bacpipe1.3.5 --sources head:perch_v2-bacpipe1.3.5
 $B ensemble --sources birdmae-bacpipe1.3.5/logistic,perch_v2-bacpipe1.3.5/logistic
 $B detector-bench --detector band_contrast           # distilled, homemade : réservés

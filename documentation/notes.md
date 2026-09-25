@@ -9,8 +9,6 @@
 
  Le prototype simple apparaît au §3 comme « baseline de similarité », mais il n'est repris ni au §6 ni dans la spécification du §13. Il est sur la carte, pas dans le plan d'exécution. Ça vaut une ligne dans DECISIONS.md pour trancher.
 
- Tester le seuillage spectral en amont et comparer les performances
-
 
  considérer la sigmoïde et un modèle de classification entre Blanci, les espèces qui cohabitent avec Blanci et les bruits. Permettrais de classer plus facilement des fenêtres overlapées ?
 
@@ -47,6 +45,9 @@ Réunion semaine pro :
 
 Inventaire complet des enregistrements et annotation, finir demain avec le collègue de la réserve Trésor
 
+Centrage par site ou par micro : on soustrait la moyenne des embeddings du micro. On retire ainsi le fond sonore, dans l'esprit du prototype différentiel. C'est de la normalisation de domaine, peut-être la plus prometteuse pour la généralisation à d'autres sites.
+
+faire un tableau ou un graph camembert des annotations pos/neg par site, par micros... pour conserver un équilibre
 Annoter manuellement un max de données d'un max de points d'écoutes différents.
 
 possibilité dans l'application d'annotation de choisir le canal à gain faible ou à gain fort
@@ -62,6 +63,11 @@ Pour le module sequentiel : timeserie de pluviométrie, phénologie, un module p
 
 # Questions en suspens
 
+revoir le principe du standard scaler, et l'intérêt d'un standard scaler par site ou par micro
+
+GeM avec p appris pour le probing ?? C'est quoi ? Je suis hype
+
+heu c'est quoi finalement une régression logistique ? Fonctionnement du linear probe
 
 blancinet la vraie baseline ultime du projet
 

@@ -10,9 +10,15 @@ Têtes comparées sur les embeddings gelés d'un encodeur (`head.METHODS`, `pool
 | simple_prototype | μ₊, moyenne des positifs |
 | prototype | μ₊ − μ₋, négatifs appariés (prototype différentiel) |
 | logistic | appris (régression logistique) sur l'embedding par défaut |
-| logistic:<pooling> | appris sur les jetons résumés par `pooling` (max, moyenne + max…) |
+| logistic_to_prototype | R30 : logistique tirée vers le prototype différentiel |
+| lda_shrunk | R31 : LDA à covariance rétrécie (Ledoit-Wolf) |
+| logistic:<pooling> | appris sur les jetons résumés par `pooling` (max, moyenne + max, gem…) |
 | attentive | appris sur les jetons, pondérés par une requête apprise |
 | cascade | logistic, puis attentive sur les meilleurs candidats |
+
+Régularisations (`blanci/regularization.py`, DECISIONS n° 108) : dans le nom de la tête,
+`logistic+R18=16+R19`. Le nom canonique figure dans les tableaux et les scores hors-pli ;
+`regularization.variants` ajoute des têtes régularisées à la liste par défaut.
 
 Deux mesures :
 
@@ -53,21 +59,50 @@ from blanci.dataset import embedded_training_set, folds_for, pairing_options
 from blanci.db import encoder_params
 from blanci.evaluate import average_precision, evaluate, paired_bootstrap, to_recordings
 from blanci.frozen import frozen_recordings
-from blanci.head import METHODS, _choose_C, fit_and_score, oof_scores
+from blanci.head import METHODS, choose_C, fit_and_score, oof_scores
 from blanci.oof import labels_fingerprint, oof_frame, save_oof
 from blanci.pooling import as_grid, available_poolings, pool
+from blanci.regularization import (
+    Context,
+    canonical,
+    needs_domain,
+    regularizer_for,
+    store_domain_statistics,
+)
 from blanci.store import EmbeddingStore
 
 TOKEN_METHODS = ("attentive", "cascade")
 LEVELS = ("window", "recording")
 
 
-def head_methods(tokens: np.ndarray | None) -> list[str]:
-    """Têtes possibles : celles des embeddings, plus celles des jetons s'il y en a."""
+def head_methods(tokens: np.ndarray | None, variants: list[str] | None = None) -> list[str]:
+    """Têtes possibles : celles des embeddings, plus celles des jetons s'il y en a, plus les
+    variantes régularisées de la config (`regularization.variants`)."""
     base = [m for m in METHODS if m not in TOKEN_METHODS]
-    if tokens is None:
-        return base
-    return base + [f"logistic:{p}" for p in available_poolings(tokens)] + list(TOKEN_METHODS)
+    if tokens is not None:
+        base += [f"logistic:{p}" for p in available_poolings(tokens)] + list(TOKEN_METHODS)
+    return base + [v for v in variants or [] if v not in base]
+
+
+def regularization_context(
+    con: sqlite3.Connection,
+    cfg: dict,
+    encoder_id: str,
+    data: pd.DataFrame,
+    specs: list[str],
+    filters: dict | None = None,
+) -> Context:
+    """Contexte des fenêtres pour les régularisations : groupe, négatifs annotés (R15) et,
+    si une tête le demande, statistiques du stock par micro (R19, R20)."""
+    by = (cfg.get("regularization", {}) or {}).get("by", "point")
+    groups = data[by].astype(str).to_numpy()
+    hard = (data["y"].to_numpy() == 0) & ~data["presumed"].to_numpy(dtype=bool)
+    context = Context(groups, hard)
+    if needs_domain(specs):
+        store = EmbeddingStore(config_path(cfg, "embeddings"), encoder_id)
+        context.domain = store_domain_statistics(con, store, filters, by)
+        context.domain_rows = context.domain.rows(groups)
+    return context
 
 
 def _inputs(method: str, X: np.ndarray, tokens: np.ndarray | None) -> tuple[str, np.ndarray]:
@@ -134,7 +169,9 @@ def run_head_benchmark(
     """Tableau des têtes, comparaisons à la référence, diagnostic du fond capté."""
     head_cfg, bench = cfg["head"], cfg["benchmark"]
     data, X, tokens = benchmark_data(con, cfg, encoder_id, filters)
-    methods = methods or head_methods(tokens)
+    variants = (cfg.get("regularization", {}) or {}).get("variants", [])
+    methods = methods or head_methods(tokens, variants)
+    context = regularization_context(con, cfg, encoder_id, data, methods, filters)
     y = data["y"].to_numpy()
     groups = data["point"].to_numpy()
     recordings = data["recording_id"].to_numpy()
@@ -143,8 +180,9 @@ def run_head_benchmark(
     fingerprint = labels_fingerprint(con, cfg)
 
     rows, scores = [], {}
-    for method in methods:
-        base, inputs = _inputs(method, X, tokens)
+    for spec in methods:
+        method, head, regularizer = regularizer_for(spec, cfg, context)
+        base, inputs = _inputs(head, X, tokens)
         oof = oof_scores(
             inputs,
             y,
@@ -157,6 +195,7 @@ def run_head_benchmark(
             assignment=assignment,
             tokens=tokens,
             cascade_fraction=head_cfg.get("cascade_fraction", 0.2),
+            regularizer=regularizer,
         )
         scores[method] = oof.values
         save_oof(
@@ -178,7 +217,7 @@ def run_head_benchmark(
             rows.append({"encoder_id": encoder_id, "head": method, **metrics})
     table = pd.DataFrame(rows).sort_values(["level", "ap"], ascending=[True, False], kind="stable")
 
-    reference = head_cfg.get("reference", "logistic")
+    reference = canonical(head_cfg.get("reference", "logistic"))
     comparisons = compare_to_reference(scores, reference, y, recordings, cfg)
     return {
         "table": table.reset_index(drop=True),
@@ -286,6 +325,8 @@ def annotation_curve(
     open_rows = ~data["gated"].to_numpy()
     data, X = data[open_rows].reset_index(drop=True), X[open_rows]
     tokens = tokens[open_rows] if tokens is not None else None
+    context = regularization_context(con, cfg, encoder_id, data, methods)
+    heads = {spec: regularizer_for(spec, cfg, context) for spec in methods}
     y = data["y"].to_numpy()
     targets_of = data[by].astype(str).to_numpy()
     recordings = data["recording_id"].to_numpy()
@@ -307,9 +348,22 @@ def annotation_curve(
         others = np.flatnonzero(targets_of != target)
         if len(np.unique(y[others])) < 2:
             continue
-        C = _choose_C(
-            X[others], y[others], groups[others], head_cfg["C_grid"], head_cfg["n_splits"], seed
-        )
+        # C de chaque tête, choisi une fois par cible sur les autres cibles (régularisations
+        # comprises : ACP et INLP ajustées sur ces mêmes fenêtres).
+        C_of = {}
+        for spec, (_, head, regularizer) in heads.items():
+            name, inputs = _inputs(head, X, tokens)
+            C_of[spec] = choose_C(
+                name,
+                inputs,
+                y,
+                groups,
+                others,
+                head_cfg["C_grid"],
+                head_cfg["n_splits"],
+                seed,
+                regularizer,
+            )
         for r in range(repeats):
             rng = np.random.default_rng([seed, r, _stable_id(target)])
             test_pos, pool_pos = _half(pos, rng)
@@ -327,8 +381,8 @@ def annotation_curve(
                 n_neg = round(len(pool_neg) * k / len(pool_pos)) if pool_pos else 0
                 support = pool_pos[:k] + pool_neg[:n_neg]
                 train = np.concatenate([base, np.flatnonzero(np.isin(recordings, support))])
-                for method in methods:
-                    name, inputs = _inputs(method, X, tokens)
+                for spec, (method, head, regularizer) in heads.items():
+                    name, inputs = _inputs(head, X, tokens)
                     values = fit_and_score(
                         name,
                         inputs,
@@ -336,10 +390,11 @@ def annotation_curve(
                         groups,
                         train,
                         test,
-                        C=C,
+                        C=C_of[spec],
                         seed=seed,
                         tokens=tokens,
                         cascade_fraction=head_cfg.get("cascade_fraction", 0.2),
+                        regularizer=regularizer,
                     )
                     runs.append(
                         {
@@ -355,7 +410,7 @@ def annotation_curve(
     runs = pd.DataFrame(runs)
     if runs.empty:
         raise ValueError(f"aucune cible ({by}) n'a au moins deux enregistrements positifs")
-    reference = head_cfg.get("reference", "logistic")
+    reference = canonical(head_cfg.get("reference", "logistic"))
     return {
         "runs": runs,
         "summary": _curve_summary(runs),
