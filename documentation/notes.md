@@ -1,16 +1,22 @@
-## À prompter une fois le squelette terminé
 
-### ajouter un script pour l'encodage, empêchant l'ordi de s'éteindre ou quoi ou qu'est-ce
+# À prompter une fois le squelette terminé
 
-###Le prototype simple apparaît au §3 comme « baseline de similarité », mais il n'est repris ni au §6 ni dans la spécification du §13. Il est sur la carte, pas dans le plan d'exécution. Ça vaut une ligne dans DECISIONS.md pour trancher.
+ la feuille de route se trompe sur le seuillage spectral en amont
 
-Et garde bien la seconde fonction du différentiel mentionnée dans ta feuille de route : l'écart de score entre prototype simple et prototype différentiel mesure la part de fond sonore captée par l'embedding. Si les deux donnent le même classement, l'ambiance de Mataroni ne pollue pas ; si le différentiel fait nettement mieux, c'est qu'elle pollue, et tu le sais avant d'avoir entraîné quoi que ce soit.
+ ajouter un notebook de checking global : un enregistrement écoutable, son spectrogramme, son spectrogramme après seuillage, son embedding, son négatif apparié, l'embedding de son négatif, comparaison des deux, soustraction etc etc etc
 
-###Tester le seuillage spectral en amont et comparer les performances
+ ajouter un script pour l'encodage, empêchant l'ordi de s'éteindre ou quoi ou qu'est-ce
 
-###Considérer pondérer les entrées de la régression logistique de fusion. Quel expert écouter en priorité ? Encodeur + probe (hors pli) ou le module sequential ?
+ Le prototype simple apparaît au §3 comme « baseline de similarité », mais il n'est repris ni au §6 ni dans la spécification du §13. Il est sur la carte, pas dans le plan d'exécution. Ça vaut une ligne dans DECISIONS.md pour trancher.
 
-###Afin de connaître quel encodeur fournit les tokens en sortie :
+ Tester le seuillage spectral en amont et comparer les performances
+
+
+ considérer la sigmoïde et un modèle de classification entre Blanci, les espèces qui cohabitent avec Blanci et les bruits. Permettrais de classer plus facilement des fenêtres overlapées ?
+
+ tableau de quel encodeur fournit quelle info en sortie, token ? taille des embeddings ? autre ? Adapter head en fonction de la sortie ?
+
+ Idée afin de connaître quel encodeur fournit les tokens en sortie :
 Lire la fonction forward du modèle. Cherche .mean(dim=…), .max(…), [:, 0] (extraction du token de classe), AdaptiveAvgPool ou GlobalAveragePooling2D.
 
 Le test empirique, en cinq lignes. Tu récupères à la fois les tokens et l'embedding par défaut, puis tu compares :
@@ -24,8 +30,94 @@ print(cos(e, h.max(1).values, dim=-1).mean())    # maximum ?
 
 La candidate dont la similarité approche 1 est la bonne. Si aucune n'y arrive exactement, c'est souvent qu'une normalisation ou une projection s'applique après l'agrégation — il faut alors remonter dans le code.
 
-### négatifs appariés peuvent autant être le micro à la même heure un autre jour que le micro le même jour mais à une distance temporelle proche. 
+  revoir avec Claude la méthode de négatif appariés, j'aimerais qu'on puisse apparier le négatif le plus proche, y compris s'il est dans le même enregistrement
 
+identifier des régularisations : L1, L2, Elastic Net (L1 + L2), autres
+
+# Trucs à faire
+
+télécharger le drive au cas où j'ai pas de co demain
+
+Réunion semaine pro : 
+- faire un cours sur le mécanisme d'attention dans ma prochaine présentation
+- état de l'art
+- suis-je noté sur mon SFE sur la biblio ? biblio foundation model biblio BirdCLEF !!! biblio phéno blanci
+- github ouvert aux tuteurs
+- CORPUS complet, tester anuraset, dans AS il n'y a que deux de leurs grenouilles qui seraient des bons candidats car elles sont multi-sites (au moins deux sites) avec assez de données pour avoir un entrainement fiable. En testant sur ces grnouilles on peut pré-benchmark la capacité des modèles à généraliser multi site
+
+Inventaire complet des enregistrements et annotation, finir demain avec le collègue de la réserve Trésor
+
+Annoter manuellement un max de données d'un max de points d'écoutes différents.
+
+possibilité dans l'application d'annotation de choisir le canal à gain faible ou à gain fort
+
+possibilité de faire des simualtions /!\ certains modèles sont sensibles aux simulations
+
+regarder les embeddings de sortie de l'encodeur solo vs choeur, on sera fixés
+
+vérifier la fiabilité des tests, si un test donne un mauvais score mais que le test est mal foutu ça peut m'induire en erreur
+
+Pour le module sequentiel : timeserie de pluviométrie, phénologie, un module puissant serait complexe et complet, sequential sera dans un second temps pour ameliorer les capciteés
+
+
+# Questions en suspens
+
+
+blancinet la vraie baseline ultime du projet
+
+attentive sur l'embedding de sortie et pas sur les tokens (attentive mets un poids sur les bonnes dimensions) (réponse pour Sylvain) ?
+
+c'est quoi les 546 tests que Claude lance tout le temps
+
+linear probe sur moyenne, max, combinaison des deux, combinaison intelligente des deux (selon l'axe ou autre), sur **autre chose que moyenne et max** ??
+
+wrapper bacpipe c'est quoi
+
+prototype différentiel arithmétique d'embedding ??
+
+clarifier attentive
+
+clarifier cascade
+
+attentive sur l'embedding de sortie et pas les tokens ? Attentive c'est du linear sur token ???
+
+birdnet et perch (et d'autres ?) font nativement de l'overlap
+
+blanci chante sporadiquement en saison sèche ?? Vérifier et coupler l'info avec la phénologie pour l'ajouter dans le module sequential
+
+Pk on mets pas des micros là où on suspecte qu'elle ait disparue ? De mémoire, les endroits où elle est suggérée disparu c'est parce qu'elle n'est plus observée, mais elle pourrait être entendue ? Quelle est la fiabilité de l'observation par rapport à l'écoute ?
+
+perspective post-stage : Peut-être phénologie différente de blanci à Mataroni par rapport à Kaw et Molokoï ? À Kaw et Molokoï, blanci vit dans des criques bien dessinées, rocheuses alors qu'à Mataroni le lit de la crique est plutôt évasé, marécageux.
+
+# Autres
+
+check pb pluie et coup de feu. La signature sonore du coup de feu, diffus lorsque le micro est loin du point de tir, se fond dans le bruit de pluie omniprésent. Quelle solution ? 
+
+stage M2 exploratoire -> perspectives futures à développer en fin de stage. Important
+
+# Extra pro
+location colocation guyane
+vivre en guyane
+
+
+# Old
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+### négatifs appariés peuvent autant être :
+- un négatif à la même heure, un autre jour
+- un négatif le même jour, à une heure le plus proche possible 
+
+## Méthode de sélection des candidats à annoter
+
+Queue 60-20-20
+Récolte par similarité
+YAPAT
+Étiquetage en bloc par cluster
+
+Queue 60-20-20 : baseline, proportions modifiable (plus d'aléatoire en début d'entraînement)
+Récolte par similarité : identifie des positifs faciles. Idéal pour amorcer l'annotation d'un nouveau site.
+YAPAT
+Cluster : quand un groupe s'avère homogène après une dizaine d'évaluation, annotation massive du groupe.
 
 ##Benchmark des méthodes pour head - Choix de w
 
@@ -45,45 +137,6 @@ Linear probe : moyenne ou maximum ou combinaison des deux ou moyenne en fréquen
 Attentive probe : coûteux en mémoire car il conserve les vecteurs de chaque token, si trop coûteux : disque dur stockant les tokens ou méthode de la cascade.
 Autre méthode : par exemple, certains modèles ont leur propre mécanisme d'attention. Dans ce cas là, ne pas construire de head ? Que faire ?
 
-## Méthode de sélection des candidats à annoter
-
-Queue 60-20-20
-Récolte par similarité
-YAPAT
-Étiquetage en bloc par cluster
-
-Queue 60-20-20 : baseline, proportions modifiable (plus d'aléatoire en début d'entraînement)
-Récolte par similarité : identifie des positifs faciles. Idéal pour amorcer l'annotation d'un nouveau site.
-YAPAT
-Cluster : quand un groupe s'avère homogène après une dizaine d'évaluation, annotation massive du groupe.
-
-## Trucs à faire
-
-Annoter manuellement un max de données d'un max de points d'écoutes différents.
-
-## Questions en suspens
-
-Pk on mets pas des micros là où on suspecte qu'elle ait disparue ? De mémoire, les endroits où elle est suggérée disparu c'est parce qu'elle n'est plus observée, mais elle pourrait être entendue ? Quelle est la fiabilité de l'observation par rapport à l'écoute ? 
-les fichiers sont en stéréo avec deux gains (6 et 18 dB) et le canal à 18 dB sature parfois. Faut-il garder la moyenne des deux canaux ou un suel ?
-
-c'est quoi le pb avec tensorflow ?
-
-trouver les enregistrements annotés de 2023. J'ai seulement 2026 à ce jour. -> réunion avec le collègue de trésor lundi
-
-perspective post-stage : Peut-être phénologie différente de blanci à Mataroni par rapport à Kaw et Molokoï ? À Kaw et Molokoï, blanci vit dans des criques bien dessinées, rocheuses alors qu'à Mataroni le lit de la crique est plutôt évasé, marécageux.
-## Autres
-
-check pb pluie et coup de feu. La signature sonore du coup de feu, diffus lorsque le micro est loin du point de tir, se fond dans le bruit de pluie omniprésent. Quelle solution ? 
-
-stage M2 exploratoire -> perspectives futures à développer en fin de stage. Important
-
-## Extra pro
-location colocation guyane
-vivre en guyane
-
-
-## Old
---------------------------------------------------------------------------------------------------------------------------------------------
 intérêt de head
 fine tuning vs entraînement
 
