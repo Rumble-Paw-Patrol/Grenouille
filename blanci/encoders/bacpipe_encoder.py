@@ -11,7 +11,8 @@ Validé contre bacpipe 1.3.5 (torch 2.6, TensorFlow 2.15, Windows) le 23/09/2026
 - `model.preprocess(lot torch)` puis `model(lot prétraité)` → tenseur torch ou TensorFlow ;
 - certains modèles rendent la séquence de jetons (lot × jetons × dim) : elle est moyennée
   ici, et l'encodeur est déclaré `has_tokens` ; perch_v2 garde en plus ses jetons spatiaux
-  (16 temps × 4 fréquences × 1 536), moyennés sur la fréquence pour l'attentive probing ;
+  (16 temps × 4 fréquences × 1 536), rendus tels quels par `embed_tokens` : les poolings
+  temps × fréquence (DECISIONS n° 92) et l'attentive probing en ont besoin ;
 - les poids sont téléchargés par `bacpipe.ensure_models_exist` dans `paths.models/bacpipe`
   (pas dans le dossier courant, défaut de bacpipe) ; birdmae passe par le cache Hugging Face ;
 - perch_v2 (ONNX, sans TensorFlow) garde les logits de ses 14 795 classes après chaque appel
@@ -183,9 +184,8 @@ class BacpipeEncoder(BaseEncoder):
             self._logits.append(logits[:, self._logit_index])
         results = getattr(self._model, "results", None)
         if isinstance(results, dict) and "spatial_embeddings" in results:
-            # perch_v2 : (lot, temps, fréquence, dim) → jetons temporels (lot, temps, dim).
-            spatial = _to_numpy(results["spatial_embeddings"])
-            self._last_tokens = spatial.mean(axis=2) if spatial.ndim == 4 else spatial
+            # perch_v2 : (lot, temps, fréquence, dim), grille gardée (poolings, DECISIONS n° 92).
+            self._last_tokens = _to_numpy(results["spatial_embeddings"])
         if out.ndim == 1:
             out = out[None, :]
         if out.ndim > 3:

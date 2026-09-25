@@ -1,7 +1,14 @@
 import numpy as np
 import pytest
 
-from blanci.grid import containing_windows, max_hop_without_cut, window_grid
+from blanci.grid import (
+    containing_windows,
+    hop_for_overlap,
+    max_hop_without_cut,
+    overlap_from_cfg,
+    overlap_of,
+    window_grid,
+)
 
 NOTE_S = 0.103
 
@@ -56,3 +63,38 @@ def test_biophonia_3s_annotations_fit_in_one_window(window_s, hop_s):
     windows = window_grid(120.0, window_s, hop_s)
     for k in range(40):
         assert containing_windows(3.0 * k, 3.0 * k + 3.0, windows), k
+
+
+# --- Chevauchement ajustable (DECISIONS n° 89) ---------------------------------------------------
+
+
+def test_overlap_zero_gives_a_standard_grid():
+    assert hop_for_overlap(3.0, 0.0) == 3.0
+    offsets = [o for o, _ in window_grid(120.0, 3.0, hop_for_overlap(3.0, 0.0))]
+    assert offsets[:3] == [0.0, 3.0, 6.0] and len(offsets) == 40
+
+
+def test_overlap_half_is_the_half_window_and_max_is_99_percent():
+    assert hop_for_overlap(5.0, 0.5) == 2.5
+    assert hop_for_overlap(3.0, 0.99) == 0.03
+    assert overlap_of(3.0, 0.03) == pytest.approx(0.99)
+    # 3 901 fenêtres pleines, plus une qui déborde de 0,03 s (< tolérance de 0,05 s)
+    assert len(window_grid(120.0, 3.0, 0.03)) == 3902
+
+
+def test_overlap_is_rounded_to_the_hundredth_and_never_below():
+    assert hop_for_overlap(0.96, 0.99) == 0.01  # 0,0096 s arrondi, jamais 0
+    assert hop_for_overlap(5.0, 0.25) == 3.75
+    assert hop_for_overlap(3.0, 0.9) == 0.3
+
+
+@pytest.mark.parametrize("bad", [-0.1, 0.995, 1.0])
+def test_overlap_outside_the_range_is_refused(bad):
+    with pytest.raises(ValueError, match="chevauchement"):
+        hop_for_overlap(3.0, bad)
+
+
+def test_overlap_is_read_from_the_config_or_the_old_hop_ratio():
+    assert overlap_from_cfg({"encoders": {"overlap": 0.75}}) == 0.75
+    assert overlap_from_cfg({"encoders": {"grid_hop_ratio": 0.25}}) == 0.75
+    assert overlap_from_cfg({}) == 0.5

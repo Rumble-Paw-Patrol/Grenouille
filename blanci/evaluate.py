@@ -6,6 +6,7 @@ aléatoire est une erreur. Métriques rejetées : exactitude, F1 au seuil 0,5, k
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from typing import Any, Literal
 
@@ -18,17 +19,59 @@ Metric = Callable[[np.ndarray, np.ndarray], float]
 
 
 def grouped_folds(
-    y: np.ndarray, groups: np.ndarray, n_splits: int = 5, seed: int = 0
+    y: np.ndarray,
+    groups: np.ndarray,
+    n_splits: int = 5,
+    seed: int = 0,
+    assignment: dict[str, int] | None = None,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Plis groupés (par micro ou par site) et stratifiés ; jamais deux plis pour un même groupe."""
+    """Plis groupés (par micro ou par site) et stratifiés ; jamais deux plis pour un même groupe.
+
+    Avec `assignment` ({groupe: pli}, `fold_assignment`), les plis sont ceux-là, quels que soient
+    les exemples : tous les modèles d'un benchmark sont alors jugés sur exactement les mêmes plis
+    (DECISIONS n° 91). Sans, ils dépendent des exemples (StratifiedGroupKFold).
+    """
     if groups is None or len(groups) != len(y):
         raise ValueError("groupes explicites obligatoires, un par exemple")
     y, groups = np.asarray(y), np.asarray(groups)
     n_groups = len(np.unique(groups))
     if n_groups < 2:
         raise ValueError("au moins deux groupes sont nécessaires pour une validation groupée")
+    if assignment is not None:
+        fold_of = np.array([assignment.get(str(g), -1) for g in groups])
+        if (fold_of < 0).any():
+            missing = sorted({str(g) for g in groups[fold_of < 0]})
+            raise ValueError(f"groupes sans pli dans l'affectation : {missing[:5]}")
+        return [
+            (np.flatnonzero(fold_of != f), np.flatnonzero(fold_of == f))
+            for f in sorted(set(fold_of.tolist()))
+        ]
     cv = StratifiedGroupKFold(n_splits=min(n_splits, n_groups), shuffle=True, random_state=seed)
     return list(cv.split(np.zeros(len(y)), y, groups))
+
+
+def fold_assignment(
+    groups: np.ndarray, has_positive: np.ndarray, n_splits: int = 5, seed: int = 0
+) -> dict[str, int]:
+    """Pli de chaque groupe (micro), calculé une fois sur les **enregistrements** annotés :
+    une ligne par enregistrement, `has_positive` = il contient A. blanci.
+
+    Indépendant de la grille et des négatifs présumés de chaque encodeur : tous les modèles
+    partagent ces plis (DECISIONS n° 91). Stratifié sur les enregistrements positifs.
+    """
+    groups = np.asarray(groups).astype(str)
+    y = np.asarray(has_positive).astype(int)
+    unique = np.unique(groups)
+    if len(unique) < 2:
+        raise ValueError("au moins deux groupes sont nécessaires pour une validation groupée")
+    k = min(n_splits, len(unique))
+    cv = StratifiedGroupKFold(n_splits=k, shuffle=True, random_state=seed)
+    out: dict[str, int] = {}
+    with warnings.catch_warnings():  # classe rare : moins de positifs que de plis
+        warnings.simplefilter("ignore", UserWarning)
+        for fold, (_, test) in enumerate(cv.split(np.zeros(len(y)), y, groups)):
+            out.update(dict.fromkeys(np.unique(groups[test]).tolist(), fold))
+    return out
 
 
 def average_precision(y: np.ndarray, scores: np.ndarray) -> float:

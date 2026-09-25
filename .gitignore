@@ -14,3 +14,6 @@ config/local.yaml
 # Exports du prestataire (annotations, détections) : données de l'ONF et de Biophonia, pas les
 # nôtres. Elles restent en local, jamais sur GitHub.
 documentation/*.xlsx
+
+# Fichiers de verrou d'Office (document ouvert dans PowerPoint, Word, Excel).
+~$*

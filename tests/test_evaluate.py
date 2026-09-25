@@ -83,6 +83,39 @@ def test_n_splits_capped_by_group_count():
     assert len(grouped_folds(y, groups, n_splits=5)) == 3
 
 
+def test_fold_assignment_puts_each_group_in_exactly_one_fold():
+    """Plis communs (DECISIONS n° 91) : calculés sur les enregistrements, un pli par micro."""
+    from blanci.evaluate import fold_assignment
+
+    groups = np.repeat([f"mic{i}" for i in range(8)], 5)
+    has_positive = np.tile([1, 0, 0, 0, 0], 8)
+    assignment = fold_assignment(groups, has_positive, n_splits=4, seed=0)
+    assert set(assignment) == {f"mic{i}" for i in range(8)}
+    assert set(assignment.values()) == {0, 1, 2, 3}
+
+
+def test_folds_from_an_assignment_do_not_depend_on_the_examples():
+    """Deux jeux de fenêtres différents (deux grilles, deux tirages de négatifs), mêmes micros :
+    exactement les mêmes micros tenus à l'écart dans chaque pli."""
+    from blanci.evaluate import fold_assignment
+
+    assignment = fold_assignment(np.array(["a", "b", "c", "d"]), np.array([1, 1, 0, 1]), 2, 0)
+    rng = np.random.default_rng(0)
+    for n in (40, 97):
+        groups = rng.choice(list("abcd"), n)
+        y = rng.integers(0, 2, n)
+        folds = grouped_folds(y, groups, n_splits=2, assignment=assignment)
+        held_out = [sorted(set(groups[test])) for _, test in folds]
+        expected = [sorted(g for g, f in assignment.items() if f == k) for k in (0, 1)]
+        assert held_out == expected
+
+
+def test_assignment_must_cover_every_group():
+    y = np.array([0, 1, 0, 1])
+    with pytest.raises(ValueError, match="sans pli"):
+        grouped_folds(y, np.array(["a", "a", "z", "z"]), assignment={"a": 0, "b": 1})
+
+
 # --- Rappel à précision fixée ---------------------------------------------------------------
 
 

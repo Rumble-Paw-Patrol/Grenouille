@@ -171,7 +171,9 @@ def test_paired_negatives_share_the_mic_and_the_time_slot(con):
         con, "2026/mataroni/M9/m9_d11.wav", mic="M9", start_utc="2026-02-11T13:00:00Z"
     )
     grid = grid_frame([positive, same_slot, other_hour, other_mic])
-    out = paired_negatives(grid, recordings_table(con), {positive}, per_positive=5)
+    out = paired_negatives(
+        grid, recordings_table(con), {positive}, per_positive=5, strategy="other_day"
+    )
     assert set(out["recording_id"]) == {same_slot}
     assert len(out) == 5
     assert (out["y"] == 0).all() and (out["label"] == "background_presumed").all()
@@ -181,14 +183,21 @@ def test_paired_negatives_tolerance_widens_the_slot(con):
     positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
     near = add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-11T13:20:00Z")
     grid = grid_frame([positive, near])
-    assert paired_negatives(grid, recordings_table(con), {positive}, 3, slot_tolerance_min=5).empty
-    assert len(paired_negatives(grid, recordings_table(con), {positive}, 3, 30)) == 3
+    assert paired_negatives(
+        grid, recordings_table(con), {positive}, 3, slot_tolerance_min=5, strategy="other_day"
+    ).empty
+    assert (
+        len(paired_negatives(grid, recordings_table(con), {positive}, 3, 30, strategy="other_day"))
+        == 3
+    )
 
 
 def test_paired_negatives_never_come_from_a_positive_recording(con):
     positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
     grid = grid_frame([positive])
-    assert paired_negatives(grid, recordings_table(con), {positive}, per_positive=5).empty
+    assert paired_negatives(
+        grid, recordings_table(con), {positive}, per_positive=5, strategy="other_day"
+    ).empty
 
 
 def test_paired_negatives_are_reproducible(con):
@@ -196,8 +205,8 @@ def test_paired_negatives_are_reproducible(con):
     other = add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-11T13:00:00Z")
     grid = grid_frame([positive, other])
     recordings = recordings_table(con)
-    first = paired_negatives(grid, recordings, {positive}, 5, seed=3)
-    second = paired_negatives(grid, recordings, {positive}, 5, seed=3)
+    first = paired_negatives(grid, recordings, {positive}, 5, seed=3, strategy="other_day")
+    second = paired_negatives(grid, recordings, {positive}, 5, seed=3, strategy="other_day")
     pd.testing.assert_frame_equal(first, second)
 
 
@@ -207,8 +216,148 @@ def test_paired_negatives_are_not_reused_across_positives(con):
     p2 = add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-11T13:00:00Z")
     neg = add_recording(con, "2026/mataroni/M1/c.wav", start_utc="2026-02-12T13:00:00Z")
     grid = grid_frame([p1, p2, neg])
-    out = paired_negatives(grid, recordings_table(con), {p1, p2}, per_positive=4)
+    out = paired_negatives(
+        grid, recordings_table(con), {p1, p2}, per_positive=4, strategy="other_day"
+    )
     assert out["window_id"].is_unique and len(out) == 8
+
+
+def test_other_day_excludes_same_day_neighbours(con):
+    """« Autre jour » l'est vraiment : l'enregistrement de 30 min plus tard, le même jour, est
+    au créneau à ± 30 min mais n'est pas tiré (DECISIONS n° 88)."""
+    positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    same_day = add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-10T13:30:00Z")
+    other_day = add_recording(con, "2026/mataroni/M1/c.wav", start_utc="2026-02-11T13:30:00Z")
+    grid = grid_frame([positive, same_day, other_day])
+    out = paired_negatives(
+        grid, recordings_table(con), {positive}, per_positive=5, strategy="other_day"
+    )
+    assert set(out["recording_id"]) == {other_day}
+    assert (out["pairing"] == "other_day").all()
+
+
+def test_same_day_takes_the_nearest_recording_first(con):
+    positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    near = add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-10T13:30:00Z")
+    far = add_recording(con, "2026/mataroni/M1/c.wav", start_utc="2026-02-10T14:00:00Z")
+    add_recording(con, "2026/mataroni/M1/d.wav", start_utc="2026-02-11T13:00:00Z")
+    grid = grid_frame([r for r in recordings_table(con)["recording_id"]])
+    out = paired_negatives(
+        grid, recordings_table(con), {positive}, per_positive=5, strategy="same_day"
+    )
+    assert set(out["recording_id"]) == {near} and len(out) == 5
+    assert (out["pairing"] == "same_day").all()
+    # 100 fenêtres demandées : le voisin n'en a que 79, le suivant complète
+    many = paired_negatives(
+        grid,
+        recordings_table(con),
+        {positive},
+        per_positive=100,
+        strategy="same_day",
+        slot_tolerance_min=30,
+    )
+    assert set(many["recording_id"]) == {near, far}
+    assert (many["recording_id"] == near).sum() == (grid["recording_id"] == near).sum()
+
+
+def test_same_day_respects_the_minimum_gap(con):
+    positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-10T13:30:00Z")
+    two_hours = add_recording(con, "2026/mataroni/M1/c.wav", start_utc="2026-02-10T11:00:00Z")
+    grid = grid_frame([r for r in recordings_table(con)["recording_id"]])
+    out = paired_negatives(
+        grid, recordings_table(con), {positive}, 5, strategy="same_day", min_gap_min=120
+    )
+    assert set(out["recording_id"]) == {two_hours}
+
+
+def test_mixed_pairing_splits_between_days(con):
+    positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-10T13:30:00Z")
+    add_recording(con, "2026/mataroni/M1/c.wav", start_utc="2026-02-11T13:00:00Z")
+    grid = grid_frame([r for r in recordings_table(con)["recording_id"]])
+    out = paired_negatives(grid, recordings_table(con), {positive}, 6, strategy="mixed")
+    assert out["pairing"].value_counts().to_dict() == {"other_day": 3, "same_day": 3}
+
+
+def test_mixed_pairing_fills_from_the_other_pool(con):
+    """Pas d'enregistrement le même jour : l'autre jour fournit tout le quota."""
+    positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    add_recording(con, "2026/mataroni/M1/c.wav", start_utc="2026-02-11T13:00:00Z")
+    grid = grid_frame([r for r in recordings_table(con)["recording_id"]])
+    out = paired_negatives(grid, recordings_table(con), {positive}, 6, strategy="mixed")
+    assert len(out) == 6 and (out["pairing"] == "other_day").all()
+
+
+def add_positive(con, rid, offset_s, dur_s=WINDOW_S):
+    add_label(con, add_window(con, rid, offset_s, dur_s), "blanci_solo")
+
+
+def test_nearest_takes_the_closest_windows_of_the_positive_recording(con):
+    """Méthode de base (DECISIONS n° 101) : les fenêtres négatives les plus proches, dans
+    l'enregistrement positif lui-même ; jamais une fenêtre qui chevauche l'annotation."""
+    positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-11T13:00:00Z")
+    grid = grid_frame([r for r in recordings_table(con)["recording_id"]])
+    annotations = pd.DataFrame({"recording_id": [positive], "offset_s": [60.0], "dur_s": [3.0]})
+    out = paired_negatives(grid, recordings_table(con), {positive}, 4, positive_windows=annotations)
+    assert set(out["recording_id"]) == {positive}
+    assert (out["pairing"] == "same_recording").all()
+    assert sorted(out["offset_s"]) == [55.5, 57.0, 63.0, 64.5]  # contiguës, sans chevaucher
+
+
+def test_nearest_never_takes_a_window_between_two_positives(con):
+    """Faux négatif suspect (n° 102) : une fenêtre encadrée de positifs n'est pas tirée."""
+    positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    grid = grid_frame([positive])
+    annotations = pd.DataFrame(
+        {"recording_id": [positive, positive], "offset_s": [57.0, 63.0], "dur_s": [3.0, 3.0]}
+    )
+    out = paired_negatives(grid, recordings_table(con), {positive}, 3, positive_windows=annotations)
+    assert 60.0 not in set(out["offset_s"])  # entre les deux chants
+    assert not out["offset_s"].between(55.0, 66.0).all()
+
+
+def test_nearest_falls_back_to_the_same_day_then_other_days(con):
+    """Enregistrement positif entièrement annoté : le même jour, puis un autre jour."""
+    positive = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    same_day = add_recording(con, "2026/mataroni/M1/b.wav", start_utc="2026-02-10T13:30:00Z")
+    other_day = add_recording(con, "2026/mataroni/M1/c.wav", start_utc="2026-02-11T13:00:00Z")
+    grid = grid_frame([positive, same_day, other_day])
+    whole = pd.DataFrame({"recording_id": [positive], "offset_s": [0.0], "dur_s": [120.0]})
+    out = paired_negatives(grid, recordings_table(con), {positive}, 100, positive_windows=whole)
+    assert set(out["recording_id"]) == {same_day, other_day}
+    assert (out.loc[out["recording_id"] == same_day, "pairing"] == "same_day").all()
+
+
+def test_nearest_needs_the_positive_annotations(con):
+    positive = add_recording(con, "2026/mataroni/M1/a.wav")
+    with pytest.raises(ValueError, match="annotations positives"):
+        paired_negatives(grid_frame([positive]), recordings_table(con), {positive}, 5)
+
+
+def test_training_set_uses_nearest_and_flags_suspect_false_negatives(con):
+    """Par défaut, les négatifs présumés viennent de l'enregistrement positif ; un négatif
+    annoté entre deux positifs annotés est signalé (réécoute), sans cesser d'être négatif."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav", start_utc="2026-02-10T13:00:00Z")
+    add_positive(con, rid, 30.0)
+    add_positive(con, rid, 36.0)
+    add_label(con, add_window(con, rid, 33.0), "bird")
+    add_label(con, add_window(con, rid, 90.0), "bird")
+    data = training_set(con, grid_frame([rid]), per_positive=5)
+    annotated = data[~data["presumed"]].set_index("offset_s")
+    assert annotated.loc[33.0, "suspect_fn"] and not annotated.loc[90.0, "suspect_fn"]
+    assert annotated.loc[33.0, "y"] == 0
+    presumed = data[data["presumed"]]
+    assert len(presumed) == 5 and (presumed["pairing"] == "same_recording").all()
+    assert not presumed["suspect_fn"].any()
+
+
+def test_unknown_pairing_strategy_is_refused(con):
+    positive = add_recording(con, "2026/mataroni/M1/a.wav")
+    grid = grid_frame([positive])
+    with pytest.raises(ValueError, match="stratégie"):
+        paired_negatives(grid, recordings_table(con), {positive}, 5, strategy="random")
 
 
 # --- Jeu d'apprentissage ----------------------------------------------------------------------

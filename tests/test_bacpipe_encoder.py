@@ -104,5 +104,5 @@ def test_spatial_tokens_are_exposed_for_attentive_probing():
     x = np.random.default_rng(0).normal(size=(6, 100)).astype(np.float32)
     assert enc.embed(x, 100).shape == (6, 2)  # l'embedding reste la sortie mise en commun
     tokens = enc.embed_tokens(x, 100)
-    assert tokens.shape == (6, 16, 2)
-    assert np.allclose(tokens[:, 0, 0], x.mean(axis=1), atol=1e-6)
+    assert tokens.shape == (6, 16, 4, 2)  # temps × fréquence gardés (DECISIONS n° 92)
+    assert np.allclose(tokens[:, 0, 0, 0], x.mean(axis=1), atol=1e-6)

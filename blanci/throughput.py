@@ -6,7 +6,7 @@ son propre processus : le pic de mémoire est alors le sien, et un modèle qui �
 pas les autres.
 
 Projection (§7) : une campagne d'une semaine ≈ 575 h d'audio ; la grille avance d'une
-demi-fenêtre (`encoders.grid_hop_ratio`), donc une heure d'audio = 3 600 / pas fenêtres.
+demi-fenêtre par défaut (`encoders.overlap`), donc une heure d'audio = 3 600 / pas fenêtres.
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from blanci.grid import overlap_from_cfg
 
 CAMPAIGN_HOURS = 575.0  # une semaine de pose (§7)
 PEAK_HOURS_SHARE = 1 / 3.6  # heures de pic seules (7–9 h, 15–17 h) : ÷ 3,6 (§7)
@@ -117,7 +119,7 @@ def measure_by_name(name: str, cfg: dict, n_windows: int = 64) -> dict[str, Any]
     return measure_encoder(
         encoder,
         n_windows=n_windows,
-        hop_ratio=cfg["encoders"]["grid_hop_ratio"],
+        hop_ratio=1.0 - overlap_from_cfg(cfg),
         load_s=load_s,
     )
 

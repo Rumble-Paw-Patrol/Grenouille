@@ -103,6 +103,32 @@ $B qc-calibrate                                      # seuils QC mesurés, confi
 # Réentraînement (ONF, M5) : nouvelle tête jugée sur le jeu gelé, adoptée si pas moins bonne
 $B retrain --encoder birdmae_base-bacpipe1.3.5
 
+# --- Variantes de la chaîne (DECISIONS n° 88–90, 101–103) -----------------
+# Négatifs appariés : benchmark.pairing = nearest (défaut) | other_day | same_day | mixed
+$B embed --encoder birdmae --subset benchmark --overlap 0.75   # stock birdmae-…@o75
+$B embed --encoder birdmae --subset benchmark --upstream bandpass      # stock birdmae+bp3-7k-…
+$B upstream-bench                                    # portes : arrêtées / positifs perdus
+$B upstream-bench --encoder birdmae-bacpipe1.3.5 --upstream notes,rhythm
+
+# --- Benchmarks (DECISIONS n° 91–98) : plis communs, scores hors-pli rangés -
+$B heads --encoder perch_v2-bacpipe1.3.5             # toutes les têtes, poolings, cascade
+$B heads-curve --encoder perch_v2-bacpipe1.3.5       # différentiel ou linear probe, selon k
+$B fusion-bench --encoder birdmae-bacpipe1.3.5 --sources head:perch_v2-bacpipe1.3.5
+$B ensemble --sources birdmae-bacpipe1.3.5/logistic,perch_v2-bacpipe1.3.5/logistic
+$B detector-bench --detector band_contrast           # distilled, homemade : réservés
+$B sources                                           # ce que le stock hors-pli contient
+$B benchmark-all --external blancinet                # tout, mêmes enregistrements
+
+# --- Sélection des candidats (DECISIONS n° 99–100) -------------------------
+$B select --method active --encoder birdmae-bacpipe1.3.5 --n 40 --mix 0.4,0.2,0.4
+$B select --method negative_mining --encoder birdmae-bacpipe1.3.5 --mode false_friends
+$B select --method cluster --encoder birdmae-bacpipe1.3.5 --n 10   # puis cluster-status
+$B select --method gaps --encoder birdmae-bacpipe1.3.5   # trous : faux négatifs suspects
+$B select --method gaps --mode labels                     # négatifs annotés à réécouter
+$B cluster-label --encoder birdmae-bacpipe1.3.5 --cluster 7        # groupe homogène
+$B yapat-export data/reports/candidats_active.csv    # extraits + manifeste pour YAPAT
+$B annotate                                          # mode de sélection, carte, « Envoyer »
+
 # --- Évaluation (§6) -----------------------------------------------------
 uv run blanci evaluate --encoder birdmae-1                       # plis par micro
 uv run blanci evaluate --encoder birdmae-1 --holdout tresor,kaw  # sites tenus à l'écart
@@ -135,12 +161,13 @@ ligne doit désigner un enregistrement déjà inventorié.
 | M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | branchés : `onsets`, `fusion`, `score --fusion` ; audit par `candidates --entiers` |
 | M4 jeu gelé, `evaluate --holdout`, patrons 2023 | `freeze`, `evaluate --frozen`, `activity` écrits ; en attente du jeu gelé et de l'inventaire 2023 |
 | M5 export ONNX, réentraînement sans intervention | `retrain` (adoption jugée sur le jeu gelé) écrit ; export ONNX après le choix d'encodeur |
+| Ajouts du 24/09 (DECISIONS n° 88–100) | négatifs appariés à trois stratégies, chevauchement réglable, seuillage en amont activable, plis communs et scores hors-pli rangés, toutes les têtes et courbe selon les annotations, fusion à N entrées, emplacement du module séquentiel, ensembles, benchmark complet, outil de sélection, poste d'annotation refondu ; emplacements réservés : distillation, modèle maison, LoRA |
 
 Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 positifs et
 150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
 viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
 
-546 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
+643 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
 `encoders/onnx_encoder.py` et `encoders/export.py`, qui demandent un modèle exporté ;
 les neuf encodeurs bacpipe du §2 sont installés et mesurés (DECISIONS n° 64, 72).
 
@@ -148,6 +175,9 @@ Enregistrements de test et hors relevé signalés (149, jamais encodés, DECISIO
 drapeaux posés à l'écoute sur les 131 enregistrements annotés (8 micro dans sac, 5 pluie,
 DECISIONS n° 79) ;
 encodage sur le premier micro (gain 6 dB), les deux micros à l'écoute (DECISIONS n° 50, 58).
+
+Négatifs appariés changés (DECISIONS n° 88, 101 : les plus proches, même enregistrement
+compris) : **relancer les baselines** avant de comparer quoi que ce soit.
 
 **Reste à faire avant M1** : regrouper les enregistrements sur le disque du stage puis
 réinventorier (les labels suivent, DECISIONS n° 46) ; inventorier la phénologie 2023-2024 ;

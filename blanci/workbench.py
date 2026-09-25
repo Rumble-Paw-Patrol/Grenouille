@@ -437,8 +437,11 @@ def save_answer(
     quality: str | None = None,
     comment: str | None = None,
     channel: int | None = None,
+    species: str | None = None,
 ) -> int:
-    """Enregistre la réponse de l'annotateur (label en ajout seul) ; renvoie label_id."""
+    """Enregistre la réponse de l'annotateur (label en ajout seul) ; renvoie label_id.
+
+    `species` : espèce entendue (faux ami, congénère), rangée dans `labels.species`."""
     wid = ensure_window(con, candidate["recording_id"], candidate["offset_s"], candidate["dur_s"])
     conditions: dict[str, Any] = {"candidate_reason": candidate.get("reason") or None}
     if comment:
@@ -457,6 +460,7 @@ def save_answer(
         label,
         source=candidate.get("source") or "active",
         quality=quality,
+        species=species or None,
         conditions=conditions,
         annotator=annotator,
     )

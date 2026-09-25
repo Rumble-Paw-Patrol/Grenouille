@@ -123,7 +123,24 @@ def test_embed_fills_the_windows_table(workspace):
     ).fetchall()
     assert [r["dur_s"] for r in rows] == [WINDOW_S] * len(rows)
     assert rows[0]["offset_s"] == 0.0
-    assert rows[1]["offset_s"] == pytest.approx(WINDOW_S / 2)  # hop_ratio 0,5
+    assert rows[1]["offset_s"] == pytest.approx(WINDOW_S / 2)  # chevauchement 0,5
+
+
+def test_other_overlap_writes_a_separate_stock(workspace):
+    """Chevauchement 75 % : grille au quart de fenêtre, stock `fake-1@o75`, rien dans `fake-1`
+    (DECISIONS n° 89)."""
+    con, raw, store_root = workspace
+    add_recording(con, raw, "2026/mataroni/M1/a.wav")
+    report = embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root, overlap=0.75)
+    assert report.encoder_id == "fake-1@o75"
+    meta, _ = EmbeddingStore(store_root, "fake-1@o75").load()
+    first = meta[meta["recording_id"] == meta["recording_id"].iloc[0]]["offset_s"].sort_values()
+    assert first.iloc[1] == pytest.approx(round(WINDOW_S / 4, 2))
+    assert not EmbeddingStore(store_root, "fake-1").directory.exists()
+    params = json.loads(
+        con.execute("SELECT params_json FROM models WHERE model_id = 'fake-1@o75'").fetchone()[0]
+    )
+    assert params["overlap"] == pytest.approx(0.75, abs=0.01)
 
 
 def test_embeddings_match_the_windows_table(workspace):

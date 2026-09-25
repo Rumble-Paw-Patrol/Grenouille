@@ -10,6 +10,7 @@ paths:
   models: data/models
   frozen_test: data/frozen_test        # jeu gelé, lecture seule
   reports: data/reports
+  exports: data/exports             # extraits audio pour un outil externe (YAPAT…)
 
 audio:
   # Formats inventoriés (lus par libsndfile). Les Song Meter écrivent en WAV ou en FLAC.
@@ -78,10 +79,14 @@ labels:
     window_s: 3.0                  # durée des fenêtres annotées (convention Biophonia)
     annotator: expert
 
-# Encodeurs (§2). La f_e et la durée de fenêtre sont lues dans le modèle ; la grille en découle
-# (pas = fenêtre × grid_hop_ratio). Noms vérifiés contre bacpipe 1.3.5 (DECISIONS n° 64).
+# Encodeurs (§2). La f_e et la durée de fenêtre sont lues dans le modèle ; la grille en découle.
+# Noms vérifiés contre bacpipe 1.3.5 (DECISIONS n° 64).
 encoders:
-  grid_hop_ratio: 0.5
+  # Chevauchement de deux fenêtres voisines (DECISIONS n° 89) : 0 = fenêtres jointives (grille
+  # standard, une note peut être coupée), 0,99 = maximal. pas = fenêtre × (1 − chevauchement),
+  # au centième de seconde. 0,5 = demi-fenêtre (§1). Hors 0,5, `embed` écrit un stock séparé
+  # (<encodeur>@o<%>) ; volume × 0,5 / (1 − chevauchement) : 50 fois plus de fenêtres à 0,99.
+  overlap: 0.5
   batch_size: 64
   models:
     birdmae: {backend: bacpipe, model: birdmae}
@@ -106,12 +111,36 @@ encoders:
 
 head:
   C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]
-  n_splits: 5                      # plis groupés par micro
+  n_splits: 5                      # plis groupés par micro, communs à tous les modèles (n° 91)
   seed: 0
+  # Benchmark des têtes (`blanci heads`, DECISIONS n° 92–93).
+  reference: logistic              # tête contre laquelle toutes les autres sont comparées
+  cascade_fraction: 0.2            # cascade : part des fenêtres reclassées par l'attentive
+  # Courbe selon le nombre d'annotations du site cible (`blanci heads-curve`) : hypothèse du
+  # prototype différentiel meilleur sur les sites peu annotés.
+  curve:
+    by: point                      # point (micro) tant que les positifs sont tous à Mataroni
+    k: [0, 1, 2, 5, 10, 20]        # enregistrements positifs du site cible à l'entraînement
+    repeats: 5                     # tirages de la moitié de test par cible
+    methods: [prototype, logistic, simple_prototype, exemplar]
 
 benchmark:
   negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)
+  # Négatifs appariés présumés, toujours du même micro (DECISIONS n° 88, 101) :
+  #   nearest   : les fenêtres les plus proches dans le temps, dans l'enregistrement positif
+  #               lui-même d'abord (jamais sur une annotation positive, jamais entre deux
+  #               positifs : faux négatif suspect), puis le même jour, puis un autre jour.
+  #               Risque : si A. blanci chante tout l'enregistrement (H20), les voisines d'un
+  #               positif en contiennent — écouter une vingtaine de ces négatifs ;
+  #   other_day : même créneau horaire (± slot_tolerance_min), un autre jour ;
+  #   same_day  : même jour, les enregistrements les plus proches, à au moins
+  #               same_day_min_gap_min (et au plus same_day_min_gap_min + slot_tolerance_min).
+  #               Meilleur témoin du fond sonore, mais A. blanci chante par épisodes : le plus
+  #               proche est aussi le plus susceptible de la contenir ;
+  #   mixed     : moitié autre jour, moitié même jour.
+  pairing: nearest
   slot_tolerance_min: 30           # même micro, créneau horaire à ± 30 min
+  same_day_min_gap_min: 30         # 30 = l'enregistrement voisin (programme : 2 min / 30 min)
   n_boot: 1000
   precisions: [0.1, 0.5]
 
@@ -134,11 +163,79 @@ aggregate:
   min_span_s: 10.0                 # fenêtres positives étalées sur moins : « suspect »
 
 fusion:
-  # Descripteurs du module séquentiel ajoutés au score de la tête (§3) : ≤ 4, car il faut
-  # ~10 enregistrements positifs indépendants par coefficient (51 aujourd'hui → 5 coefficients).
-  # Rythme (fenêtre) : onset_rate_hz, ioi_median_s, ioi_cv, frac_ioi_blanci, frac_ioi_short.
-  # Persistance (enregistrement) : frac_windows, n_positive, longest_run, n_isolated, span.
+  # Fusion à N entrées (DECISIONS n° 94), `blanci fusion` (production) et `blanci fusion-bench`.
+  # logistic (poids appris) | weighted (poids ci-dessous) | weight_grid (poids cherchés) |
+  # mean | rank_mean | max (règle OU) | min (règle ET).
+  method: logistic
+  C: 1.0
+  # Poids fixés à la main (method: weighted) : « quel expert écouter en priorité ? ». Entrées
+  # sans poids : elles se partagent le reste jusqu'à 1. Ex. {head: 0.7}.
+  weights: {}
+  grid_step: 0.1                   # weight_grid : pas de la grille des poids
+  # Autres entrées (ensemble de modèles) : head:<encodeur> (sa tête logistique, hors-pli,
+  # ramenée sur la grille de l'encodeur principal), congeners:<perch_v2…> (logits congénères).
+  sources: []
+  benchmark_methods: [logistic, weighted, weight_grid, mean, rank_mean, max, min]
+  # Emplacements comparés par `fusion-bench` ([] = module séquentiel absent, tête seule).
+  benchmark_positions:
+    - []
+    - [upstream]
+    - [parallel]
+    - [downstream]
+    - [parallel, downstream]
+    - [upstream, parallel, downstream]
+
+# Module séquentiel et seuillage spectral, fusionnés (DECISIONS n° 95, 103), `sequential.py` :
+# les mêmes descripteurs du signal, placés là où `position` le dit (liste, [] = pas du tout).
+#   upstream   (amont) : avant l'encodeur — transformations du son et portes ci-dessous
+#                        (`upstream`) ; à l'encodage, `--upstream a,b` les choisit pour une
+#                        commande ; dans la chaîne de décision, les portes notes et rhythm
+#                        (sinon notes à son seuil) ;
+#   parallel           : descripteurs de rythme (audio) fusionnés avec le score de la tête ;
+#   downstream (aval)  : descripteurs de persistance (scores de la tête sur l'enregistrement).
+# Défaut : la fusion telle qu'elle était (parallèle + aval).
+sequential:
+  position: [parallel, downstream]
+  # Descripteurs fusionnés avec la tête (§3) : ≤ 4, car il faut ~10 enregistrements positifs
+  # indépendants par coefficient (51 aujourd'hui → 5 coefficients). L'emplacement dit lesquels
+  # entrent vraiment. Rythme (fenêtre) : onset_rate_hz, ioi_median_s, ioi_cv,
+  # frac_ioi_blanci, frac_ioi_short. Persistance (enregistrement) : frac_windows, n_positive,
+  # longest_run, n_isolated (faux positifs suspects), span, n_gaps (faux négatifs suspects).
   columns: [frac_ioi_blanci, onset_rate_hz, frac_windows, longest_run]
+  # Une fenêtre négative encadrée de positives à moins de ce rayon (s) est un faux négatif
+  # suspect (DECISIONS n° 102) : jamais tirée comme négatif présumé, signalée si annotée.
+  gap_radius_s: 6.0
+  # En amont (DECISIONS n° 90, 103). Tout est coupé : `enabled` choisit les fonctionnalités,
+  # `position: [upstream, …]` les met en service. Seuils provisoires, à régler avec
+  # `blanci upstream-bench` (positifs perdus contre fenêtres arrêtées).
+  upstream:
+    # Transformations : le son donné à l'encodeur change → autre encodeur, stock <nom>+<étiq.>.
+    bandpass: {enabled: false, band_hz: [3000, 7000], order: 4}
+    denoise: {enabled: false, strength: 1.0, floor: 0.1}   # soustraction du fond médian
+    # Portes : une fenêtre qui ne passe pas n'est pas encodée, son score est le plus bas.
+    # Stock <nom>+g-<portes>. Notes et rythme : comptés sur les débuts de notes (les mêmes
+    # qu'en parallèle) ; énergie et contraste : sur le son de la fenêtre.
+    gates:
+      combine: all                                 # all : toutes les portes ; any : une suffit
+      band_energy: {enabled: false, min_db: 6.0}   # pic en bande au-dessus de la médiane
+      band_contrast: {enabled: false, min_db: 3.0} # idem, rapporté aux bandes voisines
+      notes: {enabled: false, min_count: 1}        # débuts de notes de durée compatible
+      rhythm: {enabled: false, min_count: 1}       # intervalles entre notes d'A. blanci
+
+# Détecteurs audio → score, sans encodeur de fondation (DECISIONS n° 97, `blanci/detectors/`).
+# Emplacements réservés, `blanci detector-bench --detector <nom>` les jugera sur les mêmes plis.
+detectors:
+  distilled: {band_hz: [3000, 7000]}   # distillation de la chaîne gelée (§3, après M4)
+  homemade: {band_hz: [3000, 7000]}    # modèle fait maison, entraîné sur les labels
+
+# Fine-tuning / LoRA de l'encodeur (DECISIONS n° 97, `blanci/finetune.py`) : emplacement réservé,
+# conditionné (§3). Un encodeur adapté sort en paquet ONNX et se branche comme les autres.
+finetune:
+  method: lora                      # lora | full
+  lora: {rank: 8, alpha: 16, dropout: 0.1, target_modules: [q_proj, v_proj]}
+  epochs: 10
+  lr: 1.0e-4
+  per_fold: true                    # un encodeur par pli : sinon le benchmark fuit
 
 cluster:
   # Voie non supervisée (§5 bis) : HDBSCAN sur ACP. Seuils de C1 : jugement de la feuille de route.
@@ -156,3 +253,18 @@ cluster:
 active:
   batch_recordings: 40             # lots de 30–50 enregistrements (§5)
   mix: [0.6, 0.2, 0.2]             # incertains, scores maximaux, aléatoire stratifié (micro, heure)
+
+# Outil de sélection (`blanci select`, DECISIONS n° 99) : réglages des méthodes.
+selection:
+  cluster_min_checked: 10          # écoutes, toutes du même label, avant l'étiquetage en bloc
+  # Gabarit d'échantillonnage phénologique (à affiner avec Courtois et al. 2025) : strates
+  # priorité (heures × mois forts), secondaire (heures × mois secondaires), hors strates.
+  phenology:
+    priority_hours: [[7, 9], [15, 17]]
+    priority_months: [1, 2, 3, 4]
+    secondary_months: [11, 12]
+    site_hours: {Molokoi: [[7, 17]]}   # probabilité de détection ≈ 1 de 7 à 17 h (§5)
+    shares: {priority: 0.6, secondary: 0.2, outside: 0.2}
+  # Passerelle YAPAT : traduction de ses étiquettes vers le schéma de labels (à compléter au
+  # premier export réel, son format n'est pas documenté).
+  yapat_label_map: {}

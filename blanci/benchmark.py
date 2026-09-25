@@ -22,12 +22,13 @@ import pandas as pd
 
 from blanci.attentive import TokenStore
 from blanci.config import config_path
-from blanci.dataset import embedded_training_set
+from blanci.dataset import embedded_training_set, folds_for, pairing_options
 from blanci.db import encoder_params
 from blanci.evaluate import average_precision, evaluate, paired_bootstrap, to_recordings
 from blanci.frozen import frozen_recordings
 from blanci.head import oof_scores
 from blanci.index import l2_normalize
+from blanci.oof import labels_fingerprint, oof_frame, save_oof
 from blanci.store import EmbeddingStore
 
 PROBES = ("knn", "simple_prototype", "prototype", "logistic")
@@ -66,6 +67,8 @@ def probe_table(
     n_boot: int = 1000,
     seed: int = 0,
     tokens: np.ndarray | None = None,
+    gated: np.ndarray | None = None,
+    assignment: dict[str, int] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
     """Une ligne par (sonde, niveau) ; renvoie aussi les scores hors-pli de chaque sonde.
 
@@ -75,7 +78,15 @@ def probe_table(
     probes = [(p, X) for p in PROBES] + ([("attentive", tokens)] if tokens is not None else [])
     for probe, inputs in probes:
         oof = oof_scores(
-            inputs, y, groups, n_splits=n_splits, method=probe, C_grid=C_grid, seed=seed
+            inputs,
+            y,
+            groups,
+            n_splits=n_splits,
+            method=probe,
+            C_grid=C_grid,
+            seed=seed,
+            gated=gated,
+            assignment=assignment,
         )
         scores[probe] = oof.values
         for level in LEVELS:
@@ -110,8 +121,7 @@ def benchmark_encoder(
         EmbeddingStore(store_root, encoder_id),
         params["window_s"],
         per_positive=bench["negatives_per_positive"],
-        slot_tolerance_min=bench["slot_tolerance_min"],
-        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+        **pairing_options(cfg),
         seed=head["seed"],
         filters=filters,
         exclude_recordings=frozen_recordings(cfg),
@@ -122,6 +132,7 @@ def benchmark_encoder(
     y = data["y"].to_numpy()
     groups = data["point"].to_numpy()
     recordings = data["recording_id"].to_numpy()
+    assignment = folds_for(con, cfg)
 
     table, scores = probe_table(
         X,
@@ -134,7 +145,21 @@ def benchmark_encoder(
         n_boot=bench["n_boot"],
         seed=head["seed"],
         tokens=TokenStore(config_path(cfg, "tokens"), encoder_id).load(data["window_id"].tolist()),
+        gated=data["gated"].to_numpy(),
+        assignment=assignment,
     )
+    fingerprint = labels_fingerprint(con, cfg)
+    for probe, values in scores.items():  # scores hors-pli : benchmark complet, ensembles
+        frame = oof_frame(
+            f"{encoder_id}/{probe}",
+            "encoder_head",
+            data,
+            values,
+            assignment,
+            fingerprint,
+            params["window_s"],
+        )
+        save_oof(cfg, frame)
     last_run = params.get("last_run", {})
     table.insert(0, "encoder_id", encoder_id)
     table["dim"] = params["dim"]

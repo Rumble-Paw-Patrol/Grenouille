@@ -53,10 +53,14 @@ def workspace(tmp_path, monkeypatch):
     """Un dépôt jouet : audio, config, et `toy` branché comme encodeur disponible."""
     from blanci import encoders
 
-    monkeypatch.setattr(encoders, "get_encoder", lambda name, cfg: ToyEncoder(), raising=True)
+    monkeypatch.setattr(
+        encoders, "get_encoder", lambda name, cfg, upstream=None: ToyEncoder(), raising=True
+    )
     import blanci.cli as cli_module
 
-    monkeypatch.setattr(cli_module, "get_encoder", lambda name, cfg: ToyEncoder(), raising=True)
+    monkeypatch.setattr(
+        cli_module, "get_encoder", lambda name, cfg, upstream=None: ToyEncoder(), raising=True
+    )
 
     raw = tmp_path / "raw"
     seed = 0

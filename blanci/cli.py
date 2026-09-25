@@ -19,12 +19,19 @@ from blanci.activity import write_activity_report
 from blanci.baselines import run_baselines, write_baseline_report
 from blanci.benchmark import run_benchmark, write_report
 from blanci.config import config_path, load_config
-from blanci.dataset import benchmark_recordings, current_labels, recordings_table
+from blanci.dataset import benchmark_subset, current_labels, recordings_table
 from blanci.db import connect
 from blanci.embed import embed_recordings, select_recordings
 from blanci.encoders import get_encoder
 from blanci.frozen import freeze as freeze_recordings
-from blanci.grid import containing_windows, max_hop_without_cut, window_grid
+from blanci.grid import (
+    containing_windows,
+    hop_for_overlap,
+    max_hop_without_cut,
+    overlap_from_cfg,
+    overlap_of,
+    window_grid,
+)
 from blanci.ingest import ingest as run_ingest
 from blanci.labels import POSITIVE_LABELS, import_detections, import_label_file
 from blanci.qc import (
@@ -34,7 +41,7 @@ from blanci.qc import (
     apply_metadata_flags,
     parse_flags,
 )
-from blanci.sequential import compute_onsets
+from blanci.sequential import Upstream, compute_onsets, upstream_from_cfg
 from blanci.service import (
     activity_curves,
     append_label,
@@ -48,6 +55,7 @@ from blanci.service import (
     similarity_search,
     train_and_register,
     train_fusion,
+    upstream_bench,
 )
 from blanci.service import retrain as retrain_head
 from blanci.throughput import (
@@ -320,6 +328,21 @@ def embed(
             "(défaut : qc.during_embed).",
         ),
     ] = None,
+    overlap: Annotated[
+        float | None,
+        typer.Option(
+            help="Chevauchement des fenêtres, 0 (jointives) à 0,99 (maximal). "
+            "Défaut : encoders.overlap. Hors 0,5, stock séparé <encodeur>@o<%>."
+        ),
+    ] = None,
+    upstream: Annotated[
+        str | None,
+        typer.Option(
+            help="Module séquentiel en amont : fonctionnalités actives (bandpass, denoise, "
+            "band_energy, band_contrast, notes, rhythm) ou « none ». Défaut : celles activées "
+            "dans sequential.upstream, si sequential.position contient upstream."
+        ),
+    ] = None,
 ) -> None:
     """Extraction des embeddings → stock Parquet. Reprenable : ce qui est fait est sauté.
 
@@ -329,6 +352,7 @@ def embed(
     cfg = _cfg(ctx)
     if batch:
         cfg["encoders"]["batch_size"] = batch
+    overlap = overlap_from_cfg(cfg) if overlap is None else overlap
     con = connect(config_path(cfg, "db"))
     recordings = select_recordings(
         con,
@@ -338,11 +362,7 @@ def embed(
         utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
     )
     if subset == "benchmark":
-        wanted = benchmark_recordings(
-            con,
-            cfg["benchmark"]["slot_tolerance_min"],
-            cfg["recorder"]["filename_utc_offset_h"],
-        )
+        wanted = benchmark_subset(con, cfg)
         recordings = recordings[recordings["recording_id"].isin(wanted["recording_id"])]
     elif subset is not None:
         raise typer.BadParameter("attendu : benchmark", param_hint="--subset")
@@ -350,7 +370,12 @@ def embed(
         typer.echo("aucun enregistrement retenu par ces filtres")
         raise typer.Exit(1)
     typer.echo(f"{len(recordings)} enregistrements à traiter avec {encoder}")
-    model = get_encoder(encoder, cfg)
+    chain = upstream_chain(cfg, upstream)
+    model = get_encoder(encoder, cfg, chain)
+    _echo_grid(model.window_s, overlap)
+    if chain.active:
+        gates = [f"{g} ≥ {v:g}" for g, v in chain.gates.items()]
+        typer.echo("module séquentiel en amont : " + ", ".join([*chain.transforms, *gates]))
     check_qc = cfg["qc"].get("during_embed", True) if qc is None else qc
     report = embed_recordings(
         con,
@@ -358,20 +383,179 @@ def embed(
         recordings,
         config_path(cfg, "raw"),
         config_path(cfg, "embeddings"),
-        hop_ratio=cfg["encoders"]["grid_hop_ratio"],
+        overlap=overlap,
         channel=cfg["audio"]["channel"],
         signal_cfg=cfg["signal"],
         qc_thresholds=cfg["qc"] if check_qc else None,
+        gates=chain,
     )
     if report.qc_checked:
         typer.echo(
             f"contrôle audio : {report.qc_checked} enregistrements, {report.qc_excluded} écartés "
             "(silencieux ou micro dans sac)"
         )
+    if report.gated:
+        typer.echo(f"portes : {report.gated} fenêtres arrêtées (non encodées, score minimal)")
     typer.echo(
         f"{report.encoder_id} : {report.recordings} encodés, {report.skipped} déjà faits, "
         f"{report.errors} illisibles ; {report.windows} fenêtres, "
         f"{report.windows_per_s:.1f} fenêtres/s (×{report.realtime_factor:.0f} temps réel)"
+    )
+
+
+@app.command()
+def heads(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Stock d'encodeur (identifiant).")],
+    methods: Annotated[
+        str | None,
+        typer.Option(help="Têtes à comparer (défaut : toutes celles que l'encodeur permet)."),
+    ] = None,
+    site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
+) -> None:
+    """Benchmark des têtes (DECISIONS n° 92) : recherche par l'exemple, prototypes, kNN, linear
+    probe (et ses poolings), attentive, cascade ; mêmes fenêtres, mêmes plis."""
+    from blanci.benchmark import to_markdown
+    from blanci.head_benchmark import run_head_benchmark
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    out = run_head_benchmark(
+        con, cfg, encoder, _split(methods) or None, {"site": site} if site else None
+    )
+    table = out["table"]
+    reports = config_path(cfg, "reports")
+    stem = f"tetes_{encoder}".replace(":", "_")
+    table.to_csv(reports / f"{stem}.csv", index=False)
+    out["comparisons"].to_csv(reports / f"{stem}_comparaisons.csv", index=False)
+    shown = ["head", "level", "n_pos", "n_neg", "ap", "ap_lo", "ap_hi"]
+    shown += ["recall@p0.1", "recall@p0.5"]
+    text = [f"# Benchmark des têtes : {encoder}", ""]
+    for level in ("window", "recording"):
+        part = table[table["level"] == level]
+        text += [f"## Niveau {level}", "", to_markdown(part[[c for c in shown if c in part]]), ""]
+    text += ["## Contre la référence (enregistrements)", "", to_markdown(out["comparisons"]), ""]
+    if out["background"]:
+        text += ["## Fond capté (différentiel − simple)", "", out["background"]["verdict"], ""]
+    (reports / f"{stem}.md").write_text("\n".join(text), encoding="utf-8")
+    for row in table[table["level"] == "recording"].itertuples():
+        typer.echo(f"  {row.head:<22} AP {row.ap:.3f} [{row.ap_lo:.3f} ; {row.ap_hi:.3f}]")
+    if out["background"]:
+        typer.echo(f"fond capté : {out['background']['verdict']}")
+    typer.echo(f"rapport : {reports / (stem + '.md')}")
+
+
+@app.command("heads-curve")
+def heads_curve(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Stock d'encodeur (identifiant).")],
+    methods: Annotated[
+        str | None, typer.Option(help="Têtes (défaut : head.curve.methods).")
+    ] = None,
+    k: Annotated[str | None, typer.Option(help="Valeurs de k, ex. « 0,1,2,5,10 ».")] = None,
+    repeats: Annotated[int | None, typer.Option(help="Tirages par cible.")] = None,
+    by: Annotated[str | None, typer.Option(help="Cible : point (micro) ou site.")] = None,
+) -> None:
+    """Courbe selon le nombre d'annotations du site cible (DECISIONS n° 93) : le prototype
+    différentiel fait-il mieux que le linear probe sur un site peu annoté ?"""
+    from blanci.benchmark import to_markdown
+    from blanci.head_benchmark import annotation_curve, plot_curve
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    out = annotation_curve(
+        con,
+        cfg,
+        encoder,
+        _split(methods) or None,
+        [int(v) for v in _split(k)] or None,
+        repeats,
+        by,
+    )
+    reports = config_path(cfg, "reports")
+    stem = f"courbe_annotations_{encoder}".replace(":", "_")
+    for name, table in out.items():
+        table.to_csv(reports / f"{stem}_{name}.csv", index=False)
+    text = [
+        f"# Courbe selon le nombre d'annotations du site cible : {encoder}",
+        "",
+        "## AP moyenne par tête et par k",
+        "",
+        to_markdown(out["summary"]),
+        "",
+        "## Écart à la référence (apparié par cible et tirage)",
+        "",
+        to_markdown(out["gaps"]),
+        "",
+    ]
+    if plot_curve(out["summary"], reports / f"{stem}.png"):
+        text += [f"![courbe]({stem}.png)", ""]
+    (reports / f"{stem}.md").write_text("\n".join(text), encoding="utf-8")
+    for row in out["gaps"].itertuples():
+        mark = " *" if row.significant else ""
+        typer.echo(
+            f"  k={row.k:<3} {row.head:<18} − {row.reference} : {row.gap:+.3f} "
+            f"[{row.lo:+.3f} ; {row.hi:+.3f}]{mark}"
+        )
+    typer.echo(f"rapport : {reports / (stem + '.md')}")
+
+
+def upstream_chain(cfg: dict, override: str | None) -> Upstream:
+    """Fonctionnalités amont d'une commande : l'option `--upstream` si elle est donnée, sinon
+    celles activées dans `sequential.upstream` quand `sequential.position` contient upstream."""
+    if override is not None:
+        return upstream_from_cfg(cfg, override)
+    position = (cfg.get("sequential", {}) or {}).get("position") or []
+    return upstream_from_cfg(cfg) if "upstream" in position else Upstream()
+
+
+@app.command("upstream-bench")
+def upstream_bench_command(
+    ctx: typer.Context,
+    encoder: Annotated[
+        str | None,
+        typer.Option(help="Stock d'encodeur : AP après la porte. Sans : fenêtres des baselines."),
+    ] = None,
+    upstream: Annotated[
+        str | None,
+        typer.Option(help="Portes de la combinaison à comparer (défaut : sequential.upstream)."),
+    ] = None,
+) -> None:
+    """Banc d'essai des portes du module séquentiel en amont (DECISIONS n° 90, 103) : fenêtres
+    arrêtées contre positifs perdus, porte par porte et seuil par seuil. Lit l'audio (lecture
+    seule)."""
+    from blanci.benchmark import to_markdown
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    out = upstream_bench(con, cfg, encoder, upstream_from_cfg(cfg, upstream))
+    reports = config_path(cfg, "reports") / "upstream"
+    reports.mkdir(parents=True, exist_ok=True)
+    stem = f"banc_{encoder or 'baselines'}".replace(":", "_")
+    text = ["# Banc d'essai des portes (module séquentiel en amont)", ""]
+    for name, table in out.items():
+        table.to_csv(reports / f"{stem}_{name}.csv", index=False)
+        text += [f"## {name}", "", to_markdown(table), ""]
+    (reports / f"{stem}.md").write_text("\n".join(text), encoding="utf-8")
+    sweep = out["sweep"]
+    for row in sweep.itertuples():
+        typer.echo(
+            f"  {row.gate:<14} ≥ {row.threshold:<5g} négatifs arrêtés {row.neg_stopped:6.1%}  "
+            f"rappel plafond {row.recall_ceiling:6.1%}"
+        )
+    typer.echo(f"rapport : {reports / (stem + '.md')}")
+
+
+def _echo_grid(window_s: float, overlap: float, duration_s: float = 120.0) -> None:
+    """Pas, chevauchement effectif et volume de la grille, comparés à la demi-fenêtre."""
+    window_s = round(window_s, 2)
+    hop_s = hop_for_overlap(window_s, overlap)
+    n = len(window_grid(duration_s, window_s, hop_s))
+    n_ref = len(window_grid(duration_s, window_s, hop_for_overlap(window_s, 0.5)))
+    typer.echo(
+        f"grille : fenêtre {window_s:g} s, pas {hop_s:g} s, chevauchement "
+        f"{overlap_of(window_s, hop_s):.0%} ; {n} fenêtres par enregistrement de "
+        f"{duration_s:g} s (×{n / n_ref:.1f} par rapport à 50 %)"
     )
 
 
@@ -728,9 +912,7 @@ def onsets(
     con = connect(config_path(cfg, "db"))
     recordings = select_recordings(con, site=site)
     if subset == "benchmark":
-        wanted = benchmark_recordings(
-            con, cfg["benchmark"]["slot_tolerance_min"], cfg["recorder"]["filename_utc_offset_h"]
-        )
+        wanted = benchmark_subset(con, cfg)
         recordings = recordings[recordings["recording_id"].isin(wanted["recording_id"])]
     report = compute_onsets(
         con, recordings, config_path(cfg, "raw"), cfg["signal"], cfg["audio"]["channel"]
@@ -767,11 +949,383 @@ def fusion(
         f"{'significatif' if p['significant'] else 'non significatif'}"
     )
     coefs = ", ".join(f"{k} {v:+.2f}" for k, v in result["coefficients"].items())
+    typer.echo(f"  {result['method']}, module séquentiel : {result['position'] or 'absent'}")
     typer.echo(f"  coefficients (standardisés) : {coefs}")
+    parts = ", ".join(f"{k} {v:.0%}" for k, v in result["weights"].items())
+    typer.echo(f"  part de chaque entrée : {parts}")
     typer.echo(
         f"  seuil {result['threshold']:.3f} (rappel {result['recall_at_threshold']:.2f}) ; "
         "décider avec : blanci score --fusion"
     )
+
+
+@app.command("fusion-bench")
+def fusion_bench(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Encodeur principal (identifiant).")],
+    methods: Annotated[
+        str | None, typer.Option(help="Méthodes (défaut : fusion.benchmark_methods).")
+    ] = None,
+    positions: Annotated[
+        str | None,
+        typer.Option(
+            help="Emplacements du module séquentiel séparés par « ; », ex. "
+            "« none;parallel;parallel,downstream » (défaut : fusion.benchmark_positions)."
+        ),
+    ] = None,
+    sources: Annotated[
+        str | None,
+        typer.Option(help="Autres entrées : head:<encodeur>, congeners:<perch> (défaut : config)."),
+    ] = None,
+) -> None:
+    """Benchmark de la fusion (DECISIONS n° 94–95) : emplacement du module séquentiel ×
+    méthode de fusion (pondération apprise, fixée, cherchée, moyenne, rangs, OU, ET), contre la
+    tête seule, avec la part de chaque entrée."""
+    from blanci.benchmark import to_markdown
+    from blanci.stacking import fusion_benchmark, positions_from
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    wanted = [positions_from(p) for p in positions.split(";")] if positions else None
+    out = fusion_benchmark(
+        con,
+        cfg,
+        encoder,
+        _split(methods) or None,
+        wanted,
+        _split(sources) if sources is not None else None,
+    )
+    reports = config_path(cfg, "reports")
+    stem = f"fusion_{encoder}".replace(":", "_")
+    for name in ("table", "comparisons", "weights"):
+        out[name].to_csv(reports / f"{stem}_{name}.csv", index=False)
+    table = out["table"]
+    shown = ["position", "method", "inputs", "level", "ap", "ap_lo", "ap_hi", "recall@p0.1"]
+    text = [f"# Benchmark de la fusion : {encoder}", ""]
+    for level in ("recording", "window"):
+        part = table[table["level"] == level]
+        text += [f"## Niveau {level}", "", to_markdown(part[shown]), ""]
+    text += ["## Contre la tête seule (enregistrements)", "", to_markdown(out["comparisons"]), ""]
+    text += ["## Part de chaque entrée", "", to_markdown(out["weights"]), ""]
+    (reports / f"{stem}.md").write_text(chr(10).join(text), encoding="utf-8")
+    for row in table[table["level"] == "recording"].itertuples():
+        typer.echo(f"  {row.position:<28} {row.method:<12} AP {row.ap:.3f}")
+    typer.echo(f"rapport : {reports / (stem + '.md')}")
+
+
+@app.command()
+def ensemble(
+    ctx: typer.Context,
+    sources: Annotated[
+        str | None,
+        typer.Option(
+            help="Sources du stock hors-pli à combiner par enregistrement, ex. "
+            "« birdmae-…/logistic,perch_v2-…/logistic,baseline/template_max/c0 »."
+        ),
+    ] = None,
+    concat: Annotated[
+        str | None,
+        typer.Option(help="Encodeurs de même grille dont concaténer les embeddings."),
+    ] = None,
+    methods: Annotated[str | None, typer.Option(help="Méthodes de combinaison.")] = None,
+    allow_mixed: Annotated[
+        bool, typer.Option(help="Accepter des sources calculées sur des labels différents.")
+    ] = False,
+) -> None:
+    """Ensemble de modèles (DECISIONS n° 96) : combinaison par enregistrement de sources du
+    stock hors-pli (`blanci sources` les liste), ou concaténation d'embeddings."""
+    from blanci.benchmark import to_markdown
+    from blanci.ensemble import concat_benchmark, run_ensemble
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    reports = config_path(cfg, "reports")
+    if concat:
+        table = concat_benchmark(con, cfg, _split(concat), _split(methods) or None)
+        stem = "ensemble_concat_" + "+".join(_split(concat)).replace(":", "_")
+        table.to_csv(reports / f"{stem}.csv", index=False)
+        for row in table[table["level"] == "recording"].itertuples():
+            typer.echo(f"  {row.encoders} / {row.head} : AP {row.ap:.3f}")
+        typer.echo(f"tableau : {reports / (stem + '.csv')}")
+        return
+    if not sources:
+        raise typer.BadParameter("--sources ou --concat")
+    out = run_ensemble(con, cfg, _split(sources), _split(methods) or None, allow_mixed)
+    stem = "ensemble"
+    out["table"].to_csv(reports / f"{stem}.csv", index=False)
+    out["comparisons"].to_csv(reports / f"{stem}_comparaisons.csv", index=False)
+    text = [
+        f"# Ensemble de modèles ({out['n_recordings']} enregistrements communs)",
+        "",
+        to_markdown(out["table"]),
+        "",
+        "## Contre la meilleure source seule",
+        "",
+        to_markdown(out["comparisons"]),
+    ]
+    (reports / f"{stem}.md").write_text(chr(10).join(text), encoding="utf-8")
+    for row in out["table"].itertuples():
+        typer.echo(f"  {row.kind:<9} {row.model:<60} AP {row.ap:.3f}")
+    typer.echo(f"rapport : {reports / (stem + '.md')}")
+
+
+@app.command()
+def sources(ctx: typer.Context) -> None:
+    """Sources du stock de scores hors-pli : ce que le benchmark complet et les ensembles
+    peuvent comparer ou combiner."""
+    from blanci.oof import list_sources
+
+    table = list_sources(_cfg(ctx))
+    if table.empty:
+        typer.echo("aucun score hors-pli enregistré (lancer benchmark, heads, baselines…)")
+        return
+    for row in table.itertuples():
+        typer.echo(
+            f"  {row.kind:<13} {row.source:<60} {row.n_recordings} enreg., "
+            f"{row.n_pos} fenêtres positives, empreinte {row.fingerprint}"
+        )
+
+
+@app.command("detector-bench")
+def detector_bench(
+    ctx: typer.Context,
+    detector: Annotated[
+        str, typer.Option(help="band_contrast, distilled ou homemade (emplacements réservés).")
+    ],
+) -> None:
+    """Banc d'essai d'un détecteur audio → score (DECISIONS n° 97) : hors-pli sur les plis
+    communs s'il apprend, scores rangés dans le stock commun. Lit l'audio (lecture seule)."""
+    from blanci.detectors import evaluate_detector, get_detector
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    out = evaluate_detector(con, cfg, get_detector(detector, cfg))
+    for row in out["table"].itertuples():
+        typer.echo(f"  {row.level:<10} AP {row.ap:.3f} [{row.ap_lo:.3f} ; {row.ap_hi:.3f}]")
+    typer.echo(f"scores hors-pli : {out['source']}")
+
+
+@app.command("benchmark-all")
+def benchmark_all(
+    ctx: typer.Context,
+    sources: Annotated[
+        str | None, typer.Option(help="Sources à comparer (défaut : tout le stock hors-pli).")
+    ] = None,
+    reference: Annotated[
+        str | None, typer.Option(help="Source de référence (défaut : la meilleure AP).")
+    ] = None,
+    external: Annotated[
+        str | None,
+        typer.Option(help="Sources externes à ranger d'abord : blancinet, <encodeur perch>:logit."),
+    ] = None,
+    own: Annotated[
+        bool, typer.Option(help="Chaque source sur ses enregistrements (défaut : communs).")
+    ] = False,
+) -> None:
+    """Benchmark complet des modèles (DECISIONS n° 98) : encodeurs × têtes, baselines,
+    fusions, ensembles, détecteurs, Blancinet, sur les mêmes enregistrements."""
+    from blanci.benchmark import to_markdown
+    from blanci.full_benchmark import external_source, run_full_benchmark
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    for model in _split(external):
+        typer.echo(f"source externe rangée : {external_source(con, cfg, model)}")
+    out = run_full_benchmark(con, cfg, _split(sources) or None, reference, common=not own)
+    reports = config_path(cfg, "reports")
+    out["table"].to_csv(reports / "benchmark_complet.csv", index=False)
+    out["comparisons"].to_csv(reports / "benchmark_complet_comparaisons.csv", index=False)
+    shown = [
+        "source",
+        "kind",
+        "n_recordings",
+        "n_pos",
+        "ap",
+        "ap_lo",
+        "ap_hi",
+        "recall@p0.1",
+        "dim",
+        "windows_per_s",
+        "up_to_date",
+    ]
+    table = out["table"]
+    text = [
+        "# Benchmark complet des modèles",
+        "",
+        f"{out['n_common_recordings']} enregistrements ; référence : {out['reference']}.",
+        "Colonnes à remplir à la main : licence, prise en main (§2).",
+        "",
+        to_markdown(table[[c for c in shown if c in table]]),
+        "",
+        "## Contre la référence (bootstrap apparié par enregistrement)",
+        "",
+        to_markdown(out["comparisons"]),
+        "",
+        "## Rappel par site (précision plancher)",
+        "",
+        to_markdown(out["by_site"].reset_index()) if len(out["by_site"]) else "_(vide)_",
+    ]
+    (reports / "benchmark_complet.md").write_text(chr(10).join(text), encoding="utf-8")
+    for row in table.itertuples():
+        stale = "" if row.up_to_date else "  (labels changés depuis : à relancer)"
+        typer.echo(f"  {row.kind:<13} {row.source:<55} AP {row.ap:.3f}{stale}")
+    typer.echo(f"rapport : {reports / 'benchmark_complet.md'}")
+
+
+@app.command()
+def select(
+    ctx: typer.Context,
+    method: Annotated[
+        str,
+        typer.Option(
+            help="active, similarity, coverage, cluster, audit, random, negative_mining, "
+            "phenology, suspects, gaps, congeners, blancinet."
+        ),
+    ],
+    encoder: Annotated[
+        str | None, typer.Option(help="Stock d'encodeur (si la méthode en a besoin).")
+    ] = None,
+    n: Annotated[
+        int | None, typer.Option(help="Nombre de candidats (cluster : par groupe).")
+    ] = None,
+    mix: Annotated[
+        str | None, typer.Option(help="active : proportions incertains,top,aléatoire.")
+    ] = None,
+    mode: Annotated[
+        str | None,
+        typer.Option(help="negative_mining : unlikely ou false_friends ; gaps : scores ou labels."),
+    ] = None,
+    site: Annotated[str | None, typer.Option(help="Restreindre à un site (ou des sites).")] = None,
+    whole: Annotated[
+        bool, typer.Option(help="phenology : enregistrements entiers plutôt que fenêtres.")
+    ] = False,
+    table: Annotated[Path | None, typer.Option(help="blancinet : export des détections.")] = None,
+    name: Annotated[str | None, typer.Option(help="Nom de la file (défaut : la méthode).")] = None,
+    seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
+) -> None:
+    """Outil de sélection (DECISIONS n° 99) : une méthode, une file candidats_<nom>.csv pour le
+    poste d'annotation."""
+    from blanci.selection import select_candidates, write_queue
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    options: dict[str, Any] = {"seed": seed}
+    if n is not None:
+        options["n"] = n
+    if mix:
+        options["mix"] = [float(v) for v in _split(mix)]
+    if mode:
+        options["mode"] = mode
+    if site:
+        options["site"], options["sites"] = site, _split(site)
+    if whole:
+        options["whole"] = True
+    if table is not None:
+        options["table"] = table
+    queue = select_candidates(con, cfg, method, encoder, **options)
+    if queue.empty:
+        typer.echo("aucun candidat")
+        raise typer.Exit(1)
+    for reason, count in queue["reason"].value_counts().items():
+        typer.echo(f"  {reason:<28} {count}")
+    path = write_queue(cfg, queue, name or method)
+    typer.echo(f"{len(queue)} candidats : {path}")
+
+
+@app.command("cluster-status")
+def cluster_status_command(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Stock d'encodeur des groupes.")],
+) -> None:
+    """Groupes de `select --method cluster` : écoutes faites, labels entendus, homogénéité."""
+    from blanci.selection import cluster_status
+
+    cfg = _cfg(ctx)
+    table = cluster_status(
+        connect(config_path(cfg, "db")), cfg, encoder, cfg["selection"]["cluster_min_checked"]
+    )
+    for row in table.itertuples():
+        mark = "homogène" if row.homogeneous else ""
+        typer.echo(
+            f"  groupe {row.cluster:>4} : {row.n_windows} fenêtres, {row.n_listened} écoutées "
+            f"{row.labels} {mark}"
+        )
+
+
+@app.command("cluster-label")
+def cluster_label_command(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Stock d'encodeur des groupes.")],
+    cluster: Annotated[int, typer.Option(help="Numéro du groupe.")],
+    label: Annotated[str | None, typer.Option(help="Label (défaut : celui entendu).")] = None,
+    annotator: Annotated[str | None, typer.Option(help="Qui a validé le groupe.")] = None,
+    force: Annotated[
+        bool, typer.Option(help="Étiqueter même si le groupe n'est pas homogène.")
+    ] = False,
+) -> None:
+    """Étiquetage en bloc d'un groupe homogène (§5 bis, C2) : toutes ses fenêtres non écoutées
+    reçoivent le label entendu (source « bulk »)."""
+    from blanci.selection import label_cluster
+
+    cfg = _cfg(ctx)
+    written = label_cluster(
+        connect(config_path(cfg, "db")),
+        cfg,
+        encoder,
+        cluster,
+        label,
+        annotator,
+        cfg["selection"]["cluster_min_checked"],
+        force,
+    )
+    typer.echo(f"{written} fenêtres étiquetées en bloc (source bulk)")
+
+
+@app.command("yapat-export")
+def yapat_export(
+    ctx: typer.Context,
+    queue: Annotated[Path, typer.Argument(help="File de candidats (CSV).")],
+    name: Annotated[str, typer.Option(help="Dossier d'export sous paths.exports.")] = "yapat",
+    context: Annotated[
+        float, typer.Option(help="Secondes de contexte autour de la fenêtre.")
+    ] = 2.0,
+) -> None:
+    """Extraits WAV d'une file + manifest.csv, pour YAPAT ou tout outil externe. Lecture seule
+    de l'audio d'origine ; l'export est écrit sous paths.exports."""
+    from blanci.selection import export_clips
+    from blanci.workbench import load_candidates
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    manifest = export_clips(
+        cfg,
+        load_candidates(queue, con),
+        name,
+        context,
+        0 if cfg["audio"]["channel"] == "mean" else int(cfg["audio"]["channel"]),
+    )
+    typer.echo(f"extraits et manifeste : {manifest}")
+
+
+@app.command("yapat-import")
+def yapat_import(
+    ctx: typer.Context,
+    manifest: Annotated[Path, typer.Argument(help="manifest.csv de l'export.")],
+    answers: Annotated[Path, typer.Argument(help="Réponses de l'outil externe (CSV, Excel).")],
+    annotator: Annotated[str | None, typer.Option(help="Qui a annoté.")] = None,
+) -> None:
+    """Relit les réponses d'un outil externe sur des extraits exportés (source « yapat »)."""
+    from blanci.selection import import_clip_labels
+
+    cfg = _cfg(ctx)
+    written = import_clip_labels(
+        connect(config_path(cfg, "db")),
+        manifest,
+        answers,
+        cfg["selection"].get("yapat_label_map") or {},
+        annotator,
+    )
+    typer.echo(f"{written} labels ajoutés")
 
 
 @app.command("qc-calibrate")
@@ -813,11 +1367,15 @@ def qc_calibrate(ctx: typer.Context) -> None:
 def tokens(
     ctx: typer.Context,
     encoder: Annotated[str, typer.Option(help="Nom dans encoders.models (perch_v2).")],
+    overlap: Annotated[
+        float | None, typer.Option(help="Chevauchement du stock. Défaut : encoders.overlap.")
+    ] = None,
 ) -> None:
     """Jetons des fenêtres du benchmark pour la sonde attentive (§3). Encode ~1 500 fenêtres."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
-    report = compute_tokens(con, get_encoder(encoder, cfg), cfg)
+    overlap = overlap_from_cfg(cfg) if overlap is None else overlap
+    report = compute_tokens(con, get_encoder(encoder, cfg), cfg, overlap)
     typer.echo(
         f"{report['windows']} fenêtres ({report['recordings']} enregistrements), "
         f"{report['skipped']} déjà faites ; `blanci benchmark` ajoute alors la sonde attentive"

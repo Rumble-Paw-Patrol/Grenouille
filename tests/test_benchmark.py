@@ -361,3 +361,50 @@ def test_write_report_produces_csv_and_markdown(con, tmp_path, cfg):
     assert "good-1" in text and "weak-1" in text
     assert "Comparaisons appariées" in text
     assert "licence" in text  # colonnes à renseigner à la main (§2)
+
+
+# --- Scores hors-pli enregistrés (DECISIONS n° 91) ---------------------------------------------
+
+
+def test_benchmark_saves_out_of_fold_scores_on_common_folds(con, tmp_path, cfg):
+    from blanci.oof import list_sources, load_oof
+
+    layout = build_recordings(con)
+    write_embeddings(con, tmp_path, "good-1", layout, separation=3.0)
+    write_embeddings(con, tmp_path, "bad-1", layout, separation=0.2, seed=1)
+    run_benchmark(con, ["good-1", "bad-1"], tmp_path / "embeddings", cfg)
+    sources = list_sources(cfg)
+    assert {"good-1/logistic", "good-1/prototype", "bad-1/knn"} <= set(sources["source"])
+    table = load_oof(cfg)
+    folds = table.groupby(["source", "point"])["fold"].nunique()
+    assert (folds == 1).all()  # un micro, un pli
+    by_point = table.groupby("point")["fold"].nunique()
+    assert (by_point == 1).all()  # et le même pli pour toutes les sources
+    assert table["fingerprint"].nunique() == 1
+
+
+def test_fingerprint_changes_when_a_label_is_added(con, tmp_path, cfg):
+    from blanci.oof import labels_fingerprint
+
+    layout = build_recordings(con)
+    before = labels_fingerprint(con, cfg)
+    rid, ids, _, _ = layout[1]
+    con.execute(
+        "INSERT INTO labels (window_id, label, source, created_at) VALUES (?, 'bird', 'active', ?)",
+        (ids[0], utc_now()),
+    )
+    assert labels_fingerprint(con, cfg) != before
+
+
+def test_oof_frame_refuses_an_unknown_kind_or_a_length_mismatch():
+    from blanci.oof import oof_frame
+
+    data = pd.DataFrame(
+        {"window_id": ["w"], "recording_id": ["r"], "offset_s": [0.0], "y": [1], "point": ["p"]}
+    )
+    with pytest.raises(ValueError, match="sorte"):
+        oof_frame("s", "magic", data, np.array([0.1]), None, "x", 3.0)
+    with pytest.raises(ValueError, match="autant"):
+        oof_frame("s", "baseline", data, np.array([0.1, 0.2]), None, "x", 3.0)
+    frame = oof_frame("s", "baseline", data, np.array([0.1]), {"p": 2}, "x", 3.0)
+    assert frame.loc[0, "fold"] == 2 and frame.loc[0, "dur_s"] == 3.0

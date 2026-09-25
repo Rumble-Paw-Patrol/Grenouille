@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from blanci.store import EmbeddingStore
+from blanci.store import EmbeddingStore, gated_mask
 
 
 def l2_normalize(x: np.ndarray, eps: float = 1e-12) -> np.ndarray:
@@ -49,6 +49,7 @@ def search(
             sim_pos = sims[np.arange(len(x)), best_query]
             sim_neg = (x @ n.T).max(axis=1) if n is not None else np.zeros(len(x), np.float32)
             score = sim_pos - sim_neg
+            score[gated_mask(meta.iloc[start : start + chunk_rows])] = -np.inf  # sans embedding
             keep = _top_k(score, k)
             part = meta.iloc[start + keep].reset_index(drop=True)
             part["score"] = score[keep]

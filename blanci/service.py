@@ -31,7 +31,9 @@ from blanci.config import config_path
 from blanci.dataset import (
     current_labels,
     embedded_training_set,
+    folds_for,
     local_minutes,
+    pairing_options,
     recordings_table,
     training_set,
 )
@@ -39,20 +41,26 @@ from blanci.db import encoder_params, model_params, next_version, register_model
 from blanci.evaluate import (
     evaluate,
     false_alarms_per_hour,
-    grouped_folds,
     paired_bootstrap,
     recall_at_precision,
     recall_by_group,
     to_recordings,
 )
 from blanci.frozen import frozen_recordings, frozen_versions
-from blanci.fusion import FusionWeights, fit_fusion, fusion_oof
-from blanci.head import Head, OOFScores, fit_logistic, oof_scores, select_C, train_head
+from blanci.fusion import FusionWeights
+from blanci.head import Head, oof_scores, train_head
 from blanci.index import search
 from blanci.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
 from blanci.qc import apply_annotation_flags, is_excluded
-from blanci.sequential import load_onsets, recording_persistence, window_rhythm
-from blanci.store import EmbeddingStore
+from blanci.sequential import (
+    GATED_SCORE,
+    apply_gate,
+    load_onsets,
+    onset_counts,
+    onset_gates,
+    recording_persistence,
+)
+from blanci.store import EmbeddingStore, gated_mask
 
 SCORE_CHUNK = 200_000
 
@@ -119,8 +127,7 @@ def train_and_register(
         store_for(cfg, encoder_id),
         params["window_s"],
         per_positive=bench["negatives_per_positive"],
-        slot_tolerance_min=bench["slot_tolerance_min"],
-        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+        **pairing_options(cfg),
         seed=head_cfg["seed"],
         filters=filters,
         exclude_recordings=frozen_recordings(cfg),
@@ -131,6 +138,7 @@ def train_and_register(
     groups = data["point"].to_numpy()
     recordings = data["recording_id"].to_numpy()
 
+    gated = data["gated"].to_numpy()
     oof = oof_scores(
         X,
         y,
@@ -139,6 +147,8 @@ def train_and_register(
         method="logistic",
         C_grid=head_cfg["C_grid"],
         seed=head_cfg["seed"],
+        gated=gated,
+        assignment=folds_for(con, cfg),
     )
     recall, threshold = recall_at_precision(y, oof.values, min_precision)
     metrics = evaluate(
@@ -151,7 +161,7 @@ def train_and_register(
         seed=head_cfg["seed"],
     )
 
-    head = train_head(X, y, groups, head_cfg["C_grid"], seed=head_cfg["seed"])
+    head = train_head(X, y, groups, head_cfg["C_grid"], seed=head_cfg["seed"], gated=gated)
     version = next_version(con, "head", encoder_id)
     tid = threshold_id(encoder_id, version, min_precision)
     head.meta |= {
@@ -267,7 +277,7 @@ def score_and_decide(
     frames, total = [], 0
     for path in store.fragments(filters):
         meta, emb = store.read(path)
-        scores = head.decision(emb)
+        scores = apply_gate(head.decision(emb), ~gated_mask(meta))
         con.executemany(
             "INSERT INTO scores (window_id, model_id, score) VALUES (?, ?, ?) "
             "ON CONFLICT(window_id, model_id) DO UPDATE SET score = excluded.score",
@@ -445,6 +455,49 @@ def append_label(
     return int(cursor.lastrowid)
 
 
+def _in_chunks(con: sqlite3.Connection, sql: str, ids: list[str], size: int = 500) -> list:
+    """`sql` avec « IN ({}) » exécutée par paquets (limite de paramètres de SQLite)."""
+    rows = []
+    for start in range(0, len(ids), size):
+        chunk = ids[start : start + size]
+        rows += con.execute(sql.format(",".join("?" * len(chunk))), chunk).fetchall()
+    return rows
+
+
+def append_labels_bulk(
+    con: sqlite3.Connection,
+    window_ids: list[str],
+    label: str,
+    source: str,
+    conditions: dict | None = None,
+    annotator: str | None = None,
+) -> int:
+    """Même label sur beaucoup de fenêtres existantes, en une transaction (étiquetage en bloc
+    d'un groupe homogène, DECISIONS n° 99). Ajout seul, comme `append_label`."""
+    if label not in LABELS:
+        raise ValueError(f"label inconnu : {label!r} (attendus : {', '.join(LABELS)})")
+    if source not in SOURCES:
+        raise ValueError(f"source inconnue : {source!r} (attendues : {', '.join(SOURCES)})")
+    window_ids = list(dict.fromkeys(window_ids))
+    found = _in_chunks(
+        con, "SELECT window_id, recording_id FROM windows WHERE window_id IN ({})", window_ids
+    )
+    known = {w for w, _ in found}
+    missing = [w for w in window_ids if w not in known]
+    if missing:
+        raise ValueError(f"{len(missing)} fenêtres inconnues, dont {missing[0]}")
+    text = json.dumps(conditions, ensure_ascii=False) if conditions else None
+    now = utc_now()
+    con.executemany(
+        "INSERT INTO labels (window_id, label, quality, species, conditions, annotator, "
+        "source, created_at) VALUES (?, ?, NULL, NULL, ?, ?, ?, ?)",
+        [(w, label, text, annotator, source, now) for w in window_ids],
+    )
+    con.commit()
+    apply_annotation_flags(con, sorted({r for _, r in found}))
+    return len(window_ids)
+
+
 # --- Recherche par similarité -----------------------------------------------------------------
 
 
@@ -469,11 +522,12 @@ def similarity_search(
         store,
         params["window_s"],
         per_positive=bench["negatives_per_positive"] if use_paired_negatives else 0,
-        slot_tolerance_min=bench["slot_tolerance_min"],
-        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+        **pairing_options(cfg),
         seed=cfg["head"]["seed"],
         exclude_recordings=frozen_recordings(cfg),
     )
+    open_rows = ~data["gated"].to_numpy()  # une fenêtre arrêtée n'a pas d'embedding
+    data, X = data[open_rows].reset_index(drop=True), X[open_rows]
     y = data["y"].to_numpy()
     if not (y == 1).any():
         raise ValueError("aucun positif annoté : la recherche par similarité a besoin de requêtes")
@@ -508,8 +562,7 @@ def evaluate_holdout(
         store_for(cfg, encoder_id),
         params["window_s"],
         per_positive=bench["negatives_per_positive"],
-        slot_tolerance_min=bench["slot_tolerance_min"],
-        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+        **pairing_options(cfg),
         seed=head_cfg["seed"],
         exclude_recordings=frozen_recordings(cfg),
     )
@@ -526,6 +579,8 @@ def evaluate_holdout(
             method="logistic",
             C_grid=head_cfg["C_grid"],
             seed=head_cfg["seed"],
+            gated=data["gated"].to_numpy(),
+            assignment=folds_for(con, cfg),
         )
         scores, mask = oof.values, np.ones(len(y), dtype=bool)
         protocol = "plis groupés par micro"
@@ -541,8 +596,9 @@ def evaluate_holdout(
             data.loc[~mask, "point"].to_numpy(),
             head_cfg["C_grid"],
             seed=head_cfg["seed"],
+            gated=data.loc[~mask, "gated"].to_numpy(),
         )
-        scores = head.decision(X)
+        scores = apply_gate(head.decision(X), ~data["gated"].to_numpy())
         protocol = f"entraînement hors {', '.join(sorted(wanted))}"
 
     if len(np.unique(y[mask])) < 2:
@@ -610,6 +666,8 @@ def run_clustering(
     recordings = recordings_table(con).set_index("recording_id")
     if mode == "c0":
         meta, X = store.sample(n or ccfg["c0_sample"], seed=ccfg["seed"])
+        open_rows = ~gated_mask(meta)  # fenêtres arrêtées : embedding nul, hors clustering
+        meta, X = meta[open_rows].reset_index(drop=True), X[open_rows]
         if not len(meta):
             raise ValueError(f"aucun embedding pour {encoder_id}")
         meta = meta.assign(y=np.nan)
@@ -623,12 +681,13 @@ def run_clustering(
             store,
             params["window_s"],
             per_positive=max(1, -(-n_neg // max(1, n_pos_rec))),
-            slot_tolerance_min=cfg["benchmark"]["slot_tolerance_min"],
-            utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+            **pairing_options(cfg),
             seed=ccfg["seed"],
             filters={"site": ccfg["c1_site"]},
             exclude_recordings=frozen_recordings(cfg),
         )
+        open_rows = ~meta["gated"].to_numpy()
+        meta, X = meta[open_rows].reset_index(drop=True), X[open_rows]
     else:
         raise ValueError(f"mode inconnu : {mode!r} (c0 ou c1)")
 
@@ -704,7 +763,10 @@ def evaluate_frozen(
     data = training_set(con, grid, per_positive=0)
     if data.empty or data["y"].nunique() < 2:
         raise ValueError(f"jeu gelé {frozen_version} : labels absents ou d'une seule classe")
-    scores = head.decision(emb[keep][data["row"].to_numpy()].astype(np.float32))
+    rows = data["row"].to_numpy()
+    scores = apply_gate(
+        head.decision(emb[keep][rows].astype(np.float32)), ~gated_mask(meta[keep])[rows]
+    )
     y = data["y"].to_numpy()
     recordings = data["recording_id"].to_numpy()
     bench = cfg["benchmark"]
@@ -740,7 +802,7 @@ def evaluate_frozen(
     return out
 
 
-# --- Module séquentiel et fusion (§3) -----------------------------------------------------------
+# --- Module séquentiel et fusion (§3, DECISIONS n° 94–95) -------------------------------------
 
 # Frontière de décision de la tête logistique (classes équilibrées) : sert à compter les
 # fenêtres « positives » des descripteurs de persistance, à l'entraînement comme au score.
@@ -751,100 +813,48 @@ def fusion_id(encoder_id: str, head_version: str) -> str:
     return f"{encoder_id}:fusion:{head_version}"
 
 
-def _store_rows(store: EmbeddingStore, recording_ids: set[str]) -> tuple[pd.DataFrame, np.ndarray]:
-    """Toutes les fenêtres encodées de ces enregistrements (persistance = tout l'enregistrement)."""
-    metas, embs = [], []
-    for path in store.fragments():
-        meta, emb = store.read(path)
-        keep = meta["recording_id"].isin(recording_ids).to_numpy()
-        if keep.any():
-            metas.append(meta[keep])
-            embs.append(emb[keep])
-    if not metas:
-        return pd.DataFrame(columns=["window_id", "recording_id", "offset_s"]), np.zeros((0, 0))
-    return pd.concat(metas, ignore_index=True), np.concatenate(embs).astype(np.float32)
-
-
-def _sequential_features(
-    windows: pd.DataFrame, persistence: pd.DataFrame, onsets: dict, cfg: dict
-) -> pd.DataFrame:
-    rhythm = window_rhythm(windows, onsets, tuple(cfg["signal"]["ioi_range_s"]))
-    persist = persistence.reindex(windows["recording_id"]).set_index(windows.index)
-    return pd.concat([rhythm, persist], axis=1)
-
-
 def train_fusion(
     con: sqlite3.Connection, encoder_id: str, cfg: dict, version: str = "latest"
 ) -> dict[str, Any]:
     """Évalue puis enregistre la fusion (stacking, §3) au-dessus d'une tête enregistrée.
 
-    1. Plis groupés par micro : dans chaque pli, une tête entraînée sans le micro donne le
+    Méthode (`fusion.method`), emplacement du module séquentiel (`sequential.position`) et
+    autres sources (`fusion.sources`) viennent de la config (`blanci/stacking.py`) :
+
+    1. plis communs par micro : dans chaque pli, une tête entraînée sans le micro donne le
        score hors-pli des fenêtres étiquetées **et** de toutes les fenêtres de leurs
-       enregistrements (persistance) ;
-    2. descripteurs : rythme dans la fenêtre (débuts de notes) + persistance de
-       l'enregistrement ; colonnes retenues : `fusion.columns` ;
-    3. fusion évaluée hors-pli sur les mêmes plis, comparée à la tête seule (bootstrap apparié
+       enregistrements (persistance) ; les autres sources sont calculées de même ;
+    2. fusion évaluée hors-pli sur les mêmes plis, comparée à la tête seule (bootstrap apparié
        par enregistrement) ; seuil de la fusion pris sur ses scores hors-pli ;
-    4. fusion finale ajustée sur tout le jeu de développement, enregistrée en JSON.
+    3. fusion finale ajustée sur tout le jeu de développement, enregistrée en JSON.
     """
+    from blanci.stacking import build_level1, final_model, fused_oof, positions_from
+
     _, params = load_head(con, encoder_id, version)
     version = params["version"]
-    enc = encoder_params(con, encoder_id)
-    bench, head_cfg = cfg["benchmark"], cfg["head"]
-    columns = list(cfg["fusion"]["columns"])
-    data, X = embedded_training_set(
+    bench, head_cfg, fcfg = cfg["benchmark"], cfg["head"], cfg["fusion"]
+    method = fcfg.get("method", "logistic")
+    position = positions_from(cfg.get("sequential", {}).get("position", ["parallel", "downstream"]))
+    sources = list(fcfg.get("sources") or [])
+    level1 = build_level1(
         con,
-        store_for(cfg, encoder_id),
-        enc["window_s"],
-        per_positive=bench["negatives_per_positive"],
-        slot_tolerance_min=bench["slot_tolerance_min"],
-        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
-        seed=head_cfg["seed"],
-        exclude_recordings=frozen_recordings(cfg),
+        cfg,
+        encoder_id,
+        sources,
+        require_onsets=bool(set(position) & {"upstream", "parallel"}),
     )
-    y, groups = data["y"].to_numpy(), data["point"].to_numpy()
-    recordings = data["recording_id"].to_numpy()
-    onsets = load_onsets(con, set(recordings))
-    if not onsets:
+    fused, columns = fused_oof(level1, method, position, cfg, sources)
+    if len(columns) == 1:
         raise ValueError(
-            "aucun début de note calculé pour ces enregistrements : ils se calculent pendant "
-            "`blanci embed`, ou avec `blanci onsets`"
+            "rien à fusionner : aucun descripteur séquentiel (sequential.position) ni autre "
+            "source (fusion.sources) — la tête seule décide déjà"
         )
-    meta_all, emb_all = _store_rows(store_for(cfg, encoder_id), set(recordings))
-
-    folds = grouped_folds(y, groups, head_cfg["n_splits"], head_cfg["seed"])
-    head_oof = np.full(len(y), np.nan)
-    persistence_parts = []
-    for train, test in folds:
-        if len(np.unique(groups[train])) >= 2:
-            C, _ = select_C(
-                X[train],
-                y[train],
-                groups[train],
-                head_cfg["C_grid"],
-                head_cfg["n_splits"],
-                head_cfg["seed"],
-            )
-        else:
-            C = head_cfg["C_grid"][0]
-        fold_head = fit_logistic(X[train], y[train], C, head_cfg["seed"])
-        head_oof[test] = fold_head.decision(X[test])
-        mask = meta_all["recording_id"].isin(set(recordings[test])).to_numpy()
-        scored = meta_all[mask].assign(score=fold_head.decision(emb_all[mask]))
-        persistence_parts.append(recording_persistence(scored, PERSISTENCE_THRESHOLD))
-    persistence = pd.concat(persistence_parts)
-    windows = data.assign(dur_s=enc["window_s"])
-    features = _sequential_features(windows, persistence, onsets, cfg)
-
-    head_scores = OOFScores(head_oof, tuple(folds), "logistic")
-    fused = fusion_oof(
-        head_scores, features, y, groups, columns, head_cfg["n_splits"], head_cfg["seed"]
-    )
+    y, recordings, head_oof = level1.y, level1.recordings, level1.head.values
     floor = min(bench["precisions"])
-    recall, threshold = recall_at_precision(y, fused.values, floor)
+    recall, threshold = recall_at_precision(y, fused, floor)
     comparison = {}
     for level in ("recording", "window"):
-        for name, values in (("head", head_oof), ("fusion", fused.values)):
+        for name, values in (("head", head_oof), ("fusion", fused)):
             comparison[f"{name}_{level}"] = evaluate(
                 values,
                 y,
@@ -855,7 +865,7 @@ def train_fusion(
                 seed=head_cfg["seed"],
             )
     rec_head = to_recordings(head_oof, y, recordings).set_index("recording_id")
-    rec_fused = to_recordings(fused.values, y, recordings)
+    rec_fused = to_recordings(fused, y, recordings)
     paired = paired_bootstrap(
         rec_fused["y"].to_numpy(),
         rec_fused["score"].to_numpy(),
@@ -865,7 +875,7 @@ def train_fusion(
         seed=head_cfg["seed"],
     )
 
-    final = FusionWeights.from_fusion(fit_fusion(head_scores, features, y, columns))
+    final = final_model(level1, method, position, cfg, sources)
     model_id = fusion_id(encoder_id, version)
     register_model(
         con,
@@ -874,7 +884,10 @@ def train_fusion(
         encoder_id,
         version,
         {
-            "weights": final.to_dict(),
+            "model": final.to_dict(),
+            "position": position,
+            "sources": sources,
+            "gate": dict(zip(("gates", "combine"), onset_gates(cfg), strict=True)),
             "threshold": threshold,
             "threshold_id": f"{model_id}:p{floor}",
             "min_precision": floor,
@@ -889,15 +902,23 @@ def train_fusion(
             "trained_at": utc_now(),
         },
     )
+    coefficients = (
+        dict(zip(columns, final.coef.tolist(), strict=True))
+        if final.coef is not None
+        else final.weights()
+    )
     return {
         "model_id": model_id,
+        "method": method,
+        "position": position,
         "columns": columns,
-        "coefficients": dict(zip(["head", *columns], final.coef.tolist(), strict=True)),
+        "coefficients": coefficients,
+        "weights": final.weights(),
         "threshold": threshold,
         "recall_at_threshold": recall,
         "comparison": comparison,
         "paired": paired,
-        "n_with_onsets": int(pd.Series(recordings).isin(list(onsets)).sum()),
+        "n_with_onsets": level1.n_with_onsets,
         "n_windows": len(y),
     }
 
@@ -909,19 +930,59 @@ def fused_scores(
     scored: pd.DataFrame,
     window_s: float,
 ) -> np.ndarray:
-    """Scores de fusion de fenêtres déjà scorées par la tête (recording_id, offset_s, score)."""
-    weights = FusionWeights.from_dict(fusion_params["weights"])
+    """Scores de fusion de fenêtres déjà scorées par la tête (recording_id, offset_s, score).
+
+    Une fusion enregistrée avant la fusion à N entrées (clé `weights`) est relue telle quelle.
+    """
+    from blanci.fusion import FusionModel, project_scores
+    from blanci.sequential import gate_mask
+    from blanci.stacking import congener_scores, sequential_features, store_rows
+
     persistence = recording_persistence(scored, fusion_params["persistence_threshold"])
     onsets = load_onsets(con, set(scored["recording_id"]))
     windows = scored.assign(dur_s=window_s)
-    features = _sequential_features(windows, persistence, onsets, cfg)
-    return weights.decision(scored["score"].to_numpy(), features)
+    features = sequential_features(windows, persistence, onsets, cfg)
+    if "model" not in fusion_params:  # première version : FusionWeights
+        weights = FusionWeights.from_dict(fusion_params["weights"])
+        return weights.decision(scored["score"].to_numpy(), features)
+
+    model = FusionModel.from_dict(fusion_params["model"])
+    head = scored["score"].to_numpy(dtype=float).copy()
+    stopped = head <= GATED_SCORE
+    head[stopped] = np.nan
+    parts = []
+    for column in model.columns:
+        if column == "head":
+            parts.append(head)
+        elif column in features:
+            parts.append(features[column].to_numpy(dtype=float))
+        elif column.startswith("congeners:"):
+            parts.append(congener_scores(con, column.split(":", 1)[1], windows))
+        elif column.startswith("head:"):
+            other = column.split(":", 1)[1]
+            other_head, _ = load_head(con, other, "default")
+            meta, emb = store_rows(store_for(cfg, other), set(scored["recording_id"]))
+            source = meta.assign(
+                score=apply_gate(other_head.decision(emb), ~gated_mask(meta)),
+                dur_s=encoder_params(con, other)["window_s"],
+            )
+            parts.append(project_scores(windows, source))
+        else:
+            raise ValueError(f"entrée de fusion inconnue : {column}")
+    out = model.decision(np.column_stack(parts))
+    if "upstream" in fusion_params.get("position", []):
+        counts = onset_counts(windows, onsets, tuple(cfg["signal"]["ioi_range_s"]))
+        gate = fusion_params.get("gate") or {}
+        out = apply_gate(out, gate_mask(counts, gate.get("gates", {}), gate.get("combine", "all")))
+    return apply_gate(out, ~stopped)
 
 
 # --- Jetons pour l'attentive probing (§3) --------------------------------------------------------
 
 
-def compute_tokens(con: sqlite3.Connection, encoder: Any, cfg: dict) -> dict[str, int]:
+def compute_tokens(
+    con: sqlite3.Connection, encoder: Any, cfg: dict, overlap: float = 0.5
+) -> dict[str, int]:
     """Jetons des fenêtres du benchmark (étiquetées + négatifs appariés, jeu gelé exclu) pour
     un encodeur déjà passé par `embed` : seules ces fenêtres servent à la sonde attentive.
 
@@ -930,19 +991,18 @@ def compute_tokens(con: sqlite3.Connection, encoder: Any, cfg: dict) -> dict[str
     """
     from blanci.attentive import TokenStore
     from blanci.audio import cut_windows, load_audio
-    from blanci.encoders import encoder_id as make_encoder_id
+    from blanci.encoders import stock_id
 
     if not encoder.has_tokens:
         raise ValueError(f"{encoder.name} n'expose pas de jetons (seul perch_v2 aujourd'hui)")
-    eid = make_encoder_id(encoder)
+    eid = stock_id(encoder, overlap)
     bench = cfg["benchmark"]
     data, _ = embedded_training_set(
         con,
         store_for(cfg, eid),
         encoder.window_s,
         per_positive=bench["negatives_per_positive"],
-        slot_tolerance_min=bench["slot_tolerance_min"],
-        utc_offset_h=cfg["recorder"]["filename_utc_offset_h"],
+        **pairing_options(cfg),
         seed=cfg["head"]["seed"],
         exclude_recordings=frozen_recordings(cfg),
     )
@@ -1137,3 +1197,147 @@ def activity_curves(
         "checks": checks,
         "correlations": correlations,
     }
+
+
+# --- Module séquentiel en amont : banc d'essai des portes (DECISIONS n° 90, 103) ------------------
+
+
+def window_gate_values(con: sqlite3.Connection, cfg: dict, windows: pd.DataFrame) -> pd.DataFrame:
+    """Valeurs des portes (`sequential.GATES`) de chaque fenêtre (window_id, recording_id,
+    offset_s, dur_s) : énergie et contraste calculés sur l'audio (lecture seule), gardés en
+    cache dans `paths.reports/upstream/gate_values.parquet` ; notes et rythme recomptés sur les
+    débuts de notes rangés de l'enregistrement quand ils existent (les mêmes qu'à l'encodage et
+    dans la fusion), sinon détectés dans la fenêtre."""
+    from blanci.baselines import read_windows
+    from blanci.sequential import GATES, ONSET_GATES, gate_values
+
+    cache_path = config_path(cfg, "reports") / "upstream" / "gate_values.parquet"
+    cache = pd.read_parquet(cache_path) if cache_path.exists() else pd.DataFrame()
+    known = set(cache["window_id"]) if len(cache) else set()
+    todo = windows[~windows["window_id"].isin(known)].drop_duplicates("window_id")
+    if len(todo):
+        todo = (
+            todo.drop(columns=[c for c in ("path",) if c in todo])
+            .merge(recordings_table(con)[["recording_id", "path"]], on="recording_id", how="left")
+            .reset_index(drop=True)
+        )
+        channel = cfg["audio"]["channel"]
+        channels = (0, 1) if channel == "mean" else (int(channel),)
+        values = np.full((len(todo), len(GATES)), np.nan)
+        for i, wavs, sr in read_windows(todo, config_path(cfg, "raw"), channels):
+            wav = np.mean([wavs[c] for c in channels], axis=0)
+            values[i] = gate_values(wav[None, :], sr, cfg["signal"]).iloc[0].to_numpy()
+        fresh = pd.DataFrame(values, columns=list(GATES)).assign(window_id=todo["window_id"])
+        cache = pd.concat([cache, fresh], ignore_index=True) if len(cache) else fresh
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache.to_parquet(cache_path, index=False)
+    table = cache.drop_duplicates("window_id", keep="last").set_index("window_id")
+    values = table.reindex(windows["window_id"])[list(GATES)].set_axis(windows.index)
+    onsets = load_onsets(con, set(windows["recording_id"]))
+    if onsets:
+        counts = onset_counts(windows, onsets, tuple(cfg["signal"]["ioi_range_s"]))
+        known = counts["notes"].notna()
+        values.loc[known, list(ONSET_GATES)] = counts.loc[known].to_numpy()
+    return values
+
+
+def upstream_bench(
+    con: sqlite3.Connection,
+    cfg: dict,
+    encoder_id: str | None = None,
+    upstream: Any = None,
+) -> dict[str, pd.DataFrame]:
+    """Banc d'essai des portes du module séquentiel en amont (seuillage spectral et rythme).
+
+    - `sweep` : pour chaque porte et chaque seuil de `sequential.GATE_GRIDS`, négatifs arrêtés
+      (calcul économisé) et positifs perdus (rappel plafond, en enregistrements). Sans
+      encodeur, sur les fenêtres des baselines (3 s) ; avec `encoder_id`, sur celles de son
+      stock, et l'AP (enregistrements) des scores logistiques hors-pli après la porte
+      (approximation : la tête n'est pas réentraînée sans les fenêtres arrêtées) ;
+    - `comparison` (avec encodeur et portes actives dans `upstream`) : la combinaison
+      configurée, cette fois fidèle (tête réentraînée sans les fenêtres arrêtées, pli par
+      pli), contre l'absence de porte, par bootstrap apparié.
+    """
+    from blanci.baselines import evaluation_windows
+    from blanci.sequential import gate_mask, gate_sweep
+
+    bench, head_cfg = cfg["benchmark"], cfg["head"]
+    X = None
+    if encoder_id is None:
+        data = evaluation_windows(con, cfg)
+    else:
+        params = encoder_params(con, encoder_id)
+        data, X = embedded_training_set(
+            con,
+            store_for(cfg, encoder_id),
+            params["window_s"],
+            per_positive=bench["negatives_per_positive"],
+            **pairing_options(cfg),
+            seed=head_cfg["seed"],
+            exclude_recordings=frozen_recordings(cfg),
+        )
+        data = data.assign(dur_s=params["window_s"])
+    values = window_gate_values(con, cfg, data)
+    y = data["y"].to_numpy()
+    recordings = data["recording_id"].to_numpy()
+    sweep = gate_sweep(values, y, recordings)
+    out: dict[str, pd.DataFrame] = {"sweep": sweep}
+    if X is None:
+        return out
+
+    common = {
+        "n_splits": head_cfg["n_splits"],
+        "method": "logistic",
+        "C_grid": head_cfg["C_grid"],
+        "seed": head_cfg["seed"],
+        "assignment": folds_for(con, cfg),
+    }
+    groups = data["point"].to_numpy()
+    reference = oof_scores(X, y, groups, gated=data["gated"].to_numpy(), **common).values
+    ap_ref = evaluate(reference, y, recordings, "recording", n_boot=0)["ap"]
+    sweep["ap_recording"] = [
+        evaluate(
+            apply_gate(reference, gate_mask(values, {row.gate: row.threshold})),
+            y,
+            recordings,
+            "recording",
+            n_boot=0,
+        )["ap"]
+        for row in sweep.itertuples()
+    ]
+    sweep["ap_reference"] = ap_ref
+    if upstream is not None and upstream.gates:
+        passed = upstream.passes(values)
+        gated = oof_scores(X, y, groups, gated=data["gated"].to_numpy() | ~passed, **common)
+        paired = paired_bootstrap(
+            *_recording_pair(gated.values, reference, y, recordings),
+            n_boot=bench["n_boot"],
+            seed=head_cfg["seed"],
+        )
+        out["comparison"] = pd.DataFrame(
+            [
+                {
+                    "gates": upstream.gate_tag(),
+                    "neg_stopped": float((~passed[y == 0]).mean()),
+                    "pos_windows_lost": int(((y == 1) & ~passed).sum()),
+                    "ap_gated": evaluate(gated.values, y, recordings, "recording", n_boot=0)["ap"],
+                    "ap_reference": ap_ref,
+                    **paired,
+                }
+            ]
+        )
+    return out
+
+
+def _recording_pair(
+    a: np.ndarray, b: np.ndarray, y: np.ndarray, recordings: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """(labels, scores A, scores B, enregistrements) au niveau enregistrement (maximum)."""
+    rec_a = to_recordings(a, y, recordings)
+    rec_b = to_recordings(b, y, recordings).set_index("recording_id")
+    return (
+        rec_a["y"].to_numpy(),
+        rec_a["score"].to_numpy(),
+        rec_b.loc[rec_a["recording_id"], "score"].to_numpy(),
+        rec_a["recording_id"].to_numpy(),
+    )

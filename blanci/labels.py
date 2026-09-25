@@ -37,7 +37,26 @@ LABELS = POSITIVE_LABELS + (
     "uncertain",
 )
 QUALITIES = ("A", "B", "C")
-SOURCES = ("import", "similarity", "active", "random", "audit")
+# Origine d'un label = méthode de sélection qui a proposé la fenêtre (DECISIONS n° 99) : les
+# tours d'annotation se comparent par source (lesquels trouvent des positifs, lesquels des
+# négatifs durs). « bulk » : label propagé sans écoute à tout un groupe homogène (étiquetage en
+# bloc, `selection.label_cluster`) ; les fenêtres écoutées de ce groupe restent « cluster ».
+# « gap » : faux négatif suspect, fenêtre négative encadrée de positives (n° 102).
+SOURCES = (
+    "import",
+    "similarity",
+    "active",
+    "random",
+    "audit",
+    "mining",
+    "phenology",
+    "suspect",
+    "coverage",
+    "cluster",
+    "bulk",
+    "gap",
+    "yapat",
+)
 TARGET_SPECIES = "Anomaloglossus blanci"
 
 Kind = Literal["positive", "negative"]

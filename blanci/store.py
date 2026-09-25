@@ -1,6 +1,8 @@
 """Stockage des embeddings : Parquet partitionné <encodeur>/<jeu>/<site>/<aaaamm>.parquet (§13.3).
 
-Colonnes : window_id, recording_id, offset_s, emb (liste de taille fixe float16[dim]).
+Colonnes : window_id, recording_id, offset_s, emb (liste de taille fixe float16[dim]) ; `gated`
+(booléen) dans un stock encodé avec des portes : une fenêtre arrêtée a un embedding nul, jamais
+appris, et le score le plus bas (module séquentiel en amont, `blanci/sequential.py`).
 """
 
 from __future__ import annotations
@@ -15,7 +17,15 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 META_COLUMNS = ["window_id", "recording_id", "offset_s"]
+GATED = "gated"  # colonne optionnelle : fenêtre arrêtée par une porte (seuillage en amont)
 PARTITION_KEYS = ("dataset", "site", "month")
+
+
+def gated_mask(meta: pd.DataFrame) -> np.ndarray:
+    """Fenêtres arrêtées par une porte (toutes à False dans un stock sans portes)."""
+    if GATED not in meta:
+        return np.zeros(len(meta), dtype=bool)
+    return meta[GATED].astype("boolean").fillna(False).to_numpy(dtype=bool)
 
 
 def _as_set(value: str | list[str] | None) -> set[str] | None:
@@ -43,12 +53,15 @@ class EmbeddingStore:
         if len(meta) != len(emb):
             raise ValueError("meta et emb n'ont pas le même nombre de lignes")
         path = self.partition_path(dataset, site, month)
-        meta = meta[META_COLUMNS].reset_index(drop=True)
+        columns = META_COLUMNS + ([GATED] if GATED in meta else [])
+        meta = meta[columns].reset_index(drop=True)
         emb = np.asarray(emb, dtype=np.float16)
         if path.exists():
             old_meta, old_emb = self.read(path)
             keep = ~old_meta["window_id"].isin(meta["window_id"]).to_numpy()
             meta = pd.concat([old_meta[keep], meta], ignore_index=True)
+            if GATED in meta:
+                meta[GATED] = meta[GATED].astype("boolean").fillna(False).astype(bool)
             emb = np.concatenate([old_emb[keep].astype(np.float16), emb])
         dim = emb.shape[1]
         values = pa.array(emb.reshape(-1), type=pa.float16())

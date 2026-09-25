@@ -1,6 +1,7 @@
 """Baselines sans encodeur (§3) : seuillage spectral, onsets, rythme, template matching."""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -162,6 +163,16 @@ def test_benchmark_recordings_keeps_labelled_and_same_slot_candidates(corpus):
     assert not subset["path"].str.contains("_20260214_").any()  # 15 h : hors créneau
 
 
+def test_benchmark_recordings_follow_the_pairing_strategy(corpus):
+    """Même jour : aucun enregistrement du corpus n'est à 30–60 min d'un positif le même jour ;
+    l'union des deux stratégies (sous-ensemble à encoder) garde ceux de l'autre jour."""
+    con, cfg, _ = corpus
+    same_day = benchmark_recordings(con, 30, -3, strategy="same_day")
+    assert (same_day["role"] == "paired_candidate").sum() == 0
+    mixed = benchmark_recordings(con, 30, -3, strategy="mixed")
+    assert (mixed["role"] == "paired_candidate").sum() == 12
+
+
 def test_benchmark_recordings_skips_flagged_candidates(corpus):
     con, cfg, _ = corpus
     flagged = con.execute("SELECT recording_id FROM recordings WHERE path LIKE '%M1_20260211%'")
@@ -176,6 +187,7 @@ def test_benchmark_recordings_skips_flagged_candidates(corpus):
 
 def test_evaluation_windows_mix_annotations_and_paired_negatives(corpus):
     con, cfg, _ = corpus
+    cfg["benchmark"]["pairing"] = "other_day"
     windows = evaluation_windows(con, cfg)
     assert windows["y"].sum() == 12
     negatives = windows[windows["y"] == 0]
@@ -184,8 +196,25 @@ def test_evaluation_windows_mix_annotations_and_paired_negatives(corpus):
     assert windows["point"].nunique() == 4
 
 
+def test_evaluation_windows_take_the_nearest_negatives_first(corpus):
+    """Stratégie nearest (défaut, DECISIONS n° 101) : dans l'enregistrement positif d'abord.
+    Annotations à 0, 3 et 6 s sur 12 s : seule la fenêtre à 9 s ne chevauche aucune d'elles ;
+    le reste vient d'un autre jour (aucun autre enregistrement du même point ce jour-là)."""
+    con, cfg, _ = corpus
+    windows = evaluation_windows(con, cfg)
+    negatives = windows[windows["y"] == 0]
+    assert len(negatives) == 4 * 6 and negatives["presumed"].all()
+    same = negatives[negatives["path"].str.contains("20260210")]
+    assert len(same) == 4 and (same["offset_s"] == 9.0).all()
+    assert (same["pairing"] == "same_recording").all()
+    assert (negatives.drop(same.index)["pairing"] == "other_day").all()
+
+
 def test_run_baselines_scores_every_baseline_on_each_channel(corpus, tmp_path):
     con, cfg, raw = corpus
+    # Les enregistrements positifs du corpus chantent d'un bout à l'autre (H20) : leurs voisines
+    # (nearest) contiennent du chant, c'est le risque du n° 101, pas ce que ce test mesure.
+    cfg["benchmark"]["pairing"] = "other_day"
     before = {p: p.stat().st_mtime_ns for p in raw.rglob("*.wav")}
     table, scores = run_baselines(con, cfg, raw, channels=(0, 1), progress_every=0)
     assert set(table["baseline"]) == set(BASELINES)
@@ -201,3 +230,74 @@ def test_run_baselines_scores_every_baseline_on_each_channel(corpus, tmp_path):
     paths = write_baseline_report(table, scores, tmp_path / "reports")
     text = paths["markdown"].read_text(encoding="utf-8")
     assert "go/no-go" in text and "template_max" in text
+
+
+def test_upstream_bench_without_encoder_measures_each_gate(corpus):
+    """Banc d'essai des portes (DECISIONS n° 90) sur les fenêtres des baselines : le chant passe
+    la porte « notes », le fond seul non ; les valeurs sont gardées en cache."""
+    from blanci.service import upstream_bench, window_gate_values
+
+    con, cfg, _ = corpus
+    out = upstream_bench(con, cfg)
+    sweep = out["sweep"]
+    notes = sweep[(sweep["gate"] == "notes") & (sweep["threshold"] == 1)].iloc[0]
+    assert notes["recall_ceiling"] == 1.0 and notes["neg_stopped"] > 0.5
+    assert set(sweep["gate"]) == {"band_energy", "band_contrast", "notes", "rhythm"}
+    cache = Path(cfg["paths"]["reports"]) / "upstream" / "gate_values.parquet"
+    assert cache.exists()
+    windows = evaluation_windows(con, cfg).head(3)
+    again = window_gate_values(con, cfg, windows)
+    assert again.notna().all().all() and len(again) == 3
+
+
+# --- Détecteurs audio → score : emplacements (DECISIONS n° 97) -----------------------------------
+
+
+class ToyTrainable:
+    """Détecteur entraînable jouet : énergie de la fenêtre, centrée sur la moyenne des négatifs
+    d'entraînement. Compte ses entraînements (un par pli)."""
+
+    name, version = "toy", "1"
+    fits = 0
+
+    def fit(self, windows, sr, y):
+        ToyTrainable.fits += 1
+        fitted = ToyTrainable()
+        energies = np.array([np.std(w) for w in windows])
+        fitted.offset = energies[np.asarray(y) == 0].mean()
+        return fitted
+
+    def score(self, windows, sr):
+        return np.array([np.std(w) for w in windows]) - getattr(self, "offset", 0.0)
+
+
+def test_detector_bench_runs_a_fixed_detector_and_stores_its_scores(corpus):
+    from blanci.detectors import evaluate_detector, get_detector
+    from blanci.detectors.base import read_evaluation_audio
+    from blanci.oof import list_sources
+
+    con, cfg, _ = corpus
+    audio = read_evaluation_audio(con, cfg)
+    out = evaluate_detector(con, cfg, get_detector("band_contrast", cfg), audio)
+    assert set(out["table"]["level"]) == {"window", "recording"}
+    assert "detector/band_contrast" in set(list_sources(cfg)["source"])
+    ToyTrainable.fits = 0
+    trained = evaluate_detector(con, cfg, ToyTrainable(), audio)
+    assert ToyTrainable.fits == cfg["head"]["n_splits"]  # un apprentissage par pli
+    assert np.isfinite(trained["scores"]).all()
+
+
+def test_reserved_slots_say_they_are_not_written_yet(corpus):
+    from blanci.detectors import TrainableDetector, get_detector
+    from blanci.finetune import finetune_encoder
+
+    con, cfg, _ = corpus
+    for name in ("distilled", "homemade"):
+        detector = get_detector(name, cfg)
+        assert isinstance(detector, TrainableDetector)
+        with pytest.raises(NotImplementedError, match="emplacement réservé"):
+            detector.fit([], 48000, np.array([]))
+    with pytest.raises(NotImplementedError, match="LoRA"):
+        finetune_encoder(con, cfg, "birdmae")
+    with pytest.raises(ValueError, match="inconnu"):
+        get_detector("magic", cfg)

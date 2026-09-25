@@ -35,6 +35,19 @@ def encoder_id(encoder: Encoder) -> str:
     return f"{encoder.name}-{encoder.version}"
 
 
+def stock_id(encoder: Encoder, overlap: float = 0.5) -> str:
+    """Identifiant du stock d'embeddings (et de tout ce qui en dépend : têtes, scores,
+    décisions) : l'encodeur, suivi du chevauchement de la grille s'il n'est pas de 50 %.
+
+    Deux chevauchements donnent deux grilles différentes : un stock par grille, jamais de
+    mélange (`birdmae-bacpipe1.3.5@o75`).
+    """
+    base = encoder_id(encoder)
+    if abs(overlap - 0.5) < 1e-9:
+        return base
+    return f"{base}@o{round(overlap * 100, 1):g}"
+
+
 class BaseEncoder:
     """Implémente `embed` à partir de `_forward` (lot à la f_e du modèle → embeddings)."""
 

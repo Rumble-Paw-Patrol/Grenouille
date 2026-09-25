@@ -10,6 +10,38 @@ import math
 
 Window = tuple[float, float]
 
+DEFAULT_OVERLAP = 0.5  # demi-fenêtre (§1) : chaque instant est vu par deux fenêtres
+MAX_OVERLAP = 0.99
+
+
+def hop_for_overlap(window_s: float, overlap: float) -> float:
+    """Pas de la grille pour un chevauchement donné, de 0 (fenêtres jointives, grille
+    standard) à 0,99 (chevauchement maximal).
+
+    pas = fenêtre × (1 − chevauchement), arrondi au centième (précision de `window_id`), jamais
+    moins de 0,01 s : le chevauchement effectif (`overlap_of`) peut différer un peu du demandé.
+    À 0 %, une note à cheval sur deux fenêtres est coupée ; à 99 %, il y a 50 fois plus de
+    fenêtres qu'à 50 % (réservé au sous-ensemble du benchmark).
+    """
+    if not 0.0 <= overlap <= MAX_OVERLAP:
+        raise ValueError(f"chevauchement {overlap} hors de [0, {MAX_OVERLAP}]")
+    return max(0.01, round(window_s * (1.0 - overlap), 2))
+
+
+def overlap_of(window_s: float, hop_s: float) -> float:
+    """Chevauchement effectif de deux fenêtres voisines (0 à 1)."""
+    return 1.0 - hop_s / window_s
+
+
+def overlap_from_cfg(cfg: dict) -> float:
+    """`encoders.overlap` ; une ancienne config à `grid_hop_ratio` reste lue (1 − ratio)."""
+    encoders = cfg.get("encoders", {})
+    if "overlap" in encoders:
+        return float(encoders["overlap"])
+    if "grid_hop_ratio" in encoders:
+        return 1.0 - float(encoders["grid_hop_ratio"])
+    return DEFAULT_OVERLAP
+
 
 def window_grid(
     duration_s: float, window_s: float, hop_s: float, tol_s: float = 0.05

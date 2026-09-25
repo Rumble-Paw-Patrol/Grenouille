@@ -40,7 +40,10 @@ from blanci.dataset import (
     EXCLUDED_LABELS,
     benchmark_recordings,
     current_labels,
+    folds_for,
     paired_negatives,
+    pairing_options,
+    positive_annotations,
     recordings_table,
 )
 from blanci.db import window_id_for
@@ -48,6 +51,7 @@ from blanci.evaluate import evaluate, grouped_folds
 from blanci.frozen import frozen_recordings
 from blanci.grid import window_grid
 from blanci.labels import POSITIVE_LABELS
+from blanci.oof import labels_fingerprint, oof_frame, save_oof
 from blanci.sequential import detect_onsets
 
 FIXED = ("band_energy", "band_contrast", "notes", "rhythm")
@@ -75,7 +79,6 @@ def evaluation_windows(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
     """Fenêtres annotées + négatifs appariés présumés : window_id, recording_id, path,
     offset_s, dur_s, label, y, presumed, point, site."""
     bench = cfg["benchmark"]
-    offset_h = cfg["recorder"]["filename_utc_offset_h"]
     recordings = recordings_table(con)
 
     frozen = frozen_recordings(cfg)  # jeu gelé : jamais vu en développement (§6)
@@ -87,28 +90,32 @@ def evaluation_windows(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
         presumed=False
     )
 
-    candidates = benchmark_recordings(con, bench["slot_tolerance_min"], offset_h)
+    positives = set(labelled.loc[labelled["y"] == 1, "recording_id"])
+    candidates = benchmark_recordings(con, **pairing_options(cfg))
+    # Candidats aux négatifs appariés, plus les enregistrements positifs eux-mêmes (stratégie
+    # nearest, DECISIONS n° 101) ; jamais une fenêtre déjà annotée.
     candidates = candidates[
-        (candidates["role"] == "paired_candidate") & ~candidates["recording_id"].isin(frozen)
+        ((candidates["role"] == "paired_candidate") | candidates["recording_id"].isin(positives))
+        & ~candidates["recording_id"].isin(frozen)
     ]
     w3 = cfg["grids"]["w3"]
     grid = pd.DataFrame(
         [
-            (window_id_for(r.recording_id, o, w3["window_s"]), r.recording_id, o)
+            (window_id_for(r.recording_id, o, w3["window_s"]), r.recording_id, o, w3["window_s"])
             for r in candidates.itertuples()
             for o, _ in window_grid(r.duration_s or 0.0, w3["window_s"], w3["hop_s"])
         ],
-        columns=["window_id", "recording_id", "offset_s"],
+        columns=["window_id", "recording_id", "offset_s", "dur_s"],
     )
-    positives = set(labelled.loc[labelled["y"] == 1, "recording_id"])
+    grid = grid[~grid["window_id"].isin(labelled["window_id"])].reset_index(drop=True)
     negatives = paired_negatives(
         grid,
         recordings,
         positives,
         bench["negatives_per_positive"],
-        bench["slot_tolerance_min"],
-        offset_h,
-        cfg["head"]["seed"],
+        seed=cfg["head"]["seed"],
+        positive_windows=positive_annotations(labels),
+        **pairing_options(cfg),
     ).assign(dur_s=w3["window_s"], presumed=True)
 
     data = pd.concat([labelled, negatives], ignore_index=True)
@@ -223,12 +230,13 @@ def oof_template_scores(
     n_splits: int = 5,
     n_exemplars: int = 30,
     seed: int = 0,
+    assignment: dict[str, int] | None = None,
 ) -> dict[str, np.ndarray]:
     """Scores hors-pli des deux gabarits : appris sur les seuls positifs annotés du pli
     d'entraînement (jamais sur les négatifs présumés), appliqués au micro tenu à l'écart."""
     rng = np.random.default_rng(seed)
     out = {name: np.full(len(specs), np.nan) for name in LEARNED}
-    for train, test in grouped_folds(y, groups, n_splits, seed):
+    for train, test in grouped_folds(y, groups, n_splits, seed, assignment):
         sources = [i for i in train if y[i] == 1 and not presumed[i]]
         patches = [p for p in (note_patch(specs[i], width) for i in sources) if p is not None]
         if not patches:
@@ -268,6 +276,8 @@ def run_baselines(
     groups = windows["point"].to_numpy()
     recordings = windows["recording_id"].to_numpy()
     bench, head = cfg["benchmark"], cfg["head"]
+    assignment = folds_for(con, cfg)
+    fingerprint = labels_fingerprint(con, cfg)
 
     rows, scored = [], []
     for c in channels:
@@ -281,12 +291,19 @@ def run_baselines(
             width,
             n_splits=head["n_splits"],
             seed=head["seed"],
+            assignment=assignment,
         )
         for name, values in scores.items():
             scored.append(
                 windows[["window_id", "recording_id", "y"]].assign(
                     baseline=name, channel=c, score=values
                 )
+            )
+            save_oof(
+                cfg,
+                oof_frame(
+                    f"baseline/{name}/c{c}", "baseline", windows, values, assignment, fingerprint
+                ),
             )
             finite = np.isfinite(values)
             for level in ("window", "recording"):

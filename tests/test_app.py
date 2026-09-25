@@ -45,14 +45,52 @@ def app_config(tmp_path, cfg, monkeypatch):
     return cfg
 
 
+def _button(at, label):
+    return next(b for b in at.button if b.label == label)
+
+
 def test_app_shows_a_candidate_and_saves_an_answer(app_config):
+    """Classe, espèce, commentaire, puis « Envoyer » : un label, et la fenêtre suivante."""
     at = AppTest.from_file("blanci/app.py", default_timeout=60).run()
     assert not at.exception
     assert "CDR" in at.subheader[0].value
     at.sidebar.text_input[0].input("léonard").run()
-    next(b for b in at.button if b.label == "rien").click().run()
+    next(r for r in at.radio if r.label == "Classe").set_value("bird")
+    next(t for t in at.text_input if t.label.startswith("Espèce")).input("Fourmilier tacheté")
+    next(t for t in at.text_input if t.label.startswith("Commentaire")).input("chant lointain")
+    _button(at, "Envoyer ▶").click().run()
     assert not at.exception
     con = connect(app_config["paths"]["db"])
-    rows = con.execute("SELECT label, annotator, source FROM labels").fetchall()
-    assert [tuple(r) for r in rows] == [("background", "léonard", "random")]
+    rows = con.execute("SELECT label, annotator, source, species FROM labels").fetchall()
+    assert [tuple(r) for r in rows] == [("bird", "léonard", "random", "Fourmilier tacheté")]
     assert any("File terminée" in s.value for s in at.success)
+
+
+def test_sending_without_an_annotator_is_refused(app_config):
+    at = AppTest.from_file("blanci/app.py", default_timeout=60).run()
+    _button(at, "Envoyer ▶").click().run()
+    assert any("annotateur" in e.value for e in at.error)
+    con = connect(app_config["paths"]["db"])
+    assert con.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == 0
+
+
+def test_a_queue_is_drawn_in_the_app_and_opened(app_config):
+    """Mode de sélection « fenêtres au hasard » : la file est écrite puis ouverte sur place."""
+    from pathlib import Path
+
+    at = AppTest.from_file("blanci/app.py", default_timeout=60).run()
+    at.sidebar.selectbox(key="mode").set_value("random").run()
+    at.sidebar.number_input(key="n::random").set_value(1).run()
+    _button(at, "Générer la file").click().run()
+    assert not at.exception
+    queues = list(Path(app_config["paths"]["reports"]).glob("candidats_random_*.csv"))
+    assert len(queues) == 1
+    assert at.sidebar.selectbox(key="mode").value == "existing"
+    assert "CDR" in at.subheader[0].value
+
+
+def test_modes_needing_an_encoder_say_so(app_config):
+    at = AppTest.from_file("blanci/app.py", default_timeout=60).run()
+    at.sidebar.selectbox(key="mode").set_value("map").run()
+    assert not at.exception
+    assert any("encodeur" in i.value.lower() for i in at.info)

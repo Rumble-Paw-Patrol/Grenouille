@@ -713,3 +713,182 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
     présumés sont tirés comme avant le n° 80. Les détections restent rangées comme scores
     du détecteur « blancinet » (`import-detections`), pour comparer Blancinet et nos têtes
     sur les mêmes fenêtres. Baselines relancées : de nouveau celles d'avant le n° 80.
+
+## 2026-09-24 — Ajouts demandés par Léonard (liste du 24/09, après le point d'étape)
+
+88. **Négatifs appariés : trois stratégies** (`benchmark.pairing`, `dataset.py`). Écart
+    constaté : la règle « même créneau, autre jour » n'excluait pas le même jour ; comme les
+    micros enregistrent toutes les 30 min, les enregistrements voisins du positif (± 30 min, le
+    même jour) étaient tirés aussi. Désormais : `other_day` (défaut, autre jour vraiment),
+    `same_day` (même jour, les enregistrements les plus proches à au moins
+    `same_day_min_gap_min`, et au plus ce délai + la tolérance), `mixed` (moitié, moitié ; l'un
+    complète l'autre). Colonne `pairing` sur chaque négatif présumé. Avis donné à Léonard : le
+    même jour est le meilleur témoin du fond (météo, chœur, saison), mais A. blanci chante par
+    épisodes : le voisin le plus proche est aussi le plus susceptible de la contenir. À
+    trancher en écoutant une vingtaine de négatifs présumés de chaque stratégie. Le
+    sous-ensemble à encoder (`embed --subset benchmark`) prend les candidats des deux
+    stratégies : changer de stratégie ne demande pas de ré-encoder. **Les baselines et tout
+    benchmark antérieur sont à relancer** (négatifs changés).
+
+89. **Chevauchement ajustable des fenêtres** (`encoders.overlap`, `embed --overlap`,
+    `grid.hop_for_overlap`). De 0 (fenêtres jointives, grille standard) à 0,99 ; pas =
+    fenêtre × (1 − chevauchement), au centième (précision de `window_id`), jamais moins de
+    0,01 s. Hors 50 %, stock séparé `<encodeur>@o<%>` : deux grilles ne se mélangent jamais,
+    et les têtes, scores et décisions de chaque grille restent distincts. À 99 %, 50 fois plus
+    de fenêtres qu'à 50 % : réservé au sous-ensemble du benchmark. `grid_hop_ratio` reste lu.
+
+90. **Seuillage spectral en amont, fonctionnalités activables** (`blanci/prefilter.py`,
+    section `prefilter`, option `--prefilter`, `blanci prefilter-bench`). Revient, à la
+    demande de Léonard, sur le « pas de filtre amont » du §3 (jugement) : tout reste coupé par
+    défaut, et le banc d'essai juge avant tout usage. Transformations (le son donné à
+    l'encodeur change → autre encodeur, stock `<nom>+bp3-7k`, jugé par le benchmark) :
+    passe-bande, débruitage par soustraction spectrale. Portes (une fenêtre arrêtée n'est pas
+    encodée, embedding nul, colonne `gated` du stock, score `GATED_SCORE`, jamais apprise ; un
+    positif arrêté compte comme manqué) : énergie en bande, contraste aux bandes voisines,
+    débuts de notes, rythme ; combinaison « toutes » ou « une ». Banc d'essai : par porte et
+    par seuil, négatifs arrêtés (calcul économisé) contre rappel plafond en enregistrements ;
+    avec un encodeur, AP après la porte, et la combinaison configurée jugée fidèlement (tête
+    réentraînée sans les fenêtres arrêtées) contre l'absence de porte.
+
+91. **Plis communs et stock de scores hors-pli** (`dataset.folds_for`, `blanci/oof.py`,
+    `blanci sources`). Les plis étaient recalculés sur chaque jeu (StratifiedGroupKFold sur
+    les fenêtres) : deux encodeurs, avec leurs grilles et leurs négatifs présumés, n'avaient
+    pas exactement les mêmes micros tenus à l'écart. Désormais le pli de chaque micro est
+    calculé une fois, sur les enregistrements annotés (hors jeu gelé), et partagé par
+    encodeurs, têtes, baselines, fusion, ensembles et détecteurs. Chaque benchmark range ses
+    scores hors-pli (`paths.reports/oof/`) au même format, avec une empreinte des labels et
+    réglages : une source calculée sur d'autres labels est signalée au lieu d'être comparée
+    en silence. Noms des sources : `<encodeur>/<tête>`, `baseline/<nom>/c<canal>`,
+    `<encodeur>/fusion:<emplacement>/<méthode>`, `ensemble:<méthode>(…)`, `detector/<nom>`,
+    `external/blancinet`.
+
+92. **Toutes les têtes à comparer** (`head.py`, `pooling.py`, `head_benchmark.py`,
+    `blanci heads`). Ajouts : recherche par l'exemple (plus proche positif ;
+    `exemplar_medoid` = un seul exemple de référence, le positif le plus central), linear
+    probe sur jetons résumés (`logistic:<pooling>` : moyenne, maximum, les deux, moyenne +
+    écart-type, top-k, moyenne en fréquence et maximum en temps, et l'inverse), cascade
+    (logistique puis attentive sur les 20 % meilleurs candidats, `head.cascade_fraction`). Les
+    jetons de perch_v2 sont gardés en grille 16 temps × 4 fréquences (ils étaient moyennés sur
+    la fréquence) ; l'attentive les prend à plat. Seul perch_v2 expose ses jetons : pour un
+    transformer, `encoders.models.<nom>.token_grid` (à vérifier sur le code du modèle,
+    notes.md) remet les jetons en grille. Le benchmark des têtes donne aussi le diagnostic du
+    fond capté (prototype différentiel contre simple, apparié). Mécanisme d'attention propre
+    au modèle et wrapper bacpipe : non programmés (rien de concret à brancher aujourd'hui).
+
+93. **Courbe selon le nombre d'annotations du site cible** (`blanci heads-curve`). Hypothèse
+    de Léonard : le prototype différentiel généraliserait mieux que le linear probe sur un site
+    peu annoté. Protocole : par cible (micro tant que tous les positifs sont à Mataroni, site
+    ensuite), moitié de test fixe tirée au hasard (positifs, négatifs annotés, négatifs
+    présumés séparément) ; entraînement = autres cibles + négatifs présumés de la réserve (le
+    fond du site, gratuit) + k enregistrements positifs de la réserve (k emboîtés, 0 = transfert
+    pur) et une part proportionnelle de ses négatifs annotés ; 5 tirages ; C choisi une fois
+    par cible sur les autres. Écart de chaque tête à la référence, apparié par (cible, tirage),
+    intervalle bootstrap sur les cibles : l'hypothèse tient si différentiel − logistique > 0
+    aux petits k.
+
+94. **Fusion à N entrées** (`fusion.py`, `stacking.py`, `blanci fusion-bench`, `fusion.method`,
+    `fusion.sources`). Entrées : score de la tête (hors-pli), descripteurs séquentiels, et
+    toute autre source — tête d'un autre encodeur (`head:<id>`, apprise pli par pli, ramenée
+    sur la grille principale), logits des congénères (`congeners:<id>`) : trois entrées ou plus.
+    Méthodes : logistique (poids appris), poids fixés à la main (`fusion.weights` ; les entrées
+    sans poids se partagent le reste), poids cherchés sur une grille, moyenne, moyenne des
+    rangs, maximum (OU), minimum (ET), entrées orientées sur l'entraînement. La part de chaque
+    entrée répond à « quel expert écouter en priorité ? ». `blanci fusion` enregistre la
+    méthode, l'emplacement et les sources de la config ; une fusion déjà enregistrée dans
+    l'ancien format reste lue.
+
+95. **Module séquentiel ≠ seuillage spectral ; emplacement paramétrable**
+    (`sequential.position`). Réponse à la question de Léonard : le seuillage agit sur le son
+    avant l'encodeur ; le module séquentiel produit des descripteurs (rythme, sur l'audio ;
+    persistance, sur les scores de la tête). Ils partagent leurs briques (enveloppe en bande,
+    débuts de notes). Emplacements : `upstream` (le rythme sert de porte : c'est une porte du
+    seuillage en amont, calculée sur les débuts de notes rangés, `sequential.gate`),
+    `parallel` (rythme fusionné avec la tête), `downstream` (persistance, qui n'existe qu'après
+    la tête), ou aucun. Défaut : parallèle + aval (la fusion d'avant). `fusion-bench` compare
+    les emplacements × méthodes à la tête seule.
+
+96. **Ensemble de modèles** (`ensemble.py`, `blanci ensemble`). Oui, il faut un outil : les
+    grilles diffèrent (3 s, 5 s). Trois voies : combinaison par enregistrement de n'importe
+    quelles sources du stock hors-pli (méthodes de la fusion, apprises pli par pli) ;
+    combinaison par fenêtre = fusion à N entrées (production possible) ; concaténation des
+    embeddings (blocs normalisés) pour des encodeurs de même grille. Un ensemble n'est jugé
+    que contre sa meilleure source seule.
+
+97. **Emplacements : distillation, modèle fait maison, fine-tuning / LoRA**
+    (`blanci/detectors/`, `blanci/finetune.py`, `blanci detector-bench`). Contrat
+    « détecteur » (audio → score, `fit` s'il apprend) et banc d'essai déjà branchés : hors-pli
+    sur les plis communs, scores rangés dans le stock commun, donc repris par le benchmark
+    complet et les ensembles. `band_contrast` montre que la chaîne marche ; `distilled` et
+    `homemade` disent qu'ils sont réservés. Fine-tuning / LoRA : contrat de sortie (un
+    encodeur en paquet ONNX) et contrainte d'évaluation (adaptation pli par pli, ou jugement
+    sur le seul jeu gelé et les nouveaux sites). Conforme au §13.7 : rien avant M4.
+
+98. **Benchmark complet des modèles** (`full_benchmark.py`, `blanci benchmark-all`). Toutes
+    les sources au niveau enregistrement, sur les enregistrements évalués par toutes : AP [IC],
+    rappels aux précisions plancher [Wilson], rappel par site, coût des encodeurs (dimension,
+    débit), fraîcheur des labels ; comparaison appariée à la référence. Sources externes
+    rangées à la demande sur les fenêtres des baselines : Blancinet (peut-être entraîné sur ces
+    mêmes enregistrements : optimiste, à confirmer avec Biophonia), logits des congénères.
+
+99. **Outil de sélection unique** (`selection.py`, `blanci select`, `cluster-status`,
+    `cluster-label`, `yapat-export`, `yapat-import`). Méthodes : 60-20-20 à proportions
+    réglables, similarité, couverture (k-centres : YAPAT fait maison automatique), groupes
+    HDBSCAN puis étiquetage en bloc d'un groupe homogène (10 écoutes d'un même label,
+    `selection.cluster_min_checked`), audit aléatoire, hasard, negative mining (scores hauts là
+    où A. blanci est improbable, ou proches des faux amis annotés), gabarit phénologique
+    (`selection.phenology`), détections isolées, congénères, Blancinet. Nouvelles sources de
+    labels : mining, phenology, suspect, coverage, cluster, bulk (propagé sans écoute), yapat.
+    YAPAT (Docker, PostgreSQL, embeddings BirdNET, licence non commerciale) n'est pas embarqué :
+    export d'extraits + manifeste, relecture des réponses (format non documenté : à valider au
+    premier essai, `selection.yapat_label_map`).
+
+100. **Poste d'annotation refondu** (`blanci annotate`). Mode de sélection dans le panneau de
+     gauche (file existante, ou file tirée sur place par n'importe quelle méthode), carte des
+     embeddings où l'on entoure une zone à écouter (YAPAT fait maison, à la main), formulaire
+     classe + qualité + espèce + commentaire et bouton « Envoyer ▶ » (label ajouté, fenêtre
+     suivante), étiquetage en bloc des groupes homogènes. `app/streamlit_app.py` : voir n° 104.
+
+## 2026-09-24 (soir) — Retours de Léonard sur les ajouts
+
+101. **Négatifs appariés : la plus proche, même enregistrement compris, par défaut**
+     (`benchmark.pairing: nearest`, décision de Léonard). Rappel : ce ne sont que des fenêtres
+     *présumées* négatives (jamais écoutées, jamais écrites dans la table labels) ; les négatifs
+     annotés entrent à part. Désormais, par enregistrement positif, les fenêtres les plus proches
+     dans le temps d'une annotation positive, dans l'enregistrement lui-même d'abord — jamais une
+     fenêtre qui chevauche une annotation positive, jamais une fenêtre encadrée de positifs
+     (n° 102) —, puis le même jour, puis un autre jour (colonne `pairing` : same_recording,
+     same_day, other_day). **Risque signalé** : si A. blanci chante tout l'enregistrement quand
+     elle chante (H20, notes de Léonard), les voisines d'un positif en contiennent : négatifs
+     faux, et la tête apprendrait à baisser le score d'un vrai chant. À mesurer en écoutant une
+     vingtaine de ces négatifs ; `other_day` reste disponible. Les fenêtres des baselines
+     incluent désormais celles des enregistrements positifs.
+
+102. **Faux négatifs suspects : fenêtres négatives encadrées de positives** (idée de Léonard,
+     miroir du « suspect » = positif isolé, faux positif probable). Critère commun
+     (`sequential.surrounded_by_positives`) : un positif avant et un après, chacun à moins de
+     `sequential.gap_radius_s` (6 s ≈ 4 notes). Usages : (1) jamais tirée comme négatif
+     présumé ; (2) négatif annoté encadré de positifs annotés : colonne `suspect_fn` du jeu
+     d'apprentissage, **il reste négatif** (n° 85 : l'écoute prime), à réécouter ; (3)
+     persistance : descripteur `n_gaps` (trous dans une série positive) ; (4) sélection
+     `gaps` : mode `scores` (fenêtres sous le seuil de la tête entre deux au-dessus : si
+     A. blanci y chante, les positifs que le modèle rate, les plus utiles à annoter), mode
+     `labels` (négatifs annotés entre deux positifs, réécoute). Source de label « gap ».
+
+103. **Seuillage spectral et module séquentiel fusionnés** (demande de Léonard). Un seul
+     module (`sequential.py` ; `prefilter.py` supprimé, `encoders/prefiltered.py` devient
+     `encoders/upstream.py`), une seule section de config (`sequential` : `position`,
+     `columns` — ex-`fusion.columns` —, `gap_radius_s`, `upstream` — ex-section `prefilter` —),
+     un seul réglage de place : `position` dit où le module agit, `upstream.*.enabled` dit
+     quelles fonctionnalités amont. Une seule détection des notes partout : les portes `notes`
+     et `rhythm` se comptent sur les débuts de notes de l'enregistrement (`onset_counts`), à
+     l'encodage comme dans la chaîne de décision et au banc d'essai ; `sequential.gate` est
+     supprimé (la chaîne prend les portes de rythme activées, sinon `notes` à son seuil) ; les
+     portes spectrales agissent à l'encodage (stock `+g-…`). `embed` n'applique l'amont que si
+     `position` contient `upstream`, ou sur `--upstream a,b` (ex-`--prefilter`) ; banc
+     d'essai : `blanci upstream-bench` (ex-`prefilter-bench`). Les anciennes clés
+     (`prefilter`, `fusion.columns`) restent lues.
+
+104. **`app/streamlit_app.py` supprimé** (décision de Léonard : désuet). Il écrivait les labels
+     sans passer par la couche de service (ni validation, ni drapeaux d'écoute) ; le poste
+     d'annotation est `blanci/app.py` (`blanci annotate`). La feuille de route (§13.2) le cite
+     encore dans l'arborescence : document de référence, non modifié.

@@ -238,3 +238,25 @@ def test_recording_persistence_uses_every_window_of_the_recording():
     assert table.loc["a", "frac_windows"] == pytest.approx(4 / 6)
     assert table.loc["a", "longest_run"] == 3 and table.loc["a", "n_isolated"] == 1
     assert table.loc["b", "n_positive"] == 1 and table.loc["b", "n_isolated"] == 1
+
+
+# --- Faux négatifs suspects : fenêtres négatives encadrées de positives (DECISIONS n° 102) --------
+
+
+def test_surrounded_needs_a_positive_on_both_sides_within_the_radius():
+    from blanci.sequential import surrounded_by_positives
+
+    positives = np.array([10.0, 20.0])
+    centers = np.array([15.0, 5.0, 25.0, 15.0])
+    assert surrounded_by_positives(centers, positives, 6.0).tolist() == [True, False, False, True]
+    assert not surrounded_by_positives(np.array([15.0]), positives, 4.0).any()  # trop loin
+    assert not surrounded_by_positives(np.array([15.0]), np.array([]), 6.0).any()
+
+
+def test_persistence_counts_the_gaps_inside_a_song():
+    """Miroir des détections isolées : un trou dans une série positive est compté."""
+    scores = np.array([0.9, 0.9, 0.1, 0.9, 0.9, 0.1, 0.1, 0.1, 0.1])
+    offsets = np.arange(len(scores)) * 1.5
+    features = persistence_features(scores, 0.5, offsets, gap_radius_s=3.0)
+    assert features["n_gaps"] == 1
+    assert persistence_features(scores, 0.5)["n_gaps"] == 1  # sans décalages : 2 fenêtres
