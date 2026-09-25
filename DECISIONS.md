@@ -978,9 +978,11 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      Combinaisons refusées : R19 + R20, R27 + R28, R21 + R19/R20 (n° 109), R19/R20 sur les
      jetons résumés, poids et pénalités hors des têtes logistiques. Hors du benchmark des têtes
      (`train`, `benchmark`, fusion, empilement), rien ne change : logistique L2 tant qu'aucune
-     n'est retenue. Environnement : un `uv run` sans `--no-sync` a retiré les groupes research,
-     app et notebook ; remis par `uv sync --inexact --group research --group app --group
-     notebook`.
+     n'est retenue. Environnement : torch, bacpipe, streamlit, pytest et ruff manquaient le
+     25/09 vers 11 h 40 (dates d'installation dans `.venv`) — signature d'un `uv sync` exact
+     (le défaut de `uv sync`) lancé sans ces groupes ; `uv run`, lui, n'enlève jamais rien.
+     Remis par `uv sync --inexact --group research --group app --group notebook`. Toujours
+     `--inexact` et tous les groupes voulus.
 
 109. **Mesure sur données simulées : la validation croisée sur un seul site récompense les
      raccourcis de micro** (`tests/test_regularization.py`). Corpus : micros « riches » (50 %
@@ -996,3 +998,25 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      par le chant qui fuit dans la moyenne des micros riches, et R21 efface l'espèce : refusé ;
      (c) R19 retire aussi du chant là où A. blanci occupe beaucoup de fenêtres (la moyenne du
      micro en contient) : à surveiller sur les micros à chœur.
+
+110. **R85, sonde à portes** (« attentive sur l'embedding », idée de Léonard ; tête `gated`,
+     `blanci/gated.py`). Score = w · (x̃ ⊙ g(x̃)) + b, porte g = σ(B·A·x̃ + c) de rang 8 : le
+     poids de chaque dimension dépend de la fenêtre. Départ B = 0 → portes à ½, la tête part
+     d'une logistique. AdamW (weight decay 1e-2, lr 0,05, 300 époques, lot entier), classes
+     équilibrées ; torch (groupe research), écartée de la liste par défaut sans torch. Sur
+     données simulées où le chant ne compte que selon le contexte : AP 0,84–0,87 sur un jeu
+     d'essai contre 0,80 pour la logistique, mais AP ≈ 1 à l'entraînement et 0,58–0,81 en
+     validation croisée pooled (logistique 0,73) : elle sur-apprend et l'échelle de ses scores
+     varie d'un pli à l'autre. Ni réglée plus avant sur données jouets, ni arrêt précoce :
+     à juger au benchmark réel ; R42 (arrêt précoce) serait le premier remède. Aucune
+     régularisation par suffixe n'est refusée sauf les poids (R13/R15) et pénalités (R27/R28).
+
+111. **Tableau des encodeurs de bacpipe** (`documentation/encodeurs-bacpipe.md`, demande de
+     Léonard, R23) : pour les 8 encodeurs du projet et les 17 autres de bacpipe 1.3.5,
+     framework, f_e, fenêtre, ce que bacpipe rend, accès aux jetons et aux couches
+     intermédiaires. Relevé dans le code, sans exécuter les modèles (tailles de grille à
+     mesurer). **Correction du n° 77** : Bird-MAE rend lui aussi ses jetons (`last_hidden_state`),
+     que l'adaptateur moyenne et déclare `has_tokens` ; `blanci tokens` les stocke déjà.
+     BEATs et NatureBEATs : jetons par `avg_pooling = False`, sans hook ; BirdNET (Keras),
+     ProtoCLR et ConvNeXt-BirdSet : faciles ; Perch v1 et v2 : couches intermédiaires
+     difficiles (modèles exportés). Rien n'est encore branché dans l'adaptateur.

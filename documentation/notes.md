@@ -60,6 +60,20 @@ vérifier la fiabilité des tests, si un test donne un mauvais score mais que le
 
 Pour le module sequentiel : timeserie de pluviométrie, phénologie, un module puissant serait complexe et complet, sequential sera dans un second temps pour ameliorer les capciteés
 
+# Régularisations (tri du 25/09, R1–R32 ; suite R33–R84 à trier)
+
+Programmées (DECISIONS n° 108) : R13, R15, R17, R18, R19, R20, R21, R22 (gem), R27, R28, R30, R31
+Gardées pour plus tard : R1 (mélange de fond), R3 + R7 (gain, réverbération), R6 (SpecAugment),
+R9 (canal 18 dB), R24 + R29 (ensembles par concaténation), R32 (logistique bayésienne → file des incertains)
+Outils de performance : R25 (quantification)
+Jetées : R2, R4, R5, R8, R10, R11, R12, R14, R16
+Impossible pour l'instant : R23 (couches intermédiaires : hook par encodeur PyTorch, à faire à la main)
+Nouvelle : R85 = R21 bis, sonde non linéaire (pondération des dimensions selon l'entrée)
+
+⚠ R19/R20/R21 se jugent sur un site tenu à l'écart, pas en validation croisée Mataroni (DECISIONS n° 109)
+⚠ R19 + R21 interdit : efface le chant
+
+
 
 # Questions en suspens
 

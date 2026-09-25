@@ -12,6 +12,7 @@ Têtes comparées sur les embeddings gelés d'un encodeur (`head.METHODS`, `pool
 | logistic | appris (régression logistique) sur l'embedding par défaut |
 | logistic_to_prototype | R30 : logistique tirée vers le prototype différentiel |
 | lda_shrunk | R31 : LDA à covariance rétrécie (Ledoit-Wolf) |
+| gated | R85 : poids de chaque dimension selon la fenêtre (porte de rang faible), torch |
 | logistic:<pooling> | appris sur les jetons résumés par `pooling` (max, moyenne + max, gem…) |
 | attentive | appris sur les jetons, pondérés par une requête apprise |
 | cascade | logistic, puis attentive sur les meilleurs candidats |
@@ -47,6 +48,7 @@ Deux mesures :
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import sqlite3
 from typing import Any
 
@@ -79,6 +81,8 @@ def head_methods(tokens: np.ndarray | None, variants: list[str] | None = None) -
     """Têtes possibles : celles des embeddings, plus celles des jetons s'il y en a, plus les
     variantes régularisées de la config (`regularization.variants`)."""
     base = [m for m in METHODS if m not in TOKEN_METHODS]
+    if importlib.util.find_spec("torch") is None:  # R85 s'entraîne avec torch
+        base.remove("gated")
     if tokens is not None:
         base += [f"logistic:{p}" for p in available_poolings(tokens)] + list(TOKEN_METHODS)
     return base + [v for v in variants or [] if v not in base]

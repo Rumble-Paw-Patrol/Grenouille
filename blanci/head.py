@@ -1,6 +1,7 @@
 """Têtes sur embeddings gelés (§3) : recherche par l'exemple, prototypes simple et différentiel,
 kNN cosinus, régression logistique, attentive probe et cascade (DECISIONS n° 92) ; logistique
-tirée vers le prototype (R30) et LDA à covariance rétrécie (R31), DECISIONS n° 108.
+tirée vers le prototype (R30) et LDA à covariance rétrécie (R31), DECISIONS n° 108 ; sonde à
+portes (R85, n° 110).
 
 La tête retenue (logistique L2) est stockée sans pickle (JSON + npz, calcul en numpy) : elle se
 recharge sur n'importe quelle machine, quelle que soit la version de scikit-learn.
@@ -347,6 +348,7 @@ METHODS = (
     "logistic",
     "logistic_to_prototype",  # R30
     "lda_shrunk",  # R31
+    "gated",  # R85 (torch)
     "attentive",
     "cascade",
 )
@@ -445,6 +447,10 @@ def fit_and_score(
         return fit_logistic_to_prototype(Xtr, ytr, C, seed, sample_weight=sw).decision(X[test])
     if method == "lda_shrunk":
         return lda_shrunk_scores(Xtr, ytr, X[test])
+    if method == "gated":
+        from blanci.gated import fit_gated
+
+        return fit_gated(Xtr, ytr, seed=seed).decision(X[test])
     if method == "prototype":
         w, b = differential_prototype(Xtr[ytr == 1], Xtr[ytr == 0])
         return prototype_scores(X[test], w, b)
@@ -497,7 +503,7 @@ def oof_scores(
 
     Méthodes (`METHODS`) : exemplar_medoid (un seul exemple), exemplar (plus proche positif),
     knn, simple_prototype, prototype (différentiel), logistic, logistic_to_prototype (R30),
-    lda_shrunk (R31), attentive (X = jetons en
+    lda_shrunk (R31), gated (R85, `blanci/gated.py`), attentive (X = jetons en
     (fenêtres, jetons, dim) ou (fenêtres, temps, fréquence, dim), `blanci/attentive.py`),
     cascade (X = embeddings, `tokens` = jetons des mêmes fenêtres).
 
