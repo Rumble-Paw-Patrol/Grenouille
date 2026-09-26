@@ -59,17 +59,20 @@ def fit_gated(
     validation: tuple[np.ndarray, np.ndarray] | None = None,
     patience: int | None = 20,
     monitor: str = "loss",
+    warmup: int = 0,
+    clip_norm: float | None = None,
 ) -> GatedHead:
     """Entraîne la sonde (lot entier, AdamW, entropie croisée à classes équilibrées).
 
     `dim_dropout` : R46, dropout de x̃ ⊙ g ; `validation`, `patience` et `monitor` : arrêt
-    précoce (R42, `regularization.fit_with_options`)."""
+    précoce (R42, `regularization.fit_with_options`) ; `warmup`, `clip_norm` : R59. Mécanique
+    dans `blanci/regularization.py`."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation
         raise RuntimeError("R85 s'entraîne avec torch (uv sync --group research)") from exc
 
-    from blanci.attentive import optimise, validation_criterion
+    from blanci.regularization import dropout, optimise, validation_criterion
 
     X = np.asarray(X, dtype=np.float32)
     y = np.asarray(y).astype(np.float32)
@@ -92,9 +95,7 @@ def fit_gated(
 
     def logits(inputs, train: bool):
         gated = inputs * torch.sigmoid((inputs @ down) @ up + gate_bias)
-        if train and dim_dropout > 0:
-            gated = torch.nn.functional.dropout(gated, dim_dropout, training=True)
-        return gated @ weight + bias
+        return dropout(torch, gated, dim_dropout, train) @ weight + bias  # R46
 
     validation_loss = None
     if validation is not None:
@@ -116,14 +117,19 @@ def fit_gated(
         validation_loss=validation_loss,
         patience=patience,
         curve=curve,
+        warmup=warmup,
+        clip_norm=clip_norm,
     )
 
     def numpy(t) -> np.ndarray:
         return t.detach().numpy().astype(np.float32)
 
     meta: dict[str, Any] = {"rank": r, "weight_decay": weight_decay, "epochs": epochs, "lr": lr}
-    if dim_dropout:
-        meta["dim_dropout"] = dim_dropout
+    meta |= {
+        k: v
+        for k, v in {"dim_dropout": dim_dropout, "warmup": warmup, "clip_norm": clip_norm}.items()
+        if v
+    }
     if validation is not None:
         meta |= {"best_epoch": best_epoch, "validation_curve": curve}
     return GatedHead(

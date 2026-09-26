@@ -1165,3 +1165,30 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      têtes (R22 `pooling.py`, R30/R31/R39 `head.py`, R34/R35 `losses.py`, R85 `gated.py`) et
      la fusion (R50 `fusion.py`, R57 `stacking.py`). R51–R56 et R58 : expliquées à Léonard,
      en discussion.
+
+121. **La mécanique des régularisations regroupée dans `blanci/regularization.py` ; R59, R62,
+     R63 ; tri de la section F** (demande de Léonard : ne pas se perdre dans un projet qui
+     grandit). Le module contient désormais la mécanique de toutes les régularisations qui en
+     ont une, et les autres modules l'appellent là où elle prend effet :
+     - `grouped_search` : un réglage choisi par validation groupée, commun au C des têtes (R26,
+       `head.select_C`), au weight decay des têtes torch (R40) et au C de la fusion (R50,
+       `choose_fusion_C`, déplacée depuis `fusion.py`) — trois copies du même calcul en une ;
+     - la boucle d'entraînement torch `optimise` (R41 ; R42 avec `validation_criterion` ; R59),
+       `keep_mask` (R45), `dropout` (R46), `logistic_start` (R47), déplacées depuis
+       `attentive.py` et `gated.py` ;
+     - `nearest_similarity` (R39, depuis `head.py`), `group_bias_scale` (R37, σ/√C, auparavant
+       écrit deux fois dans `head.py` et `losses.py`).
+     Sorties identiques au bit près, vérifiées sur 12 têtes et variantes (logistique, R30,
+     focal, R36, R37, knn:k=5:w, exemplar:k=3, gated+R40+R42, attentive seule et régularisée,
+     fusion logistic+R50). Restent dans leur module, avec une ligne de l'index : les têtes qui
+     *sont* la régularisation (R22 `pooling.gem`, R30, R31, R34/R35, R85), la L2 elle-même
+     (R26, `fit_logistic`) et le hors-pli de la fusion (R57).
+     Section F (tri du 26/09) : R59 programmée pour l'attentive et la sonde à portes
+     (`+R59` : warm-up linéaire du pas sur `warmup` époques, norme du gradient écrêtée à
+     `clip_norm`) — le reste de R59 (dropout, weight decay, arrêt précoce) l'était déjà ; R60 :
+     le rang du LoRA est réglable dans la config ; R62 : `l2_sp_penalty`, utilisée dès
+     aujourd'hui par R47 (même calcul, vers la logistique) et prête pour le fine-tuning ;
+     R63 : `distillation_loss` (labels souples de l'enseignant, température), prête pour le
+     détecteur distillé ; R65 accordée, à faire avec le modèle maison et le LoRA. R61, R64,
+     R66 expliquées, en discussion ; R67 à explorer. Les emplacements réservés (`finetune.py`,
+     `detectors/distilled.py`, `detectors/homemade.py`) nomment les fonctions à appeler.

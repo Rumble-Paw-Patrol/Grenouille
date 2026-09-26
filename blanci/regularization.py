@@ -23,30 +23,38 @@ Programmées ici, appliquées dans cet ordre :
 | R27 | pénalité | L1 (lasso) au lieu de L2 |
 | R28 | pénalité | Elastic Net (`l1_ratio`) |
 
-Têtes entraînées avec torch (DECISIONS n° 117) : R40 et R42 entourent l'entraînement
-(`fit_with_options`, ici) ; R41, R45, R46, R47 sont des options passées à `fit_attentive` et
-`fit_gated`, appliquées dans leur boucle d'entraînement (`torch_options`, ici) :
+Têtes entraînées avec torch (DECISIONS n° 117, 121) : toute la mécanique est ici, les têtes
+(`attentive.py`, `gated.py`) l'appellent dans leur boucle d'entraînement.
 
-| R | têtes | quoi |
-|---|---|---|
-| R40 | attentive, gated | weight decay choisi par validation groupée sur `grid` |
-| R41 | attentive | AdamW (weight decay découplé, `weight_decay`) |
-| R42 | attentive, gated | nombre d'époques par validation groupée (`R42=ap`, `R42=loss`) |
-| R45 | attentive | dropout des jetons (`p`) |
-| R46 | attentive, gated | dropout des dimensions du vecteur agrégé (`p`) |
-| R47 | attentive | départ et rétrécissement vers la logistique (`strength` λ) |
+| R | têtes | quoi | fonction |
+|---|---|---|---|
+| R40 | attentive, gated | weight decay par validation groupée (`grid`) | `fit_with_options` |
+| R41 | attentive | AdamW (weight decay découplé, `weight_decay`) | `optimise` |
+| R42 | attentive, gated | époques par validation groupée (`R42=ap`, `=loss`) | `fit_with_options` |
+| R45 | attentive | dropout des jetons (`p`) | `keep_mask` |
+| R46 | attentive, gated | dropout des dimensions du vecteur agrégé (`p`) | `dropout` |
+| R47 | attentive | départ et rétrécissement vers la logistique (`strength`) | `logistic_start` |
+| R59 | attentive, gated | warm-up du pas (`warmup` époques), écrêtage du gradient | `optimise` |
+
+Prêtes pour les réseaux à venir (fine-tuning, distillation, modèle maison), sans appel encore :
+R62 `l2_sp_penalty` (déjà utilisée par R47), R63 `distillation_loss`.
+
+Réglage choisi par validation groupée : `grouped_search`, commun au C des têtes (R26,
+`head.select_C`), au weight decay (R40) et au C de la fusion (R50, `choose_fusion_C`).
 
 Ce module est l'index de toutes les régularisations programmées. Celles qui sont une tête ou
-un réglage d'un autre étage vivent là où elles s'appliquent :
+un réglage d'un autre étage vivent là où elles s'appliquent, et appellent ce module quand elles
+ont une mécanique propre :
 
 | R | où | comment l'activer |
 |---|---|---|
-| R22 | `pooling.py` | tête `logistic:gem` (gem2, gem5…) |
-| R26 | `head.fit_logistic` | la L2, toujours là (C par validation groupée) |
+| R22 | `pooling.gem` | tête `logistic:gem` (gem2, gem5…) |
+| R26 | `head.fit_logistic` | la L2, toujours là ; C par `grouped_search` |
 | R30, R31 | `head.py` | têtes `logistic_to_prototype`, `lda_shrunk` |
 | R34, R35 | `losses.py` | têtes `loss:<nom>`, `--methods losses` |
-| R39 | `head.py` | têtes `knn:k=…`, `exemplar:k=…` (`:w`), `--methods neighbors` |
-| R50 | `fusion.py` | méthode de fusion `logistic+R50` (C par validation groupée) |
+| R37 | `head.standardize` | échelle des colonnes : `group_bias_scale` (ici) |
+| R39 | `head.py` | têtes `knn:k=…`, `exemplar:k=…` (`:w`) ; calcul : `nearest_similarity` (ici) |
+| R50 | `fusion.fit_fusion_model` | méthode `logistic+R50` ; C : `choose_fusion_C` (ici) |
 | R57 | `stacking.py` | toujours là : la fusion n'apprend que sur des scores hors-pli |
 | R85 | `gated.py` | tête `gated` |
 
@@ -74,7 +82,7 @@ from typing import Any
 
 import numpy as np
 
-IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28, 36, 37, 40, 41, 42, 45, 46, 47)
+IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28, 36, 37, 40, 41, 42, 45, 46, 47, 59)
 DESCRIPTIONS = {
     13: "chaque micro pèse autant dans sa classe",
     15: "négatifs annotés surpondérés face aux présumés",
@@ -93,6 +101,7 @@ DESCRIPTIONS = {
     45: "dropout des jetons",
     46: "dropout des dimensions",
     47: "rétrécissement vers la logistique",
+    59: "warm-up et écrêtage du gradient",
 }
 # Réglage principal de chaque R, celui que « =v » remplace.
 MAIN_PARAMETER = {
@@ -107,12 +116,16 @@ MAIN_PARAMETER = {
     45: "p",
     46: "p",
     47: "strength",
+    59: "warmup",
 }
 WEIGHTED_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss")
 PENALIZED_HEADS = ("logistic", "cascade")
 GROUP_BIAS_HEADS = ("logistic", "cascade", "loss")
 # Régularisations des têtes entraînées avec torch, et celles que chacune accepte.
-TORCH_REGULARIZATIONS = {"attentive": (40, 41, 42, 45, 46, 47), "gated": (40, 42, 46)}
+TORCH_REGULARIZATIONS = {
+    "attentive": (40, 41, 42, 45, 46, 47, 59),
+    "gated": (40, 42, 46, 59),
+}
 # Réglages principaux qui prennent un mot plutôt qu'un nombre : R42=ap, R42=loss.
 WORD_VALUES = {42: ("ap", "loss")}
 _SUFFIX = re.compile(r"^R(\d+)(?:=([0-9.eE+-]+|[a-z_]+))?$")
@@ -496,7 +509,7 @@ class Regularizer:
         return project
 
     def torch_options(self) -> dict[str, Any]:
-        """Options des têtes torch (`fit_with_options`) : R40–R42, R45–R47."""
+        """Options des têtes torch (`fit_with_options`) : R40–R42, R45–R47, R59."""
         options: dict[str, Any] = {}
         if 40 in self.regs:
             options["weight_decays"] = [
@@ -517,6 +530,9 @@ class Regularizer:
             options["dim_dropout"] = float(self.param(46, "p", 0.2))
         if 47 in self.regs:
             options["shrink"] = float(self.param(47, "strength", 1e-2))
+        if 59 in self.regs:
+            options["warmup"] = int(self.param(59, "warmup", 20))
+            options["clip_norm"] = float(self.param(59, "clip_norm", 1.0))
         return options
 
     def fit_options(self, bias_columns: int = 0) -> dict[str, float]:
@@ -559,7 +575,234 @@ class Regularizer:
         return X, weights, self.fit_options(bias_columns)
 
 
-# --- R40, R42 : autour de l'entraînement des têtes torch ---------------------------------------
+# --- R26, R40, R50 : un réglage choisi par validation groupée -----------------------------------
+
+
+def usable_folds(
+    y: np.ndarray, groups: np.ndarray, n_splits: int, seed: int
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Plis groupés internes (micros entiers) dont l'entraînement et le test ont les deux
+    classes ; [] s'il n'y a qu'un micro."""
+    from blanci.evaluate import grouped_folds
+
+    y, groups = np.asarray(y).astype(int), np.asarray(groups)
+    if len(np.unique(groups)) < 2:
+        return []
+    return [
+        (train, test)
+        for train, test in grouped_folds(y, groups, n_splits, seed)
+        if len(np.unique(y[train])) == 2 and len(np.unique(y[test])) == 2
+    ]
+
+
+def grouped_search(
+    score, grid, y: np.ndarray, groups: np.ndarray, n_splits: int = 5, seed: int = 0
+) -> tuple[Any, dict]:
+    """Force d'une régularisation choisie par validation groupée interne : C des têtes
+    linéaires (R26, `head.select_C`), weight decay des têtes torch (R40), C de la fusion
+    (R50). `score(valeur, train, test)` rend l'AP sur `test` d'un modèle appris sur `train`.
+    Renvoie (valeur à la meilleure AP moyenne, ou None ; {valeur: AP moyenne})."""
+    folds = usable_folds(y, groups, n_splits, seed)
+    results = {}
+    for value in grid:
+        aps = [score(value, train, test) for train, test in folds]
+        finite = [ap for ap in aps if np.isfinite(ap)]
+        results[value] = float(np.mean(finite)) if finite else float("nan")
+    valid = {k: v for k, v in results.items() if np.isfinite(v)}
+    return (max(valid, key=valid.get) if valid else None), results
+
+
+def choose_fusion_C(
+    X: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    C_grid: list[float] | tuple[float, ...],
+    n_splits: int = 5,
+    seed: int = 0,
+) -> tuple[float | None, dict[float, float]]:
+    """R50 : C de la fusion logistique (`fusion.fit_fusion_model`, méthode `logistic+R50`).
+    (None, {}) faute de deux valeurs, de deux micros ou d'un pli à deux classes."""
+    from blanci.evaluate import average_precision
+    from blanci.fusion import fit_fusion_model
+
+    X, y = np.asarray(X, dtype=float), np.asarray(y).astype(int)
+    if len(C_grid) < 2 or not usable_folds(y, groups, n_splits, seed):
+        return None, {}
+    columns = [f"x{j}" for j in range(X.shape[1])]
+
+    def score(C, train, test):
+        model = fit_fusion_model("logistic", X[train], y[train], columns, C=C)
+        return average_precision(y[test], model.decision(X[test]))
+
+    best, results = grouped_search(score, [float(c) for c in C_grid], y, groups, n_splits, seed)
+    return best, results
+
+
+# --- R37 : échelle des colonnes de biais ---------------------------------------------------------
+
+
+def group_bias_scale(sigma: float, C: float) -> float:
+    """Échelle des indicatrices de micro (`head.standardize`) : σ / √C. Sous la pénalité ½‖w‖²
+    et le terme C · Σ perte, le biais b d'un micro coûte alors b² / 2σ² rapporté aux données,
+    l'a priori N(0, σ²), quel que soit C."""
+    return float(sigma) / float(np.sqrt(C))
+
+
+# --- R39 : k plus proches voisins ----------------------------------------------------------------
+
+
+def nearest_similarity(sims: np.ndarray, k: int = 1, weighted: bool = False) -> np.ndarray:
+    """Similarité de chaque ligne à ses k références les plus proches (R39, DECISIONS n° 115),
+    appelée par les têtes `knn:k=…` et `exemplar:k=…` (`head.py`).
+
+    k = 1 : le plus proche seul. k > 1 : moyenne des k plus proches, plus lisse, moins sensible
+    à une référence bizarre. `weighted` : moyenne pondérée par 1 / distance (distance
+    euclidienne entre vecteurs de norme 1, √(2 − 2·cos), comme `weights="distance"` de
+    scikit-learn) : les voisins très proches comptent davantage, entre k = 1 et la moyenne."""
+    k = max(1, min(int(k), sims.shape[1]))
+    top = -np.partition(-sims, k - 1, axis=1)[:, :k] if k > 1 else sims.max(axis=1)[:, None]
+    if not weighted:
+        return top.mean(axis=1)
+    w = 1.0 / np.maximum(np.sqrt(np.clip(2.0 - 2.0 * top, 0.0, None)), 1e-6)
+    return (w * top).sum(axis=1) / w.sum(axis=1)
+
+
+# --- Têtes et réseaux entraînés avec torch : R40–R42, R45–R47, R59, R62, R63 ----------------------
+
+
+def optimise(
+    parameters: list,
+    decayed: list[bool],
+    loss_of,
+    *,
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    optimizer: str = "adam",
+    validation_loss=None,
+    patience: int | None = 20,
+    curve: list[float] | None = None,
+    warmup: int = 0,
+    clip_norm: float | None = None,
+) -> int:
+    """Descente en lot entier, partagée par l'attentive et la sonde à portes (R85), et par les
+    réseaux à venir.
+
+    `loss_of()` : perte d'entraînement (dropout compris) ; weight decay sur les seuls paramètres
+    `decayed`. `optimizer` : "adam" (L2 couplée, défaut historique) ou "adamw" (R41).
+    `validation_loss()` : critère à minimiser sur des micros tenus à l'écart (R42), relevé à
+    chaque époque dans `curve` (liste remplie en place) ; avec `patience`, l'entraînement
+    s'arrête `patience` époques après la meilleure, dont les paramètres sont restaurés.
+    R59 : `warmup` époques de montée linéaire du pas d'apprentissage, `clip_norm` : norme
+    maximale du gradient (écrêtage). Renvoie l'époque retenue (la dernière sans validation)."""
+    import torch
+
+    kinds = {"adam": torch.optim.Adam, "adamw": torch.optim.AdamW}
+    if optimizer not in kinds:
+        raise ValueError(f"optimiseur inconnu : {optimizer!r} (adam, adamw)")
+    groups = [
+        {
+            "params": [p for p, d in zip(parameters, decayed, strict=True) if d],
+            "weight_decay": weight_decay,
+        },
+        {
+            "params": [p for p, d in zip(parameters, decayed, strict=True) if not d],
+            "weight_decay": 0.0,
+        },
+    ]
+    opt = kinds[optimizer]([g for g in groups if g["params"]], lr=lr)
+    best, best_epoch, best_state = float("inf"), int(epochs), None
+    for epoch in range(1, int(epochs) + 1):
+        if warmup:
+            for group in opt.param_groups:
+                group["lr"] = lr * min(1.0, epoch / warmup)
+        opt.zero_grad()
+        loss = loss_of()
+        loss.backward()
+        if clip_norm:
+            torch.nn.utils.clip_grad_norm_(parameters, clip_norm)
+        opt.step()
+        if validation_loss is None:
+            continue
+        with torch.no_grad():
+            current = float(validation_loss())
+        if curve is not None:
+            curve.append(current)
+        if current < best - 1e-7:
+            best, best_epoch = current, epoch
+            best_state = [p.detach().clone() for p in parameters]
+        elif patience is not None and epoch - best_epoch >= patience:
+            break
+    if best_state is not None:
+        with torch.no_grad():
+            for p, value in zip(parameters, best_state, strict=True):
+                p.copy_(value)
+    return best_epoch
+
+
+def validation_criterion(torch, loss_fn, scores_of, y_val: np.ndarray, monitor: str = "loss"):
+    """Critère de R42, à minimiser : la perte d'entraînement sur les fenêtres de validation
+    ("loss"), ou 1 − AP ("ap"). La perte monte dès que la tête devient trop sûre d'elle, même
+    quand son classement s'améliore encore (vu sur données simulées, DECISIONS n° 117 ; le
+    choix entre les deux se fera sur la base complète, n° 119)."""
+    from blanci.evaluate import average_precision
+
+    y_np = np.asarray(y_val).astype(int)
+    target = torch.from_numpy(y_np.astype(np.float32))
+    if monitor == "loss":
+        return lambda: loss_fn(scores_of(), target)
+    if monitor == "ap":
+        return lambda: 1.0 - average_precision(y_np, scores_of().numpy())
+    raise ValueError(f"R42 : critère inconnu {monitor!r} (loss ou ap)")
+
+
+def keep_mask(torch, n: int, t: int, p: float):
+    """R45 : jetons gardés (n, t), chacun masqué avec la probabilité p, au moins un par
+    fenêtre."""
+    keep = torch.rand(n, t) >= p
+    keep[torch.arange(n), torch.randint(t, (n,))] = True
+    return keep
+
+
+def dropout(torch, x, p: float, train: bool):
+    """R46 : dropout (sorties éteintes avec la probabilité p, les autres × 1/(1 − p)), à
+    l'entraînement seulement."""
+    if train and p > 0:
+        return torch.nn.functional.dropout(x, p, training=True)
+    return x
+
+
+def logistic_start(
+    Z: np.ndarray, y: np.ndarray, C: float, seed: int = 0
+) -> tuple[np.ndarray, float]:
+    """R47 : (w₀, b₀) d'une logistique apprise sur Z et réécrite dans l'espace de Z (sans sa
+    standardisation) : le point de départ, et la cible du rétrécissement, de l'attentive."""
+    from blanci.head import fit_logistic
+
+    head = fit_logistic(Z, np.asarray(y).astype(int), C, seed)
+    w0 = head.coef / head.scale
+    return w0, float(head.intercept - float(head.coef @ (head.mean / head.scale)))
+
+
+def l2_sp_penalty(torch, parameters: list, references: list, strength: float):
+    """R62 (L2-SP) : ½λ Σ ‖θ − θ_réf‖², l'écart aux poids de référence plutôt qu'à zéro. Les
+    poids pré-entraînés pour un réseau adapté (fine-tuning, `finetune.py`) ; ceux de la
+    logistique pour l'attentive (R47)."""
+    total = 0.0
+    for p, ref in zip(parameters, references, strict=True):
+        total = total + ((p - ref) ** 2).sum()
+    return 0.5 * strength * total
+
+
+def distillation_loss(torch, student_logits, teacher_logits, temperature: float = 2.0):
+    """R63 : perte de la distillation (détecteur distillé, `detectors/distilled.py`). L'élève
+    apprend les probabilités de l'enseignant (la chaîne gelée), adoucies par la température T :
+    entropie croisée binaire entre σ(élève / T) et σ(enseignant / T), × T² pour garder
+    l'échelle des gradients (Hinton et al. 2015). Les labels souples de l'enseignant disent
+    aussi « à peu près » et « pas sûr », ce qui régularise l'élève."""
+    t = float(temperature)
+    target = torch.sigmoid(teacher_logits / t)
+    return torch.nn.functional.binary_cross_entropy_with_logits(student_logits / t, target) * t**2
 
 
 def fit_with_options(
@@ -578,7 +821,7 @@ def fit_with_options(
     """Tête torch `fit` (fit_attentive, fit_gated) entourée de R40 et R42, sur plis groupés.
 
     R40 (`weight_decays`) : chaque valeur est jugée par l'AP moyenne en validation groupée
-    interne (`n_splits` plis, micros entiers), la meilleure est retenue. R42
+    interne (`n_splits` plis, micros entiers, `grouped_search`), la meilleure est retenue. R42
     (`early_stopping`) : dans chaque pli interne, la courbe du critère de validation
     (`monitor` : "loss" ou "ap") est relevée à chaque époque ; l'époque retenue minimise la
     courbe moyenne des plis, et la tête est réentraînée sur tout `X` pour ce nombre d'époques
@@ -586,44 +829,32 @@ def fit_with_options(
     micros donnait une époque au hasard (données simulées, DECISIONS n° 117). Faute de deux
     micros, ou d'une classe dans un pli, R40/R42 sont sautées.
     """
-    from blanci.evaluate import average_precision, grouped_folds
+    from blanci.evaluate import average_precision
 
     X, y, groups = np.asarray(X), np.asarray(y).astype(int), np.asarray(groups)
     extra: dict[str, Any] = {}
-    several = len(np.unique(groups)) >= 2
-    folds = []
-    if several:
-        folds = [
-            (train, test)
-            for train, test in grouped_folds(y, groups, n_splits, seed)
-            if len(np.unique(y[train])) == 2 and len(np.unique(y[test])) == 2
-        ]
-    if weight_decays and len(weight_decays) > 1 and folds:
-        results = {}
-        for wd in weight_decays:
-            aps = [
-                average_precision(
-                    y[test],
-                    fit_with_options(
-                        fit,
-                        X[train],
-                        y[train],
-                        groups[train],
-                        seed,
-                        early_stopping=early_stopping,
-                        monitor=monitor,
-                        n_splits=n_splits,
-                        **options | {"weight_decay": wd},
-                    ).decision(X[test]),
-                )
-                for train, test in folds
-            ]
-            results[float(wd)] = float(np.nanmean(aps))
-        valid = {k: v for k, v in results.items() if np.isfinite(v)}
-        if valid:
-            options["weight_decay"] = max(valid, key=valid.get)
+    if weight_decays and len(weight_decays) > 1:
+
+        def score(wd, train, test):
+            head = fit_with_options(
+                fit,
+                X[train],
+                y[train],
+                groups[train],
+                seed,
+                early_stopping=early_stopping,
+                monitor=monitor,
+                n_splits=n_splits,
+                **options | {"weight_decay": wd},
+            )
+            return average_precision(y[test], head.decision(X[test]))
+
+        best, results = grouped_search(score, weight_decays, y, groups, n_splits, seed)
+        if best is not None:
+            options["weight_decay"] = best
             extra["weight_decay_cv"] = {str(k): v for k, v in results.items()}
-    if early_stopping and folds:
+    folds = usable_folds(y, groups, n_splits, seed) if early_stopping else []
+    if folds:
         curves = [
             fit(
                 X[train],
@@ -637,10 +868,10 @@ def fit_with_options(
             for train, test in folds
         ]
         mean_curve = np.nanmean(np.vstack(curves), axis=0)
-        best = int(np.nanargmin(mean_curve)) + 1
-        head = fit(X, y, seed=seed, **(options | {"epochs": best}))
+        best_epoch = int(np.nanargmin(mean_curve)) + 1
+        head = fit(X, y, seed=seed, **(options | {"epochs": best_epoch}))
         head.meta |= extra | {
-            "early_stopping": {"best_epoch": best, "monitor": monitor, "folds": len(curves)}
+            "early_stopping": {"best_epoch": best_epoch, "monitor": monitor, "folds": len(curves)}
         }
         return head
     head = fit(X, y, seed=seed, **options)

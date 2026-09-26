@@ -83,9 +83,10 @@ def fit_loss(
     from sklearn.svm import LinearSVC
 
     from blanci.head import Head, standardize
+    from blanci.regularization import group_bias_scale
 
     y = np.asarray(y).astype(int)
-    Z, mean, scale = standardize(X, bias_columns, bias_scale / np.sqrt(C))
+    Z, mean, scale = standardize(X, bias_columns, group_bias_scale(bias_scale, C))
     Z = Z.astype(np.float64)
     meta: dict[str, Any] = {"C": C, "loss": loss}
     if bias_columns:

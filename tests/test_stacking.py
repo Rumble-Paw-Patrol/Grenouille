@@ -12,11 +12,11 @@ from blanci.evaluate import average_precision
 from blanci.fusion import (
     FUSION_METHODS,
     FusionModel,
-    choose_fusion_C,
     fit_fusion_model,
     fusion_model_oof,
     project_scores,
 )
+from blanci.regularization import choose_fusion_C
 from blanci.sequential import store_onsets
 from blanci.stacking import (
     build_level1,

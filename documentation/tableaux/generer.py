@@ -693,7 +693,7 @@ VOISINS = Tableau(
 
 REGULARISATIONS = Tableau(
     "regularisations",
-    "Régularisations des têtes et de la fusion",
+    "Régularisations",
     "Numéros de documentation/regularisation.md. Coupées par défaut ; une tête les active dans"
     " son nom : blanci heads --methods logistic,logistic+R19,logistic+R18=16 (« =v » remplace"
     " le réglage ◆).",
@@ -991,11 +991,78 @@ REGULARISATIONS = Tableau(
                     "—",
                     C("en discussion", "attente"),
                 ],
+                [
+                    "R59",
+                    "warm-up du pas, écrêtage du gradient",
+                    "entraînement",
+                    "attentive, gated, réseaux",
+                    "warmup (20), clip_norm (1)",
+                    C("programmée (n° 121)", "neuf"),
+                ],
+                [
+                    "R60",
+                    "rang du LoRA",
+                    "fine-tuning",
+                    "LoRA",
+                    "finetune.lora.rank (8)",
+                    C("réglable ; fine-tuning à écrire", "moyen"),
+                ],
+                [
+                    "R61",
+                    "gel progressif, pas par couche",
+                    "fine-tuning",
+                    "—",
+                    "—",
+                    C("en discussion", "attente"),
+                ],
+                [
+                    "R62",
+                    "L2-SP : écart aux poids pré-entraînés",
+                    "entraînement",
+                    "attentive (R47), réseaux",
+                    "strength",
+                    C("prête (n° 121)", "neuf"),
+                ],
+                [
+                    "R63",
+                    "distillation (labels souples, température)",
+                    "entraînement",
+                    "détecteur distillé",
+                    "temperature (2)",
+                    C("prête ; détecteur à écrire", "moyen"),
+                ],
+                [
+                    "R64",
+                    "moyenne des poids (SWA, EMA)",
+                    "entraînement",
+                    "—",
+                    "—",
+                    C("en discussion", "attente"),
+                ],
+                [
+                    "R65",
+                    "pré-entraînement sur AnuraSet",
+                    "entraînement",
+                    "modèle maison, LoRA",
+                    "—",
+                    C("accordée ; avec les réseaux", "moyen"),
+                ],
+                [
+                    "R66",
+                    "multi-tâches, inversion du gradient (DANN)",
+                    "entraînement",
+                    "—",
+                    "—",
+                    C("en discussion", "attente"),
+                ],
+                ["R67", "tête multi-classes", "tête", "—", "—", C("à explorer", "attente")],
                 ["R85", "sonde à portes", "tête", "gated", "rang (8)", C("tête (n° 110)", "bon")],
             ],
         )
     ],
     [
+        "Mécanique de chaque régularisation : blanci/regularization.py, qui sert d'index (où"
+        " chacune prend effet, comment l'activer).",
         "Ordre d'application : R19/R20 → R17 → R18 → R21 → R37 → tête (poids R13/R15/R36,"
         " pénalité R27/R28). Groupe de R13, R19–R21, R37 : regularization.by (point = site/micro).",
         "Aucune conclusion avant la base complète : les mesures sur données simulées ou sur"

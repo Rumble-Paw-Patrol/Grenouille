@@ -162,7 +162,8 @@ regularization:
   # (logistic+R37=0.3, =1, =3, =10 ; n° 119). Micro absent de l'entraînement : biais commun
   # (n° 116). logistic, cascade, loss:<nom>.
   R37: {scale: 3.0}
-  # Têtes entraînées avec torch (n° 117) : attentive (R40–R42, R45–R47) et gated (R40, R42, R46).
+  # Têtes entraînées avec torch (n° 117) : attentive (R40–R42, R45–R47, R59), gated (R40, R42,
+  # R46, R59).
   R40: {grid: [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1], n_splits: 3}  # weight decay, validation groupée
   R41: {weight_decay: 1.0e-2}          # ◆ AdamW au lieu de la L2 d'Adam (1e-3 couplé par défaut)
   # Arrêt précoce : dans chaque pli groupé interne, courbe du critère de validation à chaque
@@ -174,6 +175,9 @@ regularization:
   R45: {p: 0.2}                        # ◆ dropout des jetons avant l'attention
   R46: {p: 0.2}                        # ◆ dropout des dimensions du vecteur agrégé
   R47: {strength: 1.0e-2}              # ◆ λ de ½λ‖w − w_logistique‖²
+  # Warm-up : le pas d'apprentissage monte linéairement pendant ◆ warmup époques ; écrêtage :
+  # norme du gradient ramenée à clip_norm au plus (n° 121). attentive, gated.
+  R59: {warmup: 20, clip_norm: 1.0}
 
 benchmark:
   negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)
@@ -285,6 +289,7 @@ detectors:
 # conditionné (§3). Un encodeur adapté sort en paquet ONNX et se branche comme les autres.
 finetune:
   method: lora                      # lora | full
+  # R60 : rang réglable ; plus bas = plus régularisé (n° 121).
   lora: {rank: 8, alpha: 16, dropout: 0.1, target_modules: [q_proj, v_proj]}
   epochs: 10
   lr: 1.0e-4

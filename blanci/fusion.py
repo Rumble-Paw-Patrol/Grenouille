@@ -269,43 +269,6 @@ def _orientation(z: np.ndarray, y: np.ndarray) -> np.ndarray:
     return np.where(np.nan_to_num(np.asarray(corr)) < 0, -1.0, 1.0)
 
 
-def choose_fusion_C(
-    X: np.ndarray,
-    y: np.ndarray,
-    groups: np.ndarray,
-    C_grid: list[float] | tuple[float, ...],
-    n_splits: int = 5,
-    seed: int = 0,
-) -> tuple[float | None, dict[float, float]]:
-    """R50 : C de la fusion logistique maximisant l'AP moyenne en validation groupée interne
-    (micros entiers). (None, {}) faute de deux micros ou d'un pli à deux classes."""
-    from blanci.evaluate import average_precision
-
-    X, y, groups = np.asarray(X, dtype=float), np.asarray(y).astype(int), np.asarray(groups)
-    if len(C_grid) < 2 or len(np.unique(groups)) < 2:
-        return None, {}
-    folds = [
-        (train, test)
-        for train, test in grouped_folds(y, groups, n_splits, seed)
-        if len(np.unique(y[train])) == 2 and len(np.unique(y[test])) == 2
-    ]
-    if not folds:
-        return None, {}
-    columns = [f"x{j}" for j in range(X.shape[1])]
-    results = {}
-    for C in C_grid:
-        aps = [
-            average_precision(
-                y[test],
-                fit_fusion_model("logistic", X[train], y[train], columns, C=C).decision(X[test]),
-            )
-            for train, test in folds
-        ]
-        results[float(C)] = float(np.nanmean(aps))
-    valid = {k: v for k, v in results.items() if np.isfinite(v)}
-    return (max(valid, key=valid.get) if valid else None), results
-
-
 def fit_fusion_model(
     method: str,
     X: np.ndarray,
@@ -323,7 +286,7 @@ def fit_fusion_model(
     """Apprend une fusion `method` sur (X, y) : X = entrées de niveau 1, hors-pli.
 
     `logistic+R50` : C choisi sur `C_grid` (défaut `C_GRID`) par validation groupée interne
-    sur `groups` (`choose_fusion_C`) ; sans groupes, le C fixé."""
+    sur `groups` (`regularization.choose_fusion_C`) ; sans groupes, le C fixé."""
     from blanci.evaluate import average_precision
 
     if method not in FUSION_METHODS:
@@ -333,6 +296,8 @@ def fit_fusion_model(
         raise ValueError("une colonne nommée par entrée")
     if method == "logistic+R50":
         if groups is not None:
+            from blanci.regularization import choose_fusion_C
+
             chosen, _ = choose_fusion_C(X, y, groups, C_grid or C_GRID, n_splits, seed)
             C = chosen if chosen is not None else C
         method = "logistic"

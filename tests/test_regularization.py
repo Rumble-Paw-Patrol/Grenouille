@@ -17,9 +17,13 @@ from blanci.regularization import (
     Context,
     Regularizer,
     canonical,
+    distillation_loss,
     domain_statistics,
+    dropout,
     group_indicators,
+    grouped_search,
     head_name,
+    l2_sp_penalty,
     mean_directions,
     nuisance_directions,
     parse_head,
@@ -400,3 +404,32 @@ def test_R22_gem_goes_from_mean_to_max():
     assert np.allclose(pool(tokens, "gem"), middle) and np.allclose(
         pool(tokens, "gem1"), gem(tokens, 1.0)
     )
+
+
+# --- Mécanique commune : recherche groupée, réseaux (R26, R40, R50, R62, R63) ---------------------
+
+
+def test_grouped_search_keeps_the_best_value_on_held_out_mics():
+    X, y, groups = mic_corpus()
+
+    def score(C, train, test):
+        head = fit_logistic(X[train], y[train], C)
+        return average_precision(y[test], head.decision(X[test]))
+
+    best, results = grouped_search(score, [1e-6, 1.0], y, groups, n_splits=3)
+    assert best == max(results, key=results.get) and set(results) == {1e-6, 1.0}
+    assert grouped_search(score, [1.0], y, np.repeat("a", len(y)))[0] is None  # un seul micro
+
+
+def test_network_helpers_for_the_models_to_come():
+    torch = pytest.importorskip("torch")
+    w = torch.tensor([1.0, 2.0])
+    assert float(l2_sp_penalty(torch, [w], [torch.tensor([1.0, 0.0])], 0.5)) == pytest.approx(1.0)
+    logits = torch.tensor([3.0, -2.0])
+    same = distillation_loss(torch, logits, logits, temperature=2.0)
+    other = distillation_loss(torch, -logits, logits, temperature=2.0)
+    assert float(other) > float(same)  # l'élève qui contredit l'enseignant paie plus
+    x = torch.ones(1000)
+    assert torch.equal(dropout(torch, x, 0.5, train=False), x)
+    kept = dropout(torch, x, 0.5, train=True)
+    assert 0.35 < float((kept == 0).float().mean()) < 0.65 and float(kept.max()) == 2.0

@@ -36,6 +36,15 @@ from typing import Any
 
 import numpy as np
 
+from blanci.regularization import (
+    dropout,
+    keep_mask,
+    l2_sp_penalty,
+    logistic_start,
+    optimise,
+    validation_criterion,
+)
+
 
 def _softmax(x: np.ndarray, axis: int) -> np.ndarray:
     x = x - x.max(axis=axis, keepdims=True)
@@ -85,90 +94,6 @@ class AttentiveHead:
         )
 
 
-def optimise(
-    parameters: list,
-    decayed: list[bool],
-    loss_of,
-    *,
-    epochs: int,
-    lr: float,
-    weight_decay: float,
-    optimizer: str = "adam",
-    validation_loss=None,
-    patience: int | None = 20,
-    curve: list[float] | None = None,
-) -> int:
-    """Descente en lot entier, partagée par l'attentive et la sonde à portes (R85).
-
-    `loss_of()` : perte d'entraînement (dropout compris) ; weight decay sur les seuls paramètres
-    `decayed`. `optimizer` : "adam" (L2 couplée, défaut historique) ou "adamw" (R41).
-    `validation_loss()` : critère à minimiser sur des micros tenus à l'écart (R42), relevé à
-    chaque époque dans `curve` (liste remplie en place) ; avec `patience`, l'entraînement
-    s'arrête `patience` époques après la meilleure, dont les paramètres sont restaurés.
-    Renvoie l'époque retenue (la dernière sans validation)."""
-    import torch
-
-    kinds = {"adam": torch.optim.Adam, "adamw": torch.optim.AdamW}
-    if optimizer not in kinds:
-        raise ValueError(f"optimiseur inconnu : {optimizer!r} (adam, adamw)")
-    groups = [
-        {
-            "params": [p for p, d in zip(parameters, decayed, strict=True) if d],
-            "weight_decay": weight_decay,
-        },
-        {
-            "params": [p for p, d in zip(parameters, decayed, strict=True) if not d],
-            "weight_decay": 0.0,
-        },
-    ]
-    opt = kinds[optimizer]([g for g in groups if g["params"]], lr=lr)
-    best, best_epoch, best_state = float("inf"), int(epochs), None
-    for epoch in range(1, int(epochs) + 1):
-        opt.zero_grad()
-        loss = loss_of()
-        loss.backward()
-        opt.step()
-        if validation_loss is None:
-            continue
-        with torch.no_grad():
-            current = float(validation_loss())
-        if curve is not None:
-            curve.append(current)
-        if current < best - 1e-7:
-            best, best_epoch = current, epoch
-            best_state = [p.detach().clone() for p in parameters]
-        elif patience is not None and epoch - best_epoch >= patience:
-            break
-    if best_state is not None:
-        with torch.no_grad():
-            for p, value in zip(parameters, best_state, strict=True):
-                p.copy_(value)
-    return best_epoch
-
-
-def validation_criterion(torch, loss_fn, scores_of, y_val: np.ndarray, monitor: str = "loss"):
-    """Critère de R42, à minimiser : la perte d'entraînement sur les fenêtres de validation
-    ("loss"), ou 1 − AP ("ap"). La perte monte dès que la tête devient trop sûre d'elle, même
-    quand son classement s'améliore encore (vu sur données simulées, DECISIONS n° 117 ; le
-    choix entre les deux se fera sur la base complète, n° 119)."""
-    from blanci.evaluate import average_precision
-
-    y_np = np.asarray(y_val).astype(int)
-    target = torch.from_numpy(y_np.astype(np.float32))
-    if monitor == "loss":
-        return lambda: loss_fn(scores_of(), target)
-    if monitor == "ap":
-        return lambda: 1.0 - average_precision(y_np, scores_of().numpy())
-    raise ValueError(f"R42 : critère inconnu {monitor!r} (loss ou ap)")
-
-
-def keep_mask(torch, n: int, t: int, p: float):
-    """Jetons gardés (n, t) : chacun masqué avec la probabilité p, au moins un par fenêtre."""
-    keep = torch.rand(n, t) >= p
-    keep[torch.arange(n), torch.randint(t, (n,))] = True
-    return keep
-
-
 def fit_attentive(
     tokens: np.ndarray,
     y: np.ndarray,
@@ -185,6 +110,8 @@ def fit_attentive(
     validation: tuple[np.ndarray, np.ndarray] | None = None,
     patience: int | None = 20,
     monitor: str = "loss",
+    warmup: int = 0,
+    clip_norm: float | None = None,
 ) -> AttentiveHead:
     """Entraîne la tête (lot entier, Adam, entropie croisée à classes équilibrées).
 
@@ -193,7 +120,8 @@ def fit_attentive(
     moyenne des jetons, et ½λ‖w − w₀‖² remplace le weight decay sur w), `validation`
     (jetons, labels) de micros tenus à l'écart, `patience` (None : pas d'arrêt, courbe
     complète) et `monitor` ("loss" ou "ap") pour R42 (`regularization.fit_with_options`) ;
-    la courbe de validation est rangée dans `meta["validation_curve"]`."""
+    la courbe de validation est rangée dans `meta["validation_curve"]`. `warmup`, `clip_norm` :
+    R59. Toute la mécanique de ces régularisations est dans `blanci/regularization.py`."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation
@@ -218,13 +146,11 @@ def fit_attentive(
     bias = torch.zeros(1, requires_grad=True)
     start = None
     if shrink > 0:  # R47 : départ depuis la logistique sur la moyenne des jetons
-        from blanci.head import fit_logistic
-
-        logistic = fit_logistic(x.mean(dim=1).numpy(), y.astype(int), shrink_C, seed)
-        start = torch.from_numpy(logistic.coef / logistic.scale)
+        w0, b0 = logistic_start(x.mean(dim=1).numpy(), y, shrink_C, seed)
+        start = torch.from_numpy(w0)
         with torch.no_grad():
             weight.copy_(start)
-            bias.fill_(logistic.intercept - float(logistic.coef @ (logistic.mean / logistic.scale)))
+            bias.fill_(b0)
     n_pos = max(float(y.sum()), 1.0)
     pos_weight = torch.tensor((len(y) - n_pos) / n_pos)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -234,14 +160,13 @@ def fit_attentive(
         if train and token_dropout > 0:
             scores = scores.masked_fill(~keep_mask(torch, *scores.shape, token_dropout), -1e9)
         z = torch.einsum("nt,ntd->nd", torch.softmax(scores, dim=1), inputs)
-        if train and dim_dropout > 0:
-            z = torch.nn.functional.dropout(z, dim_dropout, training=True)
+        z = dropout(torch, z, dim_dropout, train)  # R46
         return z @ weight + bias
 
     def loss_of():
         loss = loss_fn(logits(x, True), target)
-        if start is not None:
-            loss = loss + 0.5 * shrink * ((weight - start) ** 2).sum()
+        if start is not None:  # R47 = L2-SP (R62) vers la logistique
+            loss = loss + l2_sp_penalty(torch, [weight], [start], shrink)
         return loss
 
     validation_loss = None
@@ -262,6 +187,8 @@ def fit_attentive(
         validation_loss=validation_loss,
         patience=patience,
         curve=curve,
+        warmup=warmup,
+        clip_norm=clip_norm,
     )
     meta: dict[str, Any] = {
         "weight_decay": weight_decay,
@@ -276,6 +203,8 @@ def fit_attentive(
         "shrink": shrink or None,
         "shrink_C": shrink_C if shrink else None,
         "best_epoch": best_epoch if validation is not None else None,
+        "warmup": warmup or None,
+        "clip_norm": clip_norm or None,
         "validation_curve": curve or None,
     }
     meta |= {k: v for k, v in options.items() if v is not None}

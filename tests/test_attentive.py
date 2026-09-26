@@ -168,3 +168,22 @@ def test_R42_also_stops_the_gated_probe():
     tokens, y, groups = overfitting_windows()
     head = fit_with_options(fit_gated, tokens.mean(axis=1), y, groups, early_stopping=True)
     assert head.meta["early_stopping"]["best_epoch"] <= 300
+
+
+def test_R59_warmup_and_clipping_are_recorded_and_change_the_training():
+    tokens, y, groups, _ = windows(n_per_class=40)
+    plain = fit_attentive(tokens, y, epochs=40)
+    tamed = fit_attentive(tokens, y, epochs=40, warmup=20, clip_norm=0.1)
+    assert tamed.meta["warmup"] == 20 and tamed.meta["clip_norm"] == 0.1
+    assert not np.allclose(plain.weight, tamed.weight)
+    options = Regularizer({59: 5}, {}, Context(groups)).torch_options()
+    assert options == {"warmup": 5, "clip_norm": 1.0}
+    out = oof_scores(
+        tokens,
+        y,
+        groups,
+        n_splits=3,
+        method="attentive",
+        regularizer=Regularizer({59: None}, {}, Context(groups)),
+    ).values
+    assert np.isfinite(out).all()

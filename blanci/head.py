@@ -22,6 +22,7 @@ from sklearn.preprocessing import StandardScaler
 
 from blanci.evaluate import average_precision, grouped_folds
 from blanci.index import l2_normalize
+from blanci.regularization import group_bias_scale, grouped_search, nearest_similarity
 from blanci.sequential import GATED_SCORE
 
 
@@ -59,21 +60,6 @@ def simple_prototype_scores(E_pos: np.ndarray, X: np.ndarray) -> np.ndarray:
     surtout par leur ambiance (même micro, même heure), pas par le chant.
     """
     return l2_normalize(X) @ l2_normalize(l2_normalize(E_pos).mean(axis=0, keepdims=True))[0]
-
-
-def nearest_similarity(sims: np.ndarray, k: int = 1, weighted: bool = False) -> np.ndarray:
-    """Similarité de chaque ligne à ses k références les plus proches (R39, DECISIONS n° 115).
-
-    k = 1 : le plus proche seul. k > 1 : moyenne des k plus proches, plus lisse, moins sensible
-    à une référence bizarre. `weighted` : moyenne pondérée par 1 / distance (distance
-    euclidienne entre vecteurs de norme 1, √(2 − 2·cos), comme `weights="distance"` de
-    scikit-learn) : les voisins très proches comptent davantage, entre k = 1 et la moyenne."""
-    k = max(1, min(int(k), sims.shape[1]))
-    top = -np.partition(-sims, k - 1, axis=1)[:, :k] if k > 1 else sims.max(axis=1)[:, None]
-    if not weighted:
-        return top.mean(axis=1)
-    w = 1.0 / np.maximum(np.sqrt(np.clip(2.0 - 2.0 * top, 0.0, None)), 1e-6)
-    return (w * top).sum(axis=1) / w.sum(axis=1)
 
 
 def exemplar_scores(
@@ -263,7 +249,7 @@ def fit_logistic(
     """Standardisation + logistique à classes équilibrées. `sample_weight` : R13, R15, R36 ;
     `l1_ratio` : R27, R28 ; `bias_columns`, `bias_scale` (σ, écart-type a priori des biais de
     micro, en logit) : R37 (`blanci/regularization.py`, `standardize`)."""
-    Z, mean, scale = standardize(X, bias_columns, bias_scale / np.sqrt(C))
+    Z, mean, scale = standardize(X, bias_columns, group_bias_scale(bias_scale, C))
     model = LogisticRegression(
         C=C, class_weight="balanced", random_state=seed, **_penalty(l1_ratio)
     ).fit(Z, y, sample_weight=sample_weight)
@@ -367,21 +353,20 @@ def select_C(
     sample_weight: np.ndarray | None = None,
     **fit_kw,
 ) -> tuple[float, dict[float, float]]:
-    """C maximisant l'AP moyenne en validation groupée (plis internes).
+    """C maximisant l'AP moyenne en validation groupée (plis internes,
+    `regularization.grouped_search`).
 
     `fitter` : fit_logistic (défaut) ou fit_logistic_to_prototype (R30) ; `sample_weight` et
     `fit_kw` (l1_ratio) passent à chaque ajustement."""
     fitter = fitter or fit_logistic
-    folds = grouped_folds(y, groups, n_splits, seed)
-    results = {}
-    for C in C_grid:
-        aps = []
-        for train, test in folds:
-            sw = None if sample_weight is None else sample_weight[train]
-            head = fitter(X[train], y[train], C, seed, sample_weight=sw, **fit_kw)
-            aps.append(average_precision(y[test], head.decision(X[test])))
-        results[C] = float(np.nanmean(aps))
-    return max(results, key=results.get), results
+
+    def score(C, train, test):
+        sw = None if sample_weight is None else sample_weight[train]
+        head = fitter(X[train], y[train], C, seed, sample_weight=sw, **fit_kw)
+        return average_precision(y[test], head.decision(X[test]))
+
+    best, results = grouped_search(score, C_grid, y, groups, n_splits, seed)
+    return (C_grid[0] if best is None else best), results
 
 
 def train_head(

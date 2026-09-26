@@ -149,3 +149,18 @@ sur données simulées ou sur l'échantillon vérifient le code, elles ne classe
 - R51, R52, R53, R54, R55, R56, R58 : expliquées, en discussion. R52 est déjà vraie pour les
   méthodes `weighted` et `weight_grid`.
 - R57 : déjà en place.
+
+# Tri de Léonard du 26/09, section F (R59–R67, réseaux entraînés)
+
+Toute la mécanique des régularisations est dans `blanci/regularization.py`, qui sert d'index
+(DECISIONS n° 121).
+
+- R59 : warm-up et écrêtage du gradient programmés (`attentive+R59`, `gated+R59`) ; dropout,
+  weight decay et arrêt précoce l'étaient déjà (R40–R46).
+- R60 : rang du LoRA réglable (`finetune.lora.rank`) ; le fine-tuning reste à écrire.
+- R61 : en discussion.
+- R62 : L2-SP prête (`l2_sp_penalty`), déjà utilisée par R47.
+- R63 : perte de distillation prête (`distillation_loss`), pour le détecteur distillé.
+- R64 : en discussion.
+- R65 : accordée, avec le modèle maison et le LoRA (pré-entraîner sur AnuraSet, puis ajuster).
+- R66 : en discussion. R67 : à explorer.

@@ -11,7 +11,6 @@ from blanci.head import (
     exemplar_scores,
     fit_logistic,
     knn_scores,
-    nearest_similarity,
     neighbor_options,
     oof_scores,
     prototype_scores,
@@ -19,6 +18,7 @@ from blanci.head import (
     simple_prototype_scores,
     train_head,
 )
+from blanci.regularization import nearest_similarity
 
 DIM = 32
 
