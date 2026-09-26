@@ -1070,3 +1070,71 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      de Streamlit 1.64, qui résout un chemin relatif depuis le fichier de test : chemin absolu.
      Le refus de R19/R20 + R21 (n° 108–109) est levé : la combinaison se mesure au lieu d'être
      interdite ; le mécanisme du n° 109 (b) reste l'hypothèse à vérifier.
+
+## 2026-09-26 — Tri de Léonard sur R33–R49 ; tableaux des benchmarks en images
+
+115. **R39, voisins : k et pondération** (`head.nearest_similarity`, têtes `knn:k=…`,
+     `exemplar:k=…`, suffixe `:w`). k > 1 : moyenne des cosinus aux k plus proches ; `:w` :
+     moyenne pondérée par 1 / distance (distance euclidienne entre vecteurs de norme 1,
+     `weights="distance"` de scikit-learn), entre k = 1 et la moyenne. Pour `knn`, les k
+     voisins sont pris dans chaque classe séparément (un vote toutes classes confondues serait
+     écrasé par les ~20 négatifs par positif). `knn:k=3` et `knn:k=5` rejoignent la liste par
+     défaut de `blanci heads` ; `--methods neighbors` lance toutes les têtes par similarité
+     (avec logistique et prototype) ; la courbe selon le nombre d'annotations ajoute
+     `exemplar:k=3`, `knn`, `knn:k=3` (Léonard : ces baselines serviront à amorcer les
+     nouveaux sites). Sur données simulées, avec six négatifs étiquetés positifs, k = 5 classe
+     mieux que k = 1 (le voisinage d'un faux positif ne l'hérite plus). R19 se combine :
+     `knn:k=5+R19`.
+
+116. **R36 (poids des classes), R37 (biais par micro) ; R33 écartée, R38 en attente.**
+     - R33 (norme maximale) : écartée, équivalente à la L2 pour une tête linéaire.
+     - R36 : les têtes gardent `class_weight="balanced"` (Léonard : le déséquilibre doit être
+       pris en compte). `+R36=power` remplace le poids n / (2·n_classe) de chaque classe par
+       sa puissance `power` : 0 = aucun rééquilibrage (défaut de la variante, pour mesurer ce
+       que l'équilibrage apporte), 0,5 = entre les deux. Passe par les poids des fenêtres :
+       logistic, loss:<nom>, logistic_to_prototype, cascade ; le C est rechoisi avec.
+     - R37 : un biais par **point** (site/micro, `regularization.by`), à la demande de
+       Léonard (un biais par site ne suffirait pas). Un micro déplacé sur un autre site change
+       de point, donc de biais : c'est ce qu'on veut pour l'ambiance du lieu. Colonnes
+       indicatrices non standardisées, a priori N(0, σ²) sur chaque biais, σ = `scale` en
+       logit, indépendant de C (colonne × σ/√C). Micro absent de l'entraînement : biais commun.
+       logistic, loss:<nom>, cascade. **Mesure, données simulées du n° 109** (fond du micro
+       qui prédit la présence, nouveau site où il ne tient plus), AP sur le nouveau site,
+       3 tirages : sans R37 0,25–0,37 ; σ = 0,3 : 0,24–0,42 ; σ = 1 : 0,42–0,57 ; σ = 3 :
+       0,56–0,68 ; σ = 10 : 0,61–0,71 ; R21 : 0,50–0,62. Contrairement à la liste du 25/09
+       (« biais très pénalisé »), un biais fortement rétréci ne sert à rien : w garde le
+       raccourci. Défaut σ = 3.
+     - R38 (écarts de w par micro) : non programmée. ~100 micros × 1 536 dimensions ; à
+       reprendre après une ACP (R18), avec des effets croisés micro + site si l'on veut
+       séparer le matériel (qui suit le micro) du lieu.
+
+117. **Régularisations de l'attentive (R40–R42, R45–R47) et de la sonde à portes (R40, R42,
+     R46)** (`attentive.fit_with_options`, `attentive.optimise`, partagé avec `gated`).
+     Comportement par défaut inchangé (sorties identiques au bit près, vérifié). R40 : weight
+     decay choisi sur `grid` par validation groupée interne (AP). R41 : AdamW, weight decay
+     0,01. R45 : chaque jeton masqué avec la probabilité p avant l'attention (au moins un
+     gardé). R46 : dropout de z (attentive) ou de x̃ ⊙ g (gated). R47 : w part de la
+     logistique sur la moyenne des jetons (C choisi sur la même grille) et ½λ‖w − w₀‖²
+     remplace le weight decay sur w. R42 : **mesure** — avec un seul pli de validation (1 à 2
+     micros), la perte de validation est au plus bas à l'époque 6, puis à l'époque 1 en
+     moyennant les plis, alors que l'AP de test progresse jusqu'à ~200 époques : la perte
+     monte dès que la tête devient trop sûre d'elle, même quand son classement s'améliore.
+     R42 relève donc la courbe du critère à chaque époque dans chaque pli groupé interne,
+     retient l'époque qui optimise la courbe moyenne, puis réentraîne sur tout le pli
+     d'entraînement ; critère `monitor: ap` par défaut (`loss` possible). AP hors-pli sur
+     données simulées (note dans 1 jeton sur 16, 3 tirages) : sans régularisation 0,67 /
+     0,74 / 0,79 ; R42 (loss) 0,54 / 0,65 / 0,78 ; R42 (ap) 0,66 / 0,74 / 0,79 ; R41, R45,
+     R47 à ±0,03 de la tête seule ; R46 (p = 0,2) 0,63 / 0,69 / 0,74. Ces données ne font
+     pas sur-apprendre la tête : à juger au benchmark réel. R43, R44, R48, R49 : expliquées à
+     Léonard, non programmées.
+
+118. **Tableaux des benchmarks en images** (`documentation/tableaux/`, demande de Léonard :
+     les tableaux Markdown s'affichent mal dans Xcode). Un PNG par benchmark (protocole,
+     encodeurs, têtes, poolings, pertes, voisins, régularisations, fusion, seuillage en
+     amont, négatifs appariés, baselines, ensembles), ~600 Ko en tout, générés par
+     `generer.py` (données + rendu Pillow, polices de matplotlib : rien à télécharger).
+     Un nouveau benchmark = une entrée de `TABLEAUX`. `encodeurs-bacpipe.md` : tableaux
+     remplacés par des fiches lisibles en texte brut. Le diagnostic de la cascade (n° 113)
+     est abandonné (Léonard). Tests lancés depuis un conteneur en root :
+     `test_freeze_writes_a_read_only_version_and_never_overwrites` y échoue (root écrit dans
+     un fichier en lecture seule), sans rapport avec le code.
