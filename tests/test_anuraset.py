@@ -155,3 +155,25 @@ def test_benchmark_ranks_an_encoder_by_site_folds(acfg, tmp_path):
     assert comparisons.empty  # un seul encodeur : rien à comparer
     path = write_anuraset_report(results, comparisons, tmp_path / "reports")
     assert "ADEMAR" in path.read_text(encoding="utf-8")
+
+
+def test_heads_are_judged_one_site_out(acfg, tmp_path):
+    """R78 : chaque tête apprise sur un site, jugée sur l'autre ; régularisations par site."""
+    from blanci.anuraset import run_anuraset_heads, write_anuraset_heads_report
+    from blanci.embed import embed_recordings, select_recordings
+    from tests.test_cli_pipeline import ToyEncoder
+
+    con = connect(acfg["paths"]["db"])
+    prepare(con, acfg)
+    embed_recordings(
+        con, ToyEncoder(), select_recordings(con), acfg["paths"]["raw"], tmp_path / "emb"
+    )
+    calls = read_strong_labels(acfg["anuraset"]["labels"])
+    methods = ["logistic", "prototype", "logistic+R19", "logistic+R37"]
+    out = run_anuraset_heads(con, acfg, "toy-1", ["ADEMAR"], calls, methods)
+    table = out["table"]
+    assert set(table["head"]) == set(methods) and (table["n_sites"] == 2).all()
+    assert set(out["sites"]["held_out_site"]) == {"INCT04", "INCT17"}
+    assert not out["comparisons"].empty and not out["selection"].empty
+    path = write_anuraset_heads_report(out, "toy-1", tmp_path / "reports")
+    assert "tenu à l'écart" in path.read_text(encoding="utf-8")

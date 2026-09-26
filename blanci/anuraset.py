@@ -246,6 +246,201 @@ def _encoder_windows(
     return meta.assign(dur_s=window_s), emb
 
 
+def species_rows(
+    meta: pd.DataFrame,
+    y: np.ndarray,
+    species: str,
+    negatives_per_positive: int,
+    rng: np.random.Generator,
+    encoder_id: str = "",
+) -> np.ndarray:
+    """Fenêtres jugées pour une espèce : tous ses positifs, et `negatives_per_positive`
+    négatifs par positif, tirés dans chaque site (au moins autant qu'un positif)."""
+    known = ~np.isnan(y)
+    pos = np.flatnonzero(known & (y == 1))
+    if len(pos) < 10:
+        raise ValueError(f"{species} : {len(pos)} fenêtres positives pour {encoder_id}")
+    neg = []
+    for site, idx in meta[known & (y == 0)].groupby("site").groups.items():
+        n_site_pos = int(((y == 1) & (meta["site"] == site).to_numpy()).sum())
+        k = min(len(idx), max(n_site_pos, 1) * negatives_per_positive)
+        neg.extend(rng.choice(np.asarray(idx), size=k, replace=False).tolist())
+    return np.sort(np.r_[pos, np.asarray(neg, dtype=int)])
+
+
+# R78 (DECISIONS n° 125) : têtes comparées sur AnuraSet quand on les choisit ailleurs que sur
+# Mataroni. Toutes les têtes et régularisations sans jetons ; les tokens d'AnuraSet ne sont pas
+# calculés. Le groupe des régularisations est le site (R13, R19–R21, R37, R66).
+HEADS = [
+    "logistic",
+    "prototype",
+    "knn:k=5",
+    "lda_shrunk",
+    "logistic+R19",
+    "logistic+R20",
+    "logistic+R21",
+    "logistic+R37",
+    "logistic+R13",
+    "loss:focal",
+    "loss:sigmoid",
+    "dann",
+]
+
+
+def run_anuraset_heads(
+    con: sqlite3.Connection,
+    cfg: dict,
+    encoder_id: str,
+    species: list[str],
+    calls: pd.DataFrame,
+    methods: list[str] | None = None,
+) -> dict[str, pd.DataFrame]:
+    """R78 : le benchmark des têtes sur AnuraSet, **un pli par site** (leave-one-site-out).
+
+    Chaque tête est apprise sur 3 sites et jugée sur le 4ᵉ ; son C, et le weight decay des
+    têtes torch, sont choisis par des plis internes eux aussi par site : les réglages retenus
+    sont ceux qui passent d'un site à l'autre, pas d'un micro à l'autre d'un même site. En
+    attendant des positifs hors de Mataroni, c'est là qu'on juge ce qui généralise.
+
+    Renvoie `table` (espèce × tête × niveau : AP, IC, rappels), `sites` (AP de chaque tête sur
+    chaque site tenu à l'écart), `comparisons` (contre `head.reference`, apparié) et
+    `selection` (R74 : la gagnante doit-elle sa place à la chance ?)."""
+    import importlib.util
+
+    from blanci.evaluate import average_precision, evaluate
+    from blanci.head import oof_scores
+    from blanci.head_benchmark import _inputs, compare_to_reference, expand_methods
+    from blanci.regularization import (
+        Context,
+        canonical,
+        domain_statistics,
+        fold_ids,
+        needs_domain,
+        needs_pool,
+        regularizer_for,
+        selection_estimate,
+    )
+
+    acfg, bench, head_cfg = cfg["anuraset"], cfg["benchmark"], cfg["head"]
+    methods = expand_methods(methods) or list(acfg.get("heads") or HEADS)
+    if importlib.util.find_spec("torch") is None:
+        methods = [m for m in methods if not m.startswith(("dann", "gated"))]
+    rng = np.random.default_rng(head_cfg["seed"])
+    meta, emb = _encoder_windows(con, cfg, encoder_id)
+    sites = meta["site"].astype(str).to_numpy()
+    domain = domain_statistics(emb, sites, "site") if needs_domain(methods) else None
+    reference = canonical(head_cfg.get("reference", "logistic"))
+    tables, per_site, comparisons, selections = [], [], [], []
+    for sp in species:
+        y_all = window_labels(meta, calls, sp)
+        rows = species_rows(meta, y_all, sp, acfg["negatives_per_positive"], rng, encoder_id)
+        X, y = emb[rows].astype(np.float32), y_all[rows].astype(int)
+        groups, recordings = sites[rows], meta["recording_id"].to_numpy()[rows]
+        context = Context(
+            groups,
+            domain=domain,
+            domain_rows=None if domain is None else domain.rows(groups),
+            classes=np.where(y == 1, "blanci", "fond").astype(object),
+        )
+        if needs_pool(methods):  # R81 : les fenêtres que ce tirage n'a pas retenues
+            size = int(((cfg.get("regularization") or {}).get("R81") or {}).get("pool", 20000))
+            others = np.setdiff1d(np.arange(len(meta)), rows)
+            pool = rng.choice(others, size=min(size, len(others)), replace=False)
+            context.pool, context.pool_groups = emb[pool].astype(np.float32), sites[pool]
+            if domain is not None:
+                context.pool_domain_rows = domain.rows(sites[pool])
+        n_sites = len(np.unique(groups))
+        scores, folds = {}, None
+        for spec in methods:
+            name, base, regularizer = regularizer_for(spec, cfg, context)
+            method, inputs = _inputs(base, X, None)
+            oof = oof_scores(
+                inputs,
+                y,
+                groups,
+                n_splits=n_sites,  # un pli par site
+                method=method,
+                C_grid=head_cfg["C_grid"],
+                seed=head_cfg["seed"],
+                regularizer=regularizer,
+            )
+            scores[name], folds = oof.values, oof.folds
+            for level in ("window", "recording"):
+                metrics = evaluate(
+                    oof.values,
+                    y,
+                    recordings,
+                    level=level,
+                    precisions=tuple(bench["precisions"]),
+                    n_boot=bench["n_boot"],
+                    seed=head_cfg["seed"],
+                )
+                tables.append({"species": sp, "head": name, "n_sites": n_sites, **metrics})
+            for site in np.unique(groups):
+                mask = groups == site
+                per_site.append(
+                    {
+                        "species": sp,
+                        "head": name,
+                        "held_out_site": site,
+                        "n_pos": int(y[mask].sum()),
+                        "ap": average_precision(y[mask], oof.values[mask]),
+                    }
+                )
+        if reference in scores:
+            comparisons.append(
+                compare_to_reference(scores, reference, y, recordings, cfg).assign(species=sp)
+            )
+        if len(scores) > 1:
+            chosen = selection_estimate(scores, y, fold_ids(len(y), folds), recordings)
+            selections.append({"species": sp, **{k: v for k, v in chosen.items()}})
+    return {
+        "table": pd.DataFrame(tables),
+        "sites": pd.DataFrame(per_site),
+        "comparisons": pd.concat(comparisons, ignore_index=True) if comparisons else pd.DataFrame(),
+        "selection": pd.DataFrame(selections),
+    }
+
+
+def write_anuraset_heads_report(out: dict, encoder_id: str, reports_dir: Path) -> Path:
+    from blanci.benchmark import to_markdown
+
+    reports_dir = Path(reports_dir)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"anuraset_tetes_{encoder_id}".replace(":", "_")
+    for key, frame in out.items():
+        frame.to_csv(reports_dir / f"{stem}_{key}.csv", index=False)
+    table = out["table"]
+    shown = ["species", "head", "level", "n_pos", "n_neg", "ap", "ap_lo", "ap_hi", "recall@p0.1"]
+    text = [
+        f"# Têtes sur AnuraSet, un pli par site (R78) : {encoder_id}",
+        "",
+        "Chaque tête est apprise sur les autres sites et jugée sur le site tenu à l'écart ; ses "
+        "réglages sont choisis de même. Indicateur de généralisation entre sites, sur d'autres "
+        "espèces que A. blanci.",
+        "",
+    ]
+    for level in ("window", "recording"):
+        part = table[table["level"] == level]
+        part = part.sort_values(["species", "ap"], ascending=[True, False])
+        text += [f"## Niveau {level}", "", to_markdown(part[[c for c in shown if c in part]]), ""]
+    if not out["sites"].empty:
+        pivot = (
+            out["sites"]
+            .pivot_table(index=["species", "head"], columns="held_out_site", values="ap")
+            .reset_index()
+        )
+        text += ["## AP sur chaque site tenu à l'écart", "", to_markdown(pivot), ""]
+    if not out["comparisons"].empty:
+        compared = to_markdown(out["comparisons"])
+        text += ["## Contre la référence (enregistrements)", "", compared, ""]
+    if not out["selection"].empty:
+        text += ["## Sélection honnête (R74, R80)", "", to_markdown(out["selection"]), ""]
+    path = reports_dir / f"{stem}.md"
+    path.write_text("\n".join(text), encoding="utf-8")
+    return path
+
+
 def run_anuraset_benchmark(
     con: sqlite3.Connection,
     cfg: dict,
@@ -266,16 +461,7 @@ def run_anuraset_benchmark(
         for encoder_id in encoder_ids:
             meta, emb = _encoder_windows(con, cfg, encoder_id)
             y = window_labels(meta, calls, sp)
-            known = ~np.isnan(y)
-            pos = np.flatnonzero(known & (y == 1))
-            if len(pos) < 10:
-                raise ValueError(f"{sp} : {len(pos)} fenêtres positives pour {encoder_id}")
-            neg = []
-            for site, idx in meta[known & (y == 0)].groupby("site").groups.items():
-                n_site_pos = int(((y == 1) & (meta["site"] == site).to_numpy()).sum())
-                k = min(len(idx), max(n_site_pos, 1) * acfg["negatives_per_positive"])
-                neg.extend(rng.choice(np.asarray(idx), size=k, replace=False).tolist())
-            rows = np.sort(np.r_[pos, np.asarray(neg, dtype=int)])
+            rows = species_rows(meta, y, sp, acfg["negatives_per_positive"], rng, encoder_id)
             table, scores = probe_table(
                 emb[rows].astype(np.float32),
                 y[rows].astype(int),

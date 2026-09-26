@@ -1467,6 +1467,37 @@ def anuraset_prepare(ctx: typer.Context) -> None:
     )
 
 
+@app.command("anuraset-heads")
+def anuraset_heads(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Stock d'encodeur AnuraSet (identifiant).")],
+    species: Annotated[
+        str | None, typer.Option(help="Codes AnuraSet ; défaut : anuraset.species.")
+    ] = None,
+    methods: Annotated[
+        str | None,
+        typer.Option(help="Têtes, régularisations comprises (défaut : anuraset.heads)."),
+    ] = None,
+) -> None:
+    """R78 : benchmark des têtes sur AnuraSet, un pli par site (généralisation entre sites)."""
+    from blanci.anuraset import read_strong_labels, run_anuraset_heads, write_anuraset_heads_report
+
+    cfg = _cfg(ctx)
+    if "anuraset" not in cfg:
+        raise typer.BadParameter("lancer avec --config config/anuraset.yaml")
+    chosen = _split(species) or list(cfg["anuraset"]["species"])
+    if not chosen:
+        raise typer.BadParameter("aucune espèce : --species ou anuraset.species (voir profile)")
+    con = connect(config_path(cfg, "db"))
+    calls = read_strong_labels(Path(cfg["anuraset"]["labels"]))
+    out = run_anuraset_heads(con, cfg, encoder, chosen, calls, _split(methods) or None)
+    path = write_anuraset_heads_report(out, encoder, config_path(cfg, "reports"))
+    table = out["table"]
+    for r in table[table["level"] == "recording"].to_dict("records"):
+        typer.echo(f"  {r['species']:<8} {r['head']:<22} AP {r['ap']:.3f}")
+    typer.echo(f"rapport : {path}")
+
+
 @app.command("anuraset-profile")
 def anuraset_profile(
     ctx: typer.Context,
