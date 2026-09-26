@@ -8,8 +8,11 @@ from blanci.head import (
     Head,
     OOFScores,
     differential_prototype,
+    exemplar_scores,
     fit_logistic,
     knn_scores,
+    nearest_similarity,
+    neighbor_options,
     oof_scores,
     prototype_scores,
     select_C,
@@ -117,6 +120,39 @@ def test_knn_refuses_a_single_class_training_set():
         knn_scores(X[y == 1], y[y == 1], X)
 
 
+def test_nearest_similarity_goes_from_the_nearest_to_the_mean_of_k():
+    sims = np.array([[0.9, 0.5, 0.7, 0.1]])
+    assert nearest_similarity(sims, 1)[0] == pytest.approx(0.9)
+    assert nearest_similarity(sims, 3)[0] == pytest.approx((0.9 + 0.7 + 0.5) / 3)
+    assert nearest_similarity(sims, 10)[0] == pytest.approx(sims.mean())  # k plafonné
+    weighted = nearest_similarity(sims, 3, weighted=True)[0]
+    assert (0.9 + 0.7 + 0.5) / 3 < weighted < 0.9  # les plus proches pèsent davantage
+
+
+def test_a_larger_k_resists_a_mislabelled_positive():
+    """Un « positif » faux au milieu des négatifs : à k = 1, les négatifs voisins héritent de
+    son score ; à k = 5, il est noyé par les vrais positifs (R39)."""
+    X, y = two_clusters(n=60, sep=1.0)
+    train = np.r_[0:30, 60:90]
+    test = np.r_[30:60, 90:120]
+    y_noisy = y.copy()
+    y_noisy[60:66] = 1  # six négatifs d'entraînement étiquetés positifs
+    one = knn_scores(X[train], y_noisy[train], X[test])
+    five = knn_scores(X[train], y_noisy[train], X[test], k=5)
+    assert average_precision(y[test], five) > average_precision(y[test], one)
+    positives = X[train][y_noisy[train] == 1]
+    assert average_precision(y[test], exemplar_scores(positives, X[test], 5)) > 0.9
+
+
+def test_neighbor_variants_are_parsed():
+    assert neighbor_options("knn:k=5") == ("knn", 5, False)
+    assert neighbor_options("exemplar:k=3:w") == ("exemplar", 3, True)
+    assert neighbor_options("knn") is None and neighbor_options("logistic:max") is None
+    X, y = two_clusters(n=30)
+    with pytest.raises(ValueError, match="au moins 1"):
+        oof_scores(X, y, mics(30), n_splits=2, method="knn:k=0")
+
+
 # --- Régression logistique et sauvegarde ------------------------------------------------------
 
 
@@ -164,7 +200,10 @@ def test_train_head_records_provenance():
 # --- Scores hors-pli -------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method", ["logistic", "prototype", "simple_prototype", "knn"])
+@pytest.mark.parametrize(
+    "method",
+    ["logistic", "prototype", "simple_prototype", "knn", "knn:k=3", "knn:k=5:w", "exemplar:k=3"],
+)
 def test_oof_scores_cover_every_window_without_nan(method):
     X, y = two_clusters(n=60)
     out = oof_scores(X, y, mics(60), n_splits=3, method=method)

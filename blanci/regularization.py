@@ -16,19 +16,42 @@ Programmées ici, appliquées dans cet ordre :
 | R17 | fenêtre | embedding ramené à la norme 1 |
 | R18 | pli | ACP ajustée sur l'entraînement du pli (`components`) |
 | R21 | pli | retrait des directions qui trahissent le micro (négatifs seulement) |
+| R37 | fenêtre | indicatrices du micro ajoutées à l'entrée : un biais par micro, pénalisé |
 | R13 | poids | chaque micro pèse autant dans sa classe |
 | R15 | poids | négatifs annotés (faux amis, espèces) × `hard_weight` face aux présumés |
+| R36 | poids | poids des classes (n / 2·n_classe)^`power` : 1 équilibré (défaut), 0 aucun |
 | R27 | pénalité | L1 (lasso) au lieu de L2 |
 | R28 | pénalité | Elastic Net (`l1_ratio`) |
 
+Têtes entraînées avec torch (DECISIONS n° 117, `blanci/attentive.py`) :
+
+| R | têtes | quoi |
+|---|---|---|
+| R40 | attentive, gated | weight decay choisi par validation groupée sur `grid` |
+| R41 | attentive | AdamW (weight decay découplé, `weight_decay`) |
+| R42 | attentive, gated | nombre d'époques par validation groupée (`monitor` : loss, ap) |
+| R45 | attentive | dropout des jetons (`p`) |
+| R46 | attentive, gated | dropout des dimensions du vecteur agrégé (`p`) |
+| R47 | attentive | départ et rétrécissement vers la logistique (`strength` λ) |
+
 Ailleurs : R22 = pooling `gem` (`blanci/pooling.py`), R30 = tête `logistic_to_prototype`,
-R31 = tête `lda_shrunk` (`blanci/head.py`), R26 = la L2, déjà là.
+R31 = tête `lda_shrunk` (`blanci/head.py`), R26 = la L2, déjà là, R39 = têtes `knn:k=…`,
+`exemplar:k=…`.
 
 R19 et R20 lisent le stock d'embeddings entier du micro (`store_domain_statistics`) : aucune
 étiquette, ce que la chaîne aura aussi sur un nouveau site. Elles ne valent que pour
 l'embedding par défaut (pas pour les jetons résumés `logistic:<pooling>`). R18 et R21 sont
 ajustées dans chaque pli sur les seules fenêtres d'entraînement ; le C des têtes logistiques est
 ensuite choisi sur ces fenêtres transformées.
+
+R37 (DECISIONS n° 116) : une colonne par micro de l'entraînement, non standardisée ; son poids
+est le biais du micro, d'a priori N(0, σ²) (σ = `scale`, en logit, indépendant de C : voir
+`head.standardize`). Un micro absent de l'entraînement (le micro du pli de test, un nouveau
+site) a toutes ses colonnes à 0 : biais commun. Le biais absorbe le niveau de chaque micro
+pendant l'apprentissage, w n'a plus à le coder. Mesuré sur données simulées : un σ petit
+(biais « très pénalisés ») ne sert à rien, w garde le raccourci ; il faut σ de l'ordre des
+écarts réels entre micros (≥ 3). Écartée au tri du 26/09 : R33 (norme maximale, équivalente
+à la L2 pour une tête linéaire).
 """
 
 from __future__ import annotations
@@ -39,7 +62,7 @@ from typing import Any
 
 import numpy as np
 
-IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28)
+IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28, 36, 37, 40, 41, 42, 45, 46, 47)
 DESCRIPTIONS = {
     13: "chaque micro pèse autant dans sa classe",
     15: "négatifs annotés surpondérés face aux présumés",
@@ -50,11 +73,34 @@ DESCRIPTIONS = {
     21: "retrait des directions du micro (INLP)",
     27: "pénalité L1",
     28: "pénalité Elastic Net",
+    36: "poids des classes",
+    37: "biais par micro",
+    40: "weight decay par validation groupée",
+    41: "AdamW",
+    42: "arrêt précoce",
+    45: "dropout des jetons",
+    46: "dropout des dimensions",
+    47: "rétrécissement vers la logistique",
 }
 # Réglage principal de chaque R, celui que « =v » remplace.
-MAIN_PARAMETER = {15: "hard_weight", 18: "components", 21: "iterations", 28: "l1_ratio"}
+MAIN_PARAMETER = {
+    15: "hard_weight",
+    18: "components",
+    21: "iterations",
+    28: "l1_ratio",
+    36: "power",
+    37: "scale",
+    41: "weight_decay",
+    42: "max_epochs",
+    45: "p",
+    46: "p",
+    47: "strength",
+}
 WEIGHTED_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss")
 PENALIZED_HEADS = ("logistic", "cascade")
+GROUP_BIAS_HEADS = ("logistic", "cascade", "loss")
+# Régularisations des têtes entraînées avec torch, et celles que chacune accepte.
+TORCH_REGULARIZATIONS = {"attentive": (40, 41, 42, 45, 46, 47), "gated": (40, 42, 46)}
 _SUFFIX = re.compile(r"^R(\d+)(?:=([0-9.eE+-]+))?$")
 
 
@@ -101,8 +147,17 @@ def validate(base: str, regs: dict[int, float | None]) -> None:
     if not regs:
         return
     family = "logistic" if base.startswith("logistic:") else base.split(":")[0]
-    if base == "attentive":
-        raise ValueError("l'attentive lit les jetons bruts : aucune régularisation programmée")
+    torch_only = {n for allowed in TORCH_REGULARIZATIONS.values() for n in allowed}
+    if base in TORCH_REGULARIZATIONS:
+        refused = sorted(set(regs) - set(TORCH_REGULARIZATIONS[base]))
+        if refused:
+            accepted = ", ".join(f"R{n}" for n in TORCH_REGULARIZATIONS[base])
+            reason = "l'attentive lit les jetons bruts" if base == "attentive" else base
+            raise ValueError(f"{reason} : R{refused[0]} sans objet ({accepted} seulement)")
+        return
+    if torch_only & set(regs):
+        number = min(torch_only & set(regs))
+        raise ValueError(f"R{number} : têtes attentive et gated seulement (entraînées avec torch)")
     if {19, 20} <= set(regs):
         raise ValueError("R20 contient déjà le centrage de R19 : l'une ou l'autre")
     if {27, 28} <= set(regs):
@@ -111,8 +166,10 @@ def validate(base: str, regs: dict[int, float | None]) -> None:
         raise ValueError(
             f"{base} : R19/R20 n'existent que pour l'embedding par défaut (statistiques du stock)"
         )
-    if {13, 15} & set(regs) and family not in WEIGHTED_HEADS:
-        raise ValueError(f"R13/R15 (poids) : têtes {', '.join(WEIGHTED_HEADS)} seulement")
+    if {13, 15, 36} & set(regs) and family not in WEIGHTED_HEADS:
+        raise ValueError(f"R13/R15/R36 (poids) : têtes {', '.join(WEIGHTED_HEADS)} seulement")
+    if 37 in regs and family not in GROUP_BIAS_HEADS:
+        raise ValueError(f"R37 (biais par micro) : têtes {', '.join(GROUP_BIAS_HEADS)} seulement")
     if {27, 28} & set(regs) and family not in PENALIZED_HEADS:
         raise ValueError(f"R27/R28 (pénalité) : têtes {', '.join(PENALIZED_HEADS)} seulement")
 
@@ -277,10 +334,15 @@ def sample_weights(
     hard: np.ndarray | None,
     regs: dict[int, float | None],
     hard_weight: float = 3.0,
+    class_power: float = 1.0,
 ) -> np.ndarray | None:
     """Poids par fenêtre, de moyenne 1 dans chaque classe (l'équilibre des classes reste celui
-    de `class_weight="balanced"`). None si ni R13 ni R15."""
-    if not {13, 15} & set(regs):
+    de `class_weight="balanced"`), sauf R36. None si ni R13, ni R15, ni R36.
+
+    R36 : les têtes donnent à chaque classe le poids n / (2·n_classe) (« balanced ») ; R36 le
+    remplace par (n / (2·n_classe))^`class_power` : 1 = équilibré, 0 = aucun rééquilibrage
+    (chaque fenêtre compte 1), 0,5 = entre les deux."""
+    if not {13, 15, 36} & set(regs):
         return None
     y = np.asarray(y).astype(int)
     w = np.ones(len(y))
@@ -297,7 +359,19 @@ def sample_weights(
         idx = y == c
         if idx.any():
             w[idx] *= idx.sum() / w[idx].sum()
+    if 36 in regs:
+        balanced = len(y) / (2.0 * np.maximum(np.bincount(y, minlength=2), 1))
+        w *= (balanced ** (float(class_power) - 1.0))[y]
     return w
+
+
+def group_indicators(groups: np.ndarray, train: np.ndarray) -> np.ndarray:
+    """R37 : (n, micros de l'entraînement) — 1 si la fenêtre est de ce micro, sinon 0.
+
+    Les micros absents de `train` n'ont pas de colonne : leurs fenêtres ont le biais commun."""
+    groups = np.asarray(groups).astype(str)
+    names = np.unique(groups[train])
+    return (groups[:, None] == names[None, :]).astype(np.float32)
 
 
 # --- Assemblage -------------------------------------------------------------------------------
@@ -392,13 +466,44 @@ class Regularizer:
 
         return project
 
-    def fit_options(self) -> dict[str, float]:
-        """Pénalité de la logistique (R27, R28) : l1_ratio, 0 = L2 (R26)."""
+    def torch_options(self) -> dict[str, Any]:
+        """Options des têtes torch (`attentive.fit_with_options`) : R40–R42, R45–R47."""
+        options: dict[str, Any] = {}
+        if 40 in self.regs:
+            options["weight_decays"] = [
+                float(v) for v in self.param(40, "grid", [1e-4, 1e-3, 1e-2, 1e-1])
+            ]
+            options["n_splits"] = int(self.param(40, "n_splits", 3))
+        if 41 in self.regs:
+            options["optimizer"] = "adamw"
+            options["weight_decay"] = float(self.param(41, "weight_decay", 1e-2))
+        if 42 in self.regs:
+            options["early_stopping"] = True
+            options["monitor"] = str(self.param(42, "monitor", "ap"))
+            options["epochs"] = int(self.param(42, "max_epochs", 300))
+            options["n_splits"] = int(self.param(42, "n_splits", options.get("n_splits", 3)))
+        if 45 in self.regs:
+            options["token_dropout"] = float(self.param(45, "p", 0.2))
+        if 46 in self.regs:
+            options["dim_dropout"] = float(self.param(46, "p", 0.2))
+        if 47 in self.regs:
+            options["shrink"] = float(self.param(47, "strength", 1e-2))
+        return options
+
+    def fit_options(self, bias_columns: int = 0) -> dict[str, float]:
+        """Options de l'ajustement : pénalité (R27, R28 : l1_ratio, 0 = L2, R26) et biais par
+        micro (R37 : nombre de colonnes d'indicatrices, échelle)."""
+        options: dict[str, float] = {}
         if 27 in self.regs:
-            return {"l1_ratio": 1.0}
-        if 28 in self.regs:
-            return {"l1_ratio": float(self.param(28, "l1_ratio", 0.5))}
-        return {}
+            options["l1_ratio"] = 1.0
+        elif 28 in self.regs:
+            options["l1_ratio"] = float(self.param(28, "l1_ratio", 0.5))
+        if bias_columns:
+            options |= {
+                "bias_columns": bias_columns,
+                "bias_scale": float(self.param(37, "scale", 3.0)),
+            }
+        return options
 
     def prepare(
         self, X: np.ndarray, y: np.ndarray, train: np.ndarray, seed: int = 0
@@ -409,14 +514,20 @@ class Regularizer:
         project = self.fit_projection(X[train], y[train], self.context.groups[train], seed)
         if project is not None:
             X = project(X)
+        bias_columns = 0
+        if 37 in self.regs:
+            indicators = group_indicators(self.context.groups, train)
+            bias_columns = indicators.shape[1]
+            X = np.hstack([np.asarray(X, dtype=np.float32), indicators])
         weights = sample_weights(
             y[train],
             self.context.groups[train],
             None if self.context.hard is None else self.context.hard[train],
             self.regs,
             float(self.param(15, "hard_weight", 3.0)),
+            float(self.param(36, "power", 0.0)),
         )
-        return X, weights, self.fit_options()
+        return X, weights, self.fit_options(bias_columns)
 
 
 def regularizer_for(

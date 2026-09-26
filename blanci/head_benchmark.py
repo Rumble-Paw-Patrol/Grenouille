@@ -7,6 +7,7 @@ Têtes comparées sur les embeddings gelés d'un encodeur (`head.METHODS`, `pool
 | exemplar_medoid | l'embedding d'une seule fenêtre de référence (recherche par l'exemple) |
 | exemplar | le positif d'entraînement le plus proche (recherche par les exemples) |
 | knn | plus proche positif − plus proche négatif |
+| knn:k=5, exemplar:k=3 | R39 : moyenne des k plus proches ; `:w` = pondérée par 1 / distance |
 | simple_prototype | μ₊, moyenne des positifs |
 | prototype | μ₊ − μ₋, négatifs appariés (prototype différentiel) |
 | logistic | appris (régression logistique) sur l'embedding par défaut |
@@ -17,6 +18,9 @@ Têtes comparées sur les embeddings gelés d'un encodeur (`head.METHODS`, `pool
 | logistic:<pooling> | appris sur les jetons résumés par `pooling` (max, moyenne + max, gem…) |
 | attentive | appris sur les jetons, pondérés par une requête apprise |
 | cascade | logistic, puis attentive sur les meilleurs candidats |
+
+Groupes de têtes pour `--methods` : `losses` (logistique + toutes les pertes), `neighbors`
+(logistique, prototype et toutes les variantes par similarité, R39).
 
 Régularisations (`blanci/regularization.py`, DECISIONS n° 108) : dans le nom de la tête,
 `logistic+R18=16+R19`. Le nom canonique figure dans les tableaux et les scores hors-pli ;
@@ -76,6 +80,24 @@ from blanci.store import EmbeddingStore
 
 TOKEN_METHODS = ("attentive", "cascade")
 LEVELS = ("window", "recording")
+# R39 (DECISIONS n° 115) : k voisins dans la liste par défaut, juste après `knn` ; toutes les
+# variantes dans le groupe `neighbors`, pour amorcer un nouveau site avec quelques exemples.
+NEIGHBOR_DEFAULTS = ("knn:k=3", "knn:k=5")
+NEIGHBORS = (
+    "logistic",
+    "prototype",
+    "exemplar_medoid",
+    "exemplar",
+    "exemplar:k=3",
+    "exemplar:k=5",
+    "knn",
+    "knn:k=3",
+    "knn:k=5",
+    "knn:k=10",
+    "knn:k=3:w",
+    "knn:k=5:w",
+    "knn:k=10:w",
+)
 
 
 def head_methods(tokens: np.ndarray | None, variants: list[str] | None = None) -> list[str]:
@@ -84,21 +106,24 @@ def head_methods(tokens: np.ndarray | None, variants: list[str] | None = None) -
     base = [m for m in METHODS if m not in TOKEN_METHODS]
     if importlib.util.find_spec("torch") is None:  # R85 s'entraîne avec torch
         base.remove("gated")
+    at = base.index("knn") + 1
+    base[at:at] = NEIGHBOR_DEFAULTS
     if tokens is not None:
         base += [f"logistic:{p}" for p in available_poolings(tokens)] + list(TOKEN_METHODS)
     return base + [v for v in variants or [] if v not in base]
 
 
 def expand_methods(methods: list[str] | None) -> list[str] | None:
-    """« losses » → la logistique (référence) et toutes les têtes `loss:<nom>` (R34, R35)."""
+    """Groupes de têtes : « losses » → la logistique (référence) et toutes les têtes
+    `loss:<nom>` (R34, R35) ; « neighbors » → les têtes par similarité (R39, `NEIGHBORS`)."""
     if methods is None:
         return None
     from blanci.losses import LOSSES
 
+    groups = {"losses": ["logistic", *(f"loss:{name}" for name in LOSSES)], "neighbors": NEIGHBORS}
     out: list[str] = []
     for spec in methods:
-        extra = ["logistic", *(f"loss:{name}" for name in LOSSES)] if spec == "losses" else [spec]
-        out += [m for m in extra if m not in out]
+        out += [m for m in groups.get(spec, [spec]) if m not in out]
     return out
 
 

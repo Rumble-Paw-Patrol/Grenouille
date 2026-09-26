@@ -61,12 +61,30 @@ def simple_prototype_scores(E_pos: np.ndarray, X: np.ndarray) -> np.ndarray:
     return l2_normalize(X) @ l2_normalize(l2_normalize(E_pos).mean(axis=0, keepdims=True))[0]
 
 
-def exemplar_scores(E_pos: np.ndarray, X: np.ndarray) -> np.ndarray:
-    """Recherche par l'exemple : cosinus au positif d'entraînement le plus proche.
+def nearest_similarity(sims: np.ndarray, k: int = 1, weighted: bool = False) -> np.ndarray:
+    """Similarité de chaque ligne à ses k références les plus proches (R39, DECISIONS n° 115).
+
+    k = 1 : le plus proche seul. k > 1 : moyenne des k plus proches, plus lisse, moins sensible
+    à une référence bizarre. `weighted` : moyenne pondérée par 1 / distance (distance
+    euclidienne entre vecteurs de norme 1, √(2 − 2·cos), comme `weights="distance"` de
+    scikit-learn) : les voisins très proches comptent davantage, entre k = 1 et la moyenne."""
+    k = max(1, min(int(k), sims.shape[1]))
+    top = -np.partition(-sims, k - 1, axis=1)[:, :k] if k > 1 else sims.max(axis=1)[:, None]
+    if not weighted:
+        return top.mean(axis=1)
+    w = 1.0 / np.maximum(np.sqrt(np.clip(2.0 - 2.0 * top, 0.0, None)), 1e-6)
+    return (w * top).sum(axis=1) / w.sum(axis=1)
+
+
+def exemplar_scores(
+    E_pos: np.ndarray, X: np.ndarray, k: int = 1, weighted: bool = False
+) -> np.ndarray:
+    """Recherche par l'exemple : cosinus au positif d'entraînement le plus proche (k = 1), ou
+    moyenne des k plus proches (R39).
 
     Aucun apprentissage, aucun négatif : ce que donne une requête « trouve-moi des fenêtres
     comme celles-ci » (§5, récolte par similarité)."""
-    return (l2_normalize(X) @ l2_normalize(E_pos).T).max(axis=1)
+    return nearest_similarity(l2_normalize(X) @ l2_normalize(E_pos).T, k, weighted)
 
 
 def medoid_scores(E_pos: np.ndarray, X: np.ndarray) -> np.ndarray:
@@ -120,14 +138,41 @@ def prototype_scores(X: np.ndarray, w: np.ndarray, b: float) -> np.ndarray:
     return l2_normalize(X) @ w + b
 
 
-def knn_scores(X_train: np.ndarray, y_train: np.ndarray, X: np.ndarray) -> np.ndarray:
-    """Marge top-1 : similarité au positif le plus proche − au négatif le plus proche."""
+def knn_scores(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X: np.ndarray,
+    k: int = 1,
+    weighted: bool = False,
+) -> np.ndarray:
+    """Marge kNN : similarité aux positifs les plus proches − aux négatifs les plus proches.
+
+    k = 1 (défaut) : le plus proche de chaque classe. k > 1 et `weighted` : R39
+    (`nearest_similarity`). Les k voisins sont pris dans chaque classe séparément : un vote
+    parmi les k plus proches, toutes classes confondues, serait écrasé par les ~20 négatifs
+    par positif."""
     y_train = np.asarray(y_train).astype(bool)
     if not y_train.any() or y_train.all():
         raise ValueError("la marge kNN exige des positifs et des négatifs dans l'entraînement")
     Xn, Tn = l2_normalize(X), l2_normalize(X_train)
     sims = Xn @ Tn.T
-    return sims[:, y_train].max(axis=1) - sims[:, ~y_train].max(axis=1)
+    return nearest_similarity(sims[:, y_train], k, weighted) - nearest_similarity(
+        sims[:, ~y_train], k, weighted
+    )
+
+
+_NEIGHBORS = re.compile(r"^(knn|exemplar):k=(\d+)(:w)?$")
+
+
+def neighbor_options(method: str) -> tuple[str, int, bool] | None:
+    """« knn:k=5:w » → ("knn", 5, True) ; None si `method` n'est pas une variante à k (R39)."""
+    match = _NEIGHBORS.match(method)
+    if not match:
+        return None
+    k = int(match.group(2))
+    if k < 1:
+        raise ValueError(f"{method} : k doit valoir au moins 1")
+    return match.group(1), k, bool(match.group(3))
 
 
 # --- Régression logistique --------------------------------------------------------------------
@@ -181,6 +226,30 @@ def _penalty(l1_ratio: float) -> dict[str, Any]:
     return kw
 
 
+def standardize(
+    X: np.ndarray, bias_columns: int = 0, bias_scale: float = 1.0
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(X standardisé, moyenne, échelle) ; `(X − moyenne) / échelle` redonne la même chose.
+
+    Les `bias_columns` dernières colonnes (R37 : indicatrices du micro) ne sont pas
+    standardisées mais multipliées par `bias_scale` : sous la pénalité ½‖w‖², le biais du
+    micro b = bias_scale · w_micro coûte ½ (b / bias_scale)². Les têtes passent
+    bias_scale = σ / √C : rapportée au terme des données (C · Σ perte), la pénalité vaut
+    b² / 2σ², l'a priori b ~ N(0, σ²) d'un modèle mixte, quel que soit C. σ petit : biais
+    très pénalisés, proches de 0 ; σ grand : un biais libre par micro (effets fixes)."""
+    X = np.asarray(X)
+    n = int(bias_columns)
+    d = X.shape[1] - n
+    scaler = StandardScaler().fit(X[:, :d])
+    mean = np.concatenate([scaler.mean_, np.zeros(n)])
+    scale = np.concatenate(
+        [np.where(scaler.scale_ > 0, scaler.scale_, 1.0), np.full(n, 1.0 / float(bias_scale))]
+    )
+    if not n:
+        return scaler.transform(X), mean, scale
+    return (X - mean) / scale, mean, scale
+
+
 def fit_logistic(
     X: np.ndarray,
     y: np.ndarray,
@@ -188,19 +257,23 @@ def fit_logistic(
     seed: int = 0,
     sample_weight: np.ndarray | None = None,
     l1_ratio: float = 0.0,
+    bias_columns: int = 0,
+    bias_scale: float = 1.0,
 ) -> Head:
-    """Standardisation + logistique à classes équilibrées. `sample_weight` : R13, R15 ;
-    `l1_ratio` : R27, R28 (`blanci/regularization.py`)."""
-    scaler = StandardScaler().fit(X)
+    """Standardisation + logistique à classes équilibrées. `sample_weight` : R13, R15, R36 ;
+    `l1_ratio` : R27, R28 ; `bias_columns`, `bias_scale` (σ, écart-type a priori des biais de
+    micro, en logit) : R37 (`blanci/regularization.py`, `standardize`)."""
+    Z, mean, scale = standardize(X, bias_columns, bias_scale / np.sqrt(C))
     model = LogisticRegression(
         C=C, class_weight="balanced", random_state=seed, **_penalty(l1_ratio)
-    ).fit(scaler.transform(X), y, sample_weight=sample_weight)
-    scale = np.where(scaler.scale_ > 0, scaler.scale_, 1.0)
+    ).fit(Z, y, sample_weight=sample_weight)
     meta: dict[str, Any] = {"C": C}
     if l1_ratio:
         meta["l1_ratio"] = float(l1_ratio)
+    if bias_columns:
+        meta |= {"group_biases": int(bias_columns), "bias_scale": float(bias_scale)}
     return Head(
-        scaler.mean_.astype(np.float32),
+        mean.astype(np.float32),
         scale.astype(np.float32),
         model.coef_[0].astype(np.float32),
         float(model.intercept_[0]),
@@ -363,8 +436,8 @@ FITTERS = {
 def _loss_fitter(name: str):
     from blanci.losses import fit_loss
 
-    def fitter(X, y, C, seed=0, sample_weight=None):
-        return fit_loss(X, y, C, seed, sample_weight, loss=name)
+    def fitter(X, y, C, seed=0, sample_weight=None, **fit_kw):
+        return fit_loss(X, y, C, seed, sample_weight, loss=name, **fit_kw)
 
     return fitter
 
@@ -464,21 +537,32 @@ def fit_and_score(
     if method == "logistic_to_prototype":
         return fit_logistic_to_prototype(Xtr, ytr, C, seed, sample_weight=sw).decision(X[test])
     if method.startswith("loss:"):
-        return fitter(Xtr, ytr, C, seed, sample_weight=sw).decision(X[test])
+        return fitter(Xtr, ytr, C, seed, sample_weight=sw, **fit_kw).decision(X[test])
     if method == "lda_shrunk":
         return lda_shrunk_scores(Xtr, ytr, X[test])
+    torch_options = {} if regularizer is None else regularizer.torch_options()
     if method == "gated":
+        from blanci.attentive import fit_with_options
         from blanci.gated import fit_gated
 
-        return fit_gated(Xtr, ytr, seed=seed).decision(X[test])
+        return fit_with_options(fit_gated, Xtr, ytr, groups[train], seed, **torch_options).decision(
+            X[test]
+        )
     if method == "prototype":
         w, b = differential_prototype(Xtr[ytr == 1], Xtr[ytr == 0])
         return prototype_scores(X[test], w, b)
     if method == "attentive":  # X = jetons (fenêtres, jetons, dim) ou grille 4-D
-        from blanci.attentive import fit_attentive
+        from blanci.attentive import fit_attentive, fit_with_options
         from blanci.pooling import flat_tokens
 
-        return fit_attentive(flat_tokens(Xtr), ytr, seed=seed).decision(flat_tokens(X[test]))
+        T = flat_tokens(Xtr)
+        if torch_options.get("shrink"):  # R47 : C de la logistique de départ, même grille
+            torch_options["shrink_C"] = _choose_C(
+                T.mean(axis=1), ytr, groups[train], C_grid, n_splits, seed, fit_logistic
+            )
+        return fit_with_options(
+            fit_attentive, T, ytr, groups[train], seed, **torch_options
+        ).decision(flat_tokens(X[test]))
     if method == "cascade":
         if tokens is None:
             raise ValueError("la cascade a besoin des jetons (tokens=…)")
@@ -502,7 +586,16 @@ def fit_and_score(
         return simple_prototype_scores(Xtr[ytr == 1], X[test])
     if method == "knn":
         return knn_scores(Xtr, ytr, X[test])
-    raise ValueError(f"méthode inconnue : {method} (connues : {METHODS})")
+    neighbors = neighbor_options(method)
+    if neighbors is not None:  # R39 : knn:k=5, exemplar:k=3, knn:k=5:w
+        base, k, weighted = neighbors
+        if base == "knn":
+            return knn_scores(Xtr, ytr, X[test], k, weighted)
+        return exemplar_scores(Xtr[ytr == 1], X[test], k, weighted)
+    raise ValueError(
+        f"méthode inconnue : {method} (connues : {METHODS} ; variantes knn:k=5, exemplar:k=3, "
+        "knn:k=5:w)"
+    )
 
 
 def oof_scores(
@@ -522,7 +615,8 @@ def oof_scores(
     """Scores hors-pli sur plis groupés (par micro).
 
     Méthodes (`METHODS`) : exemplar_medoid (un seul exemple), exemplar (plus proche positif),
-    knn, simple_prototype, prototype (différentiel), logistic, logistic_to_prototype (R30),
+    knn, leurs variantes à k voisins (R39 : knn:k=5, exemplar:k=3, knn:k=5:w),
+    simple_prototype, prototype (différentiel), logistic, logistic_to_prototype (R30),
     lda_shrunk (R31), gated (R85, `blanci/gated.py`), attentive (X = jetons en
     (fenêtres, jetons, dim) ou (fenêtres, temps, fréquence, dim), `blanci/attentive.py`),
     cascade (X = embeddings, `tokens` = jetons des mêmes fenêtres).

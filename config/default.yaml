@@ -124,7 +124,9 @@ head:
     repeats: 5                     # tirages de la moitié de test par cible
     # logistic_to_prototype (R30) et lda_shrunk (R31) : entre prototype et logistique, candidats
     # naturels des sites peu annotés (DECISIONS n° 108).
-    methods: [prototype, logistic, simple_prototype, exemplar, logistic_to_prototype, lda_shrunk]
+    # knn:k=3 et exemplar:k=3 (R39) : les baselines par similarité, pour amorcer un site (n° 115).
+    methods: [prototype, logistic, simple_prototype, exemplar, logistic_to_prototype, lda_shrunk,
+              exemplar:k=3, knn, knn:k=3]
 
 # Régularisations des têtes (DECISIONS n° 108, `blanci/regularization.py`), numérotées comme la
 # liste du 25/09/2026 (documentation/regularisation.md). Toutes coupées : on les active tête par
@@ -137,7 +139,7 @@ head:
 # logistic_to_prototype, R31 = tête lda_shrunk, R26 = la L2 (défaut).
 regularization:
   variants: []            # têtes ajoutées à `blanci heads` par défaut, ex. [logistic+R19, prototype+R19]
-  by: point               # groupe de R13, R19, R20, R21 : point (micro) ou site
+  by: point               # groupe de R13, R19, R20, R21, R37 : point (site/micro) ou site
   R13: {}                 # pondération : chaque micro pèse autant dans sa classe
   R15: {hard_weight: 3.0} # ◆ négatifs annotés (faux amis, espèces) × 3 face aux présumés (n° 106)
   R17: {}                 # embeddings ramenés à la norme 1
@@ -152,6 +154,26 @@ regularization:
   R21: {method: means, iterations: 3, max_directions: 128, C: 1.0, tolerance: 0.05}
   R27: {}                 # pénalité L1 (lasso)
   R28: {l1_ratio: 0.5}    # ◆ Elastic Net : part de L1 (0 = L2, 1 = L1)
+  # Poids des classes (n / 2·n_classe)^power au lieu de « balanced » (power = 1, le défaut des
+  # têtes) : ◆ 0 = aucun rééquilibrage, 0.5 = entre les deux (n° 116). Têtes logistiques et pertes.
+  R36: {power: 0.0}
+  # Un biais par micro (groupe `by`), a priori N(0, σ²), ◆ σ = scale en logit (indépendant de C).
+  # σ petit = biais très pénalisés : sur données simulées, w garde alors le raccourci du micro ;
+  # σ ≥ 3 l'efface. Micro absent de l'entraînement : biais commun (n° 116). logistic, cascade,
+  # loss:<nom>.
+  R37: {scale: 3.0}
+  # Têtes entraînées avec torch (n° 117) : attentive (R40–R42, R45–R47) et gated (R40, R42, R46).
+  R40: {grid: [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1], n_splits: 3}  # weight decay, validation groupée
+  R41: {weight_decay: 1.0e-2}          # ◆ AdamW au lieu de la L2 d'Adam (1e-3 couplé par défaut)
+  # Arrêt précoce : dans chaque pli groupé interne, courbe du critère de validation à chaque
+  # époque (monitor : ap, ou loss) ; l'époque qui optimise la courbe moyenne est retenue, puis la
+  # tête est réentraînée sur tout le pli d'entraînement pour ce nombre d'époques (au plus
+  # ◆ max_epochs). loss : la perte de validation remonte dès que la tête devient trop sûre
+  # d'elle, même quand le classement progresse (mesuré, n° 117) : ap par défaut.
+  R42: {monitor: ap, max_epochs: 300, n_splits: 3}
+  R45: {p: 0.2}                        # ◆ dropout des jetons avant l'attention
+  R46: {p: 0.2}                        # ◆ dropout des dimensions du vecteur agrégé
+  R47: {strength: 1.0e-2}              # ◆ λ de ½λ‖w − w_logistique‖²
 
 benchmark:
   negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)

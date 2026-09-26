@@ -73,19 +73,23 @@ def fit_loss(
     seed: int = 0,
     sample_weight: np.ndarray | None = None,
     loss: str = "hinge",
+    bias_columns: int = 0,
+    bias_scale: float = 1.0,
     **params: float,
 ):
-    """Tête linéaire (`head.Head`) entraînée avec la perte `loss`."""
+    """Tête linéaire (`head.Head`) entraînée avec la perte `loss`. `bias_columns`,
+    `bias_scale` : biais par micro (R37, `head.standardize`)."""
     from sklearn.linear_model import LogisticRegression, RidgeClassifier
-    from sklearn.preprocessing import StandardScaler
     from sklearn.svm import LinearSVC
 
-    from blanci.head import Head
+    from blanci.head import Head, standardize
 
     y = np.asarray(y).astype(int)
-    scaler = StandardScaler().fit(X)
-    Z = scaler.transform(X).astype(np.float64)
+    Z, mean, scale = standardize(X, bias_columns, bias_scale / np.sqrt(C))
+    Z = Z.astype(np.float64)
     meta: dict[str, Any] = {"C": C, "loss": loss}
+    if bias_columns:
+        meta |= {"group_biases": int(bias_columns), "bias_scale": float(bias_scale)}
     if loss in ("hinge", "squared_hinge"):
         model = LinearSVC(
             C=C, loss=loss, class_weight="balanced", max_iter=20000, random_state=seed
@@ -124,9 +128,8 @@ def fit_loss(
         meta |= options
     else:
         raise ValueError(f"perte inconnue : {loss!r} (connues : {LOSSES})")
-    scale = np.where(scaler.scale_ > 0, scaler.scale_, 1.0)
     return Head(
-        scaler.mean_.astype(np.float32),
+        mean.astype(np.float32),
         scale.astype(np.float32),
         np.asarray(w, dtype=np.float32),
         b,
