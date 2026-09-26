@@ -310,3 +310,39 @@ def test_annotation_curve_accepts_regularized_heads(corpus, cfg):
     out = annotation_curve(con, cfg, eid, ["logistic", "logistic+R19", "lda_shrunk"])
     assert set(out["runs"]["head"]) == {"logistic", "logistic+R19", "lda_shrunk"}
     assert set(out["gaps"]["head"]) == {"logistic+R19", "lda_shrunk"}
+
+
+def test_new_heads_and_pseudo_labels_run_on_the_stock(corpus, cfg):
+    """R67 (classes tirées des labels), R81 (réservoir tiré du stock), R74 (sélection)."""
+    con, eid = corpus
+    rng = np.random.default_rng(5)
+    metas, embs = [], []
+    for m in range(5):  # un jour de plus par micro, jamais annoté : le réservoir de R81
+        rel = f"2026/mataroni/M{m}/M{m}_d9.wav"
+        rid = recording_id_for(rel)
+        con.execute(
+            "INSERT INTO recordings (recording_id, path, dataset, site, mic_id, start_utc, "
+            "duration_s, sample_rate, channels, qc_flags) VALUES (?, ?, '2026', 'mataroni', "
+            "?, '2026-03-01T13:00:00Z', 120.0, 32000, 1, '{}')",
+            (rid, rel, f"M{m}"),
+        )
+        offsets = [round(1.5 * i, 2) for i in range(N_WINDOWS)]
+        metas.append(
+            pd.DataFrame(
+                {
+                    "window_id": [window_id_for(rid, o) for o in offsets],
+                    "recording_id": rid,
+                    "offset_s": offsets,
+                }
+            )
+        )
+        embs.append(rng.normal(0, 1.0, (N_WINDOWS, DIM)))
+    con.commit()
+    EmbeddingStore(cfg["paths"]["embeddings"], eid).write(
+        pd.concat(metas, ignore_index=True), np.concatenate(embs), "2026", "mataroni", "202603"
+    )
+    cfg["regularization"]["R81"] = {"pool": 200, "min_score": 0.0, "max_fraction": 0.2}
+    out = run_head_benchmark(con, cfg, eid, ["logistic", "logistic+R81", "multiclass"])
+    assert set(out["table"]["head"]) == {"logistic", "logistic+R81", "multiclass"}
+    assert out["table"]["ap"].notna().all()
+    assert out["selection"]["winner"] in {"logistic", "logistic+R81", "multiclass"}

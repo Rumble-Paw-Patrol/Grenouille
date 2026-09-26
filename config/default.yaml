@@ -194,6 +194,17 @@ regularization:
   # Bagging : ◆ bags têtes apprises chacune sur un tirage bootstrap des micros, scores moyennés
   # (n° 122). Têtes légères : logistic, logistic_to_prototype, loss:<nom>.
   R79: {bags: 20}
+  # Tête dann (DANN, n° 124) : représentation de ◆ hidden dimensions, classifieur de micro
+  # derrière une inversion du gradient de force strength (montée progressive) ; le micro est
+  # appris sur les négatifs seulement (domain_on: negatives) ou sur tout (all).
+  R66: {hidden: 32, strength: 1.0, domain_on: negatives, weight_decay: 1.0e-2, epochs: 300, lr: 1.0e-2}
+  # Tête multiclass (n° 124) : classes de moins de min_count fenêtres fusionnées dans « autre »
+  # (puis dans « fond » si « autre » reste trop petit) ; négatifs présumés = « fond ».
+  R67: {min_count: 10}
+  # Pseudo-étiquetage (logistic+R81, n° 124) : réservoir de ◆ pool fenêtres non annotées tirées
+  # du stock ; pseudo-positifs = score ≥ min_score (logit), au plus max_fraction du réservoir,
+  # au poids weight ; rounds tours. pool_from: train (micros d'entraînement seulement) ou all.
+  R81: {pool: 20000, min_score: 3.0, max_fraction: 0.01, weight: 0.3, rounds: 1, pool_from: train}
 
 benchmark:
   negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)

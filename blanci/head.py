@@ -342,6 +342,65 @@ def lda_shrunk_scores(X_train: np.ndarray, y_train: np.ndarray, X: np.ndarray) -
     return lda.decision_function(X)
 
 
+@dataclass
+class MulticlassHead:
+    """R67 : logistique multinomiale sur l'embedding standardisé ; score = logit de
+    P(A. blanci)."""
+
+    mean: np.ndarray
+    scale: np.ndarray
+    coef: np.ndarray  # (classes, d), ou (1, d) à deux classes
+    intercept: np.ndarray
+    classes: list[str]
+    meta: dict[str, Any] = field(default_factory=dict)
+
+    def proba(self, X: np.ndarray) -> np.ndarray:
+        """Probabilité de chaque classe (n, classes), dans l'ordre de `classes`."""
+        z = ((np.asarray(X, dtype=np.float32) - self.mean) / self.scale) @ self.coef.T
+        z = z + self.intercept
+        if len(self.classes) == 2:
+            p1 = 1.0 / (1.0 + np.exp(-z[:, 0]))
+            return np.column_stack([1.0 - p1, p1])
+        z = z - z.max(axis=1, keepdims=True)
+        e = np.exp(z)
+        return e / e.sum(axis=1, keepdims=True)
+
+    def decision(self, X: np.ndarray) -> np.ndarray:
+        p = np.clip(self.proba(X)[:, self.classes.index("blanci")], 1e-12, 1 - 1e-12)
+        return np.log(p) - np.log1p(-p)
+
+
+def fit_multiclass(
+    X: np.ndarray,
+    classes: np.ndarray,
+    C: float,
+    seed: int = 0,
+    sample_weight: np.ndarray | None = None,
+    min_count: int = 10,
+) -> MulticlassHead:
+    """R67 : la tête apprend à distinguer toutes les classes de sons (A. blanci, amphibiens
+    dont les congénères, orthoptères, oiseaux, pluie, fond…), pas seulement « A. blanci ou
+    non » : la frontière doit se placer sur ce qui est propre à A. blanci. Classes rares
+    fusionnées (`regularization.merge_rare_classes`), classes équilibrées, L2."""
+    from blanci.regularization import merge_rare_classes
+
+    classes = merge_rare_classes(np.asarray(classes, dtype=object), min_count)
+    scaler = StandardScaler().fit(X)
+    model = LogisticRegression(C=C, class_weight="balanced", max_iter=2000, random_state=seed).fit(
+        scaler.transform(X), classes.astype(str), sample_weight=sample_weight
+    )
+    scale = np.where(scaler.scale_ > 0, scaler.scale_, 1.0)
+    names = [str(c) for c in model.classes_]
+    return MulticlassHead(
+        scaler.mean_.astype(np.float32),
+        scale.astype(np.float32),
+        model.coef_.astype(np.float32),
+        model.intercept_.astype(np.float32),
+        names,
+        {"C": C, "classes": {n: int((classes == n).sum()) for n in names}},
+    )
+
+
 def select_C(
     X: np.ndarray,
     y: np.ndarray,
@@ -411,6 +470,8 @@ METHODS = (
     "logistic_to_prototype",  # R30
     "lda_shrunk",  # R31
     "gated",  # R85 (torch)
+    "dann",  # R66 (torch)
+    "multiclass",  # R67
     "attentive",
     "cascade",
 )
@@ -436,6 +497,20 @@ def _fitter(method: str):
     if method.startswith("loss:"):
         return _loss_fitter(method.split(":", 1)[1])
     return FITTERS.get(method)
+
+
+def _choose_multiclass_C(X, y, classes, groups, C_grid, n_splits, seed, sw, min_count) -> float:
+    """R67 : C de la tête multi-classes, jugé comme les autres sur l'AP d'A. blanci."""
+    if not C_grid or len(C_grid) < 2 or len(np.unique(groups)) < 2:
+        return (C_grid or [1.0])[0]
+
+    def score(C, train, test):
+        w = None if sw is None else sw[train]
+        head = fit_multiclass(X[train], classes[train], C, seed, w, min_count)
+        return average_precision(y[test], head.decision(X[test]))
+
+    best, _, _ = grouped_search(score, C_grid, y, groups, n_splits, seed)
+    return C_grid[0] if best is None else best
 
 
 def _choose_C(X, y, groups, C_grid, n_splits, seed, fitter=None, **fit_kw) -> float:
@@ -532,13 +607,35 @@ def fit_and_score(
             return fitter(Xtr[rows], ytr[rows], C, seed, sample_weight=weights, **kw)
 
         bags = regularizer.bags if regularizer is not None else 0
-        if bags:  # R79
+        if regularizer is not None and 81 in regularizer.regs:  # R81
+            from blanci.regularization import with_pseudo_labels
+
+            model = with_pseudo_labels(
+                lambda Xa, ya, wa: fitter(Xa, ya, C, seed, sample_weight=wa, **kw),
+                Xtr,
+                ytr,
+                sw,
+                regularizer.pool_prepared,
+                **regularizer.pseudo_options(),
+            )
+        elif bags:  # R79
             from blanci.regularization import bagged
 
             model = bagged(fit_rows, ytr, groups[train], bags, seed, sw)
         else:
             model = fit_rows(np.arange(len(ytr)), sw)
         return model.decision(X[test])
+    if method == "multiclass":  # R67
+        ctx = None if regularizer is None else regularizer.context
+        if ctx is None or ctx.classes is None:
+            raise ValueError("multiclass : classes des fenêtres manquantes (Context.classes)")
+        classes = np.asarray(ctx.classes, dtype=object)[train]
+        min_count = int(regularizer.param(67, "min_count", 10))
+        if C is None:
+            C = _choose_multiclass_C(
+                Xtr, ytr, classes, groups[train], C_grid, n_splits, seed, sw, min_count
+            )
+        return fit_multiclass(Xtr, classes, C, seed, sw, min_count).decision(X[test])
     if method == "lda_shrunk":
         return lda_shrunk_scores(Xtr, ytr, X[test])
     torch_options = {} if regularizer is None else regularizer.torch_options()
@@ -549,6 +646,13 @@ def fit_and_score(
         return fit_with_options(fit_gated, Xtr, ytr, groups[train], seed, **torch_options).decision(
             X[test]
         )
+    if method == "dann":  # R66 : le micro (groupe du contexte) est le domaine à effacer
+        from blanci.dann import fit_dann
+        from blanci.regularization import fit_with_options
+
+        domains = np.asarray(regularizer.context.groups)[train]
+        options = regularizer.dann_options() | torch_options
+        return fit_with_options(fit_dann, Xtr, ytr, domains, seed, **options).decision(X[test])
     if method == "prototype":
         w, b = differential_prototype(Xtr[ytr == 1], Xtr[ytr == 0])
         return prototype_scores(X[test], w, b)

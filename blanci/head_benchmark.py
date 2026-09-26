@@ -74,9 +74,12 @@ from blanci.regularization import (
     canonical,
     fold_ids,
     needs_domain,
+    needs_pool,
     regularizer_for,
+    sample_pool,
     selection_estimate,
     store_domain_statistics,
+    window_classes,
 )
 from blanci.store import EmbeddingStore
 
@@ -106,8 +109,9 @@ def head_methods(tokens: np.ndarray | None, variants: list[str] | None = None) -
     """Têtes possibles : celles des embeddings, plus celles des jetons s'il y en a, plus les
     variantes régularisées de la config (`regularization.variants`)."""
     base = [m for m in METHODS if m not in TOKEN_METHODS]
-    if importlib.util.find_spec("torch") is None:  # R85 s'entraîne avec torch
+    if importlib.util.find_spec("torch") is None:  # R85, R66 s'entraînent avec torch
         base.remove("gated")
+        base.remove("dann")
     at = base.index("knn") + 1
     base[at:at] = NEIGHBOR_DEFAULTS
     if tokens is not None:
@@ -141,12 +145,22 @@ def regularization_context(
     si une tête le demande, statistiques du stock par micro (R19, R20)."""
     by = (cfg.get("regularization", {}) or {}).get("by", "point")
     groups = data[by].astype(str).to_numpy()
-    hard = (data["y"].to_numpy() == 0) & ~data["presumed"].to_numpy(dtype=bool)
-    context = Context(groups, hard)
+    presumed = data["presumed"].to_numpy(dtype=bool)
+    hard = (data["y"].to_numpy() == 0) & ~presumed
+    labels = data["label"].to_numpy(dtype=object) if "label" in data else np.full(len(data), None)
+    context = Context(groups, hard, classes=window_classes(labels, data["y"].to_numpy(), presumed))
+    store = EmbeddingStore(config_path(cfg, "embeddings"), encoder_id)
     if needs_domain(specs):
-        store = EmbeddingStore(config_path(cfg, "embeddings"), encoder_id)
         context.domain = store_domain_statistics(con, store, filters, by)
         context.domain_rows = context.domain.rows(groups)
+    if needs_pool(specs):  # R81 : réservoir de fenêtres non annotées du stock
+        size = int(((cfg.get("regularization", {}) or {}).get("R81") or {}).get("pool", 20000))
+        pool, pool_groups = sample_pool(
+            con, store, filters, by, set(data["window_id"]), size, cfg["head"]["seed"]
+        )
+        context.pool, context.pool_groups = pool, pool_groups
+        if context.domain is not None:
+            context.pool_domain_rows = context.domain.rows(pool_groups)
     return context
 
 

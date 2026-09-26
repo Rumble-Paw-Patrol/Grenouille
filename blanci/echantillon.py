@@ -136,7 +136,13 @@ def run(
     from blanci.evaluate import evaluate
     from blanci.head import oof_scores
     from blanci.head_benchmark import _inputs, expand_methods
-    from blanci.regularization import Context, domain_statistics, needs_domain, regularizer_for
+    from blanci.regularization import (
+        Context,
+        domain_statistics,
+        needs_domain,
+        regularizer_for,
+        window_classes,
+    )
 
     df = load_labels(root)
     X, tokens = encode(cfg, encoder_name, df, root, cache)
@@ -144,7 +150,7 @@ def run(
     groups = df["point"].to_numpy()
     y = df["y"].to_numpy()
     context_groups = df[by].astype(str).to_numpy()
-    context = Context(context_groups, (y == 0))
+    context = Context(context_groups, (y == 0), classes=window_classes(df["label"].to_numpy(), y))
     if needs_domain(methods):
         context.domain = domain_statistics(X, context_groups, by)
         context.domain_rows = context.domain.rows(context_groups)

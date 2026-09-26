@@ -82,29 +82,9 @@ from typing import Any
 
 import numpy as np
 
-IMPLEMENTED = (
-    13,
-    15,
-    17,
-    18,
-    19,
-    20,
-    21,
-    27,
-    28,
-    36,
-    37,
-    40,
-    41,
-    42,
-    45,
-    46,
-    47,
-    59,
-    64,
-    76,
-    79,
-)
+IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28, 36, 37)  # fenêtres, poids, pénalités
+IMPLEMENTED += (40, 41, 42, 45, 46, 47, 59, 64)  # entraînement des têtes torch
+IMPLEMENTED += (76, 79, 81)  # sélection des réglages, bagging, pseudo-étiquetage
 DESCRIPTIONS = {
     13: "chaque micro pèse autant dans sa classe",
     15: "négatifs annotés surpondérés face aux présumés",
@@ -127,6 +107,7 @@ DESCRIPTIONS = {
     64: "moyenne des poids (EMA, SWA)",
     76: "grille de C plus fine",
     79: "bagging par micros",
+    81: "pseudo-étiquetage",
 }
 # Réglage principal de chaque R, celui que « =v » remplace.
 MAIN_PARAMETER = {
@@ -145,16 +126,20 @@ MAIN_PARAMETER = {
     64: "method",
     76: "points",
     79: "bags",
+    81: "weight",
 }
 WEIGHTED_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss")
 PENALIZED_HEADS = ("logistic", "cascade")
 GROUP_BIAS_HEADS = ("logistic", "cascade", "loss")
-C_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss")  # têtes à C (R76)
+C_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss", "multiclass")  # R76
+CONTEXT_HEADS = ("multiclass", "dann")  # têtes qui lisent le contexte même sans suffixe
+PSEUDO_HEADS = ("logistic", "logistic_to_prototype", "loss")  # R81
 BAGGED_HEADS = ("logistic", "logistic_to_prototype", "loss")  # entraînements légers (R79)
 # Régularisations des têtes entraînées avec torch, et celles que chacune accepte.
 TORCH_REGULARIZATIONS = {
     "attentive": (40, 41, 42, 45, 46, 47, 59, 64),
     "gated": (40, 42, 46, 59, 64),
+    "dann": (40, 42, 46, 59, 64),
 }
 # Réglages principaux qui prennent un mot plutôt qu'un nombre : R42=ap, R42=loss.
 WORD_VALUES = {42: ("ap", "loss"), 64: ("ema", "swa")}
@@ -220,6 +205,11 @@ def validate(base: str, regs: dict[int, float | str | None]) -> None:
         return
     family = "logistic" if base.startswith("logistic:") else base.split(":")[0]
     torch_only = {n for allowed in TORCH_REGULARIZATIONS.values() for n in allowed}
+    if base == "multiclass":
+        refused = sorted(set(regs) - {17, 18, 19, 20, 21, 76})
+        if refused:
+            raise ValueError(f"multiclass : R{refused[0]} sans objet (R17–R21, R76 seulement)")
+        return
     if base in TORCH_REGULARIZATIONS:
         refused = sorted(set(regs) - set(TORCH_REGULARIZATIONS[base]))
         if refused:
@@ -244,6 +234,10 @@ def validate(base: str, regs: dict[int, float | str | None]) -> None:
         raise ValueError(f"R76 (grille de C) : têtes {', '.join(C_HEADS)} seulement")
     if 79 in regs and family not in BAGGED_HEADS:
         raise ValueError(f"R79 (bagging) : têtes {', '.join(BAGGED_HEADS)} seulement")
+    if 81 in regs and family not in PSEUDO_HEADS:
+        raise ValueError(f"R81 (pseudo-étiquetage) : têtes {', '.join(PSEUDO_HEADS)} seulement")
+    if {79, 81} <= set(regs):
+        raise ValueError("R79 + R81 : pas programmé ensemble")
     if 37 in regs and family not in GROUP_BIAS_HEADS:
         raise ValueError(f"R37 (biais par micro) : têtes {', '.join(GROUP_BIAS_HEADS)} seulement")
     if {27, 28} & set(regs) and family not in PENALIZED_HEADS:
@@ -252,6 +246,37 @@ def validate(base: str, regs: dict[int, float | str | None]) -> None:
 
 def needs_domain(specs: list[str]) -> bool:
     return any({19, 20} & set(parse_head(s)[1]) for s in specs)
+
+
+def needs_pool(specs: list[str]) -> bool:
+    return any(81 in parse_head(s)[1] for s in specs)
+
+
+def sample_pool(
+    con, store, filters: dict | None, by: str, exclude: set, size: int, seed: int = 0
+) -> tuple[np.ndarray, np.ndarray]:
+    """R81 : (embeddings, groupe) d'au plus `size` fenêtres non annotées du stock, tirées au
+    hasard partition par partition, hors fenêtres du benchmark (`exclude`) et fenêtres
+    arrêtées par une porte."""
+    from blanci.dataset import recordings_table
+    from blanci.store import gated_mask
+
+    group_of = recordings_table(con).set_index("recording_id")[by].astype(str)
+    rng = np.random.default_rng(seed)
+    fragments = list(store.fragments(filters))
+    per_fragment = max(1, int(np.ceil(size / max(len(fragments), 1))))
+    embs, groups = [], []
+    for path in fragments:
+        meta, emb = store.read(path)
+        keep = np.flatnonzero(~gated_mask(meta) & ~meta["window_id"].isin(exclude).to_numpy())
+        if not len(keep):
+            continue
+        keep = rng.choice(keep, size=min(per_fragment, len(keep)), replace=False)
+        embs.append(np.asarray(emb[keep], dtype=np.float32))
+        groups.append(group_of.loc[meta["recording_id"].to_numpy()[keep]].to_numpy())
+    if not embs:
+        raise ValueError(f"stock vide pour {store.encoder_id} : pas de réservoir (R81)")
+    return np.vstack(embs)[:size], np.concatenate(groups)[:size]
 
 
 # --- R19, R20 : statistiques par micro sur le stock entier ------------------------------------
@@ -461,6 +486,11 @@ class Context:
     hard: np.ndarray | None = None  # (n,) négatif annoté (R15)
     domain: DomainStats | None = None  # R19, R20
     domain_rows: np.ndarray | None = None  # (n,) indice dans `domain`
+    classes: np.ndarray | None = None  # (n,) classe du son (R67, `window_classes`)
+    # R81 : fenêtres non annotées du stock (embeddings, groupe, indice dans `domain`)
+    pool: np.ndarray | None = None
+    pool_groups: np.ndarray | None = None
+    pool_domain_rows: np.ndarray | None = None
 
     def subset(self, rows: np.ndarray) -> Context:
         return Context(
@@ -468,6 +498,10 @@ class Context:
             None if self.hard is None else self.hard[rows],
             self.domain,
             None if self.domain_rows is None else self.domain_rows[rows],
+            None if self.classes is None else self.classes[rows],
+            self.pool,
+            self.pool_groups,
+            self.pool_domain_rows,
         )
 
 
@@ -485,17 +519,19 @@ class Regularizer:
             return value
         return (self.params.get(f"R{number}") or {}).get(key, default)
 
-    def window_transform(self, X: np.ndarray) -> np.ndarray:
-        """R19 / R20 puis R17 : fenêtre par fenêtre, sans apprentissage."""
+    def window_transform(self, X: np.ndarray, domain_rows: np.ndarray | None = None) -> np.ndarray:
+        """R19 / R20 puis R17 : fenêtre par fenêtre, sans apprentissage. `domain_rows` : pour
+        d'autres fenêtres que celles du contexte (le réservoir de R81)."""
         X = np.asarray(X, dtype=np.float32)
         if {19, 20} & set(self.regs):
             ctx = self.context
-            if ctx.domain is None or ctx.domain_rows is None:
+            rows = ctx.domain_rows if domain_rows is None else domain_rows
+            if ctx.domain is None or rows is None:
                 raise ValueError("R19/R20 demandent les statistiques du stock (Context.domain)")
-            X = X - ctx.domain.mean[ctx.domain_rows]
+            X = X - ctx.domain.mean[rows]
             if 20 in self.regs:
                 eps = float(self.param(20, "eps", 1e-6))
-                X = X / (ctx.domain.std[ctx.domain_rows] + eps)
+                X = X / (ctx.domain.std[rows] + eps)
         if 17 in self.regs:
             from blanci.index import l2_normalize
 
@@ -542,11 +578,56 @@ class Regularizer:
 
         return project
 
+    pool_prepared: np.ndarray | None = None  # R81 : réservoir transformé par `prepare`
+    pool_prepared_groups: np.ndarray | None = None
+
+    def pool_windows(self, project, train: np.ndarray) -> np.ndarray:
+        """R81 : le réservoir de fenêtres non annotées, passé par les mêmes transformations que
+        les fenêtres annotées. `pool_from: train` (défaut) : seulement les micros
+        d'entraînement ; `all` : aussi ceux du pli jugé (adaptation sans labels à un micro
+        nouveau)."""
+        ctx = self.context
+        if ctx.pool is None or ctx.pool_groups is None:
+            raise ValueError("R81 demande un réservoir de fenêtres non annotées (Context.pool)")
+        keep = np.ones(len(ctx.pool), dtype=bool)
+        if self.param(81, "pool_from", "train") == "train":
+            keep = np.isin(
+                np.asarray(ctx.pool_groups).astype(str),
+                np.unique(np.asarray(ctx.groups)[train].astype(str)),
+            )
+        rows = None if ctx.pool_domain_rows is None else ctx.pool_domain_rows[keep]
+        pool = self.window_transform(ctx.pool[keep], rows)
+        if project is not None:
+            pool = project(pool)
+        self.pool_prepared_groups = np.asarray(ctx.pool_groups)[keep]
+        return np.asarray(pool, dtype=np.float32)
+
     def grid(self, C_grid):
         """Grille de C de la tête : R76 la remplace par une grille plus fine."""
         if 76 in self.regs and C_grid:
             return fine_grid(C_grid, int(self.param(76, "points", 13)))
         return C_grid
+
+    def pseudo_options(self) -> dict[str, Any]:
+        """Réglages de R81 (`with_pseudo_labels`), section `regularization.R81`."""
+        return {
+            "min_score": float(self.param(81, "min_score", 3.0)),
+            "max_fraction": float(self.param(81, "max_fraction", 0.01)),
+            "weight": float(self.param(81, "weight", 0.3)),
+            "rounds": int(self.param(81, "rounds", 1)),
+        }
+
+    def dann_options(self) -> dict[str, Any]:
+        """Réglages de la tête `dann` (R66), section `regularization.R66` de la config."""
+        defaults = {
+            "hidden": 32,
+            "strength": 1.0,
+            "domain_on": "negatives",
+            "weight_decay": 1e-2,
+            "epochs": 300,
+            "lr": 1e-2,
+        }
+        return {k: type(v)(self.param(66, k, v)) for k, v in defaults.items()}
 
     @property
     def bags(self) -> int:
@@ -608,11 +689,19 @@ class Regularizer:
         project = self.fit_projection(X[train], y[train], self.context.groups[train], seed)
         if project is not None:
             X = project(X)
+        pool = self.pool_windows(project, train) if 81 in self.regs else None
         bias_columns = 0
         if 37 in self.regs:
             indicators = group_indicators(self.context.groups, train)
             bias_columns = indicators.shape[1]
             X = np.hstack([np.asarray(X, dtype=np.float32), indicators])
+            if pool is not None:
+                names = np.unique(np.asarray(self.context.groups)[train].astype(str))
+                pool_groups = np.asarray(self.pool_prepared_groups).astype(str)
+                pool = np.hstack(
+                    [pool, (pool_groups[:, None] == names[None, :]).astype(np.float32)]
+                )
+        self.pool_prepared = pool
         weights = sample_weights(
             y[train],
             self.context.groups[train],
@@ -827,6 +916,135 @@ def selection_estimate(
         "fold_ap_winner": float(np.nanmean(naive)) if naive else float("nan"),
         "fold_ap_selection": float(np.nanmean(selected)) if selected else float("nan"),
     }
+
+
+# --- R81 : pseudo-étiquetage ---------------------------------------------------------------------
+
+
+def pseudo_positives(
+    scores: np.ndarray, min_score: float = 3.0, max_fraction: float = 0.01
+) -> np.ndarray:
+    """R81 : indices des fenêtres non annotées retenues comme pseudo-positifs — score (logit de
+    la tête) ≥ `min_score`, et au plus la fraction `max_fraction` du réservoir (les mieux
+    notées) : un garde-fou si la tête note haut trop de fenêtres."""
+    scores = np.asarray(scores, dtype=float)
+    above = np.flatnonzero(scores >= min_score)
+    cap = int(np.floor(max_fraction * len(scores)))
+    if len(above) > cap:
+        above = above[np.argsort(-scores[above])[:cap]]
+    return np.sort(above)
+
+
+def with_pseudo_labels(
+    fit_rows,
+    X: np.ndarray,
+    y: np.ndarray,
+    sample_weight: np.ndarray | None,
+    pool: np.ndarray,
+    min_score: float = 3.0,
+    max_fraction: float = 0.01,
+    weight: float = 0.3,
+    rounds: int = 1,
+):
+    """R81 (auto-apprentissage, Lee 2013) : une tête apprise sur les labels note le réservoir ;
+    les fenêtres sûres (`pseudo_positives`) rejoignent l'entraînement comme positifs, au poids
+    `weight` (un avis du modèle ne vaut pas un label d'expert), et la tête est réapprise,
+    `rounds` fois. `fit_rows(X, y, poids)` apprend une tête. Pas de pseudo-négatifs : les
+    fenêtres non annotées notées bas sont aussi incertaines que les négatifs présumés (n° 106).
+    Risque : le biais de confirmation (la tête étiquette ce qu'elle reconnaît déjà, erreurs
+    comprises)."""
+    y = np.asarray(y).astype(int)
+    base_w = np.ones(len(y)) if sample_weight is None else np.asarray(sample_weight, float)
+    model = fit_rows(X, y, sample_weight)
+    chosen = np.array([], dtype=int)
+    for _ in range(int(rounds)):
+        chosen = pseudo_positives(model.decision(pool), min_score, max_fraction)
+        if not len(chosen):
+            break
+        model = fit_rows(
+            np.vstack([X, pool[chosen]]),
+            np.r_[y, np.ones(len(chosen), dtype=int)],
+            np.r_[base_w, np.full(len(chosen), float(weight))],
+        )
+    model.meta = getattr(model, "meta", {}) | {"pseudo_positives": int(len(chosen))}
+    return model
+
+
+# --- R66 : inversion du gradient (DANN) -------------------------------------------------------
+
+
+def grad_reverse(torch, x, strength: float):
+    """R66 : couche d'inversion du gradient (Ganin et al. 2016). À l'aller, l'identité ; au
+    retour, le gradient multiplié par −`strength`. Placée entre la représentation et le
+    classifieur de micro, elle fait apprendre au classifieur à reconnaître le micro, et à la
+    représentation à l'en empêcher."""
+
+    class _Reverse(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, inputs):
+            return inputs.view_as(inputs)
+
+        @staticmethod
+        def backward(ctx, grad):
+            return -strength * grad
+
+    return _Reverse.apply(x)
+
+
+def dann_strength(progress: float, strength: float = 1.0) -> float:
+    """R66 : force de l'inversion selon l'avancement p ∈ [0, 1] de l'entraînement,
+    λ(p) = strength · (2 / (1 + e^(−10 p)) − 1) : nulle au départ (la tête apprend d'abord le
+    chant), pleine ensuite (Ganin et al. 2016)."""
+    return float(strength) * (2.0 / (1.0 + np.exp(-10.0 * float(progress))) - 1.0)
+
+
+# --- R67 : classes des sons ----------------------------------------------------------------------
+
+# Labels d'annotation → classe de la tête multi-classes. Les négatifs présumés (sans label)
+# rejoignent le fond : par définition, aucun événement n'y a été noté (n° 124).
+CLASS_OF_LABEL = {
+    "bird": "oiseau",
+    "amphibian": "amphibien",
+    "amphibian_contact_call": "amphibien",
+    "orthoptera": "orthoptère",
+    "rain": "pluie",
+    "background": "fond",
+    "artefact_in_bag": "artefact",
+    "other": "autre",
+}
+POSITIVE_CLASS = "blanci"
+
+
+def window_classes(
+    labels: np.ndarray, y: np.ndarray, presumed: np.ndarray | None = None
+) -> np.ndarray:
+    """R67 : classe de chaque fenêtre — `blanci` pour les positifs, la classe de son label
+    d'annotation sinon (`CLASS_OF_LABEL`), `fond` pour les négatifs présumés et les labels
+    absents, `autre` pour un label inconnu."""
+    y = np.asarray(y).astype(int)
+    out = []
+    for i, label in enumerate(np.asarray(labels, dtype=object)):
+        if y[i] == 1:
+            out.append(POSITIVE_CLASS)
+        elif (presumed is not None and bool(presumed[i])) or label is None or label != label:
+            out.append("fond")
+        else:
+            out.append(CLASS_OF_LABEL.get(str(label), "autre"))
+    return np.array(out, dtype=object)
+
+
+def merge_rare_classes(classes: np.ndarray, min_count: int = 10) -> np.ndarray:
+    """R67 : une classe de moins de `min_count` fenêtres (hors `blanci`) rejoint `autre` ;
+    si `autre` reste sous le seuil, elle rejoint `fond`. Une classe de 3 exemples ne s'apprend
+    pas, elle ajoute du bruit."""
+    classes = np.asarray(classes, dtype=object).copy()
+    names, counts = np.unique(classes, return_counts=True)
+    for name, count in zip(names, counts, strict=True):
+        if name not in (POSITIVE_CLASS, "fond", "autre") and count < min_count:
+            classes[classes == name] = "autre"
+    if 0 < (classes == "autre").sum() < min_count:
+        classes[classes == "autre"] = "fond"
+    return classes
 
 
 # --- R79 : bagging -------------------------------------------------------------------------------
@@ -1230,6 +1448,12 @@ def fit_with_options(
         if best is not None:
             options["weight_decay"] = best
             extra["weight_decay_cv"] = {str(k): v for k, v in results.items()}
+
+    def with_groups(rows) -> dict:
+        """Les têtes qui apprennent aussi le micro (R66, `needs_groups`) reçoivent ses groupes."""
+        return {"groups": groups[rows]} if getattr(fit, "needs_groups", False) else {}
+
+    everything = np.arange(len(y))
     folds = usable_folds(y, groups, n_splits, seed) if early_stopping else []
     if folds:
         curves = [
@@ -1241,17 +1465,18 @@ def fit_with_options(
                 patience=None,
                 monitor=monitor,
                 **options,
+                **with_groups(train),
             ).meta["validation_curve"]
             for train, test in folds
         ]
         mean_curve = np.nanmean(np.vstack(curves), axis=0)
         best_epoch = int(np.nanargmin(mean_curve)) + 1
-        head = fit(X, y, seed=seed, **(options | {"epochs": best_epoch}))
+        head = fit(X, y, seed=seed, **(options | {"epochs": best_epoch}), **with_groups(everything))
         head.meta |= extra | {
             "early_stopping": {"best_epoch": best_epoch, "monitor": monitor, "folds": len(curves)}
         }
         return head
-    head = fit(X, y, seed=seed, **options)
+    head = fit(X, y, seed=seed, **options, **with_groups(everything))
     head.meta |= extra
     return head
 
@@ -1263,7 +1488,7 @@ def regularizer_for(
     base, regs = parse_head(spec)
     validate(base, regs)
     name = head_name(base, regs)
-    if not regs:
+    if not regs and base not in CONTEXT_HEADS:
         return name, base, None
     if context is None:
         raise ValueError(f"{name} : contexte des fenêtres manquant")
