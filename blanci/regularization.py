@@ -23,24 +23,38 @@ Programmées ici, appliquées dans cet ordre :
 | R27 | pénalité | L1 (lasso) au lieu de L2 |
 | R28 | pénalité | Elastic Net (`l1_ratio`) |
 
-Têtes entraînées avec torch (DECISIONS n° 117, 121) : toute la mécanique est ici, les têtes
-(`attentive.py`, `gated.py`) l'appellent dans leur boucle d'entraînement.
+Sélection des réglages et entraînements légers (DECISIONS n° 122) :
 
-| R | têtes | quoi | fonction |
-|---|---|---|---|
-| R40 | attentive, gated | weight decay par validation groupée (`grid`) | `fit_with_options` |
-| R41 | attentive | AdamW (weight decay découplé, `weight_decay`) | `optimise` |
-| R42 | attentive, gated | époques par validation groupée (`R42=ap`, `=loss`) | `fit_with_options` |
-| R45 | attentive | dropout des jetons (`p`) | `keep_mask` |
-| R46 | attentive, gated | dropout des dimensions du vecteur agrégé (`p`) | `dropout` |
-| R47 | attentive | départ et rétrécissement vers la logistique (`strength`) | `logistic_start` |
-| R59 | attentive, gated | warm-up du pas (`warmup` époques), écrêtage du gradient | `optimise` |
-
-Prêtes pour les réseaux à venir (fine-tuning, distillation, modèle maison), sans appel encore :
-R62 `l2_sp_penalty` (déjà utilisée par R47), R63 `distillation_loss`.
+| R | quoi | fonction, activation |
+|---|---|---|
+| R74 | seuil et variante jugés à part | `cross_fitted_threshold`, `selection_estimate` |
+| R75 | règle du « 1 écart-type » (`head.selection_rule`) | `pick`, `grouped_search` |
+| R76 | grille de C plus fine, chemin de régularisation (`train`) | `+R76`, `fine_grid` |
+| R77 | un pli par micro | `head.n_splits: lomo` (`evaluate.lomo_assignment`) |
+| R79 | bagging par tirage bootstrap des micros | `+R79`, `bagged` |
+| R81 | pseudo-étiquetage sur un réservoir non annoté | `+R81`, `with_pseudo_labels` |
 
 Réglage choisi par validation groupée : `grouped_search`, commun au C des têtes (R26,
 `head.select_C`), au weight decay (R40) et au C de la fusion (R50, `choose_fusion_C`).
+
+Têtes et réseaux entraînés avec torch (DECISIONS n° 117, 121, 123) : toute la mécanique est
+ici, les têtes (`attentive.py`, `gated.py`, `dann.py`) l'appellent dans leur entraînement.
+
+| R | têtes | quoi | fonction |
+|---|---|---|---|
+| R40 | attentive, gated, dann | weight decay par validation groupée | `fit_with_options` |
+| R41 | attentive | AdamW (weight decay découplé, `weight_decay`) | `optimise` |
+| R42 | attentive, gated, dann | époques par validation groupée (`=ap`, `=loss`) | idem |
+| R45 | attentive | dropout des jetons (`p`) | `keep_mask` |
+| R46 | attentive, gated, dann | dropout des dimensions (`p`) | `dropout` |
+| R47 | attentive | départ et rétrécissement vers la logistique (`strength`) | `logistic_start` |
+| R59 | attentive, gated, dann | warm-up du pas, écrêtage du gradient | `optimise` |
+| R64 | attentive, gated, dann | moyenne des poids (`=ema`, `=swa`) | `WeightAverage` |
+| R66 | dann | inversion du gradient contre le micro | `grad_reverse`, `dann_strength` |
+
+Prêtes pour les réseaux à venir (fine-tuning, distillation, modèle maison, n° 121, 123) :
+R61 `layerwise_lr_groups`, `unfreezing_schedule`, `unfreeze_top` ; R62 `snapshot`,
+`l2_sp_model_penalty` (et `l2_sp_penalty`, déjà utilisée par R47) ; R63 `distillation_loss`.
 
 Ce module est l'index de toutes les régularisations programmées. Celles qui sont une tête ou
 un réglage d'un autre étage vivent là où elles s'appliquent, et appellent ce module quand elles
@@ -56,7 +70,15 @@ ont une mécanique propre :
 | R39 | `head.py` | têtes `knn:k=…`, `exemplar:k=…` (`:w`) ; calcul : `nearest_similarity` (ici) |
 | R50 | `fusion.fit_fusion_model` | méthode `logistic+R50` ; C : `choose_fusion_C` (ici) |
 | R57 | `stacking.py` | toujours là : la fusion n'apprend que sur des scores hors-pli |
+| R60 | `finetune.py` | LoRA sur les couches hautes (`finetune.lora.layers`), à écrire |
+| R66 | `dann.py` | tête `dann` ; mécanique ici |
+| R67 | `head.fit_multiclass` | tête `multiclass` ; classes : `window_classes` (ici) |
+| R70 | `evaluate.to_recordings` | le maximum, déjà le défaut |
+| R78 | `anuraset.run_anuraset_heads` | `blanci anuraset-heads`, un pli par site |
 | R85 | `gated.py` | tête `gated` |
+
+Écartées au tri du 26/09 : R33, R68, R69, R71, R72, R82 (DECISIONS n° 116, 125). À faire plus
+tard : R83 (minimisation d'entropie).
 
 R19 et R20 lisent le stock d'embeddings entier du micro (`store_domain_statistics`) : aucune
 étiquette, ce que la chaîne aura aussi sur un nouveau site. Elles ne valent que pour
@@ -71,7 +93,6 @@ site) a toutes ses colonnes à 0 : biais commun. Le biais absorbe le niveau de c
 pendant l'apprentissage, w n'a plus à le coder. Sur données simulées, un σ petit (biais « très
 pénalisés ») laissait le raccourci dans w : le mécanisme dépend de σ, à choisir sur la base
 complète (`logistic+R37=0.3`, `=1`, `=3`, `=10`) ; σ = 3 est un défaut provisoire (n° 119).
-Écartée au tri du 26/09 : R33 (norme maximale, équivalente à la L2 pour une tête linéaire).
 """
 
 from __future__ import annotations

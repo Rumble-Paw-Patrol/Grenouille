@@ -164,3 +164,23 @@ Toute la mécanique des régularisations est dans `blanci/regularization.py`, qu
 - R64 : en discussion.
 - R65 : accordée, avec le modèle maison et le LoRA (pré-entraîner sur AnuraSet, puis ajuster).
 - R66 : en discussion. R67 : à explorer.
+
+# Tri de Léonard du 26/09, fin (sections F à I)
+
+Règle posée par Léonard : ne pas supposer 51 positifs pour toujours ; d'autres annotations
+viendront, des sites resteront peu ou pas annotés. Toute la mécanique est dans
+`blanci/regularization.py` (index en tête du module) ; les régularisations qui sont une tête à
+part entière vivent dans leur module.
+
+- R59 : écrêtage du gradient et warm-up programmés. R60 : LoRA sur les couches hautes,
+  spécifié dans `finetune.py`. R61, R62 : outils programmés pour le fine-tuning. R63 : perte de
+  distillation prête. R64 : programmée (`+R64=ema`, `+R64=swa`). R65 : accordée, avec les
+  réseaux. R66 : tête `dann`. R67 : tête `multiclass` (présumés = fond, classes rares
+  fusionnées). DECISIONS n° 123–124.
+- R68, R69 : écartées (contraires au « positive mining » sur les faux négatifs suspects).
+  R70 : le maximum, déjà en place. R71, R72 : écartées. R73 : en discussion. DECISIONS n° 125.
+- R74, R75 (par défaut), R76, R77, R79 : programmées, DECISIONS n° 122. R78 : AnuraSet, un
+  pli par site (`blanci anuraset-heads`), DECISIONS n° 125. R80 : présélection.
+- R81 : programmée (`+R81`). R82 : écartée. R83 : plus tard. R84 : en place.
+- Section E (R51–R56, R58) : en attente.
+

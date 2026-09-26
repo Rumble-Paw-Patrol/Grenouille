@@ -1192,3 +1192,71 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      détecteur distillé ; R65 accordée, à faire avec le modèle maison et le LoRA. R61, R64,
      R66 expliquées, en discussion ; R67 à explorer. Les emplacements réservés (`finetune.py`,
      `detectors/distilled.py`, `detectors/homemade.py`) nomment les fonctions à appeler.
+
+122. **Sélection des réglages : R74, R75, R76, R77, R79** (tri de Léonard du 26/09, section H).
+     Léonard : ne pas supposer 51 positifs pour toujours — d'autres annotations viendront, mais
+     des sites resteront peu ou pas annotés ; tous les cas doivent tourner.
+     - R75 (règle du « 1 écart-type ») **par défaut** (`head.selection_rule: one_se`, `best`
+       pour l'ancien comportement) : parmi les valeurs dont l'AP moyenne des plis internes est à
+       moins d'une erreur type de la meilleure, la plus régularisante (plus petit C ; plus grand
+       weight decay). Vaut pour le C des têtes (R26), le weight decay (R40) et le C de la fusion
+       (R50) : un seul calcul, `grouped_search`. Les C retenus changent donc par rapport aux
+       benchmarks d'avant ce numéro.
+     - R76 : `+R76` remplace la grille de C d'une tête par 13 valeurs log (facteur ~2,2 au lieu
+       de 10) ; à réserver aux têtes rapides. `blanci train` écrit le chemin de régularisation
+       (`chemin_C_<encodeur>_<version>.csv`, et `.png` si matplotlib est là).
+     - R77 : `head.n_splits: lomo`, un pli par micro positif, les micros sans positif répartis
+       entre ces plis ; vaut aussi pour les plis internes.
+     - R74 : `blanci train` rapporte, à côté du rappel au seuil de précision plancher, le rappel
+       et la précision d'un seuil choisi pli par pli sur les autres plis ; `blanci heads`
+       rapporte l'AP par pli de la procédure « garder la meilleure variante » choisie sans voir
+       le pli jugé, contre celle de la gagnante du tableau (R80 : ce que la gagnante doit à la
+       chance). Le C, lui, était déjà choisi dans chaque pli sur les seuls micros
+       d'entraînement : la note de la liste sur R74 était une inquiétude, pas un constat.
+     - R79 : `+R79` (logistic, loss:<nom>, logistic_to_prototype), 20 têtes apprises sur des
+       tirages bootstrap des **micros**, scores moyennés.
+
+123. **Réseaux : R60, R61, R62, R63, R64** (section F). R64 : `+R64=ema` ou `+R64=swa` pour
+     attentive, gated et dann (`WeightAverage`) ; la validation de R42 juge les poids moyens.
+     R61 (`layerwise_lr_groups`, `unfreezing_schedule`, `unfreeze_top`) et R62 complet
+     (`snapshot`, `l2_sp_model_penalty` : α vers les poids pré-entraînés, β vers 0 pour les
+     poids nouveaux) : outils prêts et testés sur un petit réseau, réglages dans `finetune`,
+     appelés par `finetune.py` quand il sera écrit. R60 : LoRA sur les couches hautes seulement
+     (`finetune.lora.layers: 4`), spécifié dans `finetune.py`. R63 : la perte existe
+     (`distillation_loss`) ; le détecteur distillé lui-même reste prévu après M4 (§13.7). R59 :
+     l'écrêtage du gradient était déjà dans `optimise`, avec le warm-up.
+
+124. **Nouvelles têtes : R66 (`dann`), R67 (`multiclass`), R81 (`+R81`).**
+     - R66, `blanci/dann.py` : h = tanh(A·x̃ + a), score = w·h + b ; un classifieur de micro
+       branché sur h à travers une inversion du gradient (`grad_reverse`), dont la force monte
+       de 0 à `strength` (`dann_strength`). Le micro n'est appris que sur les négatifs par
+       défaut (`domain_on`), comme R21. R40, R42, R46, R59, R64 par suffixe. Données simulées du
+       n° 109 (vérification du mécanisme, pas un verdict) : la part de micros reconnue dans h
+       par une logistique neuve passe de 0,49–0,55 sans adversaire à 0,41–0,46 avec (hidden 8,
+       600 époques) ; l'AP sur le nouveau site n'y dépasse pas celle de R21.
+     - R67, tête `multiclass` (logistique multinomiale, classes équilibrées ; score = logit de
+       P(A. blanci)). Choix laissés à Claude par Léonard : négatifs présumés → classe `fond`
+       (aucun événement noté) ; classes de moins de 10 fenêtres (`R67.min_count`) → `autre`,
+       puis `fond` si `autre` reste sous le seuil. Classes : `CLASS_OF_LABEL` (amphibien —
+       congénères compris —, orthoptère, oiseau, pluie, fond, artefact, autre). Données
+       simulées avec un faux ami : 0,83 d'AP contre 0,74 pour la logistique binaire.
+     - R81, `+R81` : réservoir de 20 000 fenêtres non annotées tirées du stock (hors fenêtres
+       du benchmark), des seuls micros d'entraînement par défaut (`pool_from: all` : aussi
+       ceux du pli jugé, adaptation sans labels) ; pseudo-positifs = logit ≥ 3, au plus 1 % du
+       réservoir, au poids 0,3 ; pas de pseudo-négatifs (même contamination que les négatifs
+       présumés, n° 106).
+
+125. **Tri des sections G et I ; R78 sur AnuraSet.** Écartées : R68 et R69 (Léonard compte se
+     servir des fenêtres négatives prises entre des positives — les faux négatifs suspects du
+     n° 102 — pour du « positive mining » ; lisser les scores effacerait justement ces
+     contrastes), R71, R72 (les campagnes de 7 jours suffisent, d'après la phénologie de
+     Courtois et al., à distinguer absence et présence non détectée), R82. R70 : le maximum,
+     déjà le défaut de l'évaluation ; le travail porte sur les fenêtres. R80 : présélection des
+     variantes plutôt que tout tester (et R74 pour mesurer la part de chance). R83 : à faire
+     plus tard. R84 : en place (20 % aléatoire stratifié par micro et heure). R73 : en
+     discussion (origine du plancher 0,1 et correction de la prévalence, voir la réponse du
+     26/09). R78 : `blanci anuraset-heads` (config `config/anuraset.yaml`) — toutes les têtes
+     sans jetons, un pli par site, réglages choisis par des plis internes eux aussi par site,
+     régularisations groupées par site ; AP de chaque tête sur chaque site tenu à l'écart.
+     Section E (R51–R56, R58) : en attente de Léonard.
+
