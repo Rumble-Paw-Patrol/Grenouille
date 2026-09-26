@@ -20,10 +20,22 @@ excellente). Deux voies honnêtes :
 Réglages réservés : section `finetune` de la config (méthode, rang et alpha du LoRA, modules
 ciblés, époques, pas d'apprentissage).
 
-Régularisations (`blanci/regularization.py`, DECISIONS n° 121) : R60, rang du LoRA réglable
-(`finetune.lora.rank`) ; R62, L2-SP : `l2_sp_penalty` vers les poids pré-entraînés ; boucle
-`optimise` avec R41, R42 (`fit_with_options`), R46 (`dropout`), R59 (warm-up, écrêtage). R65
-(accord de Léonard) : ajuster d'abord sur AnuraSet, puis sur nos labels.
+Régularisations (`blanci/regularization.py`, DECISIONS n° 121, 123), toutes décidées :
+
+- R60, LoRA sur les **couches hautes seulement** (`finetune.lora.layers` derniers blocs, rang
+  `finetune.lora.rank`). Les couches basses d'un encodeur apprennent des choses génériques
+  (débuts de sons, harmoniques, textures), les hautes des concepts propres à ses données
+  d'origine (les oiseaux) : notre écart est en haut. Adapter le haut seulement : moins de
+  paramètres (régularisation), calcul bien moindre (la sortie des couches gelées se calcule une
+  fois), connaissances générales préservées. Nombre de couches et rang : deux réglages de
+  capacité à comparer.
+- R61, pas d'apprentissage par couche (`layerwise_lr_groups`, `finetune.llrd_decay`) et dégel
+  progressif (`unfreezing_schedule`, `unfreeze_top`, `finetune.unfreeze_every`).
+- R62, L2-SP (`snapshot` avant l'adaptation, puis `l2_sp_model_penalty`, `finetune.l2_sp`).
+- Boucle d'entraînement `optimise` : R41 (AdamW), R42 (arrêt précoce, `fit_with_options`),
+  R46 (`dropout`), R59 (warm-up, écrêtage du gradient), R64 (moyenne des poids).
+- R65 (accord de Léonard) : ajuster d'abord sur AnuraSet, puis sur nos labels, et mesurer si
+  cela aide.
 """
 
 from __future__ import annotations

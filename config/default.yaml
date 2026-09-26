@@ -187,6 +187,10 @@ regularization:
   # Grille de C plus fine pour une tête (logistic+R76) : ◆ points valeurs régulièrement espacées
   # en échelle log entre la plus petite et la plus grande de head.C_grid (n° 122). Têtes à C.
   R76: {points: 13}
+  # Moyenne des poids : ◆ method ema (moyenne glissante, × ema_decay à chaque pas) ou swa
+  # (moyenne simple à partir de la fraction swa_start de l'entraînement) (n° 123). attentive,
+  # gated, réseaux.
+  R64: {method: ema, ema_decay: 0.99, swa_start: 0.75}
   # Bagging : ◆ bags têtes apprises chacune sur un tirage bootstrap des micros, scores moyennés
   # (n° 122). Têtes légères : logistic, logistic_to_prototype, loss:<nom>.
   R79: {bags: 20}
@@ -301,11 +305,18 @@ detectors:
 # conditionné (§3). Un encodeur adapté sort en paquet ONNX et se branche comme les autres.
 finetune:
   method: lora                      # lora | full
-  # R60 : rang réglable ; plus bas = plus régularisé (n° 121).
-  lora: {rank: 8, alpha: 16, dropout: 0.1, target_modules: [q_proj, v_proj]}
+  # R60 : rang réglable (plus bas = plus régularisé) ; LoRA sur les `layers` derniers blocs
+  # seulement, les couches basses (génériques) restent intactes (n° 121, 123).
+  lora: {rank: 8, alpha: 16, dropout: 0.1, target_modules: [q_proj, v_proj], layers: 4}
   epochs: 10
   lr: 1.0e-4
   per_fold: true                    # un encodeur par pli : sinon le benchmark fuit
+  # R61 : pas d'apprentissage par couche (× llrd_decay à chaque couche en descendant) et dégel
+  # progressif (une couche de plus toutes les unfreeze_every époques ; 0 = tout d'un coup).
+  llrd_decay: 0.8
+  unfreeze_every: 2
+  # R62 : L2-SP, α vers les poids pré-entraînés, β vers 0 pour les poids nouveaux.
+  l2_sp: {alpha: 0.01, beta: 0.0}
 
 cluster:
   # Voie non supervisée (§5 bis) : HDBSCAN sur ACP. Seuils de C1 : jugement de la feuille de route.

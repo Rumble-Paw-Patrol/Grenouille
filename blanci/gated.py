@@ -61,11 +61,15 @@ def fit_gated(
     monitor: str = "loss",
     warmup: int = 0,
     clip_norm: float | None = None,
+    average: str | None = None,
+    ema_decay: float = 0.99,
+    swa_start: float = 0.75,
 ) -> GatedHead:
     """Entraîne la sonde (lot entier, AdamW, entropie croisée à classes équilibrées).
 
     `dim_dropout` : R46, dropout de x̃ ⊙ g ; `validation`, `patience` et `monitor` : arrêt
-    précoce (R42, `regularization.fit_with_options`) ; `warmup`, `clip_norm` : R59. Mécanique
+    précoce (R42, `regularization.fit_with_options`) ; `warmup`, `clip_norm` : R59 ;
+    `average` : R64. Mécanique
     dans `blanci/regularization.py`."""
     try:
         import torch
@@ -119,6 +123,9 @@ def fit_gated(
         curve=curve,
         warmup=warmup,
         clip_norm=clip_norm,
+        average=average,
+        ema_decay=ema_decay,
+        swa_start=swa_start,
     )
 
     def numpy(t) -> np.ndarray:
@@ -127,7 +134,12 @@ def fit_gated(
     meta: dict[str, Any] = {"rank": r, "weight_decay": weight_decay, "epochs": epochs, "lr": lr}
     meta |= {
         k: v
-        for k, v in {"dim_dropout": dim_dropout, "warmup": warmup, "clip_norm": clip_norm}.items()
+        for k, v in {
+            "dim_dropout": dim_dropout,
+            "warmup": warmup,
+            "clip_norm": clip_norm,
+            "average": average,
+        }.items()
         if v
     }
     if validation is not None:

@@ -187,3 +187,57 @@ def test_R59_warmup_and_clipping_are_recorded_and_change_the_training():
         regularizer=Regularizer({59: None}, {}, Context(groups)),
     ).values
     assert np.isfinite(out).all()
+
+
+def test_R64_weight_averaging_keeps_a_mean_of_the_last_weights():
+    tokens, y, groups, _ = windows(n_per_class=40)
+    plain = fit_attentive(tokens, y, epochs=60)
+    for method in ("ema", "swa"):
+        averaged = fit_attentive(tokens, y, epochs=60, average=method, swa_start=0.5)
+        assert averaged.meta["average"] == method
+        assert not np.allclose(plain.weight, averaged.weight)
+    options = Regularizer({64: "swa"}, {}, Context(groups)).torch_options()
+    assert options["average"] == "swa"
+    out = oof_scores(
+        tokens,
+        y,
+        groups,
+        n_splits=3,
+        method="attentive",
+        regularizer=Regularizer({64: None, 42: None}, {"R42": {"max_epochs": 40}}, Context(groups)),
+    ).values
+    assert np.isfinite(out).all()
+    with pytest.raises(ValueError, match="R64"):
+        fit_attentive(tokens, y, epochs=5, average="magie")
+
+
+def test_R61_R62_fine_tuning_helpers_on_a_small_network():
+    import torch
+
+    from blanci.regularization import (
+        l2_sp_model_penalty,
+        layerwise_lr_groups,
+        snapshot,
+        unfreeze_top,
+        unfreezing_schedule,
+    )
+
+    layers = [torch.nn.Linear(4, 4) for _ in range(3)]
+    groups = layerwise_lr_groups(layers, lr=1.0, decay=0.5)
+    assert [g["lr"] for g in groups] == [0.25, 0.5, 1.0]  # du bas vers le haut
+    assert unfreezing_schedule(4, 6, every=2) == [1, 1, 2, 2, 3, 3]
+    unfreeze_top(layers, 1)
+    assert [layers[i].weight.requires_grad for i in range(3)] == [False, False, True]
+    model = torch.nn.Sequential(*layers)
+    unfreeze_top(layers, 3)
+    reference = snapshot(model)
+    assert float(l2_sp_model_penalty(torch, model, reference, alpha=1.0)) == 0.0
+    with torch.no_grad():
+        layers[2].weight += 1.0  # 16 poids écartés de 1
+    assert float(l2_sp_model_penalty(torch, model, reference, alpha=1.0)) == pytest.approx(8.0)
+    head = torch.nn.Sequential(model, torch.nn.Linear(4, 1))  # une tête nouvelle
+    pretrained = {k: v for k, v in snapshot(head).items() if not k.startswith("1.")}
+    penalty = l2_sp_model_penalty(torch, head, pretrained, alpha=0.0, beta=2.0)
+    new = head[1]
+    expected = float((new.weight**2).sum() + (new.bias**2).sum())
+    assert float(penalty) == pytest.approx(expected, rel=1e-5)

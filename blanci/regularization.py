@@ -82,7 +82,29 @@ from typing import Any
 
 import numpy as np
 
-IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28, 36, 37, 40, 41, 42, 45, 46, 47, 59, 76, 79)
+IMPLEMENTED = (
+    13,
+    15,
+    17,
+    18,
+    19,
+    20,
+    21,
+    27,
+    28,
+    36,
+    37,
+    40,
+    41,
+    42,
+    45,
+    46,
+    47,
+    59,
+    64,
+    76,
+    79,
+)
 DESCRIPTIONS = {
     13: "chaque micro pèse autant dans sa classe",
     15: "négatifs annotés surpondérés face aux présumés",
@@ -102,6 +124,7 @@ DESCRIPTIONS = {
     46: "dropout des dimensions",
     47: "rétrécissement vers la logistique",
     59: "warm-up et écrêtage du gradient",
+    64: "moyenne des poids (EMA, SWA)",
     76: "grille de C plus fine",
     79: "bagging par micros",
 }
@@ -119,6 +142,7 @@ MAIN_PARAMETER = {
     46: "p",
     47: "strength",
     59: "warmup",
+    64: "method",
     76: "points",
     79: "bags",
 }
@@ -129,11 +153,11 @@ C_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss")  # têtes à 
 BAGGED_HEADS = ("logistic", "logistic_to_prototype", "loss")  # entraînements légers (R79)
 # Régularisations des têtes entraînées avec torch, et celles que chacune accepte.
 TORCH_REGULARIZATIONS = {
-    "attentive": (40, 41, 42, 45, 46, 47, 59),
-    "gated": (40, 42, 46, 59),
+    "attentive": (40, 41, 42, 45, 46, 47, 59, 64),
+    "gated": (40, 42, 46, 59, 64),
 }
 # Réglages principaux qui prennent un mot plutôt qu'un nombre : R42=ap, R42=loss.
-WORD_VALUES = {42: ("ap", "loss")}
+WORD_VALUES = {42: ("ap", "loss"), 64: ("ema", "swa")}
 _SUFFIX = re.compile(r"^R(\d+)(?:=([0-9.eE+-]+|[a-z_]+))?$")
 
 
@@ -554,6 +578,10 @@ class Regularizer:
         if 59 in self.regs:
             options["warmup"] = int(self.param(59, "warmup", 20))
             options["clip_norm"] = float(self.param(59, "clip_norm", 1.0))
+        if 64 in self.regs:
+            options["average"] = str(self.param(64, "method", "ema"))
+            options["ema_decay"] = float(self.param(64, "ema_decay", 0.99))
+            options["swa_start"] = float(self.param(64, "swa_start", 0.75))
         return options
 
     def fit_options(self, bias_columns: int = 0) -> dict[str, float]:
@@ -899,6 +927,9 @@ def optimise(
     curve: list[float] | None = None,
     warmup: int = 0,
     clip_norm: float | None = None,
+    average: str | None = None,
+    ema_decay: float = 0.99,
+    swa_start: float = 0.75,
 ) -> int:
     """Descente en lot entier, partagée par l'attentive et la sonde à portes (R85), et par les
     réseaux à venir.
@@ -909,7 +940,10 @@ def optimise(
     chaque époque dans `curve` (liste remplie en place) ; avec `patience`, l'entraînement
     s'arrête `patience` époques après la meilleure, dont les paramètres sont restaurés.
     R59 : `warmup` époques de montée linéaire du pas d'apprentissage, `clip_norm` : norme
-    maximale du gradient (écrêtage). Renvoie l'époque retenue (la dernière sans validation)."""
+    maximale du gradient (écrêtage). R64, `average` : les poids gardés sont une moyenne des
+    poids successifs — "ema" : moyenne glissante (poids × `ema_decay` à chaque pas), "swa" :
+    moyenne simple à partir de la fraction `swa_start` de l'entraînement ; la validation (R42)
+    juge alors ces poids moyens. Renvoie l'époque retenue (la dernière sans validation)."""
     import torch
 
     kinds = {"adam": torch.optim.Adam, "adamw": torch.optim.AdamW}
@@ -925,7 +959,10 @@ def optimise(
             "weight_decay": 0.0,
         },
     ]
+    if average not in (None, "ema", "swa"):
+        raise ValueError(f"R64 : moyenne inconnue {average!r} (ema, swa)")
     opt = kinds[optimizer]([g for g in groups if g["params"]], lr=lr)
+    averager = WeightAverage(parameters, average, ema_decay, swa_start, int(epochs))
     best, best_epoch, best_state = float("inf"), int(epochs), None
     for epoch in range(1, int(epochs) + 1):
         if warmup:
@@ -937,22 +974,145 @@ def optimise(
         if clip_norm:
             torch.nn.utils.clip_grad_norm_(parameters, clip_norm)
         opt.step()
+        averager.update(epoch)
         if validation_loss is None:
             continue
-        with torch.no_grad():
+        with torch.no_grad(), averager.swapped():
             current = float(validation_loss())
+            if current < best - 1e-7:
+                best_state = [p.detach().clone() for p in parameters]
         if curve is not None:
             curve.append(current)
         if current < best - 1e-7:
             best, best_epoch = current, epoch
-            best_state = [p.detach().clone() for p in parameters]
         elif patience is not None and epoch - best_epoch >= patience:
             break
-    if best_state is not None:
+    if best_state is None:
+        averager.apply()
+    else:
         with torch.no_grad():
             for p, value in zip(parameters, best_state, strict=True):
                 p.copy_(value)
     return best_epoch
+
+
+class WeightAverage:
+    """R64 : moyenne des poids pendant l'entraînement (Izmailov et al. 2018 pour SWA ; EMA).
+
+    À la fin d'un entraînement, les poids oscillent autour d'un minimum (petits lots, pas
+    d'apprentissage grand) ; la dernière époque est un point pris au hasard dans ces
+    oscillations, la moyenne tombe plus près du centre du creux. Sans `method`, rien ne
+    change."""
+
+    def __init__(self, parameters, method, decay: float, start: float, epochs: int):
+        self.parameters, self.method, self.decay = parameters, method, float(decay)
+        self.start = max(1, int(np.ceil(float(start) * epochs)))
+        self.mean = None
+        self.count = 0
+
+    def update(self, epoch: int) -> None:
+        if self.method is None:
+            return
+        current = [p.detach().clone() for p in self.parameters]
+        if self.method == "ema":
+            self.mean = (
+                current
+                if self.mean is None
+                else [
+                    self.decay * m + (1.0 - self.decay) * c
+                    for m, c in zip(self.mean, current, strict=True)
+                ]
+            )
+        elif epoch >= self.start:  # swa
+            self.count += 1
+            if self.mean is None:
+                self.mean = current
+            else:
+                self.mean = [
+                    m + (c - m) / self.count for m, c in zip(self.mean, current, strict=True)
+                ]
+
+    def apply(self) -> None:
+        """Remplace les poids par leur moyenne."""
+        if self.mean is None:
+            return
+        for p, m in zip(self.parameters, self.mean, strict=True):
+            p.data.copy_(m)
+
+    def swapped(self):
+        """Contexte : les poids moyens le temps d'une évaluation, puis les poids courants."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def swap():
+            if self.mean is None:
+                yield
+                return
+            saved = [p.detach().clone() for p in self.parameters]
+            self.apply()
+            try:
+                yield
+            finally:
+                for p, v in zip(self.parameters, saved, strict=True):
+                    p.data.copy_(v)
+
+        return swap()
+
+
+# --- R61, R62 : fine-tuning d'un réseau pré-entraîné (`finetune.py`, à écrire) ------------------
+
+
+def layerwise_lr_groups(
+    layers: list, lr: float, decay: float = 0.8, weight_decay: float = 0.0
+) -> list[dict]:
+    """R61, pas d'apprentissage par couche (LLRD) : la dernière couche de `layers` (de bas en
+    haut) reçoit `lr`, celle du dessous lr × decay, puis lr × decay²… Les couches basses,
+    génériques, bougent peu ; les hautes, spécialisées, s'adaptent. Groupes pour un optimiseur
+    torch."""
+    n = len(layers)
+    return [
+        {
+            "params": list(layer.parameters()),
+            "lr": lr * decay ** (n - 1 - i),
+            "weight_decay": weight_decay,
+        }
+        for i, layer in enumerate(layers)
+    ]
+
+
+def unfreezing_schedule(n_layers: int, epochs: int, every: int) -> list[int]:
+    """R61, dégel progressif (ULMFiT, Howard et Ruder 2018) : nombre de couches du haut qui
+    apprennent à chaque époque — 1, puis une de plus toutes les `every` époques."""
+    return [min(n_layers, 1 + epoch // max(1, every)) for epoch in range(epochs)]
+
+
+def unfreeze_top(layers: list, n_top: int) -> None:
+    """R61 : seules les `n_top` dernières couches de `layers` apprennent, les autres sont
+    gelées."""
+    for i, layer in enumerate(layers):
+        for p in layer.parameters():
+            p.requires_grad_(i >= len(layers) - n_top)
+
+
+def snapshot(model) -> dict:
+    """R62 : copie des poids pré-entraînés d'un réseau torch, avant l'adaptation."""
+    return {name: p.detach().clone() for name, p in model.named_parameters()}
+
+
+def l2_sp_model_penalty(torch, model, reference: dict, alpha: float, beta: float = 0.0):
+    """R62, L2-SP complet (Li, Grandvalet et Davoine 2018, « SP » = starting point) :
+    α/2 Σ ‖θ − θ⁰‖² sur les poids qui existaient avant l'adaptation (`reference`, de
+    `snapshot`, clés = noms des poids dans `model`), β/2 Σ ‖θ‖² sur les poids nouveaux (tête,
+    adaptateurs LoRA) ; les poids gelés ne comptent pas."""
+    total = 0.0
+    for name, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
+        if name in reference:
+            total = total + 0.5 * alpha * ((p - reference[name]) ** 2).sum()
+        elif beta:
+            total = total + 0.5 * beta * (p**2).sum()
+    return total
 
 
 def validation_criterion(torch, loss_fn, scores_of, y_val: np.ndarray, monitor: str = "loss"):

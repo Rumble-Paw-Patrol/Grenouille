@@ -112,6 +112,9 @@ def fit_attentive(
     monitor: str = "loss",
     warmup: int = 0,
     clip_norm: float | None = None,
+    average: str | None = None,
+    ema_decay: float = 0.99,
+    swa_start: float = 0.75,
 ) -> AttentiveHead:
     """Entraîne la tête (lot entier, Adam, entropie croisée à classes équilibrées).
 
@@ -121,7 +124,8 @@ def fit_attentive(
     (jetons, labels) de micros tenus à l'écart, `patience` (None : pas d'arrêt, courbe
     complète) et `monitor` ("loss" ou "ap") pour R42 (`regularization.fit_with_options`) ;
     la courbe de validation est rangée dans `meta["validation_curve"]`. `warmup`, `clip_norm` :
-    R59. Toute la mécanique de ces régularisations est dans `blanci/regularization.py`."""
+    R59 ; `average`, `ema_decay`, `swa_start` : R64. Toute la mécanique de ces régularisations
+    est dans `blanci/regularization.py`."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation
@@ -189,6 +193,9 @@ def fit_attentive(
         curve=curve,
         warmup=warmup,
         clip_norm=clip_norm,
+        average=average,
+        ema_decay=ema_decay,
+        swa_start=swa_start,
     )
     meta: dict[str, Any] = {
         "weight_decay": weight_decay,
@@ -205,6 +212,7 @@ def fit_attentive(
         "best_epoch": best_epoch if validation is not None else None,
         "warmup": warmup or None,
         "clip_norm": clip_norm or None,
+        "average": average,
         "validation_curve": curve or None,
     }
     meta |= {k: v for k, v in options.items() if v is not None}
