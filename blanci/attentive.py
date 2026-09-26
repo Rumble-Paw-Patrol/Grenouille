@@ -9,6 +9,22 @@ dilue dans le fond. La tête d'attention apprend une requête q qui pondère les
 (x̃ : jetons standardisés). Une requête, un vecteur de classement : d·2 + 1 paramètres, peu
 pour ~150–200 positifs (§3 : « ≥ 150–200 annotations »). Entraînement avec torch (groupe
 `research`), application en numpy ; sauvegarde JSON + npz, sans pickle (§7).
+
+Régularisations (tri de Léonard du 26/09, DECISIONS n° 117), coupées par défaut, activées dans
+le nom de la tête (`attentive+R41+R42`) :
+
+| R | quoi |
+|---|---|
+| R40 | weight decay choisi par validation groupée sur une grille |
+| R41 | AdamW (weight decay découplé) au lieu de la L2 d'Adam |
+| R42 | arrêt précoce : époques choisies sur la courbe de validation moyenne des plis groupés |
+| R45 | dropout des jetons : chaque jeton masqué avec la probabilité p avant l'attention |
+| R46 | dropout des dimensions de z, le vecteur agrégé |
+| R47 | départ et rétrécissement vers la logistique sur la moyenne des jetons : ½λ‖w − w₀‖² |
+
+R40, R42 et R46 valent aussi pour la sonde à portes (R85, `blanci/gated.py`). R40 et R42
+entourent l'entraînement (`regularization.fit_with_options`) ; les autres sont des options de
+`fit_attentive`, appliquées dans la boucle d'entraînement.
 """
 
 from __future__ import annotations
@@ -19,6 +35,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from blanci.regularization import (
+    dropout,
+    keep_mask,
+    l2_sp_penalty,
+    logistic_start,
+    optimise,
+    validation_criterion,
+)
 
 
 def _softmax(x: np.ndarray, axis: int) -> np.ndarray:
@@ -76,8 +101,27 @@ def fit_attentive(
     epochs: int = 300,
     lr: float = 5e-2,
     seed: int = 0,
+    *,
+    optimizer: str = "adam",
+    token_dropout: float = 0.0,
+    dim_dropout: float = 0.0,
+    shrink: float = 0.0,
+    shrink_C: float = 1.0,
+    validation: tuple[np.ndarray, np.ndarray] | None = None,
+    patience: int | None = 20,
+    monitor: str = "loss",
+    warmup: int = 0,
+    clip_norm: float | None = None,
 ) -> AttentiveHead:
-    """Entraîne la tête (lot entier, Adam, entropie croisée à classes équilibrées)."""
+    """Entraîne la tête (lot entier, Adam, entropie croisée à classes équilibrées).
+
+    Options (toutes coupées par défaut) : `optimizer="adamw"` (R41), `token_dropout` (R45),
+    `dim_dropout` (R46), `shrink` λ > 0 (R47 : w part de w₀, logistique de C `shrink_C` sur la
+    moyenne des jetons, et ½λ‖w − w₀‖² remplace le weight decay sur w), `validation`
+    (jetons, labels) de micros tenus à l'écart, `patience` (None : pas d'arrêt, courbe
+    complète) et `monitor` ("loss" ou "ap") pour R42 (`regularization.fit_with_options`) ;
+    la courbe de validation est rangée dans `meta["validation_curve"]`. `warmup`, `clip_norm` :
+    R59. Toute la mécanique de ces régularisations est dans `blanci/regularization.py`."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation
@@ -94,30 +138,83 @@ def fit_attentive(
     scale = np.where(flat.std(axis=0) > 0, flat.std(axis=0), 1.0).astype(np.float32)
     x = torch.from_numpy((tokens - mean) / scale)
     target = torch.from_numpy(y)
-    d = x.shape[-1]
+    n, t, d = x.shape
 
     torch.manual_seed(seed)
     query = torch.zeros(d, requires_grad=True)  # départ : moyenne simple des jetons
     weight = torch.zeros(d, requires_grad=True)
     bias = torch.zeros(1, requires_grad=True)
+    start = None
+    if shrink > 0:  # R47 : départ depuis la logistique sur la moyenne des jetons
+        w0, b0 = logistic_start(x.mean(dim=1).numpy(), y, shrink_C, seed)
+        start = torch.from_numpy(w0)
+        with torch.no_grad():
+            weight.copy_(start)
+            bias.fill_(b0)
     n_pos = max(float(y.sum()), 1.0)
     pos_weight = torch.tensor((len(y) - n_pos) / n_pos)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    optimizer = torch.optim.Adam([query, weight, bias], lr=lr, weight_decay=weight_decay)
-    for _ in range(epochs):
-        optimizer.zero_grad()
-        a = torch.softmax(x @ query / d**0.5, dim=1)
-        z = torch.einsum("nt,ntd->nd", a, x)
-        loss = loss_fn(z @ weight + bias, target)
-        loss.backward()
-        optimizer.step()
+
+    def logits(inputs, train: bool):
+        scores = inputs @ query / d**0.5
+        if train and token_dropout > 0:
+            scores = scores.masked_fill(~keep_mask(torch, *scores.shape, token_dropout), -1e9)
+        z = torch.einsum("nt,ntd->nd", torch.softmax(scores, dim=1), inputs)
+        z = dropout(torch, z, dim_dropout, train)  # R46
+        return z @ weight + bias
+
+    def loss_of():
+        loss = loss_fn(logits(x, True), target)
+        if start is not None:  # R47 = L2-SP (R62) vers la logistique
+            loss = loss + l2_sp_penalty(torch, [weight], [start], shrink)
+        return loss
+
+    validation_loss = None
+    if validation is not None:
+        x_val = torch.from_numpy((np.asarray(validation[0], dtype=np.float32) - mean) / scale)
+        validation_loss = validation_criterion(
+            torch, loss_fn, lambda: logits(x_val, False), validation[1], monitor
+        )
+    curve: list[float] = []
+    best_epoch = optimise(
+        [query, weight, bias],
+        [True, start is None, True],
+        loss_of,
+        epochs=epochs,
+        lr=lr,
+        weight_decay=weight_decay,
+        optimizer=optimizer,
+        validation_loss=validation_loss,
+        patience=patience,
+        curve=curve,
+        warmup=warmup,
+        clip_norm=clip_norm,
+    )
+    meta: dict[str, Any] = {
+        "weight_decay": weight_decay,
+        "epochs": epochs,
+        "lr": lr,
+        "n_tokens": tokens.shape[1],
+    }
+    options = {
+        "optimizer": optimizer if optimizer != "adam" else None,
+        "token_dropout": token_dropout or None,
+        "dim_dropout": dim_dropout or None,
+        "shrink": shrink or None,
+        "shrink_C": shrink_C if shrink else None,
+        "best_epoch": best_epoch if validation is not None else None,
+        "warmup": warmup or None,
+        "clip_norm": clip_norm or None,
+        "validation_curve": curve or None,
+    }
+    meta |= {k: v for k, v in options.items() if v is not None}
     return AttentiveHead(
         mean.astype(np.float32),
         scale,
         query.detach().numpy().astype(np.float32),
         weight.detach().numpy().astype(np.float32),
         float(bias.detach().numpy()[0]),
-        {"weight_decay": weight_decay, "epochs": epochs, "lr": lr, "n_tokens": tokens.shape[1]},
+        meta,
     )
 
 

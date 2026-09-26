@@ -16,6 +16,7 @@ from blanci.fusion import (
     fusion_model_oof,
     project_scores,
 )
+from blanci.regularization import choose_fusion_C
 from blanci.sequential import store_onsets
 from blanci.stacking import (
     build_level1,
@@ -107,6 +108,25 @@ def test_fusion_oof_uses_the_common_folds():
     assert np.isfinite(oof.values).all()
 
 
+def test_R50_chooses_C_by_grouped_validation():
+    """R50 (n° 120) : le C de la fusion logistique vient de micros tenus à l'écart, dans chaque
+    pli ; sans groupes, le C fixé."""
+    X, y, columns = two_experts()
+    groups = np.repeat(list("abcdef"), 50)
+    grid = [1e-4, 0.01, 1.0, 100.0]
+    chosen, scores = choose_fusion_C(X, y, groups, grid, n_splits=3)
+    assert chosen in grid and set(scores) == set(grid)
+    model = fit_fusion_model("logistic+R50", X, y, columns, groups=groups, C_grid=grid)
+    assert model.method == "logistic" and model.C == chosen
+    fixed = fit_fusion_model("logistic+R50", X, y, columns, C=0.5)
+    assert fixed.C == 0.5
+    again = FusionModel.from_dict(json.loads(json.dumps(model.to_dict())))
+    assert again.C == chosen
+    assert choose_fusion_C(X, y, np.repeat("a", len(y)), grid) == (None, {})
+    oof = fusion_model_oof("logistic+R50", X, y, groups, columns, n_splits=3, C_grid=grid)
+    assert np.isfinite(oof.values).all() and oof.method == "fusion:logistic+R50"
+
+
 def test_three_or_more_inputs_are_accepted():
     rng = np.random.default_rng(1)
     y = rng.integers(0, 2, 200)
@@ -161,6 +181,7 @@ def test_unset_weights_share_what_is_left():
     cfg["fusion"]["weights"] = {"head": 0.7}
     options = fusion_options(cfg, ["head", "a", "b"])
     assert options["weights"] == pytest.approx({"head": 0.7, "a": 0.15, "b": 0.15})
+    assert options["C_grid"] == cfg["fusion"]["C_grid"]
 
 
 # --- De bout en bout ------------------------------------------------------------------------------

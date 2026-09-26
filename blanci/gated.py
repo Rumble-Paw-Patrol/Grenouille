@@ -54,12 +54,25 @@ def fit_gated(
     epochs: int = 300,
     lr: float = 5e-2,
     seed: int = 0,
+    *,
+    dim_dropout: float = 0.0,
+    validation: tuple[np.ndarray, np.ndarray] | None = None,
+    patience: int | None = 20,
+    monitor: str = "loss",
+    warmup: int = 0,
+    clip_norm: float | None = None,
 ) -> GatedHead:
-    """Entraîne la sonde (lot entier, AdamW, entropie croisée à classes équilibrées)."""
+    """Entraîne la sonde (lot entier, AdamW, entropie croisée à classes équilibrées).
+
+    `dim_dropout` : R46, dropout de x̃ ⊙ g ; `validation`, `patience` et `monitor` : arrêt
+    précoce (R42, `regularization.fit_with_options`) ; `warmup`, `clip_norm` : R59. Mécanique
+    dans `blanci/regularization.py`."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation
         raise RuntimeError("R85 s'entraîne avec torch (uv sync --group research)") from exc
+
+    from blanci.regularization import dropout, optimise, validation_criterion
 
     X = np.asarray(X, dtype=np.float32)
     y = np.asarray(y).astype(np.float32)
@@ -79,19 +92,46 @@ def fit_gated(
     bias = torch.nn.Parameter(torch.zeros(1))
     n_pos = max(float(y.sum()), 1.0)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor((len(y) - n_pos) / n_pos))
-    optimizer = torch.optim.AdamW(
-        [down, up, gate_bias, weight, bias], lr=lr, weight_decay=weight_decay
+
+    def logits(inputs, train: bool):
+        gated = inputs * torch.sigmoid((inputs @ down) @ up + gate_bias)
+        return dropout(torch, gated, dim_dropout, train) @ weight + bias  # R46
+
+    validation_loss = None
+    if validation is not None:
+        x_val = torch.from_numpy((np.asarray(validation[0], dtype=np.float32) - mean) / scale)
+        validation_loss = validation_criterion(
+            torch, loss_fn, lambda: logits(x_val, False), validation[1], monitor
+        )
+
+    parameters = [down, up, gate_bias, weight, bias]
+    curve: list[float] = []
+    best_epoch = optimise(
+        parameters,
+        [True] * len(parameters),
+        lambda: loss_fn(logits(x, True), target),
+        epochs=epochs,
+        lr=lr,
+        weight_decay=weight_decay,
+        optimizer="adamw",
+        validation_loss=validation_loss,
+        patience=patience,
+        curve=curve,
+        warmup=warmup,
+        clip_norm=clip_norm,
     )
-    for _ in range(epochs):
-        optimizer.zero_grad()
-        gates = torch.sigmoid((x @ down) @ up + gate_bias)
-        loss = loss_fn((x * gates) @ weight + bias, target)
-        loss.backward()
-        optimizer.step()
 
     def numpy(t) -> np.ndarray:
         return t.detach().numpy().astype(np.float32)
 
+    meta: dict[str, Any] = {"rank": r, "weight_decay": weight_decay, "epochs": epochs, "lr": lr}
+    meta |= {
+        k: v
+        for k, v in {"dim_dropout": dim_dropout, "warmup": warmup, "clip_norm": clip_norm}.items()
+        if v
+    }
+    if validation is not None:
+        meta |= {"best_epoch": best_epoch, "validation_curve": curve}
     return GatedHead(
         mean.astype(np.float32),
         scale,
@@ -100,5 +140,5 @@ def fit_gated(
         numpy(gate_bias),
         numpy(weight),
         float(bias.detach().numpy()[0]),
-        {"rank": r, "weight_decay": weight_decay, "epochs": epochs, "lr": lr},
+        meta,
     )

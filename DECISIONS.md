@@ -1070,3 +1070,125 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      de Streamlit 1.64, qui résout un chemin relatif depuis le fichier de test : chemin absolu.
      Le refus de R19/R20 + R21 (n° 108–109) est levé : la combinaison se mesure au lieu d'être
      interdite ; le mécanisme du n° 109 (b) reste l'hypothèse à vérifier.
+
+## 2026-09-26 — Tri de Léonard sur R33–R49 ; tableaux des benchmarks en images
+
+115. **R39, voisins : k et pondération** (`head.nearest_similarity`, têtes `knn:k=…`,
+     `exemplar:k=…`, suffixe `:w`). k > 1 : moyenne des cosinus aux k plus proches ; `:w` :
+     moyenne pondérée par 1 / distance (distance euclidienne entre vecteurs de norme 1,
+     `weights="distance"` de scikit-learn), entre k = 1 et la moyenne. Pour `knn`, les k
+     voisins sont pris dans chaque classe séparément (un vote toutes classes confondues serait
+     écrasé par les ~20 négatifs par positif). `knn:k=3` et `knn:k=5` rejoignent la liste par
+     défaut de `blanci heads` ; `--methods neighbors` lance toutes les têtes par similarité
+     (avec logistique et prototype) ; la courbe selon le nombre d'annotations ajoute
+     `exemplar:k=3`, `knn`, `knn:k=3` (Léonard : ces baselines serviront à amorcer les
+     nouveaux sites). Sur données simulées, avec six négatifs étiquetés positifs, k = 5 classe
+     mieux que k = 1 (le voisinage d'un faux positif ne l'hérite plus). R19 se combine :
+     `knn:k=5+R19`.
+
+116. **R36 (poids des classes), R37 (biais par micro) ; R33 écartée, R38 en attente.**
+     - R33 (norme maximale) : écartée, équivalente à la L2 pour une tête linéaire.
+     - R36 : les têtes gardent `class_weight="balanced"` (Léonard : le déséquilibre doit être
+       pris en compte). `+R36=power` remplace le poids n / (2·n_classe) de chaque classe par
+       sa puissance `power` : 0 = aucun rééquilibrage (défaut de la variante, pour mesurer ce
+       que l'équilibrage apporte), 0,5 = entre les deux. Passe par les poids des fenêtres :
+       logistic, loss:<nom>, logistic_to_prototype, cascade ; le C est rechoisi avec.
+     - R37 : un biais par **point** (site/micro, `regularization.by`), à la demande de
+       Léonard (un biais par site ne suffirait pas). Un micro déplacé sur un autre site change
+       de point, donc de biais : c'est ce qu'on veut pour l'ambiance du lieu. Colonnes
+       indicatrices non standardisées, a priori N(0, σ²) sur chaque biais, σ = `scale` en
+       logit, indépendant de C (colonne × σ/√C). Micro absent de l'entraînement : biais commun.
+       logistic, loss:<nom>, cascade. **Mesure, données simulées du n° 109** (fond du micro
+       qui prédit la présence, nouveau site où il ne tient plus), AP sur le nouveau site,
+       3 tirages : sans R37 0,25–0,37 ; σ = 0,3 : 0,24–0,42 ; σ = 1 : 0,42–0,57 ; σ = 3 :
+       0,56–0,68 ; σ = 10 : 0,61–0,71 ; R21 : 0,50–0,62. Contrairement à la liste du 25/09
+       (« biais très pénalisé »), un biais fortement rétréci n'y change rien : w garde le
+       raccourci. Défaut σ = 3, provisoire (n° 119).
+     - R38 (écarts de w par micro) : non programmée. ~100 micros × 1 536 dimensions ; à
+       reprendre après une ACP (R18), avec des effets croisés micro + site si l'on veut
+       séparer le matériel (qui suit le micro) du lieu.
+
+117. **Régularisations de l'attentive (R40–R42, R45–R47) et de la sonde à portes (R40, R42,
+     R46)** (`attentive.fit_with_options`, `attentive.optimise`, partagé avec `gated`).
+     Comportement par défaut inchangé (sorties identiques au bit près, vérifié). R40 : weight
+     decay choisi sur `grid` par validation groupée interne (AP). R41 : AdamW, weight decay
+     0,01. R45 : chaque jeton masqué avec la probabilité p avant l'attention (au moins un
+     gardé). R46 : dropout de z (attentive) ou de x̃ ⊙ g (gated). R47 : w part de la
+     logistique sur la moyenne des jetons (C choisi sur la même grille) et ½λ‖w − w₀‖²
+     remplace le weight decay sur w. R42 : **mesure** — avec un seul pli de validation (1 à 2
+     micros), la perte de validation est au plus bas à l'époque 6, puis à l'époque 1 en
+     moyennant les plis, alors que l'AP de test progresse jusqu'à ~200 époques : la perte
+     monte dès que la tête devient trop sûre d'elle, même quand son classement s'améliore.
+     R42 relève donc la courbe du critère à chaque époque dans chaque pli groupé interne,
+     retient l'époque qui optimise la courbe moyenne, puis réentraîne sur tout le pli
+     d'entraînement ; critère `monitor: ap` par défaut (`loss` possible). AP hors-pli sur
+     données simulées (note dans 1 jeton sur 16, 3 tirages) : sans régularisation 0,67 /
+     0,74 / 0,79 ; R42 (loss) 0,54 / 0,65 / 0,78 ; R42 (ap) 0,66 / 0,74 / 0,79 ; R41, R45,
+     R47 à ±0,03 de la tête seule ; R46 (p = 0,2) 0,63 / 0,69 / 0,74. Ces données ne font
+     pas sur-apprendre la tête : à juger au benchmark réel. R43, R44, R48, R49 : expliquées à
+     Léonard, non programmées.
+
+118. **Tableaux des benchmarks en images** (`documentation/tableaux/`, demande de Léonard :
+     les tableaux Markdown s'affichent mal dans Xcode). Un PNG par benchmark (protocole,
+     encodeurs, têtes, poolings, pertes, voisins, régularisations, fusion, seuillage en
+     amont, négatifs appariés, baselines, ensembles), ~600 Ko en tout, générés par
+     `generer.py` (données + rendu Pillow, polices de matplotlib : rien à télécharger).
+     Un nouveau benchmark = une entrée de `TABLEAUX`. `encodeurs-bacpipe.md` : tableaux
+     remplacés par des fiches lisibles en texte brut. Le diagnostic de la cascade (n° 113)
+     est abandonné (Léonard). Tests lancés depuis un conteneur en root :
+     `test_freeze_writes_a_read_only_version_and_never_overwrites` y échoue (root écrit dans
+     un fichier en lecture seule), sans rapport avec le code.
+
+119. **Aucune conclusion sur les régularisations avant la base complète** (Léonard, 26/09). La
+     base complète n'est pas accessible aujourd'hui. Les mesures des n° 109, 113, 116 et 117
+     (données simulées, échantillon de 66 clips) vérifient que le code fait ce qu'il doit ;
+     elles ne classent aucune régularisation. Les réglages par défaut qui en découlent sont
+     provisoires et se choisiront sur la base : σ de R37 (comparer `logistic+R37=0.3`, `=1`,
+     `=3`, `=10`) et le critère de R42, désormais réglage principal de son suffixe
+     (`attentive+R42=ap` et `attentive+R42=loss` dans un même run, scores hors-pli
+     distincts). Même prudence pour les avis théoriques donnés en discussion (R44 redondante
+     avec le weight decay sur q, par exemple) : à vérifier, pas à appliquer.
+
+120. **R50 : C de la fusion logistique par validation groupée ; index des régularisations.**
+     Méthode de fusion `logistic+R50` (`fusion.choose_fusion_C`) : le C est choisi sur
+     `fusion.C_grid` par l'AP moyenne sur des micros tenus à l'écart, dans chaque pli (sur les
+     seuls micros d'entraînement du pli) et, pour le modèle de production, sur tout le jeu de
+     développement ; le C retenu est enregistré avec le modèle. `logistic` garde son C fixé
+     (`fusion.C`, 1) : `fusion-bench` compare les deux (`benchmark_methods`), la production
+     reste `fusion.method: logistic` tant que rien n'est tranché (n° 119). Organisation
+     (question de Léonard) : `blanci/regularization.py` est l'index de toutes les
+     régularisations programmées (tableau « où, comment l'activer ») et contient celles qui
+     transforment les entrées, les poids ou la pénalité (R13–R21, R27, R28, R36, R37) ainsi
+     que R40/R42, qui entourent l'entraînement des têtes torch (`fit_with_options`, déplacé
+     depuis `attentive.py`, sorties identiques). Restent là où elles s'appliquent : les options
+     de la boucle d'entraînement (R41, R45–R47 dans `attentive.py`, R46 dans `gated.py`), les
+     têtes (R22 `pooling.py`, R30/R31/R39 `head.py`, R34/R35 `losses.py`, R85 `gated.py`) et
+     la fusion (R50 `fusion.py`, R57 `stacking.py`). R51–R56 et R58 : expliquées à Léonard,
+     en discussion.
+
+121. **La mécanique des régularisations regroupée dans `blanci/regularization.py` ; R59, R62,
+     R63 ; tri de la section F** (demande de Léonard : ne pas se perdre dans un projet qui
+     grandit). Le module contient désormais la mécanique de toutes les régularisations qui en
+     ont une, et les autres modules l'appellent là où elle prend effet :
+     - `grouped_search` : un réglage choisi par validation groupée, commun au C des têtes (R26,
+       `head.select_C`), au weight decay des têtes torch (R40) et au C de la fusion (R50,
+       `choose_fusion_C`, déplacée depuis `fusion.py`) — trois copies du même calcul en une ;
+     - la boucle d'entraînement torch `optimise` (R41 ; R42 avec `validation_criterion` ; R59),
+       `keep_mask` (R45), `dropout` (R46), `logistic_start` (R47), déplacées depuis
+       `attentive.py` et `gated.py` ;
+     - `nearest_similarity` (R39, depuis `head.py`), `group_bias_scale` (R37, σ/√C, auparavant
+       écrit deux fois dans `head.py` et `losses.py`).
+     Sorties identiques au bit près, vérifiées sur 12 têtes et variantes (logistique, R30,
+     focal, R36, R37, knn:k=5:w, exemplar:k=3, gated+R40+R42, attentive seule et régularisée,
+     fusion logistic+R50). Restent dans leur module, avec une ligne de l'index : les têtes qui
+     *sont* la régularisation (R22 `pooling.gem`, R30, R31, R34/R35, R85), la L2 elle-même
+     (R26, `fit_logistic`) et le hors-pli de la fusion (R57).
+     Section F (tri du 26/09) : R59 programmée pour l'attentive et la sonde à portes
+     (`+R59` : warm-up linéaire du pas sur `warmup` époques, norme du gradient écrêtée à
+     `clip_norm`) — le reste de R59 (dropout, weight decay, arrêt précoce) l'était déjà ; R60 :
+     le rang du LoRA est réglable dans la config ; R62 : `l2_sp_penalty`, utilisée dès
+     aujourd'hui par R47 (même calcul, vers la logistique) et prête pour le fine-tuning ;
+     R63 : `distillation_loss` (labels souples de l'enseignant, température), prête pour le
+     détecteur distillé ; R65 accordée, à faire avec le modèle maison et le LoRA. R61, R64,
+     R66 expliquées, en discussion ; R67 à explorer. Les emplacements réservés (`finetune.py`,
+     `detectors/distilled.py`, `detectors/homemade.py`) nomment les fonctions à appeler.

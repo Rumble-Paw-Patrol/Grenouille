@@ -13,6 +13,10 @@ scores rejoignent le stock hors-pli, le benchmark complet et les ensembles sans 
 Contraintes à garder : peu de positifs (51 enregistrements, 13 micros, tous à Mataroni) → risque
 fort de sur-apprentissage au site ; augmentation de données (bruit de fond d'autres micros,
 gain, décalage temporel) ; exécution finale en ONNX sur l'i5 (§13.1).
+
+Régularisations (`blanci/regularization.py`, DECISIONS n° 121) : boucle `optimise` avec R41,
+R42 (`fit_with_options`), R46 (`dropout`), R59 (warm-up, écrêtage du gradient). R65 (accord de
+Léonard) : pré-entraîner sur AnuraSet, puis ajuster sur nos labels, et mesurer si cela aide.
 """
 
 from __future__ import annotations

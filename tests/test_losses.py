@@ -62,3 +62,9 @@ def test_losses_shorthand_expands_to_every_loss_and_the_reference():
     out = expand_methods(["prototype", "losses"])
     assert out[:2] == ["prototype", "logistic"]
     assert out[2:] == [f"loss:{name}" for name in LOSSES]
+
+
+def test_neighbors_shorthand_expands_to_the_similarity_heads():
+    out = expand_methods(["neighbors"])
+    assert out[:2] == ["logistic", "prototype"]
+    assert {"exemplar_medoid", "knn", "knn:k=3", "knn:k=5:w", "exemplar:k=3"} <= set(out)

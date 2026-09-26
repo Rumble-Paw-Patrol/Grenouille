@@ -22,6 +22,10 @@ Plan (à trancher le moment venu, §13.7 : pas avant le jalon M4) :
 Attention au benchmark : l'élève doit être distillé **pli par pli** à partir d'un professeur
 lui-même appris sans le micro testé ; sinon il hérite de scores en-pli et paraît meilleur qu'il
 n'est.
+
+Régularisations (`blanci/regularization.py`, DECISIONS n° 121) : perte de distillation
+`distillation_loss` (R63, température) ; boucle `optimise` avec R41 (AdamW), R42 (arrêt
+précoce, `fit_with_options`), R46 (`dropout`), R59 (warm-up, écrêtage du gradient).
 """
 
 from __future__ import annotations

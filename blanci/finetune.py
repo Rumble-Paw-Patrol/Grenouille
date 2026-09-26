@@ -19,6 +19,11 @@ excellente). Deux voies honnêtes :
 
 Réglages réservés : section `finetune` de la config (méthode, rang et alpha du LoRA, modules
 ciblés, époques, pas d'apprentissage).
+
+Régularisations (`blanci/regularization.py`, DECISIONS n° 121) : R60, rang du LoRA réglable
+(`finetune.lora.rank`) ; R62, L2-SP : `l2_sp_penalty` vers les poids pré-entraînés ; boucle
+`optimise` avec R41, R42 (`fit_with_options`), R46 (`dropout`), R59 (warm-up, écrêtage). R65
+(accord de Léonard) : ajuster d'abord sur AnuraSet, puis sur nos labels.
 """
 
 from __future__ import annotations

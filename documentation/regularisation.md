@@ -118,3 +118,49 @@ R1 : augmentation par mélange de fond, pour le modèle maison.
 Autrement dit, des régularisations qui ciblent le site, plutôt que de simplement jouer sur la L1 ou la L2.
 
 On en discute dans l'ordre que tu veux.
+
+# Tri de Léonard du 26/09 (R33–R49)
+
+État de chaque régularisation en image : `documentation/tableaux/regularisations.png`. Aucune
+conclusion sur les régularisations tant que la base complète n'est pas accessible : les mesures
+sur données simulées ou sur l'échantillon vérifient le code, elles ne classent rien (n° 119).
+
+- R33 (norme maximale) : écartée, équivalente à la L2 pour une tête linéaire.
+- R34, R35 (SVM, pertes robustes) : benchmark des pertes, `--methods losses` (DECISIONS n° 112,
+  tableau `pertes.png`).
+- R36 (poids des classes) : l'équilibrage reste le défaut ; `logistic+R36` mesure ce qu'il
+  apporte (`R36=0` : aucun, `R36=0.5` : entre les deux). DECISIONS n° 116.
+- R37 : un biais par micro (point = site/micro) plutôt que par site. σ (écart-type a priori des
+  biais) reste à choisir sur la base complète : `logistic+R37=0.3`, `=1`, `=3`, `=10`.
+  DECISIONS n° 116.
+- R38 (modèle mixte) : en attente, ~100 micros × 1 536 dimensions ; après une ACP.
+- R39 (k voisins) : `knn:k=3`, `knn:k=5` par défaut, `--methods neighbors` pour toutes les
+  variantes (DECISIONS n° 115, tableau `voisins.png`).
+- R40, R41, R42, R45, R46, R47 : programmées pour l'attentive (et R40, R42, R46 pour la sonde à
+  portes), `attentive+R41+R42`… R42 choisit le nombre d'époques sur la courbe de validation
+  moyenne des plis groupés ; critère AP ou perte, à comparer : `attentive+R42=ap`,
+  `attentive+R42=loss`. DECISIONS n° 117.
+- R43, R44, R48, R49 : expliquées, en discussion, non programmées.
+
+# Tri de Léonard du 26/09, suite (R50–R58, fusion)
+
+- R50 : programmée, méthode de fusion `logistic+R50` (C par validation groupée), comparée à
+  `logistic` (C = 1) par `blanci fusion-bench`. DECISIONS n° 120.
+- R51, R52, R53, R54, R55, R56, R58 : expliquées, en discussion. R52 est déjà vraie pour les
+  méthodes `weighted` et `weight_grid`.
+- R57 : déjà en place.
+
+# Tri de Léonard du 26/09, section F (R59–R67, réseaux entraînés)
+
+Toute la mécanique des régularisations est dans `blanci/regularization.py`, qui sert d'index
+(DECISIONS n° 121).
+
+- R59 : warm-up et écrêtage du gradient programmés (`attentive+R59`, `gated+R59`) ; dropout,
+  weight decay et arrêt précoce l'étaient déjà (R40–R46).
+- R60 : rang du LoRA réglable (`finetune.lora.rank`) ; le fine-tuning reste à écrire.
+- R61 : en discussion.
+- R62 : L2-SP prête (`l2_sp_penalty`), déjà utilisée par R47.
+- R63 : perte de distillation prête (`distillation_loss`), pour le détecteur distillé.
+- R64 : en discussion.
+- R65 : accordée, avec le modèle maison et le LoRA (pré-entraîner sur AnuraSet, puis ajuster).
+- R66 : en discussion. R67 : à explorer.

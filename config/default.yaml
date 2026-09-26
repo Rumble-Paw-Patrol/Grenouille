@@ -124,7 +124,9 @@ head:
     repeats: 5                     # tirages de la moitié de test par cible
     # logistic_to_prototype (R30) et lda_shrunk (R31) : entre prototype et logistique, candidats
     # naturels des sites peu annotés (DECISIONS n° 108).
-    methods: [prototype, logistic, simple_prototype, exemplar, logistic_to_prototype, lda_shrunk]
+    # knn:k=3 et exemplar:k=3 (R39) : les baselines par similarité, pour amorcer un site (n° 115).
+    methods: [prototype, logistic, simple_prototype, exemplar, logistic_to_prototype, lda_shrunk,
+              exemplar:k=3, knn, knn:k=3]
 
 # Régularisations des têtes (DECISIONS n° 108, `blanci/regularization.py`), numérotées comme la
 # liste du 25/09/2026 (documentation/regularisation.md). Toutes coupées : on les active tête par
@@ -137,7 +139,7 @@ head:
 # logistic_to_prototype, R31 = tête lda_shrunk, R26 = la L2 (défaut).
 regularization:
   variants: []            # têtes ajoutées à `blanci heads` par défaut, ex. [logistic+R19, prototype+R19]
-  by: point               # groupe de R13, R19, R20, R21 : point (micro) ou site
+  by: point               # groupe de R13, R19, R20, R21, R37 : point (site/micro) ou site
   R13: {}                 # pondération : chaque micro pèse autant dans sa classe
   R15: {hard_weight: 3.0} # ◆ négatifs annotés (faux amis, espèces) × 3 face aux présumés (n° 106)
   R17: {}                 # embeddings ramenés à la norme 1
@@ -152,6 +154,30 @@ regularization:
   R21: {method: means, iterations: 3, max_directions: 128, C: 1.0, tolerance: 0.05}
   R27: {}                 # pénalité L1 (lasso)
   R28: {l1_ratio: 0.5}    # ◆ Elastic Net : part de L1 (0 = L2, 1 = L1)
+  # Poids des classes (n / 2·n_classe)^power au lieu de « balanced » (power = 1, le défaut des
+  # têtes) : ◆ 0 = aucun rééquilibrage, 0.5 = entre les deux (n° 116). Têtes logistiques et pertes.
+  R36: {power: 0.0}
+  # Un biais par micro (groupe `by`), a priori N(0, σ²), ◆ σ = scale en logit (indépendant de C).
+  # σ petit = biais très pénalisés. 3 : défaut provisoire, à choisir sur la base complète
+  # (logistic+R37=0.3, =1, =3, =10 ; n° 119). Micro absent de l'entraînement : biais commun
+  # (n° 116). logistic, cascade, loss:<nom>.
+  R37: {scale: 3.0}
+  # Têtes entraînées avec torch (n° 117) : attentive (R40–R42, R45–R47, R59), gated (R40, R42,
+  # R46, R59).
+  R40: {grid: [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1], n_splits: 3}  # weight decay, validation groupée
+  R41: {weight_decay: 1.0e-2}          # ◆ AdamW au lieu de la L2 d'Adam (1e-3 couplé par défaut)
+  # Arrêt précoce : dans chaque pli groupé interne, courbe du critère de validation à chaque
+  # époque (◆ monitor : ap ou loss) ; l'époque qui optimise la courbe moyenne est retenue, puis la
+  # tête est réentraînée sur tout le pli d'entraînement pour ce nombre d'époques (au plus
+  # max_epochs). Les deux critères se comparent dans un même run : attentive+R42=ap,
+  # attentive+R42=loss. ap : défaut provisoire, à trancher sur la base complète (n° 117, 119).
+  R42: {monitor: ap, max_epochs: 300, n_splits: 3}
+  R45: {p: 0.2}                        # ◆ dropout des jetons avant l'attention
+  R46: {p: 0.2}                        # ◆ dropout des dimensions du vecteur agrégé
+  R47: {strength: 1.0e-2}              # ◆ λ de ½λ‖w − w_logistique‖²
+  # Warm-up : le pas d'apprentissage monte linéairement pendant ◆ warmup époques ; écrêtage :
+  # norme du gradient ramenée à clip_norm au plus (n° 121). attentive, gated.
+  R59: {warmup: 20, clip_norm: 1.0}
 
 benchmark:
   negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)
@@ -193,10 +219,12 @@ aggregate:
 
 fusion:
   # Fusion à N entrées (DECISIONS n° 94), `blanci fusion` (production) et `blanci fusion-bench`.
-  # logistic (poids appris) | weighted (poids ci-dessous) | weight_grid (poids cherchés) |
-  # mean | rank_mean | max (règle OU) | min (règle ET).
+  # logistic (poids appris, C fixé) | logistic+R50 (poids appris, C par validation groupée) |
+  # weighted (poids ci-dessous) | weight_grid (poids cherchés) | mean | rank_mean | max (règle
+  # OU) | min (règle ET).
   method: logistic
-  C: 1.0
+  C: 1.0                           # méthode logistic : C fixé
+  C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]  # méthode logistic+R50 : C par validation groupée (n° 120)
   # Poids fixés à la main (method: weighted) : « quel expert écouter en priorité ? ». Entrées
   # sans poids : elles se partagent le reste jusqu'à 1. Ex. {head: 0.7}.
   weights: {}
@@ -204,7 +232,7 @@ fusion:
   # Autres entrées (ensemble de modèles) : head:<encodeur> (sa tête logistique, hors-pli,
   # ramenée sur la grille de l'encodeur principal), congeners:<perch_v2…> (logits congénères).
   sources: []
-  benchmark_methods: [logistic, weighted, weight_grid, mean, rank_mean, max, min]
+  benchmark_methods: [logistic, logistic+R50, weighted, weight_grid, mean, rank_mean, max, min]
   # Emplacements comparés par `fusion-bench` ([] = module séquentiel absent, tête seule).
   benchmark_positions:
     - []
@@ -261,6 +289,7 @@ detectors:
 # conditionné (§3). Un encodeur adapté sort en paquet ONNX et se branche comme les autres.
 finetune:
   method: lora                      # lora | full
+  # R60 : rang réglable ; plus bas = plus régularisé (n° 121).
   lora: {rank: 8, alpha: 16, dropout: 0.1, target_modules: [q_proj, v_proj]}
   epochs: 10
   lr: 1.0e-4
