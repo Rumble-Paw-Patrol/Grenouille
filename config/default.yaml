@@ -111,7 +111,13 @@ encoders:
 
 head:
   C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]
-  n_splits: 5                      # plis groupés par micro, communs à tous les modèles (n° 91)
+  # Plis groupés par micro, communs à tous les modèles (n° 91) ; « lomo » : un pli par micro
+  # positif (leave-one-micro-out, R77, n° 122), plus long, chaque micro jugé seul.
+  n_splits: 5
+  # R75 : choix d'un réglage (C, weight decay, C de la fusion) par validation groupée. one_se :
+  # la valeur la plus régularisante à moins d'une erreur type de la meilleure (n° 122) ; best :
+  # la meilleure AP moyenne.
+  selection_rule: one_se
   seed: 0
   # Benchmark des têtes (`blanci heads`, DECISIONS n° 92–93).
   reference: logistic              # tête contre laquelle toutes les autres sont comparées
@@ -178,6 +184,12 @@ regularization:
   # Warm-up : le pas d'apprentissage monte linéairement pendant ◆ warmup époques ; écrêtage :
   # norme du gradient ramenée à clip_norm au plus (n° 121). attentive, gated.
   R59: {warmup: 20, clip_norm: 1.0}
+  # Grille de C plus fine pour une tête (logistic+R76) : ◆ points valeurs régulièrement espacées
+  # en échelle log entre la plus petite et la plus grande de head.C_grid (n° 122). Têtes à C.
+  R76: {points: 13}
+  # Bagging : ◆ bags têtes apprises chacune sur un tirage bootstrap des micros, scores moyennés
+  # (n° 122). Têtes légères : logistic, logistic_to_prototype, loss:<nom>.
+  R79: {bags: 20}
 
 benchmark:
   negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)

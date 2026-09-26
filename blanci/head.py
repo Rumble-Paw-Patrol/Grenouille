@@ -351,13 +351,15 @@ def select_C(
     seed: int = 0,
     fitter=None,
     sample_weight: np.ndarray | None = None,
+    with_se: bool = False,
     **fit_kw,
-) -> tuple[float, dict[float, float]]:
+) -> tuple:
     """C maximisant l'AP moyenne en validation groupée (plis internes,
     `regularization.grouped_search`).
 
     `fitter` : fit_logistic (défaut) ou fit_logistic_to_prototype (R30) ; `sample_weight` et
-    `fit_kw` (l1_ratio) passent à chaque ajustement."""
+    `fit_kw` (l1_ratio) passent à chaque ajustement. Choix selon `head.selection_rule` (R75) ;
+    `with_se` : rend aussi l'erreur type de chaque AP moyenne (chemin de régularisation, R76)."""
     fitter = fitter or fit_logistic
 
     def score(C, train, test):
@@ -365,8 +367,9 @@ def select_C(
         head = fitter(X[train], y[train], C, seed, sample_weight=sw, **fit_kw)
         return average_precision(y[test], head.decision(X[test]))
 
-    best, results = grouped_search(score, C_grid, y, groups, n_splits, seed)
-    return (C_grid[0] if best is None else best), results
+    best, results, ses = grouped_search(score, C_grid, y, groups, n_splits, seed)
+    chosen = C_grid[0] if best is None else best
+    return (chosen, results, ses) if with_se else (chosen, results)
 
 
 def train_head(
@@ -386,10 +389,11 @@ def train_head(
     if gated is not None:
         keep = ~np.asarray(gated, dtype=bool)
         X, y, groups = X[keep], y[keep], groups[keep]
-    C, cv_ap = select_C(X, y, groups, C_grid, seed=seed)
+    C, cv_ap, cv_se = select_C(X, y, groups, C_grid, seed=seed, with_se=True)
     head = fit_logistic(X, y, C, seed)
     head.meta |= {
         "cv_ap": {str(k): v for k, v in cv_ap.items()},
+        "cv_se": {str(k): v for k, v in cv_se.items()},  # chemin de régularisation (R76)
         "n_pos": int(y.sum()),
         "n_neg": int(len(y) - y.sum()),
         "seed": seed,
@@ -465,6 +469,8 @@ def choose_C(
     fitter = _fitter(method)
     if fitter is None:
         return None
+    if regularizer is not None:
+        C_grid = regularizer.grid(C_grid)  # R76
     X, sw, fit_kw = _prepared(X, y, rows, regularizer, seed)
     return _choose_C(
         X[rows],
@@ -505,6 +511,8 @@ def fit_and_score(
     X, sw, fit_kw = _prepared(X, y, train, regularizer, seed)
     Xtr, ytr = X[train], y[train]
     fitter = _fitter(method)
+    if regularizer is not None:
+        C_grid = regularizer.grid(C_grid)  # R76
     if fitter is not None and C is None:
         C = _choose_C(
             Xtr,
@@ -517,12 +525,20 @@ def fit_and_score(
             sample_weight=sw,
             **fit_kw,
         )
-    if method == "logistic":
-        return fit_logistic(Xtr, ytr, C, seed, sample_weight=sw, **fit_kw).decision(X[test])
-    if method == "logistic_to_prototype":
-        return fit_logistic_to_prototype(Xtr, ytr, C, seed, sample_weight=sw).decision(X[test])
-    if method.startswith("loss:"):
-        return fitter(Xtr, ytr, C, seed, sample_weight=sw, **fit_kw).decision(X[test])
+    if method == "logistic" or method == "logistic_to_prototype" or method.startswith("loss:"):
+        kw = {} if method == "logistic_to_prototype" else fit_kw
+
+        def fit_rows(rows, weights):
+            return fitter(Xtr[rows], ytr[rows], C, seed, sample_weight=weights, **kw)
+
+        bags = regularizer.bags if regularizer is not None else 0
+        if bags:  # R79
+            from blanci.regularization import bagged
+
+            model = bagged(fit_rows, ytr, groups[train], bags, seed, sw)
+        else:
+            model = fit_rows(np.arange(len(ytr)), sw)
+        return model.decision(X[test])
     if method == "lda_shrunk":
         return lda_shrunk_scores(Xtr, ytr, X[test])
     torch_options = {} if regularizer is None else regularizer.torch_options()

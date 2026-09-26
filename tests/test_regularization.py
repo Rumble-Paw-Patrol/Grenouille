@@ -16,10 +16,14 @@ from blanci.pooling import gem, pool
 from blanci.regularization import (
     Context,
     Regularizer,
+    bootstrap_weights,
     canonical,
+    configure,
+    cross_fitted_threshold,
     distillation_loss,
     domain_statistics,
     dropout,
+    fine_grid,
     group_indicators,
     grouped_search,
     head_name,
@@ -27,8 +31,10 @@ from blanci.regularization import (
     mean_directions,
     nuisance_directions,
     parse_head,
+    pick,
     regularizer_for,
     sample_weights,
+    selection_estimate,
     validate,
 )
 
@@ -416,9 +422,71 @@ def test_grouped_search_keeps_the_best_value_on_held_out_mics():
         head = fit_logistic(X[train], y[train], C)
         return average_precision(y[test], head.decision(X[test]))
 
-    best, results = grouped_search(score, [1e-6, 1.0], y, groups, n_splits=3)
-    assert best == max(results, key=results.get) and set(results) == {1e-6, 1.0}
+    best, results, ses = grouped_search(score, [1e-6, 1.0], y, groups, n_splits=3, rule="best")
+    assert best == max(results, key=results.get) and set(results) == set(ses) == {1e-6, 1.0}
+    assert all(se >= 0 for se in ses.values())
     assert grouped_search(score, [1.0], y, np.repeat("a", len(y)))[0] is None  # un seul micro
+
+
+def test_R75_takes_the_most_regularizing_value_within_one_standard_error():
+    means = {0.001: 0.60, 0.01: 0.70, 0.1: 0.72, 1.0: 0.71, 10.0: 0.69}
+    ses = dict.fromkeys(means, 0.05)
+    assert pick(means, ses, "best") == 0.1
+    assert pick(means, ses, "one_se") == 0.01  # 0,70 ≥ 0,72 − 0,05 ; 0,60 non
+    assert pick(means, ses, "one_se", more_regularized="high") == 10.0  # weight decay
+    assert pick({1.0: float("nan")}, {}, "one_se") is None
+    configure({"head": {"selection_rule": "best"}})
+    try:
+        assert pick(means, ses) == 0.1
+    finally:
+        configure({"head": {"selection_rule": "one_se"}})
+    with pytest.raises(ValueError, match="selection_rule"):
+        configure({"head": {"selection_rule": "magie"}})
+
+
+def test_R76_fine_grid_and_suffix():
+    grid = fine_grid([0.001, 0.01, 0.1, 1.0, 10.0], points=13)
+    assert len(grid) == 13 and grid[0] == pytest.approx(0.001) and grid[-1] == pytest.approx(10)
+    reg = regularizer_for("logistic+R76=9", {}, Context(np.array(["a"])))[2]
+    assert len(reg.grid([0.01, 1.0])) == 9
+    with pytest.raises(ValueError, match="R76"):
+        regularizer_for("knn+R76", {}, Context(np.array(["a"])))
+
+
+def test_R79_bagging_draws_whole_mics_and_averages():
+    X, y, groups = mic_corpus()
+    w = bootstrap_weights(groups, np.random.default_rng(0))
+    for g in np.unique(groups):  # un micro entier est tiré k fois, ou pas du tout
+        assert len(np.unique(w[groups == g])) == 1
+    assert w.sum() == pytest.approx(len(y))  # autant de micros tirés que de micros
+    reg = Regularizer({79: 5}, {}, Context(groups))
+    assert reg.bags == 5
+    out = oof_scores(X, y, groups, n_splits=3, method="logistic", regularizer=reg).values
+    assert np.isfinite(out).all() and average_precision(y, out) > 0.8
+    with pytest.raises(ValueError, match="R79"):
+        regularizer_for("gated+R79", {}, Context(groups))
+
+
+def test_R74_threshold_chosen_without_the_judged_fold():
+    rng = np.random.default_rng(0)
+    y = np.r_[np.ones(40), np.zeros(400)].astype(int)
+    scores = y * 1.5 + rng.normal(0, 1, len(y))
+    folds = np.arange(len(y)) % 4
+    out = cross_fitted_threshold(y, scores, folds, 0.5)
+    assert set(out["thresholds"]) == {0, 1, 2, 3}
+    assert 0 < out["recall"] <= 1 and 0 <= out["precision"] <= 1
+
+
+def test_R74_selection_estimate_sees_through_a_lucky_winner():
+    """30 variantes de même valeur réelle : la gagnante du tableau l'est par chance ; choisie
+    sans voir le pli jugé, la procédure retombe au niveau commun."""
+    rng = np.random.default_rng(1)
+    y = np.r_[np.ones(30), np.zeros(300)].astype(int)
+    folds = np.arange(len(y)) % 5
+    scores = {f"v{i}": y * 0.8 + rng.normal(0, 1, len(y)) for i in range(30)}
+    out = selection_estimate(scores, y, folds)
+    assert set(out["chosen"]) == set(range(5)) and out["winner"] in scores
+    assert out["fold_ap_selection"] < out["winner_ap"]
 
 
 def test_network_helpers_for_the_models_to_come():

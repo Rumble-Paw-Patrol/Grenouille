@@ -103,6 +103,9 @@ def main(
     ] = None,
 ) -> None:
     ctx.obj = load_config(config)
+    from blanci.regularization import configure
+
+    configure(ctx.obj)  # R75 : règle de choix des réglages (head.selection_rule)
 
 
 @app.command()
@@ -435,6 +438,16 @@ def heads(
         part = table[table["level"] == level]
         text += [f"## Niveau {level}", "", to_markdown(part[[c for c in shown if c in part]]), ""]
     text += ["## Contre la référence (enregistrements)", "", to_markdown(out["comparisons"]), ""]
+    selection = out.get("selection") or {}
+    if selection:  # R74, R80
+        verdict = (
+            f"Gagnante du tableau : {selection['winner']} (AP {selection['winner_ap']:.3f}). "
+            f"AP moyenne par pli : {selection['fold_ap_winner']:.3f} pour elle, "
+            f"{selection['fold_ap_selection']:.3f} pour la procédure « garder la meilleure » "
+            "choisie sans voir le pli jugé. Un grand écart = une victoire due à la chance. "
+            f"Choix par pli : {selection['chosen']}."
+        )
+        text += ["## Sélection honnête (R74, R80)", "", verdict, ""]
     if out["background"]:
         text += ["## Fond capté (différentiel − simple)", "", out["background"]["verdict"], ""]
     (reports / f"{stem}.md").write_text("\n".join(text), encoding="utf-8")
@@ -442,6 +455,11 @@ def heads(
         typer.echo(f"  {row.head:<22} AP {row.ap:.3f} [{row.ap_lo:.3f} ; {row.ap_hi:.3f}]")
     if out["background"]:
         typer.echo(f"fond capté : {out['background']['verdict']}")
+    if selection:
+        typer.echo(
+            f"sélection honnête (R74) : {selection['fold_ap_selection']:.3f} par pli contre "
+            f"{selection['fold_ap_winner']:.3f} pour la gagnante {selection['winner']}"
+        )
     typer.echo(f"rapport : {reports / (stem + '.md')}")
 
 

@@ -82,7 +82,7 @@ from typing import Any
 
 import numpy as np
 
-IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28, 36, 37, 40, 41, 42, 45, 46, 47, 59)
+IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28, 36, 37, 40, 41, 42, 45, 46, 47, 59, 76, 79)
 DESCRIPTIONS = {
     13: "chaque micro pèse autant dans sa classe",
     15: "négatifs annotés surpondérés face aux présumés",
@@ -102,6 +102,8 @@ DESCRIPTIONS = {
     46: "dropout des dimensions",
     47: "rétrécissement vers la logistique",
     59: "warm-up et écrêtage du gradient",
+    76: "grille de C plus fine",
+    79: "bagging par micros",
 }
 # Réglage principal de chaque R, celui que « =v » remplace.
 MAIN_PARAMETER = {
@@ -117,10 +119,14 @@ MAIN_PARAMETER = {
     46: "p",
     47: "strength",
     59: "warmup",
+    76: "points",
+    79: "bags",
 }
 WEIGHTED_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss")
 PENALIZED_HEADS = ("logistic", "cascade")
 GROUP_BIAS_HEADS = ("logistic", "cascade", "loss")
+C_HEADS = ("logistic", "cascade", "logistic_to_prototype", "loss")  # têtes à C (R76)
+BAGGED_HEADS = ("logistic", "logistic_to_prototype", "loss")  # entraînements légers (R79)
 # Régularisations des têtes entraînées avec torch, et celles que chacune accepte.
 TORCH_REGULARIZATIONS = {
     "attentive": (40, 41, 42, 45, 46, 47, 59),
@@ -210,6 +216,10 @@ def validate(base: str, regs: dict[int, float | str | None]) -> None:
         )
     if {13, 15, 36} & set(regs) and family not in WEIGHTED_HEADS:
         raise ValueError(f"R13/R15/R36 (poids) : têtes {', '.join(WEIGHTED_HEADS)} seulement")
+    if 76 in regs and family not in C_HEADS:
+        raise ValueError(f"R76 (grille de C) : têtes {', '.join(C_HEADS)} seulement")
+    if 79 in regs and family not in BAGGED_HEADS:
+        raise ValueError(f"R79 (bagging) : têtes {', '.join(BAGGED_HEADS)} seulement")
     if 37 in regs and family not in GROUP_BIAS_HEADS:
         raise ValueError(f"R37 (biais par micro) : têtes {', '.join(GROUP_BIAS_HEADS)} seulement")
     if {27, 28} & set(regs) and family not in PENALIZED_HEADS:
@@ -508,6 +518,17 @@ class Regularizer:
 
         return project
 
+    def grid(self, C_grid):
+        """Grille de C de la tête : R76 la remplace par une grille plus fine."""
+        if 76 in self.regs and C_grid:
+            return fine_grid(C_grid, int(self.param(76, "points", 13)))
+        return C_grid
+
+    @property
+    def bags(self) -> int:
+        """R79 : nombre de tirages bootstrap (0 : pas de bagging)."""
+        return int(self.param(79, "bags", 20)) if 79 in self.regs else 0
+
     def torch_options(self) -> dict[str, Any]:
         """Options des têtes torch (`fit_with_options`) : R40–R42, R45–R47, R59."""
         options: dict[str, Any] = {}
@@ -579,7 +600,7 @@ class Regularizer:
 
 
 def usable_folds(
-    y: np.ndarray, groups: np.ndarray, n_splits: int, seed: int
+    y: np.ndarray, groups: np.ndarray, n_splits: int | str, seed: int
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """Plis groupés internes (micros entiers) dont l'entraînement et le test ont les deux
     classes ; [] s'il n'y a qu'un micro."""
@@ -595,21 +616,78 @@ def usable_folds(
     ]
 
 
+# R75 : règle de choix. "one_se" (défaut, `head.selection_rule`) : parmi les valeurs dont l'AP
+# moyenne est à moins d'une erreur type de la meilleure, la plus régularisante ; "best" : la
+# meilleure AP moyenne. `configure` la règle depuis la config au démarrage de la CLI.
+SELECTION_RULES = ("one_se", "best")
+_SELECTION = {"rule": "one_se"}
+
+
+def configure(cfg: dict) -> None:
+    """Réglages globaux de ce module tirés de la config (R75 : `head.selection_rule`)."""
+    rule = (cfg.get("head", {}) or {}).get("selection_rule", "one_se")
+    if rule not in SELECTION_RULES:
+        raise ValueError(f"head.selection_rule : {rule!r} (connues : {SELECTION_RULES})")
+    _SELECTION["rule"] = rule
+
+
+def pick(
+    means: dict,
+    ses: dict,
+    rule: str | None = None,
+    more_regularized: str = "low",
+) -> Any:
+    """Valeur retenue parmi `means` (AP moyenne par valeur de la grille). R75, règle du
+    « 1 écart-type » : toute valeur dont la moyenne est à moins d'une erreur type (`ses`) de la
+    meilleure est indiscernable d'elle ; on prend alors la plus régularisante — la plus petite
+    (`more_regularized="low"` : C) ou la plus grande ("high" : weight decay). None si aucune
+    valeur n'a d'AP."""
+    rule = rule or _SELECTION["rule"]
+    valid = {k: v for k, v in means.items() if np.isfinite(v)}
+    if not valid:
+        return None
+    best = max(valid, key=valid.get)
+    if rule == "best":
+        return best
+    se = ses.get(best, 0.0)
+    floor = valid[best] - (se if np.isfinite(se) else 0.0)
+    close = [k for k, v in valid.items() if v >= floor]
+    return min(close) if more_regularized == "low" else max(close)
+
+
 def grouped_search(
-    score, grid, y: np.ndarray, groups: np.ndarray, n_splits: int = 5, seed: int = 0
-) -> tuple[Any, dict]:
+    score,
+    grid,
+    y: np.ndarray,
+    groups: np.ndarray,
+    n_splits: int | str = 5,
+    seed: int = 0,
+    rule: str | None = None,
+    more_regularized: str = "low",
+) -> tuple[Any, dict, dict]:
     """Force d'une régularisation choisie par validation groupée interne : C des têtes
     linéaires (R26, `head.select_C`), weight decay des têtes torch (R40), C de la fusion
     (R50). `score(valeur, train, test)` rend l'AP sur `test` d'un modèle appris sur `train`.
-    Renvoie (valeur à la meilleure AP moyenne, ou None ; {valeur: AP moyenne})."""
+
+    Renvoie (valeur retenue par `pick` (R75), ou None ; {valeur: AP moyenne} ; {valeur :
+    erreur type de cette moyenne, écart-type des AP des plis / √plis}). Les deux derniers
+    forment le chemin de régularisation (R76)."""
     folds = usable_folds(y, groups, n_splits, seed)
-    results = {}
+    means, ses = {}, {}
     for value in grid:
         aps = [score(value, train, test) for train, test in folds]
-        finite = [ap for ap in aps if np.isfinite(ap)]
-        results[value] = float(np.mean(finite)) if finite else float("nan")
-    valid = {k: v for k, v in results.items() if np.isfinite(v)}
-    return (max(valid, key=valid.get) if valid else None), results
+        finite = np.array([ap for ap in aps if np.isfinite(ap)], dtype=float)
+        means[value] = float(finite.mean()) if len(finite) else float("nan")
+        ses[value] = float(finite.std(ddof=1) / np.sqrt(len(finite))) if len(finite) > 1 else 0.0
+    return pick(means, ses, rule, more_regularized), means, ses
+
+
+def fine_grid(grid, points: int = 13) -> list[float]:
+    """R76 : grille plus fine, `points` valeurs régulièrement espacées en échelle log entre la
+    plus petite et la plus grande de `grid` (13 entre 0,001 et 10 : un facteur ~2,2 entre deux
+    voisines, au lieu de 10)."""
+    low, high = float(min(grid)), float(max(grid))
+    return [float(v) for v in np.logspace(np.log10(low), np.log10(high), int(points))]
 
 
 def choose_fusion_C(
@@ -634,8 +712,145 @@ def choose_fusion_C(
         model = fit_fusion_model("logistic", X[train], y[train], columns, C=C)
         return average_precision(y[test], model.decision(X[test]))
 
-    best, results = grouped_search(score, [float(c) for c in C_grid], y, groups, n_splits, seed)
+    best, results, _ = grouped_search(score, [float(c) for c in C_grid], y, groups, n_splits, seed)
     return best, results
+
+
+# --- R74 : ce que le choix n'a pas vu -----------------------------------------------------------
+
+
+def fold_ids(n: int, folds) -> np.ndarray:
+    """Numéro du pli de test de chaque fenêtre, d'après les plis (train, test) d'un `OOFScores`."""
+    out = np.full(n, -1)
+    for f, (_, test) in enumerate(folds):
+        out[test] = f
+    return out
+
+
+def cross_fitted_threshold(
+    y: np.ndarray, scores: np.ndarray, folds: np.ndarray, min_precision: float
+) -> dict[str, Any]:
+    """R74 : seuil de précision plancher choisi pour chaque pli sur les scores hors-pli des
+    *autres* plis, puis appliqué à ce pli. Précision et rappel obtenus : ce que le seuil fera
+    sur des micros qu'il n'a pas vus (le seuil choisi et jugé sur les mêmes scores est
+    optimiste)."""
+    from blanci.evaluate import recall_at_precision
+
+    y, scores, folds = np.asarray(y).astype(int), np.asarray(scores, float), np.asarray(folds)
+    decided = np.zeros(len(y), dtype=bool)
+    thresholds = {}
+    for f in np.unique(folds[folds >= 0]):
+        other, this = (folds != f) & (folds >= 0), folds == f
+        _, t = recall_at_precision(y[other], scores[other], min_precision)
+        thresholds[int(f)] = float(t)
+        decided[this] = scores[this] >= t
+    tp = int((decided & (y == 1)).sum())
+    return {
+        "precision": tp / int(decided.sum()) if decided.any() else float("nan"),
+        "recall": tp / max(int((y == 1).sum()), 1),
+        "thresholds": thresholds,
+    }
+
+
+def selection_estimate(
+    scores: dict[str, np.ndarray],
+    y: np.ndarray,
+    folds: np.ndarray,
+    recordings: np.ndarray | None = None,
+) -> dict[str, Any]:
+    """R74 et R80 : ce que vaut la procédure « garder la variante à la meilleure AP ».
+
+    Pour chaque pli, la variante est choisie sur les scores hors-pli des autres plis, puis
+    jugée sur ce pli : le choix ne voit jamais les labels qu'on mesure. Comparée à l'AP, sur
+    les mêmes plis, de la variante qui gagne le tableau (choisie en voyant tout), elle dit
+    combien le gagnant doit à la chance. AP au niveau enregistrement si `recordings` est
+    donné. Renvoie les variantes choisies, et les deux AP moyennes par pli."""
+    from blanci.evaluate import average_precision, to_recordings
+
+    y, folds = np.asarray(y).astype(int), np.asarray(folds)
+
+    def ap(values: np.ndarray, mask: np.ndarray) -> float:
+        if recordings is None:
+            return average_precision(y[mask], values[mask])
+        rec = to_recordings(values[mask], y[mask], np.asarray(recordings)[mask])
+        return average_precision(rec["y"].to_numpy(), rec["score"].to_numpy())
+
+    everything = folds >= 0
+    overall = {name: ap(np.asarray(v, float), everything) for name, v in scores.items()}
+    finite = {k: v for k, v in overall.items() if np.isfinite(v)}
+    if not finite:
+        return {}
+    winner = max(finite, key=finite.get)
+    chosen, selected, naive = {}, [], []
+    for f in np.unique(folds[everything]):
+        other, this = everything & (folds != f), folds == f
+        perf = {name: ap(np.asarray(v, float), other) for name, v in scores.items()}
+        perf = {k: v for k, v in perf.items() if np.isfinite(v)}
+        if not perf:
+            continue
+        pick_f = max(perf, key=perf.get)
+        chosen[int(f)] = pick_f
+        selected.append(ap(np.asarray(scores[pick_f], float), this))
+        naive.append(ap(np.asarray(scores[winner], float), this))
+    return {
+        "winner": winner,
+        "winner_ap": finite[winner],
+        "chosen": chosen,
+        "fold_ap_winner": float(np.nanmean(naive)) if naive else float("nan"),
+        "fold_ap_selection": float(np.nanmean(selected)) if selected else float("nan"),
+    }
+
+
+# --- R79 : bagging -------------------------------------------------------------------------------
+
+
+def bootstrap_weights(groups: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """R79 : tirage bootstrap des **micros** (avec remise, autant que de micros) ; poids de
+    chaque fenêtre = nombre de fois où son micro est tiré (0 : absent de ce tirage). Tirer
+    des fenêtres ferait croire à des exemples indépendants."""
+    names, inverse = np.unique(np.asarray(groups).astype(str), return_inverse=True)
+    counts = np.bincount(rng.integers(len(names), size=len(names)), minlength=len(names))
+    return counts[inverse].astype(float)
+
+
+@dataclass
+class Bagged:
+    """Têtes apprises sur des tirages bootstrap ; score = moyenne de leurs scores."""
+
+    models: list
+
+    def decision(self, X: np.ndarray) -> np.ndarray:
+        return np.mean([m.decision(X) for m in self.models], axis=0)
+
+
+def bagged(
+    fit,
+    y: np.ndarray,
+    groups: np.ndarray,
+    bags: int,
+    seed: int = 0,
+    sample_weight: np.ndarray | None = None,
+) -> Bagged:
+    """R79 (Breiman 1996) : `bags` têtes, chacune apprise sur un tirage bootstrap des micros
+    (`bootstrap_weights`), leurs scores moyennés. Chaque tête a ses lubies (les exemples
+    qu'elle a vus) ; la moyenne les efface : la variance baisse, le biais ne bouge pas.
+    `fit(lignes, poids)` apprend une tête sur ces lignes ; les tirages sans l'une des deux
+    classes sont refaits."""
+    y = np.asarray(y).astype(int)
+    rng = np.random.default_rng(seed)
+    models, attempts = [], 0
+    while len(models) < bags and attempts < 10 * bags:
+        attempts += 1
+        w = bootstrap_weights(groups, rng)
+        rows = np.flatnonzero(w > 0)
+        if len(np.unique(y[rows])) < 2:
+            continue
+        if sample_weight is not None:
+            w = w * np.asarray(sample_weight, dtype=float)
+        models.append(fit(rows, w[rows]))
+    if not models:
+        raise ValueError("R79 : aucun tirage bootstrap n'a les deux classes")
+    return Bagged(models)
 
 
 # --- R37 : échelle des colonnes de biais ---------------------------------------------------------
@@ -849,7 +1064,9 @@ def fit_with_options(
             )
             return average_precision(y[test], head.decision(X[test]))
 
-        best, results = grouped_search(score, weight_decays, y, groups, n_splits, seed)
+        best, results, _ = grouped_search(
+            score, weight_decays, y, groups, n_splits, seed, more_regularized="high"
+        )
         if best is not None:
             options["weight_decay"] = best
             extra["weight_decay_cv"] = {str(k): v for k, v in results.items()}

@@ -149,7 +149,9 @@ def run(
         context.domain = domain_statistics(X, context_groups, by)
         context.domain_rows = context.domain.rows(context_groups)
     head_cfg, bench = cfg["head"], cfg["benchmark"]
-    n_splits = int(min(head_cfg["n_splits"], len(np.unique(groups[y == 1]))))
+    n_splits = head_cfg["n_splits"]  # "lomo" : un pli par micro positif (R77)
+    if n_splits != "lomo":
+        n_splits = int(min(n_splits, len(np.unique(groups[y == 1]))))
     rows, scores = [], {}
     for spec in methods:
         name, base, regularizer = regularizer_for(spec, cfg, context)

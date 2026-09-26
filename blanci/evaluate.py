@@ -21,7 +21,7 @@ Metric = Callable[[np.ndarray, np.ndarray], float]
 def grouped_folds(
     y: np.ndarray,
     groups: np.ndarray,
-    n_splits: int = 5,
+    n_splits: int | str = 5,
     seed: int = 0,
     assignment: dict[str, int] | None = None,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -29,7 +29,8 @@ def grouped_folds(
 
     Avec `assignment` ({groupe: pli}, `fold_assignment`), les plis sont ceux-là, quels que soient
     les exemples : tous les modèles d'un benchmark sont alors jugés sur exactement les mêmes plis
-    (DECISIONS n° 91). Sans, ils dépendent des exemples (StratifiedGroupKFold).
+    (DECISIONS n° 91). Sans, ils dépendent des exemples (StratifiedGroupKFold). `n_splits`
+    = "lomo" : un pli par micro positif (R77, `lomo_assignment`).
     """
     if groups is None or len(groups) != len(y):
         raise ValueError("groupes explicites obligatoires, un par exemple")
@@ -37,6 +38,8 @@ def grouped_folds(
     n_groups = len(np.unique(groups))
     if n_groups < 2:
         raise ValueError("au moins deux groupes sont nécessaires pour une validation groupée")
+    if assignment is None and n_splits == LOMO:
+        assignment = lomo_assignment(groups, y, seed)
     if assignment is not None:
         fold_of = np.array([assignment.get(str(g), -1) for g in groups])
         if (fold_of < 0).any():
@@ -50,8 +53,28 @@ def grouped_folds(
     return list(cv.split(np.zeros(len(y)), y, groups))
 
 
+LOMO = "lomo"  # R77 : un pli par micro (leave-one-micro-out), `head.n_splits: lomo`
+
+
+def lomo_assignment(groups: np.ndarray, y: np.ndarray, seed: int = 0) -> dict[str, int]:
+    """R77 : un pli par groupe (micro) qui a des positifs ; les groupes sans positif sont
+    répartis entre ces plis au hasard (graine fixe), à parts égales. Chaque micro positif est
+    ainsi jugé seul, par un modèle appris sur tous les autres."""
+    groups = np.asarray(groups).astype(str)
+    y = np.asarray(y).astype(int)
+    positive = sorted(set(groups[y == 1].tolist()))
+    others = sorted(set(groups.tolist()) - set(positive))
+    if len(positive) < 2:
+        raise ValueError("leave-one-micro-out : il faut au moins deux micros avec des positifs")
+    out = {g: i for i, g in enumerate(positive)}
+    order = np.random.default_rng(seed).permutation(len(others))
+    for rank, i in enumerate(order):
+        out[others[i]] = rank % len(positive)
+    return out
+
+
 def fold_assignment(
-    groups: np.ndarray, has_positive: np.ndarray, n_splits: int = 5, seed: int = 0
+    groups: np.ndarray, has_positive: np.ndarray, n_splits: int | str = 5, seed: int = 0
 ) -> dict[str, int]:
     """Pli de chaque groupe (micro), calculé une fois sur les **enregistrements** annotés :
     une ligne par enregistrement, `has_positive` = il contient A. blanci.
@@ -64,6 +87,8 @@ def fold_assignment(
     unique = np.unique(groups)
     if len(unique) < 2:
         raise ValueError("au moins deux groupes sont nécessaires pour une validation groupée")
+    if n_splits == LOMO:
+        return lomo_assignment(groups, y, seed)
     k = min(n_splits, len(unique))
     cv = StratifiedGroupKFold(n_splits=k, shuffle=True, random_state=seed)
     out: dict[str, int] = {}

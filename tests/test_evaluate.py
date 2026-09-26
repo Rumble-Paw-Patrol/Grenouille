@@ -269,3 +269,20 @@ def test_snr_bins():
 
     bins = snr_bins(np.array([3.0, 6.0, 11.9, 12.0, np.nan]))
     assert bins.tolist() == ["<6 dB", "6–12 dB", "6–12 dB", "≥12 dB", "?"]
+
+
+def test_R77_leave_one_micro_out_puts_each_positive_mic_alone():
+    from blanci.evaluate import fold_assignment, grouped_folds, lomo_assignment
+
+    groups = np.array(["a", "a", "b", "b", "c", "c", "n1", "n2", "n3"])
+    y = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0])
+    out = lomo_assignment(groups, y)
+    assert [out[g] for g in "abc"] == [0, 1, 2]
+    assert {out[g] for g in ("n1", "n2", "n3")} <= {0, 1, 2}
+    folds = grouped_folds(y, groups, "lomo")
+    assert len(folds) == 3
+    for _, test in folds:
+        assert len(set(groups[test]) & {"a", "b", "c"}) == 1
+    assert fold_assignment(groups, y, "lomo") == out
+    with pytest.raises(ValueError, match="deux micros"):
+        lomo_assignment(np.array(["a", "b"]), np.array([1, 0]))

@@ -52,6 +52,7 @@ from blanci.head import Head, oof_scores, train_head
 from blanci.index import search
 from blanci.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
 from blanci.qc import apply_annotation_flags, is_excluded
+from blanci.regularization import cross_fitted_threshold, fold_ids
 from blanci.sequential import (
     GATED_SCORE,
     apply_gate,
@@ -97,13 +98,20 @@ class TrainResult:
     metrics: dict[str, Any] = field(default_factory=dict)
 
     def summary(self) -> str:
-        return (
+        text = (
             f"tête {self.encoder_id} {self.version} : "
             f"{self.metrics.get('n_pos', 0)} positifs, {self.metrics.get('n_neg', 0)} négatifs, "
             f"AP {self.metrics.get('ap', float('nan')):.3f} (enregistrements) ; "
             f"seuil {self.threshold:.3f} à précision ≥ {self.min_precision} "
             f"(rappel {self.recall_at_threshold:.3f})"
         )
+        if "crossfit_recall" in self.metrics:  # R74
+            text += (
+                f" ; seuil choisi sans le micro jugé : rappel "
+                f"{self.metrics['crossfit_recall']:.3f}, précision "
+                f"{self.metrics['crossfit_precision']:.3f}"
+            )
+        return text
 
 
 def train_and_register(
@@ -151,6 +159,9 @@ def train_and_register(
         assignment=folds_for(con, cfg),
     )
     recall, threshold = recall_at_precision(y, oof.values, min_precision)
+    # R74 : le même seuil, choisi pli par pli sur les autres plis : ce qu'il fera sur des micros
+    # qu'il n'a pas vus (le rappel ci-dessus est mesuré sur les scores qui ont fixé le seuil).
+    crossfit = cross_fitted_threshold(y, oof.values, fold_ids(len(y), oof.folds), min_precision)
     metrics = evaluate(
         oof.values,
         y,
@@ -171,6 +182,8 @@ def train_and_register(
         "threshold_id": tid,
         "min_precision": min_precision,
         "recall_at_threshold": recall,
+        "crossfit_recall": crossfit["recall"],
+        "crossfit_precision": crossfit["precision"],
         "trained_at": utc_now(),
         # Jeux gelés exclus à l'entraînement : seuls eux peuvent juger cette tête (§6).
         "frozen_excluded": sorted(frozen_versions(cfg)),
@@ -199,6 +212,7 @@ def train_and_register(
             "recall_at_threshold": recall,
         },
     )
+    write_regularization_path(cfg, head, f"chemin_C_{encoder_id}_{version}")
     return TrainResult(
         encoder_id,
         version,
@@ -208,8 +222,52 @@ def train_and_register(
         min_precision,
         recall,
         directory,
-        metrics,
+        metrics
+        | {"crossfit_recall": crossfit["recall"], "crossfit_precision": crossfit["precision"]},
     )
+
+
+def write_regularization_path(cfg: dict, head: Head, stem: str) -> Path:
+    """R76 : chemin de régularisation de la tête (AP moyenne ± erreur type selon C, C retenu)
+    en CSV, et en PNG si matplotlib est là : un optimum plat dit que le choix de C importe peu."""
+    reports = config_path(cfg, "reports")
+    reports.mkdir(parents=True, exist_ok=True)
+    path = pd.DataFrame(
+        {
+            "C": [float(c) for c in head.meta["cv_ap"]],
+            "ap": list(head.meta["cv_ap"].values()),
+            "se": [head.meta.get("cv_se", {}).get(c, float("nan")) for c in head.meta["cv_ap"]],
+        }
+    ).sort_values("C")
+    path["chosen"] = np.isclose(path["C"], float(head.meta["C"]))
+    csv = reports / f"{stem}.csv"
+    path.to_csv(csv, index=False)
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:  # pragma: no cover - groupe app ou notebook absent
+        return csv
+    fig, ax = plt.subplots(figsize=(6, 3.5))
+    ax.errorbar(path["C"], path["ap"], yerr=path["se"], marker="o", capsize=3)
+    chosen = path[path["chosen"]]
+    ax.scatter(
+        chosen["C"],
+        chosen["ap"],
+        s=120,
+        facecolors="none",
+        edgecolors="black",
+        label=f"C retenu ({cfg['head'].get('selection_rule', 'one_se')})",
+    )
+    ax.set_xscale("log")
+    ax.set_xlabel("C (plus petit = plus régularisé)")
+    ax.set_ylabel("AP moyenne des plis internes")
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    fig.savefig(reports / f"{stem}.png", dpi=120)
+    plt.close(fig)
+    return csv
 
 
 def load_head(con: sqlite3.Connection, encoder_id: str, version: str) -> tuple[Head, dict]:

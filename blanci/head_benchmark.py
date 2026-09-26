@@ -72,8 +72,10 @@ from blanci.pooling import as_grid, available_poolings, pool
 from blanci.regularization import (
     Context,
     canonical,
+    fold_ids,
     needs_domain,
     regularizer_for,
+    selection_estimate,
     store_domain_statistics,
 )
 from blanci.store import EmbeddingStore
@@ -222,7 +224,7 @@ def run_head_benchmark(
     assignment = folds_for(con, cfg)
     fingerprint = labels_fingerprint(con, cfg)
 
-    rows, scores = [], {}
+    rows, scores, folds = [], {}, None
     for spec in methods:
         method, head, regularizer = regularizer_for(spec, cfg, context)
         base, inputs = _inputs(head, X, tokens)
@@ -241,6 +243,7 @@ def run_head_benchmark(
             regularizer=regularizer,
         )
         scores[method] = oof.values
+        folds = oof.folds
         save_oof(
             cfg,
             oof_frame(
@@ -262,9 +265,17 @@ def run_head_benchmark(
 
     reference = canonical(head_cfg.get("reference", "logistic"))
     comparisons = compare_to_reference(scores, reference, y, recordings, cfg)
+    # R74, R80 : la variante gagnante doit-elle sa place à la chance ? Choisie pli par pli sur
+    # les autres plis, jugée sur le pli.
+    selection = (
+        selection_estimate(scores, y, fold_ids(len(y), folds), recordings)
+        if len(scores) > 1
+        else {}
+    )
     return {
         "table": table.reset_index(drop=True),
         "comparisons": comparisons,
+        "selection": selection,
         "background": background_diagnostic(scores, y, recordings, cfg),
         "scores": scores,
         "n_mics": int(len(np.unique(groups))),
