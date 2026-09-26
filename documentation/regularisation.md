@@ -141,3 +141,11 @@ sur données simulées ou sur l'échantillon vérifient le code, elles ne classe
   moyenne des plis groupés ; critère AP ou perte, à comparer : `attentive+R42=ap`,
   `attentive+R42=loss`. DECISIONS n° 117.
 - R43, R44, R48, R49 : expliquées, en discussion, non programmées.
+
+# Tri de Léonard du 26/09, suite (R50–R58, fusion)
+
+- R50 : programmée, méthode de fusion `logistic+R50` (C par validation groupée), comparée à
+  `logistic` (C = 1) par `blanci fusion-bench`. DECISIONS n° 120.
+- R51, R52, R53, R54, R55, R56, R58 : expliquées, en discussion. R52 est déjà vraie pour les
+  méthodes `weighted` et `weight_grid`.
+- R57 : déjà en place.

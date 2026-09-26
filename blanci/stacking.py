@@ -349,6 +349,7 @@ def fusion_options(cfg: dict, columns: list[str]) -> dict[str, Any]:
     weights = given | {c: left / len(missing) for c in missing} if missing else given
     return {
         "C": float(fcfg.get("C", 1.0)),
+        "C_grid": [float(c) for c in fcfg.get("C_grid") or []] or None,  # R50
         "weights": weights,
         "grid_step": float(fcfg.get("grid_step", 0.1)),
     }
@@ -488,5 +489,12 @@ def final_model(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return fit_fusion_model(
-            method, X, level1.y, columns, seed=cfg["head"]["seed"], **fusion_options(cfg, columns)
+            method,
+            X,
+            level1.y,
+            columns,
+            seed=cfg["head"]["seed"],
+            groups=level1.groups,
+            n_splits=cfg["head"]["n_splits"],
+            **fusion_options(cfg, columns),
         )

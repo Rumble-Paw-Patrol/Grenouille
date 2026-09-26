@@ -9,7 +9,8 @@ Méthodes comparées (`FUSION_METHODS`), toutes sur entrées standardisées sur 
 
 | méthode | combinaison | pondération |
 |---|---|---|
-| logistic | régression logistique (stacking) | apprise |
+| logistic | régression logistique (stacking) | apprise, C fixé (`fusion.C`) |
+| logistic+R50 | idem | apprise, C choisi par validation groupée (`fusion.C_grid`) |
 | weighted | somme pondérée | fixée à la main (`fusion.weights`) |
 | weight_grid | somme pondérée | cherchée sur une grille (AP d'entraînement) |
 | mean | moyenne des entrées | égale |
@@ -153,8 +154,18 @@ class FusionWeights:
 
 # --- Fusion à N entrées (DECISIONS n° 94) ---------------------------------------------------------
 
-FUSION_METHODS = ("logistic", "weighted", "weight_grid", "mean", "rank_mean", "max", "min")
+FUSION_METHODS = (
+    "logistic",
+    "logistic+R50",
+    "weighted",
+    "weight_grid",
+    "mean",
+    "rank_mean",
+    "max",
+    "min",
+)
 N_QUANTILES = 101
+C_GRID = (0.001, 0.01, 0.1, 1.0, 10.0)  # R50, faute de `fusion.C_grid`
 
 
 @dataclass
@@ -169,6 +180,7 @@ class FusionModel:
     coef: np.ndarray | None = None
     intercept: float = 0.0
     quantiles: np.ndarray | None = None  # (N_QUANTILES, entrées), pour rank_mean
+    C: float | None = None  # logistique : le C retenu (R50 : choisi par validation groupée)
 
     def _z(self, X: np.ndarray) -> np.ndarray:
         z = (np.asarray(X, dtype=float) - self.mean) / self.scale
@@ -215,6 +227,8 @@ class FusionModel:
             out["coef"] = self.coef.tolist()
         if self.quantiles is not None:
             out["quantiles"] = self.quantiles.tolist()
+        if self.C is not None:
+            out["C"] = self.C
         return out
 
     @classmethod
@@ -228,6 +242,7 @@ class FusionModel:
             np.asarray(d["coef"], dtype=float) if "coef" in d else None,
             float(d.get("intercept", 0.0)),
             np.asarray(d["quantiles"], dtype=float) if "quantiles" in d else None,
+            float(d["C"]) if "C" in d else None,
         )
 
 
@@ -254,6 +269,43 @@ def _orientation(z: np.ndarray, y: np.ndarray) -> np.ndarray:
     return np.where(np.nan_to_num(np.asarray(corr)) < 0, -1.0, 1.0)
 
 
+def choose_fusion_C(
+    X: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    C_grid: list[float] | tuple[float, ...],
+    n_splits: int = 5,
+    seed: int = 0,
+) -> tuple[float | None, dict[float, float]]:
+    """R50 : C de la fusion logistique maximisant l'AP moyenne en validation groupée interne
+    (micros entiers). (None, {}) faute de deux micros ou d'un pli à deux classes."""
+    from blanci.evaluate import average_precision
+
+    X, y, groups = np.asarray(X, dtype=float), np.asarray(y).astype(int), np.asarray(groups)
+    if len(C_grid) < 2 or len(np.unique(groups)) < 2:
+        return None, {}
+    folds = [
+        (train, test)
+        for train, test in grouped_folds(y, groups, n_splits, seed)
+        if len(np.unique(y[train])) == 2 and len(np.unique(y[test])) == 2
+    ]
+    if not folds:
+        return None, {}
+    columns = [f"x{j}" for j in range(X.shape[1])]
+    results = {}
+    for C in C_grid:
+        aps = [
+            average_precision(
+                y[test],
+                fit_fusion_model("logistic", X[train], y[train], columns, C=C).decision(X[test]),
+            )
+            for train, test in folds
+        ]
+        results[float(C)] = float(np.nanmean(aps))
+    valid = {k: v for k, v in results.items() if np.isfinite(v)}
+    return (max(valid, key=valid.get) if valid else None), results
+
+
 def fit_fusion_model(
     method: str,
     X: np.ndarray,
@@ -264,8 +316,14 @@ def fit_fusion_model(
     grid_step: float = 0.1,
     max_grid: int = 5000,
     seed: int = 0,
+    groups: np.ndarray | None = None,
+    C_grid: list[float] | tuple[float, ...] | None = None,
+    n_splits: int = 5,
 ) -> FusionModel:
-    """Apprend une fusion `method` sur (X, y) : X = entrées de niveau 1, hors-pli."""
+    """Apprend une fusion `method` sur (X, y) : X = entrées de niveau 1, hors-pli.
+
+    `logistic+R50` : C choisi sur `C_grid` (défaut `C_GRID`) par validation groupée interne
+    sur `groups` (`choose_fusion_C`) ; sans groupes, le C fixé."""
     from blanci.evaluate import average_precision
 
     if method not in FUSION_METHODS:
@@ -273,6 +331,11 @@ def fit_fusion_model(
     X, y = np.asarray(X, dtype=float), np.asarray(y).astype(int)
     if X.ndim != 2 or X.shape[1] != len(columns):
         raise ValueError("une colonne nommée par entrée")
+    if method == "logistic+R50":
+        if groups is not None:
+            chosen, _ = choose_fusion_C(X, y, groups, C_grid or C_GRID, n_splits, seed)
+            C = chosen if chosen is not None else C
+        method = "logistic"
     with warnings.catch_warnings():  # colonne entièrement manquante sur l'entraînement
         warnings.simplefilter("ignore", RuntimeWarning)
         mean = np.nanmean(X, axis=0)
@@ -287,6 +350,7 @@ def fit_fusion_model(
             C=C, class_weight="balanced", max_iter=2000, random_state=seed
         ).fit(z, y)
         model.coef, model.intercept = fitted.coef_[0].astype(float), float(fitted.intercept_[0])
+        model.C = float(C)
     elif method == "weighted":
         if not weights:
             raise ValueError("fusion « weighted » : poids à fixer dans fusion.weights")
@@ -320,13 +384,24 @@ def fusion_model_oof(
     **options,
 ) -> OOFScores:
     """Scores hors-pli d'une fusion sur les plis communs : chaque pli apprend sa fusion sans
-    le micro testé (les entrées sont déjà hors-pli, §3)."""
+    le micro testé (les entrées sont déjà hors-pli, §3) ; R50 choisit son C dans chaque pli,
+    sur les seuls micros d'entraînement."""
     y = np.asarray(y).astype(int)
     X = np.asarray(X, dtype=float)
     folds = grouped_folds(y, groups, n_splits, seed, assignment)
     out = np.full(len(y), np.nan)
+    groups = np.asarray(groups)
     for train, test in folds:
-        model = fit_fusion_model(method, X[train], y[train], columns, seed=seed, **options)
+        model = fit_fusion_model(
+            method,
+            X[train],
+            y[train],
+            columns,
+            seed=seed,
+            groups=groups[train],
+            n_splits=n_splits,
+            **options,
+        )
         out[test] = model.decision(X[test])
     return OOFScores(out, tuple(folds), f"fusion:{method}")
 

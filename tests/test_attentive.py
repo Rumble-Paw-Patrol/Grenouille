@@ -5,15 +5,15 @@ import pytest
 
 pytest.importorskip("torch")
 
-from blanci.attentive import (  # noqa: E402
-    AttentiveHead,
-    TokenStore,
-    fit_attentive,
-    fit_with_options,
-)
+from blanci.attentive import AttentiveHead, TokenStore, fit_attentive  # noqa: E402
 from blanci.evaluate import average_precision  # noqa: E402
 from blanci.head import fit_logistic, oof_scores  # noqa: E402
-from blanci.regularization import Context, Regularizer, regularizer_for  # noqa: E402
+from blanci.regularization import (  # noqa: E402
+    Context,
+    Regularizer,
+    fit_with_options,
+    regularizer_for,
+)
 
 N_TOKENS, DIM = 16, 8
 

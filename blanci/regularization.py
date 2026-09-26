@@ -23,7 +23,9 @@ Programmées ici, appliquées dans cet ordre :
 | R27 | pénalité | L1 (lasso) au lieu de L2 |
 | R28 | pénalité | Elastic Net (`l1_ratio`) |
 
-Têtes entraînées avec torch (DECISIONS n° 117, `blanci/attentive.py`) :
+Têtes entraînées avec torch (DECISIONS n° 117) : R40 et R42 entourent l'entraînement
+(`fit_with_options`, ici) ; R41, R45, R46, R47 sont des options passées à `fit_attentive` et
+`fit_gated`, appliquées dans leur boucle d'entraînement (`torch_options`, ici) :
 
 | R | têtes | quoi |
 |---|---|---|
@@ -34,9 +36,19 @@ Têtes entraînées avec torch (DECISIONS n° 117, `blanci/attentive.py`) :
 | R46 | attentive, gated | dropout des dimensions du vecteur agrégé (`p`) |
 | R47 | attentive | départ et rétrécissement vers la logistique (`strength` λ) |
 
-Ailleurs : R22 = pooling `gem` (`blanci/pooling.py`), R30 = tête `logistic_to_prototype`,
-R31 = tête `lda_shrunk` (`blanci/head.py`), R26 = la L2, déjà là, R39 = têtes `knn:k=…`,
-`exemplar:k=…`.
+Ce module est l'index de toutes les régularisations programmées. Celles qui sont une tête ou
+un réglage d'un autre étage vivent là où elles s'appliquent :
+
+| R | où | comment l'activer |
+|---|---|---|
+| R22 | `pooling.py` | tête `logistic:gem` (gem2, gem5…) |
+| R26 | `head.fit_logistic` | la L2, toujours là (C par validation groupée) |
+| R30, R31 | `head.py` | têtes `logistic_to_prototype`, `lda_shrunk` |
+| R34, R35 | `losses.py` | têtes `loss:<nom>`, `--methods losses` |
+| R39 | `head.py` | têtes `knn:k=…`, `exemplar:k=…` (`:w`), `--methods neighbors` |
+| R50 | `fusion.py` | méthode de fusion `logistic+R50` (C par validation groupée) |
+| R57 | `stacking.py` | toujours là : la fusion n'apprend que sur des scores hors-pli |
+| R85 | `gated.py` | tête `gated` |
 
 R19 et R20 lisent le stock d'embeddings entier du micro (`store_domain_statistics`) : aucune
 étiquette, ce que la chaîne aura aussi sur un nouveau site. Elles ne valent que pour
@@ -484,7 +496,7 @@ class Regularizer:
         return project
 
     def torch_options(self) -> dict[str, Any]:
-        """Options des têtes torch (`attentive.fit_with_options`) : R40–R42, R45–R47."""
+        """Options des têtes torch (`fit_with_options`) : R40–R42, R45–R47."""
         options: dict[str, Any] = {}
         if 40 in self.regs:
             options["weight_decays"] = [
@@ -545,6 +557,95 @@ class Regularizer:
             float(self.param(36, "power", 0.0)),
         )
         return X, weights, self.fit_options(bias_columns)
+
+
+# --- R40, R42 : autour de l'entraînement des têtes torch ---------------------------------------
+
+
+def fit_with_options(
+    fit,
+    X: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    seed: int = 0,
+    *,
+    weight_decays: list[float] | None = None,
+    early_stopping: bool = False,
+    monitor: str = "ap",
+    n_splits: int = 3,
+    **options,
+):
+    """Tête torch `fit` (fit_attentive, fit_gated) entourée de R40 et R42, sur plis groupés.
+
+    R40 (`weight_decays`) : chaque valeur est jugée par l'AP moyenne en validation groupée
+    interne (`n_splits` plis, micros entiers), la meilleure est retenue. R42
+    (`early_stopping`) : dans chaque pli interne, la courbe du critère de validation
+    (`monitor` : "loss" ou "ap") est relevée à chaque époque ; l'époque retenue minimise la
+    courbe moyenne des plis, et la tête est réentraînée sur tout `X` pour ce nombre d'époques
+    (en lot entier, une époque = un pas, quel que soit l'effectif). Un pli unique de 1 à 3
+    micros donnait une époque au hasard (données simulées, DECISIONS n° 117). Faute de deux
+    micros, ou d'une classe dans un pli, R40/R42 sont sautées.
+    """
+    from blanci.evaluate import average_precision, grouped_folds
+
+    X, y, groups = np.asarray(X), np.asarray(y).astype(int), np.asarray(groups)
+    extra: dict[str, Any] = {}
+    several = len(np.unique(groups)) >= 2
+    folds = []
+    if several:
+        folds = [
+            (train, test)
+            for train, test in grouped_folds(y, groups, n_splits, seed)
+            if len(np.unique(y[train])) == 2 and len(np.unique(y[test])) == 2
+        ]
+    if weight_decays and len(weight_decays) > 1 and folds:
+        results = {}
+        for wd in weight_decays:
+            aps = [
+                average_precision(
+                    y[test],
+                    fit_with_options(
+                        fit,
+                        X[train],
+                        y[train],
+                        groups[train],
+                        seed,
+                        early_stopping=early_stopping,
+                        monitor=monitor,
+                        n_splits=n_splits,
+                        **options | {"weight_decay": wd},
+                    ).decision(X[test]),
+                )
+                for train, test in folds
+            ]
+            results[float(wd)] = float(np.nanmean(aps))
+        valid = {k: v for k, v in results.items() if np.isfinite(v)}
+        if valid:
+            options["weight_decay"] = max(valid, key=valid.get)
+            extra["weight_decay_cv"] = {str(k): v for k, v in results.items()}
+    if early_stopping and folds:
+        curves = [
+            fit(
+                X[train],
+                y[train],
+                seed=seed,
+                validation=(X[test], y[test]),
+                patience=None,
+                monitor=monitor,
+                **options,
+            ).meta["validation_curve"]
+            for train, test in folds
+        ]
+        mean_curve = np.nanmean(np.vstack(curves), axis=0)
+        best = int(np.nanargmin(mean_curve)) + 1
+        head = fit(X, y, seed=seed, **(options | {"epochs": best}))
+        head.meta |= extra | {
+            "early_stopping": {"best_epoch": best, "monitor": monitor, "folds": len(curves)}
+        }
+        return head
+    head = fit(X, y, seed=seed, **options)
+    head.meta |= extra
+    return head
 
 
 def regularizer_for(

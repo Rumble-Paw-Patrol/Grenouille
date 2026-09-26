@@ -63,7 +63,7 @@ def fit_gated(
     """Entraîne la sonde (lot entier, AdamW, entropie croisée à classes équilibrées).
 
     `dim_dropout` : R46, dropout de x̃ ⊙ g ; `validation`, `patience` et `monitor` : arrêt
-    précoce (R42, `attentive.fit_with_options`)."""
+    précoce (R42, `regularization.fit_with_options`)."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation

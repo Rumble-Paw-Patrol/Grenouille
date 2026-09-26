@@ -542,8 +542,8 @@ def fit_and_score(
         return lda_shrunk_scores(Xtr, ytr, X[test])
     torch_options = {} if regularizer is None else regularizer.torch_options()
     if method == "gated":
-        from blanci.attentive import fit_with_options
         from blanci.gated import fit_gated
+        from blanci.regularization import fit_with_options
 
         return fit_with_options(fit_gated, Xtr, ytr, groups[train], seed, **torch_options).decision(
             X[test]
@@ -552,8 +552,9 @@ def fit_and_score(
         w, b = differential_prototype(Xtr[ytr == 1], Xtr[ytr == 0])
         return prototype_scores(X[test], w, b)
     if method == "attentive":  # X = jetons (fenêtres, jetons, dim) ou grille 4-D
-        from blanci.attentive import fit_attentive, fit_with_options
+        from blanci.attentive import fit_attentive
         from blanci.pooling import flat_tokens
+        from blanci.regularization import fit_with_options
 
         T = flat_tokens(Xtr)
         if torch_options.get("shrink"):  # R47 : C de la logistique de départ, même grille

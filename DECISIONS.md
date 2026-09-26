@@ -1148,3 +1148,20 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      (`attentive+R42=ap` et `attentive+R42=loss` dans un même run, scores hors-pli
      distincts). Même prudence pour les avis théoriques donnés en discussion (R44 redondante
      avec le weight decay sur q, par exemple) : à vérifier, pas à appliquer.
+
+120. **R50 : C de la fusion logistique par validation groupée ; index des régularisations.**
+     Méthode de fusion `logistic+R50` (`fusion.choose_fusion_C`) : le C est choisi sur
+     `fusion.C_grid` par l'AP moyenne sur des micros tenus à l'écart, dans chaque pli (sur les
+     seuls micros d'entraînement du pli) et, pour le modèle de production, sur tout le jeu de
+     développement ; le C retenu est enregistré avec le modèle. `logistic` garde son C fixé
+     (`fusion.C`, 1) : `fusion-bench` compare les deux (`benchmark_methods`), la production
+     reste `fusion.method: logistic` tant que rien n'est tranché (n° 119). Organisation
+     (question de Léonard) : `blanci/regularization.py` est l'index de toutes les
+     régularisations programmées (tableau « où, comment l'activer ») et contient celles qui
+     transforment les entrées, les poids ou la pénalité (R13–R21, R27, R28, R36, R37) ainsi
+     que R40/R42, qui entourent l'entraînement des têtes torch (`fit_with_options`, déplacé
+     depuis `attentive.py`, sorties identiques). Restent là où elles s'appliquent : les options
+     de la boucle d'entraînement (R41, R45–R47 dans `attentive.py`, R46 dans `gated.py`), les
+     têtes (R22 `pooling.py`, R30/R31/R39 `head.py`, R34/R35 `losses.py`, R85 `gated.py`) et
+     la fusion (R50 `fusion.py`, R57 `stacking.py`). R51–R56 et R58 : expliquées à Léonard,
+     en discussion.

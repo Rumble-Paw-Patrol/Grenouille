@@ -15,14 +15,16 @@ le nom de la tête (`attentive+R41+R42`) :
 
 | R | quoi |
 |---|---|
-| R40 | weight decay choisi par validation groupée sur une grille (`fit_with_options`) |
+| R40 | weight decay choisi par validation groupée sur une grille |
 | R41 | AdamW (weight decay découplé) au lieu de la L2 d'Adam |
 | R42 | arrêt précoce : époques choisies sur la courbe de validation moyenne des plis groupés |
 | R45 | dropout des jetons : chaque jeton masqué avec la probabilité p avant l'attention |
 | R46 | dropout des dimensions de z, le vecteur agrégé |
 | R47 | départ et rétrécissement vers la logistique sur la moyenne des jetons : ½λ‖w − w₀‖² |
 
-R40, R42 et R46 valent aussi pour la sonde à portes (R85, `blanci/gated.py`).
+R40, R42 et R46 valent aussi pour la sonde à portes (R85, `blanci/gated.py`). R40 et R42
+entourent l'entraînement (`regularization.fit_with_options`) ; les autres sont des options de
+`fit_attentive`, appliquées dans la boucle d'entraînement.
 """
 
 from __future__ import annotations
@@ -190,8 +192,8 @@ def fit_attentive(
     `dim_dropout` (R46), `shrink` λ > 0 (R47 : w part de w₀, logistique de C `shrink_C` sur la
     moyenne des jetons, et ½λ‖w − w₀‖² remplace le weight decay sur w), `validation`
     (jetons, labels) de micros tenus à l'écart, `patience` (None : pas d'arrêt, courbe
-    complète) et `monitor` ("loss" ou "ap") pour R42 (`fit_with_options`) ; la courbe de
-    validation est rangée dans `meta["validation_curve"]`."""
+    complète) et `monitor` ("loss" ou "ap") pour R42 (`regularization.fit_with_options`) ;
+    la courbe de validation est rangée dans `meta["validation_curve"]`."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation
@@ -285,92 +287,6 @@ def fit_attentive(
         float(bias.detach().numpy()[0]),
         meta,
     )
-
-
-def fit_with_options(
-    fit,
-    X: np.ndarray,
-    y: np.ndarray,
-    groups: np.ndarray,
-    seed: int = 0,
-    *,
-    weight_decays: list[float] | None = None,
-    early_stopping: bool = False,
-    monitor: str = "ap",
-    n_splits: int = 3,
-    **options,
-):
-    """Tête torch `fit` (fit_attentive, fit_gated) entourée de R40 et R42, sur plis groupés.
-
-    R40 (`weight_decays`) : chaque valeur est jugée par l'AP moyenne en validation groupée
-    interne (`n_splits` plis, micros entiers), la meilleure est retenue. R42
-    (`early_stopping`) : dans chaque pli interne, la courbe du critère de validation
-    (`monitor` : "loss" ou "ap") est relevée à chaque époque ; l'époque retenue minimise la
-    courbe moyenne des plis, et la tête est réentraînée sur tout `X` pour ce nombre d'époques
-    (en lot entier, une époque = un pas, quel que soit l'effectif). Un pli unique de 1 à 3
-    micros donnait une époque au hasard (données simulées, DECISIONS n° 117). Faute de deux
-    micros, ou d'une classe dans un pli, R40/R42 sont sautées.
-    """
-    from blanci.evaluate import average_precision, grouped_folds
-
-    X, y, groups = np.asarray(X), np.asarray(y).astype(int), np.asarray(groups)
-    extra: dict[str, Any] = {}
-    several = len(np.unique(groups)) >= 2
-    folds = []
-    if several:
-        folds = [
-            (train, test)
-            for train, test in grouped_folds(y, groups, n_splits, seed)
-            if len(np.unique(y[train])) == 2 and len(np.unique(y[test])) == 2
-        ]
-    if weight_decays and len(weight_decays) > 1 and folds:
-        results = {}
-        for wd in weight_decays:
-            aps = [
-                average_precision(
-                    y[test],
-                    fit_with_options(
-                        fit,
-                        X[train],
-                        y[train],
-                        groups[train],
-                        seed,
-                        early_stopping=early_stopping,
-                        monitor=monitor,
-                        n_splits=n_splits,
-                        **options | {"weight_decay": wd},
-                    ).decision(X[test]),
-                )
-                for train, test in folds
-            ]
-            results[float(wd)] = float(np.nanmean(aps))
-        valid = {k: v for k, v in results.items() if np.isfinite(v)}
-        if valid:
-            options["weight_decay"] = max(valid, key=valid.get)
-            extra["weight_decay_cv"] = {str(k): v for k, v in results.items()}
-    if early_stopping and folds:
-        curves = [
-            fit(
-                X[train],
-                y[train],
-                seed=seed,
-                validation=(X[test], y[test]),
-                patience=None,
-                monitor=monitor,
-                **options,
-            ).meta["validation_curve"]
-            for train, test in folds
-        ]
-        mean_curve = np.nanmean(np.vstack(curves), axis=0)
-        best = int(np.nanargmin(mean_curve)) + 1
-        head = fit(X, y, seed=seed, **(options | {"epochs": best}))
-        head.meta |= extra | {
-            "early_stopping": {"best_epoch": best, "monitor": monitor, "folds": len(curves)}
-        }
-        return head
-    head = fit(X, y, seed=seed, **options)
-    head.meta |= extra
-    return head
 
 
 # --- Stock de jetons -------------------------------------------------------------------------
