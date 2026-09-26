@@ -86,6 +86,23 @@ def test_meaningless_regularizations_are_refused(spec, message):
         validate(*parse_head(spec))
 
 
+def test_R42_takes_its_criterion_as_a_word():
+    """Les deux critères de l'arrêt précoce se comparent dans un même run (n° 119)."""
+    assert parse_head("attentive+R42=loss") == ("attentive", {42: "loss"})
+    assert canonical("attentive+R42=ap+R41") == "attentive+R41+R42=ap"
+    context = Context(np.array(["a"]))
+    for word in ("ap", "loss"):
+        options = regularizer_for(f"attentive+R42={word}", {}, context)[2].torch_options()
+        assert options["monitor"] == word and options["early_stopping"]
+    cfg = {"regularization": {"R42": {"monitor": "loss"}}}
+    default = regularizer_for("attentive+R42", cfg, context)[2]
+    assert default.torch_options()["monitor"] == "loss"
+    with pytest.raises(ValueError, match="valeurs possibles"):
+        parse_head("attentive+R42=auc")
+    with pytest.raises(ValueError, match="illisible"):
+        parse_head("logistic+R37=abc")
+
+
 def test_a_plain_head_has_no_regularizer():
     assert regularizer_for("logistic", {}, None) == ("logistic", "logistic", None)
 

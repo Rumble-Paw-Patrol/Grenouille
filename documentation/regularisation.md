@@ -121,21 +121,23 @@ On en discute dans l'ordre que tu veux.
 
 # Tri de Léonard du 26/09 (R33–R49)
 
-État de chaque régularisation en image : `documentation/tableaux/regularisations.png`.
+État de chaque régularisation en image : `documentation/tableaux/regularisations.png`. Aucune
+conclusion sur les régularisations tant que la base complète n'est pas accessible : les mesures
+sur données simulées ou sur l'échantillon vérifient le code, elles ne classent rien (n° 119).
 
 - R33 (norme maximale) : écartée, équivalente à la L2 pour une tête linéaire.
 - R34, R35 (SVM, pertes robustes) : benchmark des pertes, `--methods losses` (DECISIONS n° 112,
   tableau `pertes.png`).
 - R36 (poids des classes) : l'équilibrage reste le défaut ; `logistic+R36` mesure ce qu'il
   apporte (`R36=0` : aucun, `R36=0.5` : entre les deux). DECISIONS n° 116.
-- R37 : un biais par micro (point = site/micro) plutôt que par site. Mesure sur données
-  simulées : il ne sert que si le biais est *peu* pénalisé (σ ≥ 3), pas « très pénalisé ».
+- R37 : un biais par micro (point = site/micro) plutôt que par site. σ (écart-type a priori des
+  biais) reste à choisir sur la base complète : `logistic+R37=0.3`, `=1`, `=3`, `=10`.
   DECISIONS n° 116.
 - R38 (modèle mixte) : en attente, ~100 micros × 1 536 dimensions ; après une ACP.
 - R39 (k voisins) : `knn:k=3`, `knn:k=5` par défaut, `--methods neighbors` pour toutes les
   variantes (DECISIONS n° 115, tableau `voisins.png`).
 - R40, R41, R42, R45, R46, R47 : programmées pour l'attentive (et R40, R42, R46 pour la sonde à
-  portes), `attentive+R41+R42`… R42 choisit le nombre d'époques sur l'AP de validation
-  moyenne des plis groupés : la perte de validation remontait dès la première époque sur
-  données simulées. DECISIONS n° 117.
+  portes), `attentive+R41+R42`… R42 choisit le nombre d'époques sur la courbe de validation
+  moyenne des plis groupés ; critère AP ou perte, à comparer : `attentive+R42=ap`,
+  `attentive+R42=loss`. DECISIONS n° 117.
 - R43, R44, R48, R49 : expliquées, en discussion, non programmées.

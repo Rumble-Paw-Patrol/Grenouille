@@ -29,7 +29,7 @@ Têtes entraînées avec torch (DECISIONS n° 117, `blanci/attentive.py`) :
 |---|---|---|
 | R40 | attentive, gated | weight decay choisi par validation groupée sur `grid` |
 | R41 | attentive | AdamW (weight decay découplé, `weight_decay`) |
-| R42 | attentive, gated | nombre d'époques par validation groupée (`monitor` : loss, ap) |
+| R42 | attentive, gated | nombre d'époques par validation groupée (`R42=ap`, `R42=loss`) |
 | R45 | attentive | dropout des jetons (`p`) |
 | R46 | attentive, gated | dropout des dimensions du vecteur agrégé (`p`) |
 | R47 | attentive | départ et rétrécissement vers la logistique (`strength` λ) |
@@ -48,10 +48,10 @@ R37 (DECISIONS n° 116) : une colonne par micro de l'entraînement, non standard
 est le biais du micro, d'a priori N(0, σ²) (σ = `scale`, en logit, indépendant de C : voir
 `head.standardize`). Un micro absent de l'entraînement (le micro du pli de test, un nouveau
 site) a toutes ses colonnes à 0 : biais commun. Le biais absorbe le niveau de chaque micro
-pendant l'apprentissage, w n'a plus à le coder. Mesuré sur données simulées : un σ petit
-(biais « très pénalisés ») ne sert à rien, w garde le raccourci ; il faut σ de l'ordre des
-écarts réels entre micros (≥ 3). Écartée au tri du 26/09 : R33 (norme maximale, équivalente
-à la L2 pour une tête linéaire).
+pendant l'apprentissage, w n'a plus à le coder. Sur données simulées, un σ petit (biais « très
+pénalisés ») laissait le raccourci dans w : le mécanisme dépend de σ, à choisir sur la base
+complète (`logistic+R37=0.3`, `=1`, `=3`, `=10`) ; σ = 3 est un défaut provisoire (n° 119).
+Écartée au tri du 26/09 : R33 (norme maximale, équivalente à la L2 pour une tête linéaire).
 """
 
 from __future__ import annotations
@@ -91,7 +91,7 @@ MAIN_PARAMETER = {
     36: "power",
     37: "scale",
     41: "weight_decay",
-    42: "max_epochs",
+    42: "monitor",
     45: "p",
     46: "p",
     47: "strength",
@@ -101,31 +101,48 @@ PENALIZED_HEADS = ("logistic", "cascade")
 GROUP_BIAS_HEADS = ("logistic", "cascade", "loss")
 # Régularisations des têtes entraînées avec torch, et celles que chacune accepte.
 TORCH_REGULARIZATIONS = {"attentive": (40, 41, 42, 45, 46, 47), "gated": (40, 42, 46)}
-_SUFFIX = re.compile(r"^R(\d+)(?:=([0-9.eE+-]+))?$")
+# Réglages principaux qui prennent un mot plutôt qu'un nombre : R42=ap, R42=loss.
+WORD_VALUES = {42: ("ap", "loss")}
+_SUFFIX = re.compile(r"^R(\d+)(?:=([0-9.eE+-]+|[a-z_]+))?$")
 
 
 # --- Noms des têtes -------------------------------------------------------------------------
 
 
-def parse_head(spec: str) -> tuple[str, dict[int, float | None]]:
-    """« logistic:max+R18=16+R13 » → ("logistic:max", {13: None, 18: 16.0})."""
+def parse_head(spec: str) -> tuple[str, dict[int, float | str | None]]:
+    """« logistic:max+R18=16+R13 » → ("logistic:max", {13: None, 18: 16.0}) ;
+    « attentive+R42=loss » → ("attentive", {42: "loss"}) (`WORD_VALUES`)."""
     base, *suffixes = spec.split("+")
-    regs: dict[int, float | None] = {}
+    regs: dict[int, float | str | None] = {}
     for suffix in suffixes:
         match = _SUFFIX.match(suffix.strip())
+        number = int(match.group(1)) if match else None
+        value = match.group(2) if match else None
+        if match and value is not None and number in WORD_VALUES:
+            if value not in WORD_VALUES[number]:
+                raise ValueError(
+                    f"R{number}={value} : valeurs possibles {', '.join(WORD_VALUES[number])}"
+                )
+            regs[number] = value
+            continue
+        try:
+            regs[number] = float(value) if value is not None else None
+        except (TypeError, ValueError):
+            match = None
         if not match:
             raise ValueError(f"régularisation illisible dans {spec!r} : {suffix!r} (ex. R18=16)")
-        regs[int(match.group(1))] = float(match.group(2)) if match.group(2) else None
     return base.strip(), regs
 
 
-def head_name(base: str, regs: dict[int, float | None]) -> str:
+def head_name(base: str, regs: dict[int, float | str | None]) -> str:
     """Nom canonique : régularisations triées par numéro."""
     parts = [base]
     for number in sorted(regs):
         value = regs[number]
         if value is None:
             parts.append(f"R{number}")
+        elif isinstance(value, str):
+            parts.append(f"R{number}={value}")
         else:
             parts.append(f"R{number}={int(value) if float(value).is_integer() else value}")
     return "+".join(parts)
@@ -135,7 +152,7 @@ def canonical(spec: str) -> str:
     return head_name(*parse_head(spec))
 
 
-def validate(base: str, regs: dict[int, float | None]) -> None:
+def validate(base: str, regs: dict[int, float | str | None]) -> None:
     """Refuse une régularisation inconnue ou sans objet pour cette tête."""
     unknown = sorted(set(regs) - set(IMPLEMENTED))
     if unknown:
@@ -332,7 +349,7 @@ def sample_weights(
     y: np.ndarray,
     groups: np.ndarray,
     hard: np.ndarray | None,
-    regs: dict[int, float | None],
+    regs: dict[int, float | str | None],
     hard_weight: float = 3.0,
     class_power: float = 1.0,
 ) -> np.ndarray | None:
@@ -399,7 +416,7 @@ class Context:
 class Regularizer:
     """Les régularisations d'une tête, avec leurs réglages et le contexte des fenêtres."""
 
-    regs: dict[int, float | None]
+    regs: dict[int, float | str | None]
     params: dict[str, Any]
     context: Context
 
@@ -479,7 +496,7 @@ class Regularizer:
             options["weight_decay"] = float(self.param(41, "weight_decay", 1e-2))
         if 42 in self.regs:
             options["early_stopping"] = True
-            options["monitor"] = str(self.param(42, "monitor", "ap"))
+            options["monitor"] = str(self.param(42, "monitor", "ap"))  # provisoire (n° 119)
             options["epochs"] = int(self.param(42, "max_epochs", 300))
             options["n_splits"] = int(self.param(42, "n_splits", options.get("n_splits", 3)))
         if 45 in self.regs:

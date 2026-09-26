@@ -1102,8 +1102,8 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        qui prédit la présence, nouveau site où il ne tient plus), AP sur le nouveau site,
        3 tirages : sans R37 0,25–0,37 ; σ = 0,3 : 0,24–0,42 ; σ = 1 : 0,42–0,57 ; σ = 3 :
        0,56–0,68 ; σ = 10 : 0,61–0,71 ; R21 : 0,50–0,62. Contrairement à la liste du 25/09
-       (« biais très pénalisé »), un biais fortement rétréci ne sert à rien : w garde le
-       raccourci. Défaut σ = 3.
+       (« biais très pénalisé »), un biais fortement rétréci n'y change rien : w garde le
+       raccourci. Défaut σ = 3, provisoire (n° 119).
      - R38 (écarts de w par micro) : non programmée. ~100 micros × 1 536 dimensions ; à
        reprendre après une ACP (R18), avec des effets croisés micro + site si l'on veut
        séparer le matériel (qui suit le micro) du lieu.
@@ -1138,3 +1138,13 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      est abandonné (Léonard). Tests lancés depuis un conteneur en root :
      `test_freeze_writes_a_read_only_version_and_never_overwrites` y échoue (root écrit dans
      un fichier en lecture seule), sans rapport avec le code.
+
+119. **Aucune conclusion sur les régularisations avant la base complète** (Léonard, 26/09). La
+     base complète n'est pas accessible aujourd'hui. Les mesures des n° 109, 113, 116 et 117
+     (données simulées, échantillon de 66 clips) vérifient que le code fait ce qu'il doit ;
+     elles ne classent aucune régularisation. Les réglages par défaut qui en découlent sont
+     provisoires et se choisiront sur la base : σ de R37 (comparer `logistic+R37=0.3`, `=1`,
+     `=3`, `=10`) et le critère de R42, désormais réglage principal de son suffixe
+     (`attentive+R42=ap` et `attentive+R42=loss` dans un même run, scores hors-pli
+     distincts). Même prudence pour les avis théoriques donnés en discussion (R44 redondante
+     avec le weight decay sur q, par exemple) : à vérifier, pas à appliquer.

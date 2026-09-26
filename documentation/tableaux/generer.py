@@ -834,7 +834,7 @@ REGULARISATIONS = Tableau(
                     "un biais par micro, a priori N(0, σ²)",
                     "fenêtre",
                     "logistic, loss:, cascade",
-                    "scale σ (3)",
+                    "scale σ (3, provisoire)",
                     C("programmée", "neuf"),
                 ],
                 [
@@ -874,7 +874,7 @@ REGULARISATIONS = Tableau(
                     "arrêt précoce",
                     "entraînement",
                     "attentive, gated",
-                    "max_epochs (300), monitor (ap)",
+                    "R42=ap ou R42=loss (ap, provisoire)",
                     C("programmée", "neuf"),
                 ],
                 [
@@ -926,9 +926,11 @@ REGULARISATIONS = Tableau(
     [
         "Ordre d'application : R19/R20 → R17 → R18 → R21 → R37 → tête (poids R13/R15/R36,"
         " pénalité R27/R28). Groupe de R13, R19–R21, R37 : regularization.by (point = site/micro).",
-        "R19, R20, R21 ne se jugent pas sur les plis de Mataroni mais sur un site tenu à l'écart"
-        " (n° 109). R42 : le critère « perte de validation » choisissait l'époque 1 sur données"
-        " simulées ; l'AP de validation est le critère par défaut (n° 117).",
+        "Aucune conclusion avant la base complète : les mesures sur données simulées ou sur"
+        " l'échantillon vérifient le code, elles ne classent rien ; les défauts marqués"
+        " « provisoire » se choisiront sur la base (n° 119).",
+        "R19, R20, R21 se jugent sur un site tenu à l'écart, pas sur les plis de Mataroni"
+        " (n° 109).",
     ],
 )
 

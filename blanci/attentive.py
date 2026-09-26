@@ -147,7 +147,8 @@ def optimise(
 def validation_criterion(torch, loss_fn, scores_of, y_val: np.ndarray, monitor: str = "loss"):
     """Critère de R42, à minimiser : la perte d'entraînement sur les fenêtres de validation
     ("loss"), ou 1 − AP ("ap"). La perte monte dès que la tête devient trop sûre d'elle, même
-    quand son classement s'améliore encore (mesuré, DECISIONS n° 117)."""
+    quand son classement s'améliore encore (vu sur données simulées, DECISIONS n° 117 ; le
+    choix entre les deux se fera sur la base complète, n° 119)."""
     from blanci.evaluate import average_precision
 
     y_np = np.asarray(y_val).astype(int)
@@ -307,8 +308,8 @@ def fit_with_options(
     (`monitor` : "loss" ou "ap") est relevée à chaque époque ; l'époque retenue minimise la
     courbe moyenne des plis, et la tête est réentraînée sur tout `X` pour ce nombre d'époques
     (en lot entier, une époque = un pas, quel que soit l'effectif). Un pli unique de 1 à 3
-    micros donnait une époque au hasard (mesuré, DECISIONS n° 117). Faute de deux micros, ou
-    d'une classe dans un pli, R40/R42 sont sautées.
+    micros donnait une époque au hasard (données simulées, DECISIONS n° 117). Faute de deux
+    micros, ou d'une classe dans un pli, R40/R42 sont sautées.
     """
     from blanci.evaluate import average_precision, grouped_folds
 
