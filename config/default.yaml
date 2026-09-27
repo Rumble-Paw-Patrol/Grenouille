@@ -167,7 +167,11 @@ regularization:
   # σ petit = biais très pénalisés. 3 : défaut provisoire, à choisir sur la base complète
   # (logistic+R37=0.3, =1, =3, =10 ; n° 119). Micro absent de l'entraînement : biais commun
   # (n° 116). logistic, cascade, loss:<nom>.
-  R37: {scale: 3.0}
+  # GLMM (n° 131) : scale « glmm » (ou logistic+R37=glmm) = σ estimé sur les données, par
+  # vraisemblance marginale approchée, parmi glmm_grid (logistic, cascade). site_scale : un
+  # biais de site en plus de celui du micro (emboîtés), σ fixé ou « glmm » ; null = pas de
+  # niveau site (groupes « site/micro » seulement, `by: point`).
+  R37: {scale: 3.0, site_scale: null, glmm_grid: [0.1, 0.3, 1.0, 3.0, 10.0]}
   # Têtes entraînées avec torch (n° 117) : attentive (R40–R42, R45–R47, R59), gated (R40, R42,
   # R46, R59).
   R40: {grid: [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1], n_splits: 3}  # weight decay, validation groupée
@@ -270,10 +274,18 @@ fusion:
   # Autres entrées (ensemble de modèles) : head:<encodeur> (sa tête logistique, hors-pli,
   # ramenée sur la grille de l'encodeur principal), congeners:<perch_v2…> (logits congénères).
   sources: []
-  # Variantes de la logistique, combinables (n° 127) : +R50 (C par validation groupée), +R52
-  # (poids ≥ 0 sur les entrées orientées), +R53 (sélection L1 des entrées), +R56 (pas de veto).
+  # Variantes de la logistique, combinables (n° 127, 130) : +R50 (C par validation groupée),
+  # +R52 (poids ≥ 0 sur les entrées orientées), +R53 (sélection L1 des entrées), +R54
+  # (descripteurs en paliers monotones), +R55 (descripteurs en courbes lisses, GAM), +R56 (pas
+  # de veto). « R55=10 » : le réglage principal à la place de celui d'ici (R54 bins, R55
+  # smoothness, R56 cap).
   benchmark_methods: [logistic, logistic+R50, logistic+R50+R52, logistic+R50+R53,
-                      logistic+R50+R56, weighted, weight_grid, mean, rank_mean, max, min]
+                      logistic+R50+R54, logistic+R50+R55, logistic+R50+R56, weighted,
+                      weight_grid, mean, rank_mean, max, min]
+  R54: {bins: 5}                   # paliers : 5 classes de même effectif (4 marches) par descripteur
+  # Courbes lisses (P-splines cubiques) : `segments` intervalles égaux entre les quantiles 1 %
+  # et 99 % ; `smoothness` : prix de la courbure (grand → droite). Provisoire (n° 130).
+  R55: {segments: 8, smoothness: 1.0}
   R56: {cap: 2.0}                  # pas de veto : les descripteurs déplacent le logit d'au plus 2
   # Emplacements comparés par `fusion-bench` ([] = module séquentiel absent, tête seule).
   benchmark_positions:

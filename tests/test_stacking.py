@@ -525,3 +525,100 @@ def test_constrained_variants_run_out_of_fold_with_R50():
         "logistic+R50+R52", X, y, groups, columns, n_splits=3, C_grid=[0.01, 1.0]
     )
     assert np.isfinite(oof.values).all() and average_precision(y, oof.values) > 0.75
+
+
+# --- R54, R55 : descripteurs courbés dans la fusion (n° 130) --------------------------------------
+
+
+def test_fusion_settings_read_values_and_refuse_bad_mixes():
+    from blanci.regularization import fusion_settings, fusion_variant
+
+    assert fusion_settings("logistic+R50+R55=10") == {50: None, 55: 10.0}
+    assert fusion_variant("logistic+R54=3+R56=1.5") == {54, 56}
+    with pytest.raises(ValueError, match="pas les deux"):
+        fusion_settings("logistic+R54+R55")
+    with pytest.raises(ValueError, match="R53"):
+        fusion_settings("logistic+R53+R55")
+    with pytest.raises(ValueError, match="valeur"):
+        fusion_settings("logistic+R52=1")
+
+
+def u_shaped(n=800, seed=0):
+    """Un descripteur en U : A. blanci au milieu, ni trop bas ni trop haut."""
+    rng = np.random.default_rng(seed)
+    y = rng.integers(0, 2, n)
+    head = y * 1.0 + rng.normal(0, 1, n)
+    rate = rng.normal(0, 1, n) * np.where(y == 1, 0.4, 1.5)
+    return np.column_stack([head, rate]), y, ["head", "rate"]
+
+
+def test_R54_steps_only_climb_in_the_oriented_direction():
+    X, y, columns = two_experts(600)
+    model = fit_fusion_model("logistic+R54", X, y, columns, bins=5)
+    basis = model.basis
+    assert set(basis.expanded) == {1, 2}  # la tête reste une droite
+    grid = np.linspace(-3, 3, 301)
+    rising = basis.curve(1, model.coef, grid)
+    falling = basis.curve(2, model.coef, grid)  # l'entrée inversée
+    assert (np.diff(rising) >= -1e-12).all() and rising[-1] > rising[0]
+    assert (np.diff(falling) <= 1e-12).all() and falling[-1] < falling[0]
+    assert len(basis.expanded[1]["cuts"]) == 4  # 5 classes, 4 marches
+    assert average_precision(y, model.decision(X)) > 0.75
+    again = FusionModel.from_dict(json.loads(json.dumps(model.to_dict())))
+    assert np.allclose(again.decision(X), model.decision(X))
+    shares = model.weights()
+    assert set(shares) == set(columns) and sum(shares.values()) == pytest.approx(1)
+
+
+def test_R55_bends_a_u_shaped_descriptor_that_a_straight_line_misses():
+    X, y, columns = u_shaped()
+    train, test = np.arange(len(y)) < 500, np.arange(len(y)) >= 500
+    straight = fit_fusion_model("logistic", X[train], y[train], columns)
+    curved = fit_fusion_model("logistic+R55", X[train], y[train], columns, C=0.1)
+    assert average_precision(y[test], curved.decision(X[test])) > average_precision(
+        y[test], straight.decision(X[test])
+    )
+    f = curved.basis.curve(1, curved.coef, np.array([-2.0, 0.0, 2.0]))
+    assert f[1] > f[0] and f[1] > f[2]  # le sommet au milieu
+    again = FusionModel.from_dict(json.loads(json.dumps(curved.to_dict())))
+    assert np.allclose(again.decision(X), curved.decision(X))
+
+
+def test_R55_very_smooth_is_a_straight_line_and_flat_outside_the_training_range():
+    X, y, columns = two_experts(600)
+    model = fit_fusion_model("logistic+R55=1e6", X, y, columns)
+    spec = model.basis.expanded[1]
+    knots, degree = np.asarray(spec["knots"]), spec["degree"]
+    lo, hi = knots[degree], knots[-degree - 1]
+    inside = np.linspace(lo, hi, 50)
+    f = model.basis.curve(1, model.coef, inside)
+    assert np.abs(np.diff(f, n=2)).max() < 1e-3 * (np.abs(f).max() + 1e-12)
+    far = model.basis.curve(1, model.coef, np.array([hi, hi + 5.0, hi + 50.0]))
+    assert np.allclose(far, far[0])  # pas d'extrapolation
+
+
+def test_R54_R55_curve_only_the_sequential_descriptors():
+    X, y, _ = two_experts(600)
+    columns = ["head", "seq", "head:autre-1"]
+    for method in ("logistic+R54", "logistic+R55"):
+        model = fit_fusion_model(method, X, y, columns)
+        assert set(model.basis.expanded) == {1}
+    constant = np.column_stack([X, np.ones(len(y))])
+    model = fit_fusion_model("logistic+R55", constant, y, [*columns, "fixe"])
+    assert 3 not in model.basis.expanded  # constante à l'entraînement : laissée telle quelle
+
+
+def test_R55_with_R56_still_bounds_the_descriptors():
+    X, y, columns = u_shaped()
+    model = fit_fusion_model("logistic+R55+R56", X, y, columns, cap=0.5)
+    z = (X - model.mean) / model.scale
+    free = z[:, 0] * model.coef[model.head_index] + model.intercept
+    assert np.abs(model.decision(X) - free).max() <= 0.5 + 1e-9
+
+
+def test_curved_fusions_run_out_of_fold_with_R50():
+    X, y, columns = u_shaped()
+    groups = np.repeat(list("abcdefgh"), 100)
+    for method in ("logistic+R50+R54", "logistic+R50+R55"):
+        oof = fusion_model_oof(method, X, y, groups, columns, n_splits=4, C_grid=[0.01, 1.0])
+        assert np.isfinite(oof.values).all() and average_precision(y, oof.values) > 0.6

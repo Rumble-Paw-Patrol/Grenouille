@@ -110,7 +110,9 @@ def test_R42_takes_its_criterion_as_a_word():
     with pytest.raises(ValueError, match="valeurs possibles"):
         parse_head("attentive+R42=auc")
     with pytest.raises(ValueError, match="illisible"):
-        parse_head("logistic+R37=abc")
+        parse_head("logistic+R18=abc")
+    with pytest.raises(ValueError, match="valeurs possibles"):
+        parse_head("logistic+R37=abc")  # R37 : un nombre ou « glmm »
 
 
 def test_a_plain_head_has_no_regularizer():
@@ -530,3 +532,71 @@ def test_R73_precision_moves_with_the_prevalence_but_not_the_curve():
     a, b = platt(scores, y)
     assert a > 0
     assert prior_shift(0.5, 0.5, 0.01) == pytest.approx(0.01)
+
+
+# --- R37 en GLMM : σ estimé sur les données, niveau site (n° 131) ---------------------------------
+
+
+def glmm_corpus(sigma, seed=0, n_mics=16, per=150, d=8, sites=4, site_sigma=0.0):
+    """Logistique à biais aléatoires : b_micro ~ N(0, σ²) (+ b_site ~ N(0, σ_site²))."""
+    rng = np.random.default_rng(seed)
+    mics = np.array([f"S{m % sites}/M{m}" for m in range(n_mics)])
+    site_bias = rng.normal(0, site_sigma, sites)
+    b = rng.normal(0, sigma, n_mics) + site_bias[np.arange(n_mics) % sites]
+    w = rng.normal(0, 1, d)
+    X, y, groups = [], [], []
+    for m in range(n_mics):
+        x = rng.normal(0, 1, (per, d))
+        logit = 0.7 * x @ w - 2.5 + b[m]
+        y.append((rng.random(per) < 1 / (1 + np.exp(-logit))).astype(int))
+        X.append(x)
+        groups += [mics[m]] * per
+    return np.vstack(X).astype(np.float32), np.concatenate(y), np.array(groups)
+
+
+def test_R37_glmm_learns_how_much_the_mics_differ():
+    from blanci.regularization import bias_indicators
+
+    chosen = {}
+    for sigma in (0.0, 3.0):
+        X, y, groups = glmm_corpus(sigma)
+        ind, _ = bias_indicators(groups, np.arange(len(y)))
+        head = fit_logistic(np.hstack([X, ind]), y, 1.0, bias_columns=16, bias_scale="glmm")
+        chosen[sigma] = head.meta["bias_scale"]
+        assert len(head.meta["glmm_evidence"]) == 5  # la grille par défaut
+    assert chosen[0.0] <= 0.3 and chosen[3.0] >= 1.0
+
+
+def test_R37_glmm_as_a_head_suffix_runs_in_the_benchmark():
+    assert parse_head("logistic+R37=glmm") == ("logistic", {37: "glmm"})
+    with pytest.raises(ValueError, match="glmm"):
+        regularizer_for("loss:focal+R37=glmm", {}, Context(np.array(["a"])))
+    X, y, groups, held = shortcut_corpus()
+    train, test = np.flatnonzero(~held), np.flatnonzero(held)
+    reg = Regularizer({37: "glmm"}, {"R37": {"glmm_grid": [0.3, 3.0]}}, Context(groups))
+    _, _, options = reg.prepare(X, y, train)
+    assert options["bias_scale"] == "glmm" and options["glmm_grid"] == (0.3, 3.0)
+    kw = {"C_grid": [0.1, 1.0], "n_splits": 3}
+    plain = fit_and_score("logistic", X, y, groups, train, test, **kw)
+    glmm = fit_and_score("logistic", X, y, groups, train, test, regularizer=reg, **kw)
+    assert average_precision(y[test], glmm) > average_precision(y[test], plain)
+
+
+def test_R37_site_level_gives_a_new_mic_the_bias_of_its_site():
+    from blanci.regularization import bias_indicators
+
+    groups = np.array(["S1/a", "S1/b", "S2/c", "S1/d"])
+    ind, levels = bias_indicators(groups, np.array([0, 1, 2]), sites=True)
+    assert levels.tolist() == [0, 0, 0, 1, 1]  # micros a, b, c puis sites S1, S2
+    assert ind[3].tolist() == [0, 0, 0, 1, 0]  # d : micro inconnu, site S1 connu
+    X, y, g = glmm_corpus(0.3, seed=1, site_sigma=2.0)
+    reg = Regularizer({37: None}, {"R37": {"site_scale": 1.0}}, Context(g))
+    Xr, _, options = reg.prepare(X, y, np.arange(len(y)))
+    assert options["bias_scale"] == (3.0, 1.0) and Xr.shape[1] == X.shape[1] + 16 + 4
+    head = fit_logistic(Xr, y, 1.0, **options)
+    assert head.meta["bias_scale"] == [3.0, 1.0]
+    both = Regularizer({37: "glmm"}, {"R37": {"site_scale": "glmm"}}, Context(g))
+    Xr, _, options = both.prepare(X, y, np.arange(len(y)))
+    head = fit_logistic(Xr, y, 1.0, **options)
+    micro, site = head.meta["bias_scale"]
+    assert site >= micro  # les sites diffèrent plus que les micros d'un site

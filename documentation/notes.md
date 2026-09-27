@@ -36,6 +36,19 @@ identifier des régularisations : L1, L2, Elastic Net (L1 + L2), autres
 
 télécharger le drive au cas où j'ai pas de co demain
 
+Estimer la prévalence de A. blanci dans le stock (R73, DECISIONS n° 128) : écouter des fenêtres
+tirées **au hasard** (strate `random` de la file + tirage d'audit, pas les fenêtres choisies pour
+annotation qui surreprésentent les positifs), puis `blanci prevalence` → reporter la valeur dans
+`decision.prevalence` (config/default.yaml) et ré-entraîner (`blanci train`) : le seuil tient alors
+compte de la rareté du chant dans le stock réel. Plus il y a de fenêtres écoutées au hasard, plus
+l'intervalle est serré (la commande l'affiche).
+
+Lancer le diagnostic site/micro (DECISIONS n° 129) : `blanci cluster --mode c0` sur un échantillon
+qui couvre **plusieurs sites** (sinon la part « site » vaut 0 par construction). Lire la partition
+de variance : part site / part micro / part intra-micro, et l'AMI site. Si la part micro domine,
+les régularisations par micro (R19, R21, R37, DANN) visent la bonne cible ; si la part site domine,
+il faudra les passer au niveau du site.
+
 Réunion semaine pro : 
 - faire un cours sur le mécanisme d'attention dans ma prochaine présentation
 - état de l'art

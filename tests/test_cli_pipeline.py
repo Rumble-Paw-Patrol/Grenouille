@@ -349,6 +349,17 @@ def test_cluster_c1_gives_a_verdict(embedded):
     assert "C1 réussi" in output or "C1 échoué" in output
 
 
+def test_pca_writes_the_lost_variance_curve(embedded):
+    tmp_path, config = embedded
+    output = run(config, "pca", "--encoder", "toy-1")
+    assert "variance gardée" in output and "centrés par micro" in output
+    import pandas as pd
+
+    curve = pd.read_csv(tmp_path / "reports" / "acp_toy-1.csv")
+    assert {"components", "lost_raw", "lost_centred"} <= set(curve.columns)
+    assert curve["lost_raw"].is_monotonic_decreasing and curve["lost_raw"].iloc[-1] < 1e-6
+
+
 # --- Module séquentiel et fusion (§3) --------------------------------------------------------
 
 

@@ -16,7 +16,7 @@ Programmées ici, appliquées dans cet ordre :
 | R17 | fenêtre | embedding ramené à la norme 1 |
 | R18 | pli | ACP ajustée sur l'entraînement du pli (`components`) |
 | R21 | pli | retrait des directions qui trahissent le micro (négatifs seulement) |
-| R37 | fenêtre | indicatrices du micro ajoutées à l'entrée : un biais par micro, pénalisé |
+| R37 | fenêtre | indicatrices du micro (et du site) ajoutées à l'entrée : biais pénalisés |
 | R13 | poids | chaque micro pèse autant dans sa classe |
 | R15 | poids | négatifs annotés (faux amis, espèces) × `hard_weight` face aux présumés |
 | R36 | poids | poids des classes (n / 2·n_classe)^`power` : 1 équilibré (défaut), 0 aucun |
@@ -68,9 +68,11 @@ ont une mécanique propre :
 | R30, R31 | `head.py` | têtes `logistic_to_prototype`, `lda_shrunk` |
 | R34, R35 | `losses.py` | têtes `loss:<nom>`, `--methods losses` |
 | R37 | `head.standardize` | échelle des colonnes : `group_bias_scale` (ici) |
+| R37=glmm | `head.fit_logistic` | σ estimé sur les données : `glmm_scales` (ici) |
 | R39 | `head.py` | têtes `knn:k=…`, `exemplar:k=…` (`:w`) ; calcul : `nearest_similarity` (ici) |
 | R50 | `fusion.fit_fusion_model` | méthode `logistic+R50` ; C : `choose_fusion_C` (ici) |
 | R52, R53, R56 | `fusion.py` | `logistic+R52`, `+R53`, `+R56` ; `fit_constrained_logistic` |
+| R54, R55 | `fusion.py` | `logistic+R54`, `+R55` ; `DescriptorBasis`, `fit_fusion_logistic` |
 | R57 | `stacking.py` | toujours là : la fusion n'apprend que sur des scores hors-pli |
 | R60 | `finetune.py` | LoRA sur les couches hautes (`finetune.lora.layers`), à écrire |
 | R66 | `dann.py` | tête `dann` ; mécanique ici |
@@ -81,7 +83,7 @@ ont une mécanique propre :
 | R85 | `gated.py` | tête `gated` |
 
 Écartées au tri des 26 et 27/09 : R33, R48, R51 (remplacée par R52), R58, R68, R69, R71, R72,
-R82 (DECISIONS n° 116, 125–127). En discussion : R54, R55. Plus tard : R83.
+R82 (DECISIONS n° 116, 125–127). Plus tard : R83.
 
 R19 et R20 lisent le stock d'embeddings entier du micro (`store_domain_statistics`) : aucune
 étiquette, ce que la chaîne aura aussi sur un nouveau site. Elles ne valent que pour
@@ -96,6 +98,14 @@ site) a toutes ses colonnes à 0 : biais commun. Le biais absorbe le niveau de c
 pendant l'apprentissage, w n'a plus à le coder. Sur données simulées, un σ petit (biais « très
 pénalisés ») laissait le raccourci dans w : le mécanisme dépend de σ, à choisir sur la base
 complète (`logistic+R37=0.3`, `=1`, `=3`, `=10`) ; σ = 3 est un défaut provisoire (n° 119).
+
+R37 en GLMM (DECISIONS n° 131) : `logistic+R37=glmm` estime σ sur les données au lieu de le
+fixer — la variance de l'effet aléatoire « micro » d'un modèle linéaire généralisé mixte,
+choisie par vraisemblance marginale approchée (Laplace, `glmm_evidence`) parmi `glmm_grid`.
+`R37.site_scale` ajoute un niveau site (biais de site + biais de micro dans son site, emboîtés) :
+un micro nouveau d'un site connu hérite du biais de son site. Ce qui est lissé vers la moyenne,
+ce sont les **biais de la tête** (le niveau de score propre à chaque micro), pas une probabilité
+de présence : la tête reste un détecteur, fenêtre par fenêtre.
 """
 
 from __future__ import annotations
@@ -168,7 +178,7 @@ TORCH_REGULARIZATIONS = {
     "dann": (40, 42, 46, 59, 64),
 }
 # Réglages principaux qui prennent un mot plutôt qu'un nombre : R42=ap, R42=loss.
-WORD_VALUES = {42: ("ap", "loss"), 64: ("ema", "swa")}
+WORD_VALUES = {37: ("glmm",), 42: ("ap", "loss"), 64: ("ema", "swa")}
 _SUFFIX = re.compile(r"^R(\d+)(?:=([0-9.eE+-]+|[a-z_]+))?$")
 
 
@@ -266,6 +276,8 @@ def validate(base: str, regs: dict[int, float | str | None]) -> None:
         raise ValueError("R79 + R81 : pas programmé ensemble")
     if 37 in regs and family not in GROUP_BIAS_HEADS:
         raise ValueError(f"R37 (biais par micro) : têtes {', '.join(GROUP_BIAS_HEADS)} seulement")
+    if regs.get(37) == "glmm" and family == "loss":
+        raise ValueError("R37=glmm (σ estimé) : têtes logistic et cascade seulement")
     if {27, 28} & set(regs) and family not in PENALIZED_HEADS:
         raise ValueError(f"R27/R28 (pénalité) : têtes {', '.join(PENALIZED_HEADS)} seulement")
 
@@ -501,6 +513,27 @@ def group_indicators(groups: np.ndarray, train: np.ndarray) -> np.ndarray:
     return (groups[:, None] == names[None, :]).astype(np.float32)
 
 
+def site_of(groups: np.ndarray) -> np.ndarray:
+    """Site de chaque point « site/micro » (ce qui précède le premier « / »)."""
+    return np.array([g.split("/", 1)[0] for g in np.asarray(groups).astype(str)])
+
+
+def bias_indicators(
+    groups: np.ndarray, train: np.ndarray, sites: bool = False
+) -> tuple[np.ndarray, np.ndarray]:
+    """R37 : (indicatrices, niveau de chaque colonne). Niveau 0 : une colonne par micro de
+    l'entraînement ; avec `sites`, niveau 1 : une colonne par site de l'entraînement (biais de
+    site et biais de micro emboîtés, comme les effets aléatoires d'un GLMM site/micro). Un
+    micro nouveau d'un site connu reçoit alors le biais de son site ; un site nouveau, le biais
+    commun."""
+    micro = group_indicators(groups, train)
+    levels = np.zeros(micro.shape[1], dtype=int)
+    if not sites:
+        return micro, levels
+    site = group_indicators(site_of(groups), train)
+    return np.hstack([micro, site]), np.concatenate([levels, np.ones(site.shape[1], dtype=int)])
+
+
 # --- Assemblage -------------------------------------------------------------------------------
 
 
@@ -693,19 +726,40 @@ class Regularizer:
             options["swa_start"] = float(self.param(64, "swa_start", 0.75))
         return options
 
-    def fit_options(self, bias_columns: int = 0) -> dict[str, float]:
+    def bias_scales(self) -> tuple[float | str, ...]:
+        """R37 : σ de chaque niveau de biais, (micro,) ou (micro, site) ; « glmm » : σ estimé
+        sur les données (`glmm_scales`)."""
+
+        def read(value: Any) -> float | str:
+            return "glmm" if str(value) == "glmm" else float(value)
+
+        scales = (read(self.param(37, "scale", 3.0)),)
+        site = self.param(37, "site_scale", None)
+        return scales if site is None else (*scales, read(site))
+
+    def fit_options(
+        self, bias_columns: int = 0, bias_levels: np.ndarray | None = None
+    ) -> dict[str, Any]:
         """Options de l'ajustement : pénalité (R27, R28 : l1_ratio, 0 = L2, R26) et biais par
-        micro (R37 : nombre de colonnes d'indicatrices, échelle)."""
-        options: dict[str, float] = {}
+        micro (R37 : nombre de colonnes d'indicatrices, σ par niveau, niveau de chaque colonne,
+        grille du GLMM)."""
+        options: dict[str, Any] = {}
         if 27 in self.regs:
             options["l1_ratio"] = 1.0
         elif 28 in self.regs:
             options["l1_ratio"] = float(self.param(28, "l1_ratio", 0.5))
         if bias_columns:
+            scales = self.bias_scales()
             options |= {
                 "bias_columns": bias_columns,
-                "bias_scale": float(self.param(37, "scale", 3.0)),
+                "bias_scale": scales[0] if len(scales) == 1 else scales,
             }
+            if bias_levels is not None and len(scales) > 1:
+                options["bias_levels"] = np.asarray(bias_levels)
+            if "glmm" in scales:
+                options["glmm_grid"] = tuple(
+                    float(v) for v in self.param(37, "glmm_grid", GLMM_GRID)
+                )
         return options
 
     def prepare(
@@ -718,17 +772,18 @@ class Regularizer:
         if project is not None:
             X = project(X)
         pool = self.pool_windows(project, train) if 81 in self.regs else None
-        bias_columns = 0
+        bias_columns, bias_levels = 0, None
         if 37 in self.regs:
-            indicators = group_indicators(self.context.groups, train)
+            groups = np.asarray(self.context.groups).astype(str)
+            sites = len(self.bias_scales()) > 1 and all("/" in g for g in groups[train])
+            indicators, bias_levels = bias_indicators(groups, train, sites)
             bias_columns = indicators.shape[1]
             X = np.hstack([np.asarray(X, dtype=np.float32), indicators])
             if pool is not None:
-                names = np.unique(np.asarray(self.context.groups)[train].astype(str))
                 pool_groups = np.asarray(self.pool_prepared_groups).astype(str)
-                pool = np.hstack(
-                    [pool, (pool_groups[:, None] == names[None, :]).astype(np.float32)]
-                )
+                both = np.concatenate([groups[train], pool_groups])
+                own = np.arange(len(groups[train]))
+                pool = np.hstack([pool, bias_indicators(both, own, sites)[0][len(own) :]])
         self.pool_prepared = pool
         weights = sample_weights(
             y[train],
@@ -738,7 +793,7 @@ class Regularizer:
             float(self.param(15, "hard_weight", 3.0)),
             float(self.param(36, "power", 0.0)),
         )
-        return X, weights, self.fit_options(bias_columns)
+        return X, weights, self.fit_options(bias_columns, bias_levels)
 
 
 # --- R26, R40, R50 : un réglage choisi par validation groupée -----------------------------------
@@ -1208,44 +1263,67 @@ FUSION_SUFFIXES = {
     50: "C par validation groupée",
     52: "poids ≥ 0 (combinaison convexe à l'échelle près)",
     53: "sélection L1 des entrées",
+    54: "descripteurs en paliers monotones (classes)",
+    55: "descripteurs en courbes lisses (GAM, P-splines)",
     56: "pas de veto : contribution des descripteurs plafonnée",
 }
+# « R54=v », « R55=v », « R56=v » : le réglage principal, à la place de celui de la config.
+FUSION_PARAMETER = {54: "bins", 55: "smoothness", 56: "cap"}
 
 
-def fusion_variant(method: str) -> set[int] | None:
-    """« logistic+R50+R52 » → {50, 52} ; « logistic » → set() ; None si ce n'est pas la
-    fusion logistique. Suffixes possibles : `FUSION_SUFFIXES`."""
+def fusion_settings(method: str) -> dict[int, float | None] | None:
+    """« logistic+R50+R55=10 » → {50: None, 55: 10.0} ; « logistic » → {} ; None si ce n'est
+    pas la fusion logistique. Suffixes possibles : `FUSION_SUFFIXES` ; valeur (« =v ») pour
+    ceux de `FUSION_PARAMETER`. R54 et R55 s'excluent (deux façons de courber un
+    descripteur), R53 et R55 aussi (la L1 ne lisse pas une courbe)."""
     base, *parts = method.split("+")
     if base != "logistic":
         return None
-    numbers = set()
+    settings: dict[int, float | None] = {}
     for part in parts:
-        match = re.fullmatch(r"R(\d+)", part.strip())
+        match = re.fullmatch(r"R(\d+)(?:=([0-9.eE+-]+))?", part.strip())
         if not match or int(match.group(1)) not in FUSION_SUFFIXES:
             raise ValueError(
                 f"fusion {method!r} : suffixe {part!r} inconnu "
                 f"({', '.join(f'R{n}' for n in FUSION_SUFFIXES)})"
             )
-        numbers.add(int(match.group(1)))
-    return numbers
+        number, value = int(match.group(1)), match.group(2)
+        if value is not None and number not in FUSION_PARAMETER:
+            raise ValueError(f"fusion {method!r} : R{number} ne prend pas de valeur")
+        settings[number] = float(value) if value is not None else None
+    if {54, 55} <= settings.keys():
+        raise ValueError(f"fusion {method!r} : R54 ou R55, pas les deux")
+    if {53, 55} <= settings.keys():
+        raise ValueError(f"fusion {method!r} : R53 (L1) ne se combine pas avec R55 (lissage)")
+    return settings
+
+
+def fusion_variant(method: str) -> set[int] | None:
+    """« logistic+R50+R52 » → {50, 52} ; « logistic » → set() ; None si ce n'est pas la
+    fusion logistique. Suffixes possibles : `FUSION_SUFFIXES`."""
+    settings = fusion_settings(method)
+    return None if settings is None else set(settings)
 
 
 def fit_constrained_logistic(
     z: np.ndarray,
     y: np.ndarray,
     C: float,
-    nonneg: bool = False,
+    nonneg: bool | np.ndarray = False,
     l1: bool = False,
     cap: float | None = None,
     head_index: int | None = None,
+    penalty: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float]:
     """(coefficients, biais) d'une logistique de fusion à classes équilibrées, sous contraintes.
 
     Perte : C · Σ poids · log(1 + e^(−t·s)) + pénalité, avec
     - R52 (`nonneg`) : coefficients ≥ 0 sur des entrées déjà orientées (« plus haut = plus
-      A. blanci ») — pour classer, c'est une combinaison convexe à l'échelle près ;
+      A. blanci ») — pour classer, c'est une combinaison convexe à l'échelle près. Un booléen
+      pour toutes les colonnes, ou un masque par colonne (R54 : les paliers seulement) ;
     - R53 (`l1`) : pénalité ‖w‖₁ au lieu de ½‖w‖² : les entrées inutiles tombent à 0 (exactement
       avec R52, à ~0 sinon) ;
+    - R55 (`penalty`) : pénalité ½ wᵀ P w au lieu de ½‖w‖² (P : `DescriptorBasis.penalty`) ;
     - R56 (`cap`) : s = w_tête·z_tête + cap · tanh(Σ_autres w_j z_j / cap) + b. Les
       descripteurs déplacent le score d'au plus `cap` (en logit) : une tête assez sûre d'elle
       passe toujours, aucun descripteur n'a de droit de veto.
@@ -1258,6 +1336,9 @@ def fit_constrained_logistic(
     counts = np.bincount(y, minlength=2)
     sw = (n / (2.0 * np.maximum(counts, 1)))[y]
     t = 2.0 * y - 1.0
+    positive = np.broadcast_to(np.asarray(nonneg, dtype=bool), (k,)).copy()
+    if l1 and penalty is not None:
+        raise ValueError("pénalité L1 ou quadratique, pas les deux")
     others = np.ones(k, dtype=bool)
     if cap is not None:
         if head_index is None:
@@ -1283,34 +1364,345 @@ def fit_constrained_logistic(
             grad_w = np.empty(k)
             grad_w[~others] = z[:, ~others].T @ g_s
             grad_w[others] = z[:, others].T @ (g_s * (1.0 - np.tanh(u / cap) ** 2))
-        if l1 and nonneg:
-            loss += float(w.sum())
-            grad_w = grad_w + 1.0
-        elif l1:
-            smooth = np.sqrt(w**2 + eps**2)
-            loss += float(smooth.sum())
-            grad_w = grad_w + w / smooth
+        if l1:  # |w| = w sur les colonnes ≥ 0 ; ailleurs, une valeur absolue lissée
+            smooth = np.sqrt(w[~positive] ** 2 + eps**2)
+            loss += float(w[positive].sum() + smooth.sum())
+            grad_w = grad_w + np.where(positive, 1.0, 0.0)
+            grad_w[~positive] += w[~positive] / smooth
+        elif penalty is not None:
+            pw = penalty @ w
+            loss += 0.5 * float(w @ pw)
+            grad_w = grad_w + pw
         else:
             loss += 0.5 * float(w @ w)
             grad_w = grad_w + w
         return loss, np.append(grad_w, g_s.sum())
 
     start = np.append(np.full(k, 0.01), 0.0)
-    bounds = [(0.0, None) if nonneg else (None, None)] * k + [(None, None)]
-    result = minimize(
-        objective, start, jac=True, method="L-BFGS-B", bounds=bounds, options={"maxiter": 5000}
-    )
+    bounds = [(0.0, None) if p else (None, None) for p in positive] + [(None, None)]
+    # Petits produits matrice-vecteur : BLAS à plusieurs fils y perd jusqu'à 100× son temps.
+    from threadpoolctl import threadpool_limits
+
+    with threadpool_limits(limits=1, user_api="blas"):
+        result = minimize(
+            objective, start, jac=True, method="L-BFGS-B", bounds=bounds, options={"maxiter": 5000}
+        )
     return result.x[:-1], float(result.x[-1])
+
+
+# --- R54, R55 : descripteurs courbés dans la fusion ----------------------------------------------
+
+
+def is_descriptor(column: str) -> bool:
+    """R54, R55 : les entrées courbées sont les descripteurs du module séquentiel. Le score de
+    la tête (« head ») et les autres sources (« head:<encodeur> », « congeners:… »), des
+    scores déjà faits pour classer, restent linéaires."""
+    return column != "head" and ":" not in column
+
+
+@dataclass
+class DescriptorBasis:
+    """R54, R55 : chaque descripteur (entrée standardisée z_j de la fusion) devient un bloc de
+    colonnes, les autres entrées restent telles quelles. La fusion reste une logistique : sa
+    contribution f_j(z_j) = bloc · coefficients n'est simplement plus une droite.
+
+    - `kind` = "steps" (R54) : colonnes 1[s_j·z_j > t] aux seuils t, quantiles de
+      l'entraînement (`bins` classes), s_j l'orientation de l'entrée (+1 si elle monte avec le
+      label). Coefficients ≥ 0 : f_j est une marche qui ne fait que monter dans le sens « plus
+      A. blanci », chaque coefficient est la hauteur d'une marche.
+    - `kind` = "spline" (R55) : B-splines cubiques sur `segments` intervalles égaux entre les
+      quantiles 1 % et 99 % de l'entraînement (P-splines, Eilers et Marx 1996). Au-delà, la
+      courbe reste plate : pas d'extrapolation sur un site aux valeurs jamais vues.
+
+    Colonnes centrées sur l'entraînement : f_j vaut 0 en moyenne, le biais de la fusion garde
+    le niveau (et R56 plafonne une contribution centrée). `expanded` : entrée → réglages ; une
+    entrée constante à l'entraînement n'est pas développée."""
+
+    kind: str
+    n_inputs: int
+    expanded: dict[int, dict[str, Any]]
+
+    def _raw(self, spec: dict[str, Any], x: np.ndarray) -> np.ndarray:
+        if self.kind == "steps":
+            cuts = np.asarray(spec["cuts"], dtype=float)
+            return (spec["sign"] * x[:, None] > cuts[None, :]).astype(float)
+        from scipy.interpolate import BSpline
+
+        knots, degree = np.asarray(spec["knots"], dtype=float), int(spec["degree"])
+        x = np.clip(x, knots[degree], knots[-degree - 1])
+        return BSpline.design_matrix(x, knots, degree).toarray()
+
+    def blocks(self) -> list[tuple[int, int]]:
+        """Colonnes (début, fin) de chaque entrée dans la matrice développée."""
+        out, start = [], 0
+        for j in range(self.n_inputs):
+            spec = self.expanded.get(j)
+            width = len(spec["center"]) if spec else 1
+            out.append((start, start + width))
+            start += width
+        return out
+
+    def transform(self, z: np.ndarray) -> np.ndarray:
+        z = np.asarray(z, dtype=float)
+        parts = []
+        for j in range(self.n_inputs):
+            spec = self.expanded.get(j)
+            if spec is None:
+                parts.append(z[:, j : j + 1])
+            else:
+                parts.append(self._raw(spec, z[:, j]) - np.asarray(spec["center"]))
+        return np.hstack(parts)
+
+    def penalty(self, smoothness: float = 1.0, order: int = 2) -> np.ndarray:
+        """R55 : matrice P de la pénalité ½ wᵀ P w. Entrée linéaire : 1 (la L2 ordinaire).
+        Bloc de spline : G + `smoothness` · DᵀD, avec G = BᵀB / n la taille de la courbe (pour
+        une droite w·z, fᵀf / n = w² : la même L2 qu'une entrée linéaire) et D les différences
+        d'ordre `order` des coefficients voisins (la courbure). Quand C baisse, la courbe
+        rétrécit comme une entrée ordinaire ; `smoothness` grand : la courbe tend vers une
+        droite (le noyau de D d'ordre 2)."""
+        blocks = self.blocks()
+        size = blocks[-1][1]
+        out = np.zeros((size, size))
+        for j, (a, b) in enumerate(blocks):
+            spec = self.expanded.get(j)
+            if spec is None:
+                out[a, a] = 1.0
+                continue
+            diff = np.diff(np.eye(b - a), n=order, axis=0)
+            gram = np.asarray(spec["gram"], dtype=float)
+            out[a:b, a:b] = gram + float(smoothness) * diff.T @ diff + 1e-6 * np.eye(b - a)
+        return out
+
+    def amplitudes(self, coef: np.ndarray) -> np.ndarray:
+        """Amplitude de la contribution de chaque entrée quand elle va de −2 à +2 écarts-types
+        (4·|w| pour une entrée linéaire) : la « part » de chaque entrée dans la fusion."""
+        grid = np.linspace(-2.0, 2.0, 401)
+        out = []
+        for j, (a, b) in enumerate(self.blocks()):
+            spec = self.expanded.get(j)
+            if spec is None:
+                out.append(4.0 * abs(float(coef[a])))
+                continue
+            x = grid
+            if self.kind == "steps":
+                cuts = np.asarray(spec["cuts"], dtype=float) * spec["sign"]
+                x = np.concatenate([grid, cuts[np.abs(cuts) <= 2.0] + 1e-9])
+            f = self._raw(spec, x) @ coef[a:b]
+            out.append(float(f.max() - f.min()))
+        return np.asarray(out)
+
+    def curve(self, j: int, coef: np.ndarray, x: np.ndarray) -> np.ndarray:
+        """f_j(x) : la contribution de l'entrée j (z standardisé) au logit de la fusion."""
+        a, b = self.blocks()[j]
+        spec = self.expanded.get(j)
+        if spec is None:
+            return np.asarray(x, dtype=float) * float(coef[a])
+        return (self._raw(spec, np.asarray(x, dtype=float)) - np.asarray(spec["center"])) @ coef[
+            a:b
+        ]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "n_inputs": self.n_inputs,
+            "expanded": [[j, spec] for j, spec in sorted(self.expanded.items())],
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> DescriptorBasis:
+        return cls(d["kind"], int(d["n_inputs"]), {int(j): spec for j, spec in d["expanded"]})
+
+
+def fit_descriptor_basis(
+    kind: str,
+    z: np.ndarray,
+    sign: np.ndarray,
+    expand: list[int],
+    bins: int = 5,
+    segments: int = 8,
+    degree: int = 3,
+) -> DescriptorBasis:
+    """R54 (`kind` = "steps", `bins` classes de même effectif) ou R55 ("spline", `segments`
+    intervalles, degré `degree`) : la base de chaque entrée de `expand`, apprise sur z
+    (entraînement de la fusion, entrées standardisées)."""
+    if kind not in ("steps", "spline"):
+        raise ValueError(f"R54, R55 : kind {kind!r} (steps ou spline)")
+    z = np.asarray(z, dtype=float)
+    basis = DescriptorBasis(kind, z.shape[1], {})
+    for j in expand:
+        x = z[:, j]
+        if kind == "steps":
+            oriented = sign[j] * x
+            cuts = np.unique(np.quantile(oriented, np.linspace(0, 1, int(bins) + 1)[1:-1]))
+            cuts = cuts[(cuts >= oriented.min()) & (cuts < oriented.max())]
+            if not len(cuts):
+                continue
+            spec: dict[str, Any] = {"sign": float(sign[j]), "cuts": cuts.tolist()}
+        else:
+            lo, hi = np.quantile(x, [0.01, 0.99])
+            if hi - lo < 1e-9:
+                continue
+            step = (hi - lo) / int(segments)
+            knots = lo + step * np.arange(-int(degree), int(segments) + int(degree) + 1)
+            spec = {"knots": knots.tolist(), "degree": int(degree)}
+        raw = basis._raw(spec, x)
+        spec["center"] = raw.mean(axis=0).tolist()
+        if kind == "spline":
+            centred = raw - raw.mean(axis=0)
+            spec["gram"] = (centred.T @ centred / len(x)).tolist()
+        basis.expanded[j] = spec
+    return basis
+
+
+def fit_fusion_logistic(
+    z: np.ndarray,
+    y: np.ndarray,
+    sign: np.ndarray,
+    columns: list[str],
+    variant: set[int],
+    C: float,
+    cap: float = 2.0,
+    bins: int = 5,
+    segments: int = 8,
+    smoothness: float = 1.0,
+) -> tuple[np.ndarray, float, DescriptorBasis | None, int | None]:
+    """Fusion logistique contrainte (R52, R53, R54, R55, R56) sur les entrées standardisées z :
+    (coefficients sur la matrice développée, biais, base des descripteurs ou None, colonne de
+    la tête dans la matrice développée ou None). Les coefficients intègrent déjà
+    l'orientation : décision = base(z) · coefficients + biais (R56 : voir
+    `fit_constrained_logistic`)."""
+    kind = "steps" if 54 in variant else "spline" if 55 in variant else None
+    basis = None
+    if kind is not None:
+        expand = [j for j, c in enumerate(columns) if is_descriptor(c)]
+        basis = fit_descriptor_basis(kind, z, sign, expand, bins, segments)
+    design = basis.transform(z) if basis is not None else np.asarray(z, dtype=float)
+    blocks = basis.blocks() if basis is not None else [(j, j + 1) for j in range(z.shape[1])]
+    linear = np.zeros(design.shape[1], dtype=bool)
+    flip = np.ones(design.shape[1])
+    for j, (a, _) in enumerate(blocks):
+        if basis is None or j not in basis.expanded:
+            linear[a] = True
+            if 52 in variant:
+                flip[a] = sign[j]
+    nonneg = (linear & (52 in variant)) | (~linear & (kind == "steps"))
+    head = blocks[list(columns).index("head")][0] if "head" in columns else None
+    coef, intercept = fit_constrained_logistic(
+        design * flip,
+        y,
+        C,
+        nonneg=nonneg,
+        l1=53 in variant,
+        cap=float(cap) if 56 in variant else None,
+        head_index=head,
+        penalty=basis.penalty(smoothness) if kind == "spline" else None,
+    )
+    return coef * flip, intercept, basis, head
 
 
 # --- R37 : échelle des colonnes de biais ---------------------------------------------------------
 
 
-def group_bias_scale(sigma: float, C: float) -> float:
+def group_bias_scale(sigma, C: float):
     """Échelle des indicatrices de micro (`head.standardize`) : σ / √C. Sous la pénalité ½‖w‖²
     et le terme C · Σ perte, le biais b d'un micro coûte alors b² / 2σ² rapporté aux données,
-    l'a priori N(0, σ²), quel que soit C."""
-    return float(sigma) / float(np.sqrt(C))
+    l'a priori N(0, σ²), quel que soit C. Un σ par colonne possible (niveaux micro et site)."""
+    out = np.asarray(sigma, dtype=float) / float(np.sqrt(C))
+    return float(out) if out.ndim == 0 else out
+
+
+def bias_sigmas(bias_scale, bias_columns: int, bias_levels: np.ndarray | None = None) -> np.ndarray:
+    """σ de chaque colonne de biais : `bias_scale` est un σ, ou un σ par niveau (micro, site),
+    `bias_levels` le niveau de chaque colonne (tout au niveau 0 par défaut)."""
+    scales = np.atleast_1d(np.asarray(bias_scale, dtype=object))
+    if any(str(v) == "glmm" for v in scales):
+        raise ValueError("R37 : σ « glmm » à estimer d'abord (`glmm_scales`)")
+    levels = np.zeros(int(bias_columns), dtype=int) if bias_levels is None else bias_levels
+    return scales.astype(float)[np.asarray(levels, dtype=int)]
+
+
+# --- R37 en GLMM : σ estimé sur les données ------------------------------------------------------
+
+GLMM_GRID = (0.1, 0.3, 1.0, 3.0, 10.0)  # σ essayés (logit), faute de `R37.glmm_grid`
+
+
+def glmm_evidence(
+    decision: np.ndarray,
+    y: np.ndarray,
+    sample_weight: np.ndarray,
+    indicators: np.ndarray,
+    biases: np.ndarray,
+    sigmas: np.ndarray,
+    weight_penalty: float,
+) -> float:
+    """Log-vraisemblance marginale approchée (Laplace) d'une logistique à biais aléatoires
+    b ~ N(0, σ²) : on intègre les biais autour de leur valeur ajustée b̂, les poids w restent
+    à leur valeur ajustée (effets fixes, déjà pénalisés par C).
+
+        log p(y | σ) ≈ − Σ poids · perte(w, b̂) − ½‖w‖² / C − Σ b̂² / 2σ² − ½ log det(I + Σ H)
+
+    avec H = Zᵀ diag(poids · p(1 − p)) Z la courbure de la perte le long des biais (Z : les
+    indicatrices) et Σ = diag(σ²). Les deux derniers termes font l'arbitrage : σ grand laisse
+    chaque micro coller à ses données mais se paie en log det (un paramètre libre par micro) ;
+    σ petit coûte en ajustement si les micros diffèrent vraiment."""
+    y = np.asarray(y).astype(int)
+    p = 1.0 / (1.0 + np.exp(-decision))
+    t = 2.0 * y - 1.0
+    loss = float(sample_weight @ np.logaddexp(0.0, -t * decision))
+    curvature = (indicators * (sample_weight * p * (1 - p))[:, None]).T @ indicators
+    root = np.asarray(sigmas, dtype=float)  # Σ^½ = diag(σ)
+    _, logdet = np.linalg.slogdet(np.eye(len(root)) + root[:, None] * curvature * root[None, :])
+    prior = float((np.asarray(biases) ** 2 / (2.0 * np.asarray(sigmas) ** 2)).sum())
+    return -loss - weight_penalty - prior - 0.5 * float(logdet)
+
+
+def glmm_scales(
+    fit,
+    X: np.ndarray,
+    y: np.ndarray,
+    C: float,
+    bias_columns: int,
+    bias_scale,
+    bias_levels: np.ndarray | None = None,
+    sample_weight: np.ndarray | None = None,
+    grid=GLMM_GRID,
+) -> tuple[list[float], dict[str, float]]:
+    """R37 en GLMM : σ de chaque niveau marqué « glmm » dans `bias_scale`, choisi sur `grid` en
+    maximisant `glmm_evidence` (Bayes empirique : l'a priori des biais est appris sur les
+    données, comme la variance d'un effet aléatoire d'un GLMM). `fit(σ par niveau)` renvoie la
+    tête logistique (`head.Head`) ajustée avec ces σ. Deux niveaux : une coordonnée après
+    l'autre, deux passes. Renvoie (σ par niveau, log-vraisemblance approchée de chaque essai)."""
+    y = np.asarray(y).astype(int)
+    X = np.asarray(X, dtype=np.float32)
+    counts = np.bincount(y, minlength=2)
+    weights = (len(y) / (2.0 * np.maximum(counts, 1)))[y]
+    if sample_weight is not None:
+        weights = weights * np.asarray(sample_weight, dtype=float)
+    n = int(bias_columns)
+    indicators = X[:, -n:].astype(np.float64)
+    scales = list(np.atleast_1d(np.asarray(bias_scale, dtype=object)))
+    free = [k for k, v in enumerate(scales) if str(v) == "glmm"]
+    current = [1.0 if str(v) == "glmm" else float(v) for v in scales]
+    tried: dict[tuple[float, ...], float] = {}
+
+    def evidence(sigmas: list[float]) -> float:
+        key = tuple(sigmas)
+        if key not in tried:
+            head = fit(list(sigmas))
+            sig = bias_sigmas(sigmas, n, bias_levels)
+            biases = head.coef[-n:] / head.scale[-n:]  # b = coefficient · échelle de la colonne
+            penalty = 0.5 * float(head.coef[:-n].astype(float) @ head.coef[:-n]) / C
+            tried[key] = glmm_evidence(
+                head.decision(X).astype(float), y, weights, indicators, biases, sig, penalty
+            )
+        return tried[key]
+
+    for _ in range(2 if len(free) > 1 else 1):
+        for k in free:
+            options = [[*current[:k], float(v), *current[k + 1 :]] for v in grid]
+            current = max(options, key=evidence)
+    table = {"/".join(f"{v:g}" for v in key): value for key, value in tried.items()}
+    return current, table
 
 
 # --- R39 : k plus proches voisins ----------------------------------------------------------------

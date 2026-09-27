@@ -1623,6 +1623,36 @@ def cluster(
 
 
 @app.command()
+def pca(
+    ctx: typer.Context,
+    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur (nom-version).")],
+    n: Annotated[
+        int | None, typer.Option(help="Fenêtres tirées (défaut : cluster.c0_sample).")
+    ] = None,
+) -> None:
+    """Part de la variance des embeddings perdue selon le nombre de composantes de l'ACP gardées
+    (R18, clustering), telle quelle et après centrage par micro (R19) : CSV et PNG."""
+    from blanci.service import PCA_KEPT, PCA_MARKS, run_pca_curve, write_pca_curve
+
+    cfg = _cfg(ctx)
+    summary, curve = run_pca_curve(connect(config_path(cfg, "db")), encoder, cfg, n)
+    typer.echo(
+        f"{summary['n_windows']} fenêtres, {summary['n_mics']} micros, "
+        f"dimension {summary['dim']} ; le centrage par micro retire "
+        f"{summary['mic_share']:.0%} de la variance"
+    )
+    for column, name in (("lost_raw", "tels quels"), ("lost_centred", "centrés par micro")):
+        kept = ", ".join(f"{k} % → {summary[f'{column}_k{k}']}" for k in PCA_KEPT)
+        lost = ", ".join(
+            f"{k} : {summary[f'{column}_at{k}']:.1f} %"
+            for k in PCA_MARKS
+            if f"{column}_at{k}" in summary
+        )
+        typer.echo(f"{name} : variance gardée {kept} composantes ; perdue à {lost}")
+    typer.echo(f"courbe : {write_pca_curve(cfg, summary, curve)} (et .png)")
+
+
+@app.command()
 def agreement(
     ctx: typer.Context,
     annotators: Annotated[str, typer.Option(help="Deux annotateurs, ex. « léonard,tuteur ».")],

@@ -123,7 +123,10 @@ $B heads --encoder perch_v2-bacpipe1.3.5 --methods attentive,attentive+R41+R42  
 $B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R79,logistic+R81,multiclass,dann  # n° 122–124
 $A anuraset-heads --encoder perch_v2-bacpipe1.3.5     # têtes jugées un site à la fois (R78, n° 125)
 $B prevalence                                        # part de positifs au hasard → decision.prevalence (n° 128)
+$B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic+R37,logistic+R37=glmm  # σ du biais estimé (GLMM, n° 131)
+$B pca --encoder perch_v2-bacpipe1.3.5               # variance perdue selon les dimensions gardées (n° 132)
 $B fusion-bench --encoder birdmae-bacpipe1.3.5 --sources head:perch_v2-bacpipe1.3.5
+$B fusion-bench --encoder birdmae-bacpipe1.3.5         # dont logistic+R50+R54, +R50+R55 (n° 130)
 $B ensemble --sources birdmae-bacpipe1.3.5/logistic,perch_v2-bacpipe1.3.5/logistic
 $B detector-bench --detector band_contrast           # distilled, homemade : réservés
 $B sources                                           # ce que le stock hors-pli contient

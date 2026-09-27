@@ -139,6 +139,49 @@ def variance_partition(X: np.ndarray, sites: np.ndarray, mics: np.ndarray) -> di
     }
 
 
+def pca_information_curve(X: np.ndarray, mics: np.ndarray | None = None) -> pd.DataFrame:
+    """Part de la variance des embeddings **perdue** quand on ne garde que les k premières
+    composantes de l'ACP, pour k = 1 … d (question de Léonard, 27/09) : l'ACP de R18 et du
+    clustering (`cluster.pca_components`) garde les k premières, ce tableau dit ce qu'elle jette.
+
+    Colonnes : `components` (k), `lost_raw` (en %, embeddings tels quels, comme R18 seule) et,
+    avec `mics`, `lost_centred` (après centrage par micro, comme R19 puis R18 : l'ACP ne voit
+    plus ce qui distingue les micros). La variance n'est pas l'information utile : une direction
+    de faible variance peut porter le chant (la note occupe 2–3 % d'une fenêtre). La courbe dit
+    combien de dimensions portent l'essentiel du **paysage sonore** ; ce qu'elles valent pour
+    A. blanci se lit dans le benchmark (`logistic+R18=16`, `=32`, `=64`).
+
+    Chaque courbe est en % de sa propre variance totale ; `attrs["mic_share"]` : la part de la
+    variance brute que le centrage par micro retire (les différences entre micros)."""
+    X = np.asarray(X, dtype=np.float64)
+    totals = {}
+
+    def lost(A: np.ndarray, name: str) -> np.ndarray:
+        A = A - A.mean(axis=0)
+        eig = np.clip(np.linalg.eigvalsh(A.T @ A)[::-1], 0.0, None)
+        totals[name] = total = eig.sum()
+        return 100.0 * (1.0 - np.cumsum(eig) / total) if total > 0 else np.zeros(len(eig))
+
+    out = pd.DataFrame({"components": np.arange(1, X.shape[1] + 1), "lost_raw": lost(X, "raw")})
+    if mics is not None:
+        mics = np.asarray(mics).astype(str)
+        centred = X.copy()
+        for mic in np.unique(mics):
+            rows = mics == mic
+            centred[rows] -= centred[rows].mean(axis=0)
+        out["lost_centred"] = lost(centred, "centred")
+        if totals["raw"] > 0:
+            out.attrs["mic_share"] = float(1.0 - totals["centred"] / totals["raw"])
+    out.iloc[:, 1:] = out.iloc[:, 1:].clip(lower=0.0)
+    return out
+
+
+def components_for(curve: pd.DataFrame, column: str, kept: float) -> int:
+    """Plus petit nombre de composantes qui garde au moins `kept` % de la variance."""
+    enough = curve.loc[curve[column] <= 100.0 - kept + 1e-9, "components"]
+    return int(enough.iloc[0]) if len(enough) else int(curve["components"].iloc[-1])
+
+
 def c1_verdict(
     labels: np.ndarray,
     y: np.ndarray,

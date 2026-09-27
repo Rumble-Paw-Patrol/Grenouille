@@ -878,6 +878,93 @@ def run_clustering(
     return summary, table, windows
 
 
+PCA_MARKS = (16, 32, 64, 128)  # R18 : nombres de composantes à lire sur la courbe
+PCA_KEPT = (80, 90, 95, 99)  # parts de variance gardées : combien de composantes pour chacune
+
+
+def run_pca_curve(
+    con: sqlite3.Connection, encoder_id: str, cfg: dict, n: int | None = None
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    """Courbe « variance perdue selon le nombre de dimensions » (`cluster.pca_information_curve`)
+    sur un échantillon du stock de l'encodeur (`cluster.c0_sample` fenêtres par défaut, les
+    fenêtres arrêtées par le seuillage en amont exclues). Renvoie (résumé, courbe)."""
+    from blanci.cluster import components_for, pca_information_curve
+
+    ccfg = cfg["cluster"]
+    store = store_for(cfg, encoder_id)
+    meta, X = store.sample(n or ccfg["c0_sample"], seed=ccfg["seed"])
+    open_rows = ~gated_mask(meta)
+    meta, X = meta[open_rows].reset_index(drop=True), X[open_rows]
+    if len(meta) < 2:
+        raise ValueError(f"pas assez d'embeddings pour {encoder_id}")
+    recordings = recordings_table(con).set_index("recording_id")
+    mics = recordings.loc[meta["recording_id"], "point"].to_numpy()
+    curve = pca_information_curve(X, mics)
+    summary: dict[str, Any] = {
+        "encoder_id": encoder_id,
+        "n_windows": int(len(meta)),
+        "dim": int(X.shape[1]),
+        "n_mics": int(len(np.unique(mics.astype(str)))),
+        "mic_share": curve.attrs.get("mic_share", float("nan")),
+    }
+    for column in ("lost_raw", "lost_centred"):
+        for kept in PCA_KEPT:
+            summary[f"{column}_k{kept}"] = components_for(curve, column, kept)
+        for k in PCA_MARKS:
+            if k <= len(curve):
+                summary[f"{column}_at{k}"] = float(curve[column].iloc[k - 1])
+    return summary, curve
+
+
+def write_pca_curve(cfg: dict, summary: dict[str, Any], curve: pd.DataFrame) -> Path:
+    """CSV de la courbe, et PNG si matplotlib est là : % de variance perdue (ordonnée) selon le
+    nombre de composantes gardées (abscisse logarithmique), repères aux k de R18 et du
+    clustering."""
+    reports = config_path(cfg, "reports")
+    reports.mkdir(parents=True, exist_ok=True)
+    stem = f"acp_{summary['encoder_id']}"
+    csv = reports / f"{stem}.csv"
+    curve.to_csv(csv, index=False)
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:  # pragma: no cover - groupe app ou notebook absent
+        return csv
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.plot(curve["components"], curve["lost_raw"], label="embeddings tels quels (R18)")
+    if "lost_centred" in curve:
+        ax.plot(curve["components"], curve["lost_centred"], label="centrés par micro (R19 + R18)")
+    marks = [
+        k for k in sorted({*PCA_MARKS, int(cfg["cluster"]["pca_components"])}) if k <= len(curve)
+    ]
+    for k in marks:
+        ax.axvline(k, color="grey", linestyle=":", linewidth=0.8)
+    for level in (10, 5):
+        ax.axhline(level, color="grey", linestyle="--", linewidth=0.6)
+    ax.set_xscale("log")
+    ax.set_xlim(1, len(curve))
+    ticks = sorted({1, 2, 4, 8, *marks, len(curve)})
+    ax.set_xticks(ticks, [str(k) for k in ticks], fontsize=8)
+    ax.minorticks_off()
+    ax.set_yticks(range(0, 101, 10))
+    ax.grid(axis="y", color="0.92")
+    ax.set_ylim(0, 100)
+    ax.set_xlabel("composantes gardées (échelle log. ; pointillés : R18, clustering)")
+    ax.set_ylabel("variance perdue (%)")
+    ax.set_title(
+        f"{summary['encoder_id']} : {summary['n_windows']} fenêtres, {summary['n_mics']} micros, "
+        f"dimension {summary['dim']}",
+        fontsize=9,
+    )
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    fig.savefig(reports / f"{stem}.png", dpi=120)
+    plt.close(fig)
+    return csv
+
+
 # --- Jeu gelé (§6) --------------------------------------------------------------------------
 
 

@@ -1309,3 +1309,89 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      somme 1), et l'AMI groupes/sites à côté de l'AMI groupes/micros. À lancer sur un
      échantillon qui couvre plusieurs sites.
 
+
+130. **Fusion : R54 et R55, des descripteurs courbés.** Accord de Léonard (27/09) ; le tri
+     des descripteurs viendra après. Les deux ne touchent que les descripteurs du module
+     séquentiel (`regularization.is_descriptor`) : le score de la tête et les autres sources
+     restent des droites. Chaque descripteur standardisé devient un bloc de colonnes
+     (`DescriptorBasis`), la fusion reste une logistique pénalisée
+     (`fit_constrained_logistic`, appelée par `fit_fusion_logistic`).
+     - `logistic+R54` : `fusion.R54.bins` = 5 classes de même effectif, soit 4 marches aux
+       quantiles de l'entraînement ; la hauteur de chaque marche est un coefficient ≥ 0 sur
+       le descripteur orienté (signe de sa corrélation au label, comme R52) : la courbe ne
+       fait que monter dans le sens « plus A. blanci ». Robuste aux descripteurs asymétriques
+       (une longue queue ne tire plus la droite) ; incapable d'une forme en U, par
+       construction.
+     - `logistic+R55` : modèle additif (GAM) par P-splines (Eilers et Marx 1996, pas de
+       dépendance : scipy suffit, mgcv est en R et pygam serait à télécharger). B-splines
+       cubiques sur `fusion.R55.segments` = 8 intervalles égaux entre les quantiles 1 % et
+       99 % ; au-delà la courbe reste plate : pas d'extrapolation sur un site aux valeurs
+       jamais vues. Pénalité ½ βᵀ(G + `smoothness` · DᵀD)β : G = BᵀB / n mesure la taille de
+       la courbe (pour une droite, la même L2 qu'une entrée linéaire : quand C baisse, tout
+       rétrécit ensemble, rien ne s'échappe) ; DᵀD, différences secondes des coefficients,
+       mesure la courbure (`smoothness` grand → une droite). `smoothness` = 1 est provisoire.
+     C par validation groupée avec R50 (`logistic+R50+R54`, `+R50+R55`, ajoutées à
+     `fusion.benchmark_methods`) ; « =v » remplace le réglage principal (`R54=3`, `R55=10`,
+     et désormais `R56=1` pour le plafond, `FUSION_PARAMETER`). Combinables avec R52
+     (entrées linéaires ≥ 0) et R56 (plafond sur la somme des courbes, centrées) ; R54 et R55
+     s'excluent, R53 et R55 aussi (la L1 ne lisse pas une courbe). La « part » d'une entrée
+     (`FusionModel.weights`) devient l'amplitude de sa courbe de −2 à +2 écarts-types. Plus
+     de coefficients par descripteur (5 à 11 au lieu de 1) : c'est la pénalité, pas le nombre
+     de colonnes, qui fixe ce que la fusion peut apprendre de ~10 positifs par degré de
+     liberté (n° 94). Données simulées (un descripteur à seuil, un en U) : AP hors-pli 0,60
+     (logistique), 0,60 (R54), 0,76 (R55) — ce que la mécanique sait faire, pas un verdict.
+     Les ajustements contraints limitent BLAS à un fil (`threadpoolctl`, déjà là avec
+     scikit-learn) : sur ces petites matrices, le multi-fil coûtait jusqu'à 100×.
+
+131. **R37 en GLMM.** Accord de Léonard (27/09), pour le programme, sans usage immédiat. R37
+     est déjà l'effet aléatoire « micro » d'un GLMM (biais b_micro ~ N(0, σ²), n° 116) ; il
+     lui manquait ce qui fait un GLMM : σ estimé sur les données. `logistic+R37=glmm` (ou
+     `R37.scale: glmm`) choisit σ parmi `R37.glmm_grid` en maximisant la vraisemblance
+     marginale approchée (Laplace sur les biais, poids de la tête à leur valeur ajustée) :
+     − perte − ½‖w‖²/C − Σ b̂²/2σ² − ½ log det(I + Σ H), H la courbure de la perte le long des
+     biais (`glmm_evidence`, `glmm_scales`). σ grand laisse chaque micro coller à ses données
+     mais se paie en log det ; σ petit coûte en ajustement si les micros diffèrent vraiment.
+     Sur données simulées, σ vrai 0 → 0,3 retenu ; 0,5 → 1 ; 1,5 → 1 ; 3 → 3. Mais sur le
+     corpus « raccourci » du n° 116 (le fond du micro prédit la présence, pas sur le nouveau
+     site), le GLMM retient σ = 1 et fait AP 0,42–0,58 sur le nouveau site, contre 0,58–0,69
+     pour σ = 3 et 0,21–0,37 sans R37 : le GLMM choisit le σ qui **décrit** le mieux les
+     micros de l'entraînement, pas celui qui **protège** le mieux un site nouveau (des biais
+     plus libres absorbent davantage le niveau du micro, w en garde moins). Les deux se
+     comparent dans le benchmark (`logistic+R37=glmm` contre `=3`), jugés sur un site tenu à
+     l'écart (n° 109). Niveau site en
+     option (`R37.site_scale`, σ fixé ou « glmm ») : biais de site + biais de micro dans son
+     site, emboîtés ; un micro nouveau d'un site connu hérite du biais de son site, un site
+     nouveau du biais commun. Logistique et cascade seulement (pas `loss:`). Coût : un
+     ajustement par valeur essayée (5 par défaut, jusqu'à 20 avec deux niveaux). Ce que le
+     GLMM lisse vers la moyenne : les biais de la tête (le niveau de score propre à un micro,
+     estimé sur ses fenêtres **annotées**), pas une probabilité de présence par point
+     d'écoute — ce dernier usage (occupation, abondance) est celui de R72, écartée : le projet
+     cherche des sites, une détection attestée suffit à déclencher la visite.
+
+132. **Graphe de l'ACP : `blanci pca`.** Demande de Léonard : la part d'information perdue
+     selon le nombre de dimensions gardées. Sur un échantillon du stock de l'encodeur
+     (`cluster.c0_sample`, fenêtres arrêtées exclues), `cluster.pca_information_curve` donne,
+     pour k = 1 … d, la part de variance des embeddings que perdent les k premières
+     composantes : telles quelles (R18 seule) et après centrage par micro (R19 puis R18),
+     chacune en % de sa propre variance totale, avec la part que le centrage retire (les
+     différences entre micros). CSV et PNG `rapports/acp_<encodeur>` (abscisse logarithmique,
+     repères aux k de R18 — 16, 32, 64, 128 — et du clustering, `cluster.pca_components`) ;
+     la commande affiche combien de composantes gardent 80, 90, 95, 99 % et ce que perdent
+     16, 32, 64, 128. Variance n'est pas information utile : la note occupe 2–3 % d'une
+     fenêtre, une direction de faible variance peut porter le chant. La courbe dit combien de
+     dimensions décrivent le paysage sonore ; ce qu'elles valent pour A. blanci se lit dans
+     le benchmark (`logistic+R18=16`, `=32`, `=64`).
+
+133. **L'AP poolée pénalise les réglages choisis pli par pli (mécanisme confirmé).** Le n° 113
+     le soupçonnait pour la cascade. Sur données simulées, `logistic+R50` (fusion) : AP poolée
+     0,48 contre 0,60 pour `logistic` (C fixé), mais AP moyenne par pli 0,59 contre 0,61.
+     Cause : les plis qui retiennent un C petit rendent des logits resserrés (écart-type 0,6
+     au lieu de 2,2) ; mis bout à bout, les scores de plis différents ne sont plus sur la
+     même échelle et le classement commun se dégrade, sans que le classement dans chaque pli
+     change. Même effet possible pour toute tête dont C (R26), σ (R37=glmm), les époques
+     (R42) ou le nombre de composantes varient d'un pli à l'autre. À garder en tête en
+     lisant `heads` et `fusion-bench` : un écart d'AP poolée entre une méthode à réglage fixe
+     et une méthode à réglage choisi n'est pas forcément un écart de classement. Remèdes
+     possibles, non programmés (à décider) : rapporter aussi l'AP moyenne par pli, ou
+     recalibrer chaque pli (Platt sur son entraînement) avant de mettre les scores bout à
+     bout. Le seuil (R74, sur les scores hors-pli des autres plis) subit le même effet.

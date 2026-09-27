@@ -46,6 +46,7 @@ ETIQUETTES = {
     "dur": (_teinte("#d03b3b", 0.16), "difficile, écarté, risqué"),
     "ref": (_teinte("#52514e", 0.12), "référence"),
     "neuf": (_teinte("#2a6fdb", 0.13), "ajouté le 26/09/2026"),
+    "neuf27": (_teinte("#0f9d9a", 0.16), "ajouté le 27/09/2026"),
     "attente": (_teinte("#8a5cd0", 0.13), "en discussion, pas programmé"),
 }
 
@@ -847,11 +848,19 @@ REGULARISATIONS = Tableau(
                 ],
                 [
                     "R37",
-                    "un biais par micro, a priori N(0, σ²)",
+                    "un biais par micro, a priori N(0, σ²) ; + site (emboîtés)",
                     "fenêtre",
                     "logistic, loss:, cascade",
-                    "scale σ (3, provisoire)",
+                    "scale σ (3, provisoire), site_scale",
                     C("programmée", "neuf"),
+                ],
+                [
+                    "R37=glmm",
+                    "GLMM : σ estimé sur les données (Laplace)",
+                    "fenêtre",
+                    "logistic, cascade",
+                    "glmm_grid",
+                    C("programmée (n° 131)", "neuf27"),
                 ],
                 [
                     "R38",
@@ -971,17 +980,17 @@ REGULARISATIONS = Tableau(
                     "R54",
                     "descripteurs en classes, marches monotones",
                     "fusion",
-                    "—",
-                    "—",
-                    C("en discussion", "attente"),
+                    "logistic+R54",
+                    "bins (5 classes)",
+                    C("programmée (n° 130)", "neuf27"),
                 ],
                 [
                     "R55",
                     "modèle additif (GAM), courbes lissées",
                     "fusion",
-                    "—",
-                    "—",
-                    C("en discussion", "attente"),
+                    "logistic+R55",
+                    "smoothness (1), segments (8)",
+                    C("programmée (n° 130)", "neuf27"),
                 ],
                 [
                     "R56",
@@ -1245,6 +1254,16 @@ FUSION = Tableau(
                     "apprise ; les descripteurs inutiles tombent à 0",
                 ],
                 [
+                    C("logistic+R54", "neuf27"),
+                    "idem, chaque descripteur en marches (5 classes) qui ne font que monter",
+                    "apprise ; une hauteur par marche",
+                ],
+                [
+                    C("logistic+R55", "neuf27"),
+                    "idem, chaque descripteur en courbe lisse (GAM, P-splines)",
+                    "apprise ; courbure pénalisée (smoothness)",
+                ],
+                [
                     C("logistic+R56", "neuf"),
                     "idem, descripteurs plafonnés à ±cap (logit)",
                     "apprise ; pas de veto sur la tête",
@@ -1288,7 +1307,9 @@ FUSION = Tableau(
     ],
     [
         "Au plus 4 descripteurs (~10 enregistrements positifs par coefficient) ; jamais de veto"
-        " en parallèle ni en aval (R56). Les suffixes se combinent : logistic+R50+R52+R56."
+        " en parallèle ni en aval (R56). Les suffixes se combinent : logistic+R50+R52+R56,"
+        " logistic+R50+R55=10 (« =v » : bins de R54, smoothness de R55, cap de R56). R54 et R55"
+        " ne courbent que les descripteurs du module séquentiel ; ils s'excluent."
     ],
 )
 

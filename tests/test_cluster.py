@@ -103,3 +103,22 @@ def test_variance_partition_separates_site_from_mic():
     out = variance_partition(np.vstack(rows), np.array(sites), np.array(mics))
     assert out["share_site"] > 0.8 and out["share_mic"] < 0.1
     assert out["share_site"] + out["share_mic"] + out["share_within"] == pytest.approx(1.0)
+
+
+def test_pca_curve_says_how_much_variance_each_cut_loses():
+    """Trois directions porteuses dans 10 dimensions : 3 composantes gardent presque tout ; un
+    décalage fort par micro occupe une direction que le centrage par micro rend inutile."""
+    from blanci.cluster import components_for, pca_information_curve
+
+    rng = np.random.default_rng(0)
+    n = 600
+    signal = rng.normal(0, 1, (n, 3)) @ rng.normal(0, 1, (3, 10))
+    mics = np.repeat(["S/a", "S/b", "S/c"], n // 3)
+    offset = np.where(mics[:, None] == "S/a", 8.0, 0.0) * np.eye(10)[9]
+    X = signal + offset + rng.normal(0, 0.01, (n, 10))
+    curve = pca_information_curve(X, mics)
+    assert len(curve) == 10 and curve["lost_raw"].is_monotonic_decreasing
+    assert curve["lost_raw"].iloc[3] < 0.1  # 4 directions (3 + le micro) : presque rien de perdu
+    assert components_for(curve, "lost_raw", 99) == 4
+    assert components_for(curve, "lost_centred", 99) == 3  # le micro ne coûte plus de dimension
+    assert curve["lost_centred"].iloc[2] < 0.1

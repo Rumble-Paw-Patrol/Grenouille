@@ -188,9 +188,26 @@ part entière vivent dans leur module.
 
 - R50 : programmée (`logistic+R50`). R51 : remplacée par R52. R52 : programmée
   (`logistic+R52`, poids ≥ 0 sur les entrées orientées). R53 : programmée (`logistic+R53`,
-  sélection L1), après le tri des descripteurs par Léonard. R54, R55 : en discussion. R56 :
+  sélection L1), après le tri des descripteurs par Léonard. R54, R55 : programmées ensuite
+  (voir plus bas). R56 :
   programmée (`logistic+R56`, pas de veto). R57 : en place. R58 : écartée. DECISIONS n° 127.
 - R43 : programmée (`attentive+R43=β`), et l'AP par type de positif (solo, chœur) dans
   `blanci heads`. R48 : non (R85 porte déjà le rang faible). DECISIONS n° 126.
 - R73 : démarche en chaîne, `blanci prevalence` puis `decision.prevalence`. DECISIONS n° 128.
 
+
+# Retours de Léonard du 27/09, suite
+
+- R54 : programmée (`logistic+R54`, chaque descripteur en 5 classes, marches qui ne font que
+  monter dans le sens « plus A. blanci »). R55 : programmée (`logistic+R55`, GAM par P-splines,
+  courbe lisse, plate hors de la plage d'entraînement). Les deux avec R50 dans
+  `fusion-bench`. Le tri des descripteurs viendra après. DECISIONS n° 130.
+- GLMM : ajouté au programme (`logistic+R37=glmm`, σ du biais par micro estimé sur les
+  données ; niveau site en option, `R37.site_scale`). Pas d'usage prévu tout de suite.
+  DECISIONS n° 131.
+- Graphe de l'ACP : `blanci pca --encoder …`, variance perdue selon le nombre de composantes,
+  telle quelle et après centrage par micro. DECISIONS n° 132.
+- Constat en chemin : l'AP poolée pénalise les réglages choisis pli par pli (C de R50, etc.) ;
+  remède à décider. DECISIONS n° 133.
+- À faire (notes.md) : `blanci prevalence` après une écoute au hasard ; le diagnostic
+  site/micro (`blanci cluster --mode c0` sur plusieurs sites).

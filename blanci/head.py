@@ -22,7 +22,12 @@ from sklearn.preprocessing import StandardScaler
 
 from blanci.evaluate import average_precision, grouped_folds
 from blanci.index import l2_normalize
-from blanci.regularization import group_bias_scale, grouped_search, nearest_similarity
+from blanci.regularization import (
+    bias_sigmas,
+    group_bias_scale,
+    grouped_search,
+    nearest_similarity,
+)
 from blanci.sequential import GATED_SCORE
 
 
@@ -213,7 +218,7 @@ def _penalty(l1_ratio: float) -> dict[str, Any]:
 
 
 def standardize(
-    X: np.ndarray, bias_columns: int = 0, bias_scale: float = 1.0
+    X: np.ndarray, bias_columns: int = 0, bias_scale: float | np.ndarray = 1.0
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(X standardisé, moyenne, échelle) ; `(X − moyenne) / échelle` redonne la même chose.
 
@@ -222,14 +227,18 @@ def standardize(
     micro b = bias_scale · w_micro coûte ½ (b / bias_scale)². Les têtes passent
     bias_scale = σ / √C : rapportée au terme des données (C · Σ perte), la pénalité vaut
     b² / 2σ², l'a priori b ~ N(0, σ²) d'un modèle mixte, quel que soit C. σ petit : biais
-    très pénalisés, proches de 0 ; σ grand : un biais libre par micro (effets fixes)."""
+    très pénalisés, proches de 0 ; σ grand : un biais libre par micro (effets fixes).
+    `bias_scale` : une échelle, ou une par colonne (biais de micro et de site)."""
     X = np.asarray(X)
     n = int(bias_columns)
     d = X.shape[1] - n
     scaler = StandardScaler().fit(X[:, :d])
     mean = np.concatenate([scaler.mean_, np.zeros(n)])
     scale = np.concatenate(
-        [np.where(scaler.scale_ > 0, scaler.scale_, 1.0), np.full(n, 1.0 / float(bias_scale))]
+        [
+            np.where(scaler.scale_ > 0, scaler.scale_, 1.0),
+            1.0 / np.broadcast_to(np.asarray(bias_scale, dtype=float), (n,)),
+        ]
     )
     if not n:
         return scaler.transform(X), mean, scale
@@ -244,12 +253,40 @@ def fit_logistic(
     sample_weight: np.ndarray | None = None,
     l1_ratio: float = 0.0,
     bias_columns: int = 0,
-    bias_scale: float = 1.0,
+    bias_scale: float | str | tuple = 1.0,
+    bias_levels: np.ndarray | None = None,
+    glmm_grid: tuple[float, ...] | None = None,
 ) -> Head:
     """Standardisation + logistique à classes équilibrées. `sample_weight` : R13, R15, R36 ;
     `l1_ratio` : R27, R28 ; `bias_columns`, `bias_scale` (σ, écart-type a priori des biais de
-    micro, en logit) : R37 (`blanci/regularization.py`, `standardize`)."""
-    Z, mean, scale = standardize(X, bias_columns, group_bias_scale(bias_scale, C))
+    micro, en logit ; un σ par niveau avec `bias_levels`, micro puis site ; « glmm » : σ estimé
+    sur les données, `regularization.glmm_scales`) : R37 (`blanci/regularization.py`,
+    `standardize`)."""
+    scales = list(np.atleast_1d(np.asarray(bias_scale, dtype=object)))
+    if bias_columns and "glmm" in [str(v) for v in scales]:
+        from blanci.regularization import GLMM_GRID, glmm_scales
+
+        def fit_with(sigmas: list[float]) -> Head:
+            return fit_logistic(
+                X, y, C, seed, sample_weight, l1_ratio, bias_columns, tuple(sigmas), bias_levels
+            )
+
+        chosen, evidence = glmm_scales(
+            fit_with,
+            X,
+            y,
+            C,
+            bias_columns,
+            tuple(scales),
+            bias_levels,
+            sample_weight,
+            glmm_grid or GLMM_GRID,
+        )
+        head = fit_with(chosen)
+        head.meta["glmm_evidence"] = evidence
+        return head
+    sigmas = bias_sigmas(bias_scale, bias_columns, bias_levels)
+    Z, mean, scale = standardize(X, bias_columns, group_bias_scale(sigmas, C))
     model = LogisticRegression(
         C=C, class_weight="balanced", random_state=seed, **_penalty(l1_ratio)
     ).fit(Z, y, sample_weight=sample_weight)
@@ -257,7 +294,11 @@ def fit_logistic(
     if l1_ratio:
         meta["l1_ratio"] = float(l1_ratio)
     if bias_columns:
-        meta |= {"group_biases": int(bias_columns), "bias_scale": float(bias_scale)}
+        shown = [float(v) for v in scales]
+        meta |= {
+            "group_biases": int(bias_columns),
+            "bias_scale": shown[0] if len(shown) == 1 else shown,
+        }
     return Head(
         mean.astype(np.float32),
         scale.astype(np.float32),

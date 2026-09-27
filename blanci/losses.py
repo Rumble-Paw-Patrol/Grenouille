@@ -74,23 +74,31 @@ def fit_loss(
     sample_weight: np.ndarray | None = None,
     loss: str = "hinge",
     bias_columns: int = 0,
-    bias_scale: float = 1.0,
+    bias_scale: float | tuple = 1.0,
+    bias_levels: np.ndarray | None = None,
+    glmm_grid: tuple[float, ...] | None = None,  # noqa: ARG001 - R37=glmm : logistique seule
     **params: float,
 ):
     """Tête linéaire (`head.Head`) entraînée avec la perte `loss`. `bias_columns`,
-    `bias_scale` : biais par micro (R37, `head.standardize`)."""
+    `bias_scale`, `bias_levels` : biais par micro (et par site), R37 (`head.standardize`) ;
+    σ fixé (« glmm » : têtes logistiques seulement)."""
     from sklearn.linear_model import LogisticRegression, RidgeClassifier
     from sklearn.svm import LinearSVC
 
     from blanci.head import Head, standardize
-    from blanci.regularization import group_bias_scale
+    from blanci.regularization import bias_sigmas, group_bias_scale
 
     y = np.asarray(y).astype(int)
-    Z, mean, scale = standardize(X, bias_columns, group_bias_scale(bias_scale, C))
+    sigmas = bias_sigmas(bias_scale, bias_columns, bias_levels)
+    Z, mean, scale = standardize(X, bias_columns, group_bias_scale(sigmas, C))
     Z = Z.astype(np.float64)
     meta: dict[str, Any] = {"C": C, "loss": loss}
     if bias_columns:
-        meta |= {"group_biases": int(bias_columns), "bias_scale": float(bias_scale)}
+        shown = [float(v) for v in np.atleast_1d(np.asarray(bias_scale, dtype=float))]
+        meta |= {
+            "group_biases": int(bias_columns),
+            "bias_scale": shown[0] if len(shown) == 1 else shown,
+        }
     if loss in ("hinge", "squared_hinge"):
         model = LinearSVC(
             C=C, loss=loss, class_weight="balanced", max_iter=20000, random_state=seed
