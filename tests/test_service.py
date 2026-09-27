@@ -394,3 +394,36 @@ def test_evaluate_holdout_rejects_an_unknown_site(con, cfg, tmp_path):
     multi_site_corpus(con, tmp_path)
     with pytest.raises(ValueError, match="aucune fenêtre"):
         evaluate_holdout(con, "good-1", cfg, ["molokoi"])
+
+
+# --- R73 : seuil pour la précision du stock ------------------------------------------------------
+
+
+def test_R73_threshold_follows_the_stock_prevalence(con, tmp_path, cfg):
+    from pathlib import Path
+
+    layout = build_recordings(con)
+    write_embeddings(con, tmp_path, "good-1", layout, separation=1.0, seed=0)
+    plain = train_and_register(con, "good-1", cfg)
+    cfg["decision"] = {"prevalence": 0.01}
+    rare = train_and_register(con, "good-1", cfg)
+    meta = load_head(con, "good-1", rare.version)[1]
+    assert meta["prevalence"] == 0.01 and meta["benchmark_prevalence"] > 0.1
+    # Moins de positifs dans le stock : pour la même précision, un seuil au moins aussi haut.
+    assert rare.threshold >= plain.threshold
+    assert len(meta["platt"]) == 2
+    curve = pd.read_csv(Path(cfg["paths"]["reports"]) / f"seuils_good-1_{rare.version}.csv")
+    assert {"recall", "precision_benchmark", "precision_stock"} <= set(curve.columns)
+
+
+def test_R73_prevalence_counts_only_windows_heard_at_random(con, cfg):
+    from blanci.service import estimate_prevalence
+
+    layout = build_recordings(con)
+    windows = [ids[0] for _, ids, _, positive in layout if not positive][:3]
+    heard = [("blanci_solo", "random"), ("background", "audit"), ("blanci", "active")]
+    for wid, (label, source) in zip(windows, heard, strict=True):
+        append_label(con, wid, label, source=source)
+    out = estimate_prevalence(con)
+    assert out["n_windows"] == 2 and out["n_positive"] == 1  # « active » : choisie par le détecteur
+    assert out["lo"] < 0.5 < out["hi"]

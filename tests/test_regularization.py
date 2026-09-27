@@ -501,3 +501,32 @@ def test_network_helpers_for_the_models_to_come():
     assert torch.equal(dropout(torch, x, 0.5, train=False), x)
     kept = dropout(torch, x, 0.5, train=True)
     assert 0.35 < float((kept == 0).float().mean()) < 0.65 and float(kept.max()) == 2.0
+
+
+# --- R73 --------------------------------------------------------------------------------------
+
+
+def test_R73_precision_moves_with_the_prevalence_but_not_the_curve():
+    from blanci.evaluate import recall_at_precision
+    from blanci.regularization import (
+        operating_curve,
+        platt,
+        precision_at_prevalence,
+        prior_shift,
+        threshold_at_prevalence,
+    )
+
+    rng = np.random.default_rng(0)
+    y = np.r_[np.ones(50), np.zeros(1000)].astype(int)
+    scores = y * 2.0 + rng.normal(0, 1, len(y))
+    curve = operating_curve(y, scores)
+    same = precision_at_prevalence(curve["tpr"], curve["fpr"], y.mean())
+    ok = np.isfinite(curve["precision"])
+    assert np.allclose(same[ok], curve["precision"][ok])  # à la proportion observée : identique
+    here = threshold_at_prevalence(y, scores, 0.3, y.mean())
+    assert here["recall"] == pytest.approx(recall_at_precision(y, scores, 0.3)[0])
+    rarer = threshold_at_prevalence(y, scores, 0.3, 0.005)
+    assert rarer["threshold"] >= here["threshold"] and rarer["recall"] <= here["recall"]
+    a, b = platt(scores, y)
+    assert a > 0
+    assert prior_shift(0.5, 0.5, 0.01) == pytest.approx(0.01)

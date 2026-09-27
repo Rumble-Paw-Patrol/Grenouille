@@ -45,6 +45,7 @@ ici, les têtes (`attentive.py`, `gated.py`, `dann.py`) l'appellent dans leur en
 | R40 | attentive, gated, dann | weight decay par validation groupée | `fit_with_options` |
 | R41 | attentive | AdamW (weight decay découplé, `weight_decay`) | `optimise` |
 | R42 | attentive, gated, dann | époques par validation groupée (`=ap`, `=loss`) | idem |
+| R43 | attentive | entropie de l'attention (`strength` β, signé) | `attention_entropy` |
 | R45 | attentive | dropout des jetons (`p`) | `keep_mask` |
 | R46 | attentive, gated, dann | dropout des dimensions (`p`) | `dropout` |
 | R47 | attentive | départ et rétrécissement vers la logistique (`strength`) | `logistic_start` |
@@ -69,16 +70,18 @@ ont une mécanique propre :
 | R37 | `head.standardize` | échelle des colonnes : `group_bias_scale` (ici) |
 | R39 | `head.py` | têtes `knn:k=…`, `exemplar:k=…` (`:w`) ; calcul : `nearest_similarity` (ici) |
 | R50 | `fusion.fit_fusion_model` | méthode `logistic+R50` ; C : `choose_fusion_C` (ici) |
+| R52, R53, R56 | `fusion.py` | `logistic+R52`, `+R53`, `+R56` ; `fit_constrained_logistic` |
 | R57 | `stacking.py` | toujours là : la fusion n'apprend que sur des scores hors-pli |
 | R60 | `finetune.py` | LoRA sur les couches hautes (`finetune.lora.layers`), à écrire |
 | R66 | `dann.py` | tête `dann` ; mécanique ici |
 | R67 | `head.fit_multiclass` | tête `multiclass` ; classes : `window_classes` (ici) |
 | R70 | `evaluate.to_recordings` | le maximum, déjà le défaut |
+| R73 | `service.train_and_register` | `decision.prevalence` ; `threshold_at_prevalence`, `platt` |
 | R78 | `anuraset.run_anuraset_heads` | `blanci anuraset-heads`, un pli par site |
 | R85 | `gated.py` | tête `gated` |
 
-Écartées au tri du 26/09 : R33, R68, R69, R71, R72, R82 (DECISIONS n° 116, 125). À faire plus
-tard : R83 (minimisation d'entropie).
+Écartées au tri des 26 et 27/09 : R33, R48, R51 (remplacée par R52), R58, R68, R69, R71, R72,
+R82 (DECISIONS n° 116, 125–127). En discussion : R54, R55. Plus tard : R83.
 
 R19 et R20 lisent le stock d'embeddings entier du micro (`store_domain_statistics`) : aucune
 étiquette, ce que la chaîne aura aussi sur un nouveau site. Elles ne valent que pour
@@ -104,7 +107,7 @@ from typing import Any
 import numpy as np
 
 IMPLEMENTED = (13, 15, 17, 18, 19, 20, 21, 27, 28, 36, 37)  # fenêtres, poids, pénalités
-IMPLEMENTED += (40, 41, 42, 45, 46, 47, 59, 64)  # entraînement des têtes torch
+IMPLEMENTED += (40, 41, 42, 43, 45, 46, 47, 59, 64)  # entraînement des têtes torch
 IMPLEMENTED += (76, 79, 81)  # sélection des réglages, bagging, pseudo-étiquetage
 DESCRIPTIONS = {
     13: "chaque micro pèse autant dans sa classe",
@@ -121,6 +124,7 @@ DESCRIPTIONS = {
     40: "weight decay par validation groupée",
     41: "AdamW",
     42: "arrêt précoce",
+    43: "entropie de l'attention",
     45: "dropout des jetons",
     46: "dropout des dimensions",
     47: "rétrécissement vers la logistique",
@@ -140,6 +144,7 @@ MAIN_PARAMETER = {
     37: "scale",
     41: "weight_decay",
     42: "monitor",
+    43: "strength",
     45: "p",
     46: "p",
     47: "strength",
@@ -158,7 +163,7 @@ PSEUDO_HEADS = ("logistic", "logistic_to_prototype", "loss")  # R81
 BAGGED_HEADS = ("logistic", "logistic_to_prototype", "loss")  # entraînements légers (R79)
 # Régularisations des têtes entraînées avec torch, et celles que chacune accepte.
 TORCH_REGULARIZATIONS = {
-    "attentive": (40, 41, 42, 45, 46, 47, 59, 64),
+    "attentive": (40, 41, 42, 43, 45, 46, 47, 59, 64),
     "gated": (40, 42, 46, 59, 64),
     "dann": (40, 42, 46, 59, 64),
 }
@@ -656,7 +661,7 @@ class Regularizer:
         return int(self.param(79, "bags", 20)) if 79 in self.regs else 0
 
     def torch_options(self) -> dict[str, Any]:
-        """Options des têtes torch (`fit_with_options`) : R40–R42, R45–R47, R59."""
+        """Options des têtes torch (`fit_with_options`) : R40–R47, R59, R64."""
         options: dict[str, Any] = {}
         if 40 in self.regs:
             options["weight_decays"] = [
@@ -671,6 +676,8 @@ class Regularizer:
             options["monitor"] = str(self.param(42, "monitor", "ap"))  # provisoire (n° 119)
             options["epochs"] = int(self.param(42, "max_epochs", 300))
             options["n_splits"] = int(self.param(42, "n_splits", options.get("n_splits", 3)))
+        if 43 in self.regs:
+            options["entropy"] = float(self.param(43, "strength", 0.01))
         if 45 in self.regs:
             options["token_dropout"] = float(self.param(45, "p", 0.2))
         if 46 in self.regs:
@@ -835,19 +842,23 @@ def choose_fusion_C(
     C_grid: list[float] | tuple[float, ...],
     n_splits: int = 5,
     seed: int = 0,
+    method: str = "logistic",
+    columns: list[str] | None = None,
+    **options,
 ) -> tuple[float | None, dict[float, float]]:
-    """R50 : C de la fusion logistique (`fusion.fit_fusion_model`, méthode `logistic+R50`).
-    (None, {}) faute de deux valeurs, de deux micros ou d'un pli à deux classes."""
+    """R50 : C de la fusion logistique `method` (`logistic`, ou ses variantes `+R52`, `+R53`,
+    `+R56`), choisi par validation groupée. (None, {}) faute de deux valeurs, de deux micros
+    ou d'un pli à deux classes."""
     from blanci.evaluate import average_precision
     from blanci.fusion import fit_fusion_model
 
     X, y = np.asarray(X, dtype=float), np.asarray(y).astype(int)
     if len(C_grid) < 2 or not usable_folds(y, groups, n_splits, seed):
         return None, {}
-    columns = [f"x{j}" for j in range(X.shape[1])]
+    columns = columns or [f"x{j}" for j in range(X.shape[1])]
 
     def score(C, train, test):
-        model = fit_fusion_model("logistic", X[train], y[train], columns, C=C)
+        model = fit_fusion_model(method, X[train], y[train], columns, C=C, **options)
         return average_precision(y[test], model.decision(X[test]))
 
     best, results, _ = grouped_search(score, [float(c) for c in C_grid], y, groups, n_splits, seed)
@@ -1120,6 +1131,178 @@ def bagged(
     return Bagged(models)
 
 
+# --- R73 : le seuil pour la précision du stock, pas celle du benchmark ---------------------------
+
+
+def operating_curve(y: np.ndarray, scores: np.ndarray) -> dict[str, np.ndarray]:
+    """Pour chaque seuil possible (scores distincts, du plus haut au plus bas) : rappel (TPR),
+    taux de fausses alertes (FPR) et précision **dans cet échantillon**. TPR et FPR ne dépendent
+    pas de la proportion de positifs ; la précision, si (`precision_at_prevalence`)."""
+    y, scores = np.asarray(y).astype(int), np.asarray(scores, dtype=float)
+    thresholds = np.unique(scores)[::-1]
+    pos, neg = np.sort(scores[y == 1]), np.sort(scores[y == 0])
+    tp = len(pos) - np.searchsorted(pos, thresholds, side="left")
+    fp = len(neg) - np.searchsorted(neg, thresholds, side="left")
+    tpr = tp / max(len(pos), 1)
+    fpr = fp / max(len(neg), 1)
+    precision = np.where(tp + fp > 0, tp / np.maximum(tp + fp, 1), np.nan)
+    return {"threshold": thresholds, "tpr": tpr, "fpr": fpr, "precision": precision}
+
+
+def precision_at_prevalence(tpr, fpr, prevalence: float):
+    """Précision attendue là où la part de positifs vaut `prevalence` :
+    π·TPR / (π·TPR + (1 − π)·FPR). Hypothèse forte : les négatifs jugés ressemblent à ceux du
+    stock (le benchmark tire ses négatifs près des positifs : mêmes micros, mêmes heures)."""
+    tpr, fpr = np.asarray(tpr, dtype=float), np.asarray(fpr, dtype=float)
+    num = prevalence * tpr
+    den = num + (1.0 - prevalence) * fpr
+    return np.where(den > 0, num / np.where(den > 0, den, 1.0), np.nan)
+
+
+def threshold_at_prevalence(
+    y: np.ndarray, scores: np.ndarray, min_precision: float, prevalence: float
+) -> dict[str, float]:
+    """R73 : le seuil au plus grand rappel dont la précision **à la prévalence du stock**
+    atteint `min_precision` (à rappel égal, le seuil le plus haut). Rappel 0 et seuil +inf si
+    aucun seuil n'y arrive."""
+    curve = operating_curve(y, scores)
+    precision = precision_at_prevalence(curve["tpr"], curve["fpr"], prevalence)
+    ok = np.flatnonzero(np.nan_to_num(precision) >= min_precision)
+    if not len(ok):
+        return {"recall": 0.0, "threshold": float("inf"), "precision": float("nan")}
+    # Seuils décroissants : le premier maximum du rappel est le seuil le plus haut.
+    best = ok[np.argmax(curve["tpr"][ok])]
+    return {
+        "recall": float(curve["tpr"][best]),
+        "threshold": float(curve["threshold"][best]),
+        "precision": float(precision[best]),
+    }
+
+
+def platt(scores: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    """R73, calibration de Platt : (a, b) tels que σ(a·score + b) soit la probabilité d'être un
+    positif **à la proportion de positifs de l'échantillon** (à corriger par `prior_shift`).
+    Deux paramètres : stable avec peu de positifs, à la différence de l'isotonique."""
+    from sklearn.linear_model import LogisticRegression
+
+    model = LogisticRegression(C=1e6, max_iter=1000).fit(
+        np.asarray(scores, dtype=float)[:, None], np.asarray(y).astype(int)
+    )
+    return float(model.coef_[0, 0]), float(model.intercept_[0])
+
+
+def prior_shift(p, source_prevalence: float, target_prevalence: float):
+    """Probabilité ramenée d'une proportion de positifs à une autre (règle de Bayes sur les
+    cotes : cote × [π'/(1 − π')] / [π/(1 − π)])."""
+    p = np.clip(np.asarray(p, dtype=float), 1e-12, 1 - 1e-12)
+    ratio = (target_prevalence / (1 - target_prevalence)) / (
+        source_prevalence / (1 - source_prevalence)
+    )
+    odds = p / (1 - p) * ratio
+    return odds / (1 + odds)
+
+
+# --- R52, R53, R56 : fusion logistique contrainte -----------------------------------------------
+
+FUSION_SUFFIXES = {
+    50: "C par validation groupée",
+    52: "poids ≥ 0 (combinaison convexe à l'échelle près)",
+    53: "sélection L1 des entrées",
+    56: "pas de veto : contribution des descripteurs plafonnée",
+}
+
+
+def fusion_variant(method: str) -> set[int] | None:
+    """« logistic+R50+R52 » → {50, 52} ; « logistic » → set() ; None si ce n'est pas la
+    fusion logistique. Suffixes possibles : `FUSION_SUFFIXES`."""
+    base, *parts = method.split("+")
+    if base != "logistic":
+        return None
+    numbers = set()
+    for part in parts:
+        match = re.fullmatch(r"R(\d+)", part.strip())
+        if not match or int(match.group(1)) not in FUSION_SUFFIXES:
+            raise ValueError(
+                f"fusion {method!r} : suffixe {part!r} inconnu "
+                f"({', '.join(f'R{n}' for n in FUSION_SUFFIXES)})"
+            )
+        numbers.add(int(match.group(1)))
+    return numbers
+
+
+def fit_constrained_logistic(
+    z: np.ndarray,
+    y: np.ndarray,
+    C: float,
+    nonneg: bool = False,
+    l1: bool = False,
+    cap: float | None = None,
+    head_index: int | None = None,
+) -> tuple[np.ndarray, float]:
+    """(coefficients, biais) d'une logistique de fusion à classes équilibrées, sous contraintes.
+
+    Perte : C · Σ poids · log(1 + e^(−t·s)) + pénalité, avec
+    - R52 (`nonneg`) : coefficients ≥ 0 sur des entrées déjà orientées (« plus haut = plus
+      A. blanci ») — pour classer, c'est une combinaison convexe à l'échelle près ;
+    - R53 (`l1`) : pénalité ‖w‖₁ au lieu de ½‖w‖² : les entrées inutiles tombent à 0 (exactement
+      avec R52, à ~0 sinon) ;
+    - R56 (`cap`) : s = w_tête·z_tête + cap · tanh(Σ_autres w_j z_j / cap) + b. Les
+      descripteurs déplacent le score d'au plus `cap` (en logit) : une tête assez sûre d'elle
+      passe toujours, aucun descripteur n'a de droit de veto.
+    """
+    from scipy.optimize import minimize
+    from scipy.special import expit
+
+    z, y = np.asarray(z, dtype=float), np.asarray(y).astype(int)
+    n, k = z.shape
+    counts = np.bincount(y, minlength=2)
+    sw = (n / (2.0 * np.maximum(counts, 1)))[y]
+    t = 2.0 * y - 1.0
+    others = np.ones(k, dtype=bool)
+    if cap is not None:
+        if head_index is None:
+            raise ValueError("R56 : la fusion n'a pas d'entrée « head » à protéger")
+        others[head_index] = False
+    eps = 1e-6
+
+    def score(w, b):
+        if cap is None:
+            return z @ w + b, None
+        u = z[:, others] @ w[others]
+        return z[:, ~others] @ w[~others] + cap * np.tanh(u / cap) + b, u
+
+    def objective(theta):
+        w, b = theta[:-1], theta[-1]
+        s, u = score(w, b)
+        m = t * s
+        loss = C * float(sw @ np.logaddexp(0.0, -m))
+        g_s = -C * sw * t * expit(-m)
+        if cap is None:
+            grad_w = z.T @ g_s
+        else:
+            grad_w = np.empty(k)
+            grad_w[~others] = z[:, ~others].T @ g_s
+            grad_w[others] = z[:, others].T @ (g_s * (1.0 - np.tanh(u / cap) ** 2))
+        if l1 and nonneg:
+            loss += float(w.sum())
+            grad_w = grad_w + 1.0
+        elif l1:
+            smooth = np.sqrt(w**2 + eps**2)
+            loss += float(smooth.sum())
+            grad_w = grad_w + w / smooth
+        else:
+            loss += 0.5 * float(w @ w)
+            grad_w = grad_w + w
+        return loss, np.append(grad_w, g_s.sum())
+
+    start = np.append(np.full(k, 0.01), 0.0)
+    bounds = [(0.0, None) if nonneg else (None, None)] * k + [(None, None)]
+    result = minimize(
+        objective, start, jac=True, method="L-BFGS-B", bounds=bounds, options={"maxiter": 5000}
+    )
+    return result.x[:-1], float(result.x[-1])
+
+
 # --- R37 : échelle des colonnes de biais ---------------------------------------------------------
 
 
@@ -1368,6 +1551,16 @@ def validation_criterion(torch, loss_fn, scores_of, y_val: np.ndarray, monitor: 
     if monitor == "ap":
         return lambda: 1.0 - average_precision(y_np, scores_of().numpy())
     raise ValueError(f"R42 : critère inconnu {monitor!r} (loss ou ap)")
+
+
+def attention_entropy(torch, weights):
+    """R43 : entropie moyenne des poids d'attention (fenêtres, jetons), −Σ a log a par
+    fenêtre. Maximale (log du nombre de jetons) pour une attention uniforme, la moyenne des
+    jetons ; nulle quand tout le poids est sur un jeton, le maximum. Ajoutée à la perte avec un
+    coefficient β : β > 0 pousse vers une attention piquée (a priori « la note est brève, un ou
+    deux jetons »), β < 0 vers une attention diffuse (chœur, bruit : ne pas s'accrocher à un
+    jeton)."""
+    return -(weights * torch.log(weights.clamp_min(1e-12))).sum(dim=1).mean()
 
 
 def keep_mask(torch, n: int, t: int, p: float):

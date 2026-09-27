@@ -18,6 +18,7 @@ le nom de la tête (`attentive+R41+R42`) :
 | R40 | weight decay choisi par validation groupée sur une grille |
 | R41 | AdamW (weight decay découplé) au lieu de la L2 d'Adam |
 | R42 | arrêt précoce : époques choisies sur la courbe de validation moyenne des plis groupés |
+| R43 | pénalité d'entropie de l'attention : > 0 piquée (note brève), < 0 diffuse (chœur) |
 | R45 | dropout des jetons : chaque jeton masqué avec la probabilité p avant l'attention |
 | R46 | dropout des dimensions de z, le vecteur agrégé |
 | R47 | départ et rétrécissement vers la logistique sur la moyenne des jetons : ½λ‖w − w₀‖² |
@@ -37,6 +38,7 @@ from typing import Any
 import numpy as np
 
 from blanci.regularization import (
+    attention_entropy,
     dropout,
     keep_mask,
     l2_sp_penalty,
@@ -104,6 +106,7 @@ def fit_attentive(
     *,
     optimizer: str = "adam",
     token_dropout: float = 0.0,
+    entropy: float = 0.0,
     dim_dropout: float = 0.0,
     shrink: float = 0.0,
     shrink_C: float = 1.0,
@@ -118,7 +121,8 @@ def fit_attentive(
 ) -> AttentiveHead:
     """Entraîne la tête (lot entier, Adam, entropie croisée à classes équilibrées).
 
-    Options (toutes coupées par défaut) : `optimizer="adamw"` (R41), `token_dropout` (R45),
+    Options (toutes coupées par défaut) : `optimizer="adamw"` (R41), `entropy` (R43),
+    `token_dropout` (R45),
     `dim_dropout` (R46), `shrink` λ > 0 (R47 : w part de w₀, logistique de C `shrink_C` sur la
     moyenne des jetons, et ½λ‖w − w₀‖² remplace le weight decay sur w), `validation`
     (jetons, labels) de micros tenus à l'écart, `patience` (None : pas d'arrêt, courbe
@@ -159,16 +163,22 @@ def fit_attentive(
     pos_weight = torch.tensor((len(y) - n_pos) / n_pos)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
+    attention = {}
+
     def logits(inputs, train: bool):
         scores = inputs @ query / d**0.5
         if train and token_dropout > 0:
             scores = scores.masked_fill(~keep_mask(torch, *scores.shape, token_dropout), -1e9)
-        z = torch.einsum("nt,ntd->nd", torch.softmax(scores, dim=1), inputs)
+        weights = torch.softmax(scores, dim=1)
+        attention["weights"] = weights
+        z = torch.einsum("nt,ntd->nd", weights, inputs)
         z = dropout(torch, z, dim_dropout, train)  # R46
         return z @ weight + bias
 
     def loss_of():
         loss = loss_fn(logits(x, True), target)
+        if entropy:  # R43 : > 0 pousse vers une attention piquée, < 0 vers une attention diffuse
+            loss = loss + entropy * attention_entropy(torch, attention["weights"])
         if start is not None:  # R47 = L2-SP (R62) vers la logistique
             loss = loss + l2_sp_penalty(torch, [weight], [start], shrink)
         return loss
@@ -206,6 +216,7 @@ def fit_attentive(
     options = {
         "optimizer": optimizer if optimizer != "adam" else None,
         "token_dropout": token_dropout or None,
+        "entropy": entropy or None,
         "dim_dropout": dim_dropout or None,
         "shrink": shrink or None,
         "shrink_C": shrink_C if shrink else None,

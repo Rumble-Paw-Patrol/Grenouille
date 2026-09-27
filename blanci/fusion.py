@@ -11,6 +11,11 @@ Méthodes comparées (`FUSION_METHODS`), toutes sur entrées standardisées sur 
 |---|---|---|
 | logistic | régression logistique (stacking) | apprise, C fixé (`fusion.C`) |
 | logistic+R50 | idem | apprise, C choisi par validation groupée (`fusion.C_grid`) |
+| logistic+R52 | idem, poids ≥ 0 sur les entrées orientées | apprise, parts lisibles |
+| logistic+R53 | idem, pénalité L1 | apprise, les entrées inutiles tombent à 0 |
+| logistic+R56 | idem, descripteurs plafonnés à ±`cap` | apprise, pas de veto sur la tête |
+
+Les suffixes se combinent : `logistic+R50+R52+R56`.
 | weighted | somme pondérée | fixée à la main (`fusion.weights`) |
 | weight_grid | somme pondérée | cherchée sur une grille (AP d'entraînement) |
 | mean | moyenne des entrées | égale |
@@ -181,6 +186,8 @@ class FusionModel:
     intercept: float = 0.0
     quantiles: np.ndarray | None = None  # (N_QUANTILES, entrées), pour rank_mean
     C: float | None = None  # logistique : le C retenu (R50 : choisi par validation groupée)
+    cap: float | None = None  # R56 : plafond de la contribution des descripteurs (logit)
+    head_index: int | None = None  # R56 : l'entrée protégée (score de la tête)
 
     def _z(self, X: np.ndarray) -> np.ndarray:
         z = (np.asarray(X, dtype=float) - self.mean) / self.scale
@@ -188,6 +195,10 @@ class FusionModel:
 
     def decision(self, X: np.ndarray) -> np.ndarray:
         z = self._z(X)
+        if self.method == "logistic" and self.cap is not None:  # R56
+            head = z[:, self.head_index] * self.coef[self.head_index]
+            rest = z @ self.coef - head
+            return head + self.cap * np.tanh(rest / self.cap) + self.intercept
         if self.method in ("logistic", "weighted", "weight_grid", "mean"):
             return z @ self.coef + self.intercept
         oriented = z * self.sign
@@ -229,6 +240,8 @@ class FusionModel:
             out["quantiles"] = self.quantiles.tolist()
         if self.C is not None:
             out["C"] = self.C
+        if self.cap is not None:
+            out |= {"cap": self.cap, "head_index": self.head_index}
         return out
 
     @classmethod
@@ -243,6 +256,8 @@ class FusionModel:
             float(d.get("intercept", 0.0)),
             np.asarray(d["quantiles"], dtype=float) if "quantiles" in d else None,
             float(d["C"]) if "C" in d else None,
+            float(d["cap"]) if "cap" in d else None,
+            int(d["head_index"]) if "head_index" in d else None,
         )
 
 
@@ -282,23 +297,31 @@ def fit_fusion_model(
     groups: np.ndarray | None = None,
     C_grid: list[float] | tuple[float, ...] | None = None,
     n_splits: int = 5,
+    cap: float = 2.0,
 ) -> FusionModel:
     """Apprend une fusion `method` sur (X, y) : X = entrées de niveau 1, hors-pli.
 
-    `logistic+R50` : C choisi sur `C_grid` (défaut `C_GRID`) par validation groupée interne
-    sur `groups` (`regularization.choose_fusion_C`) ; sans groupes, le C fixé."""
+    Variantes de la logistique, combinables (`regularization.fusion_variant`) : `+R50` (C
+    choisi sur `C_grid` par validation groupée interne sur `groups` ; sans groupes, le C
+    fixé), `+R52` (poids ≥ 0 sur les entrées orientées), `+R53` (sélection L1 des entrées),
+    `+R56` (contribution des descripteurs plafonnée à `cap`, en logit : pas de veto)."""
     from blanci.evaluate import average_precision
+    from blanci.regularization import fusion_variant
 
-    if method not in FUSION_METHODS:
+    variant = fusion_variant(method)
+    if method not in FUSION_METHODS and variant is None:
         raise ValueError(f"méthode de fusion inconnue : {method!r} (connues : {FUSION_METHODS})")
     X, y = np.asarray(X, dtype=float), np.asarray(y).astype(int)
     if X.ndim != 2 or X.shape[1] != len(columns):
         raise ValueError("une colonne nommée par entrée")
-    if method == "logistic+R50":
-        if groups is not None:
+    if variant is not None:
+        if 50 in variant and groups is not None:  # R50 : C par validation groupée
             from blanci.regularization import choose_fusion_C
 
-            chosen, _ = choose_fusion_C(X, y, groups, C_grid or C_GRID, n_splits, seed)
+            inner = "+".join(["logistic", *(f"R{n}" for n in sorted(variant - {50}))])
+            chosen, _ = choose_fusion_C(
+                X, y, groups, C_grid or C_GRID, n_splits, seed, inner, list(columns), cap=cap
+            )
             C = chosen if chosen is not None else C
         method = "logistic"
     with warnings.catch_warnings():  # colonne entièrement manquante sur l'entraînement
@@ -310,7 +333,25 @@ def fit_fusion_model(
     z = np.nan_to_num((X - mean) / scale, nan=0.0)
     sign = _orientation(z, y)
     model = FusionModel(method, list(columns), mean, scale, sign)
-    if method == "logistic":
+    if method == "logistic" and variant and variant - {50}:  # R52, R53, R56
+        from blanci.regularization import fit_constrained_logistic
+
+        oriented = 52 in variant
+        head_index = list(columns).index("head") if "head" in columns else None
+        coef, intercept = fit_constrained_logistic(
+            z * sign if oriented else z,
+            y,
+            C,
+            nonneg=oriented,
+            l1=53 in variant,
+            cap=float(cap) if 56 in variant else None,
+            head_index=head_index,
+        )
+        model.coef = coef * sign if oriented else coef
+        model.intercept, model.C = intercept, float(C)
+        if 56 in variant:
+            model.cap, model.head_index = float(cap), head_index
+    elif method == "logistic":
         fitted = LogisticRegression(
             C=C, class_weight="balanced", max_iter=2000, random_state=seed
         ).fit(z, y)

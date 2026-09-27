@@ -290,10 +290,40 @@ def run_head_benchmark(
         "table": table.reset_index(drop=True),
         "comparisons": comparisons,
         "selection": selection,
+        "by_positive": by_positive_type(scores, data),
         "background": background_diagnostic(scores, y, recordings, cfg),
         "scores": scores,
         "n_mics": int(len(np.unique(groups))),
     }
+
+
+def by_positive_type(
+    scores: dict[str, np.ndarray], data: pd.DataFrame, min_windows: int = 5
+) -> pd.DataFrame:
+    """AP de chaque tête par type de positif (label `blanci_solo`, `blanci_chorus`, `blanci`) :
+    ses positifs de ce type contre tous les négatifs, au niveau fenêtre. Une tête peut classer
+    les mâles seuls et mal les chœurs, ou l'inverse (R43 : attention piquée ou diffuse). Les
+    types de moins de `min_windows` fenêtres sont omis."""
+    if "label" not in data:
+        return pd.DataFrame()
+    y = data["y"].to_numpy()
+    labels = data["label"].to_numpy(dtype=object)
+    kinds = pd.Series(labels[y == 1]).value_counts()
+    rows = []
+    for kind, count in kinds.items():
+        if count < min_windows:
+            continue
+        mask = (y == 0) | (labels == kind)
+        for head, values in scores.items():
+            rows.append(
+                {
+                    "head": head,
+                    "positive_type": kind,
+                    "n_pos": int(count),
+                    "ap": average_precision(y[mask], np.asarray(values)[mask]),
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 def compare_to_reference(

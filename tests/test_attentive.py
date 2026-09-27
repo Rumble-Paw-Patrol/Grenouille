@@ -241,3 +241,20 @@ def test_R61_R62_fine_tuning_helpers_on_a_small_network():
     new = head[1]
     expected = float((new.weight**2).sum() + (new.bias**2).sum())
     assert float(penalty) == pytest.approx(expected, rel=1e-5)
+
+
+def test_R43_entropy_penalty_sharpens_or_spreads_the_attention():
+    tokens, y, groups, _ = windows(n_per_class=60)
+
+    def mean_entropy(head):
+        a = head.attention(tokens)
+        return float(-(a * np.log(a + 1e-12)).sum(axis=1).mean())
+
+    plain = fit_attentive(tokens, y, epochs=150)
+    peaky = fit_attentive(tokens, y, epochs=150, entropy=0.5)
+    diffuse = fit_attentive(tokens, y, epochs=150, entropy=-0.5)
+    assert mean_entropy(peaky) < mean_entropy(plain) < mean_entropy(diffuse)
+    assert peaky.meta["entropy"] == 0.5
+    options = Regularizer({43: -0.01}, {}, Context(groups)).torch_options()
+    assert options["entropy"] == -0.01
+    assert regularizer_for("attentive+R43=-0.01", {}, Context(groups))[0] == "attentive+R43=-0.01"

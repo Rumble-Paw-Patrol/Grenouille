@@ -350,6 +350,7 @@ def fusion_options(cfg: dict, columns: list[str]) -> dict[str, Any]:
     return {
         "C": float(fcfg.get("C", 1.0)),
         "C_grid": [float(c) for c in fcfg.get("C_grid") or []] or None,  # R50
+        "cap": float((fcfg.get("R56") or {}).get("cap", 2.0)),  # R56
         "weights": weights,
         "grid_step": float(fcfg.get("grid_step", 0.1)),
     }

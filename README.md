@@ -122,6 +122,7 @@ $B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R36,logisti
 $B heads --encoder perch_v2-bacpipe1.3.5 --methods attentive,attentive+R41+R42  # n° 117
 $B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R79,logistic+R81,multiclass,dann  # n° 122–124
 $A anuraset-heads --encoder perch_v2-bacpipe1.3.5     # têtes jugées un site à la fois (R78, n° 125)
+$B prevalence                                        # part de positifs au hasard → decision.prevalence (n° 128)
 $B fusion-bench --encoder birdmae-bacpipe1.3.5 --sources head:perch_v2-bacpipe1.3.5
 $B ensemble --sources birdmae-bacpipe1.3.5/logistic,perch_v2-bacpipe1.3.5/logistic
 $B detector-bench --detector band_contrast           # distilled, homemade : réservés

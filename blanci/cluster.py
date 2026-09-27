@@ -93,13 +93,49 @@ def cluster_table(
     return table.sort_values(order, ascending=False, kind="stable").reset_index(drop=True)
 
 
-def c0_summary(labels: np.ndarray, mics: np.ndarray) -> dict[str, float]:
+def c0_summary(
+    labels: np.ndarray, mics: np.ndarray, sites: np.ndarray | None = None
+) -> dict[str, float]:
     kept = labels != NOISE
-    return {
+    out = {
         "n_windows": int(len(labels)),
         "n_clusters": int(len(np.unique(labels[kept]))),
         "noise_share": float(1 - kept.mean()) if len(labels) else float("nan"),
         "ami_mic": ami(labels, mics),
+    }
+    if sites is not None and len(np.unique(sites)) > 1:
+        out["ami_site"] = ami(labels, sites)
+    return out
+
+
+def variance_partition(X: np.ndarray, sites: np.ndarray, mics: np.ndarray) -> dict[str, float]:
+    """Où est la variance des embeddings (normés) : part due au **site** (écart des moyennes de
+    site à la moyenne générale), au **micro dans son site** (écart des moyennes de micro à celle
+    de leur site), et **dans un micro** (heure, météo, chant, bruit). Décomposition exacte des
+    sommes de carrés (ANOVA emboîtée), les trois parts font 1. Question de Léonard (27/09) :
+    les micros d'un même site diffèrent-ils autant que deux sites ? Si la part « micro » domine
+    la part « site », généraliser d'un micro à l'autre est déjà aussi dur que d'un site à
+    l'autre. `mics` : le point (site/micro), pour qu'un micro déplacé compte une fois par site."""
+    X = l2_normalize(np.asarray(X, dtype=np.float64))
+    sites, mics = np.asarray(sites).astype(str), np.asarray(mics).astype(str)
+    grand = X.mean(axis=0)
+    total = float(((X - grand) ** 2).sum())
+    between_sites = between_mics = 0.0
+    for site in np.unique(sites):
+        in_site = sites == site
+        site_mean = X[in_site].mean(axis=0)
+        between_sites += in_site.sum() * float(((site_mean - grand) ** 2).sum())
+        for mic in np.unique(mics[in_site]):
+            in_mic = in_site & (mics == mic)
+            between_mics += in_mic.sum() * float(((X[in_mic].mean(axis=0) - site_mean) ** 2).sum())
+    if total <= 0:
+        return {"share_site": float("nan"), "share_mic": float("nan"), "share_within": float("nan")}
+    return {
+        "share_site": between_sites / total,
+        "share_mic": between_mics / total,
+        "share_within": 1.0 - (between_sites + between_mics) / total,
+        "n_sites": int(len(np.unique(sites))),
+        "n_mics": int(len(np.unique(mics))),
     }
 
 

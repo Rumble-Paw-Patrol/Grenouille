@@ -895,11 +895,11 @@ REGULARISATIONS = Tableau(
                 ],
                 [
                     "R43",
-                    "pénalité d'entropie de l'attention",
-                    "—",
-                    "—",
-                    "—",
-                    C("en discussion", "attente"),
+                    "entropie de l'attention (piquée ou diffuse)",
+                    "entraînement",
+                    "attentive",
+                    "strength β (signé)",
+                    C("programmée (n° 126)", "neuf"),
                 ],
                 ["R44", "température de l'attention", "—", "—", "—", C("en discussion", "attente")],
                 [
@@ -932,7 +932,7 @@ REGULARISATIONS = Tableau(
                     "—",
                     "—",
                     "—",
-                    C("en discussion", "attente"),
+                    C("non : R85 porte déjà le rang faible", "dur"),
                 ],
                 ["R49", "attention multi-têtes", "—", "—", "—", C("en discussion", "attente")],
                 [
@@ -949,23 +949,23 @@ REGULARISATIONS = Tableau(
                     "fusion",
                     "—",
                     "—",
-                    C("en discussion", "attente"),
+                    C("remplacée par R52", "ref"),
                 ],
                 [
                     "R52",
-                    "combinaison convexe (poids ≥ 0, somme 1)",
+                    "poids ≥ 0 sur les entrées orientées",
                     "fusion",
-                    "weighted, weight_grid",
+                    "logistic+R52, weighted, weight_grid",
                     "—",
-                    C("en place pour ces deux méthodes", "ref"),
+                    C("programmée (n° 127)", "neuf"),
                 ],
                 [
                     "R53",
                     "sélection L1 des descripteurs",
                     "fusion",
-                    "—",
-                    "—",
-                    C("en discussion", "attente"),
+                    "logistic+R53",
+                    "C (R50)",
+                    C("programmée (n° 127)", "neuf"),
                 ],
                 [
                     "R54",
@@ -985,11 +985,11 @@ REGULARISATIONS = Tableau(
                 ],
                 [
                     "R56",
-                    "pas de veto : plafond des descripteurs",
+                    "pas de veto : descripteurs plafonnés",
                     "fusion",
-                    "—",
-                    "—",
-                    C("en discussion", "attente"),
+                    "logistic+R56",
+                    "cap (2 logits)",
+                    C("programmée (n° 127)", "neuf"),
                 ],
                 [
                     "R57",
@@ -999,14 +999,7 @@ REGULARISATIONS = Tableau(
                     "—",
                     C("en place", "ref"),
                 ],
-                [
-                    "R58",
-                    "phénologie en a priori",
-                    "décision",
-                    "—",
-                    "—",
-                    C("en discussion", "attente"),
-                ],
+                ["R58", "phénologie en a priori", "—", "—", "—", C("écartée", "dur")],
                 [
                     "R59",
                     "warm-up du pas, écrêtage du gradient",
@@ -1114,11 +1107,11 @@ REGULARISATIONS = Tableau(
                 ],
                 [
                     "R73",
-                    "calibration, seuil de précision",
+                    "seuil à la précision du stock, calibration",
                     "décision",
-                    "—",
-                    "—",
-                    C("en discussion (n° 125)", "attente"),
+                    "train",
+                    "decision.prevalence",
+                    C("programmée (n° 128)", "neuf"),
                 ],
                 [
                     "R74",
@@ -1241,6 +1234,21 @@ FUSION = Tableau(
                     "régression logistique (stacking)",
                     "apprise, C choisi par validation groupée dans chaque pli",
                 ],
+                [
+                    C("logistic+R52", "neuf"),
+                    "idem, poids ≥ 0 sur les entrées orientées",
+                    "apprise ; parts lisibles (« 70 % la tête »)",
+                ],
+                [
+                    C("logistic+R53", "neuf"),
+                    "idem, pénalité L1",
+                    "apprise ; les descripteurs inutiles tombent à 0",
+                ],
+                [
+                    C("logistic+R56", "neuf"),
+                    "idem, descripteurs plafonnés à ±cap (logit)",
+                    "apprise ; pas de veto sur la tête",
+                ],
                 ["weighted", "somme pondérée", "fixée à la main (fusion.weights)"],
                 ["weight_grid", "somme pondérée", "cherchée sur une grille (pas 0,1)"],
                 ["mean", "moyenne des entrées", "égale"],
@@ -1280,7 +1288,7 @@ FUSION = Tableau(
     ],
     [
         "Au plus 4 descripteurs (~10 enregistrements positifs par coefficient) ; jamais de veto"
-        " en parallèle ni en aval."
+        " en parallèle ni en aval (R56). Les suffixes se combinent : logistic+R50+R52+R56."
     ],
 )
 

@@ -182,5 +182,15 @@ part entière vivent dans leur module.
 - R74, R75 (par défaut), R76, R77, R79 : programmées, DECISIONS n° 122. R78 : AnuraSet, un
   pli par site (`blanci anuraset-heads`), DECISIONS n° 125. R80 : présélection.
 - R81 : programmée (`+R81`). R82 : écartée. R83 : plus tard. R84 : en place.
-- Section E (R51–R56, R58) : en attente.
+- Section E : voir plus bas (27/09).
+
+# Tri de Léonard du 27/09 (section E, et retours)
+
+- R50 : programmée (`logistic+R50`). R51 : remplacée par R52. R52 : programmée
+  (`logistic+R52`, poids ≥ 0 sur les entrées orientées). R53 : programmée (`logistic+R53`,
+  sélection L1), après le tri des descripteurs par Léonard. R54, R55 : en discussion. R56 :
+  programmée (`logistic+R56`, pas de veto). R57 : en place. R58 : écartée. DECISIONS n° 127.
+- R43 : programmée (`attentive+R43=β`), et l'AP par type de positif (solo, chœur) dans
+  `blanci heads`. R48 : non (R85 porte déjà le rang faible). DECISIONS n° 126.
+- R73 : démarche en chaîne, `blanci prevalence` puis `decision.prevalence`. DECISIONS n° 128.
 

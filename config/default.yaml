@@ -178,6 +178,9 @@ regularization:
   # max_epochs). Les deux critères se comparent dans un même run : attentive+R42=ap,
   # attentive+R42=loss. ap : défaut provisoire, à trancher sur la base complète (n° 117, 119).
   R42: {monitor: ap, max_epochs: 300, n_splits: 3}
+  # Entropie de l'attention ajoutée à la perte × ◆ strength : > 0 attention piquée (note brève),
+  # < 0 attention diffuse (chœur) ; attentive+R43=0.01, attentive+R43=-0.01 (n° 126).
+  R43: {strength: 0.01}
   R45: {p: 0.2}                        # ◆ dropout des jetons avant l'attention
   R46: {p: 0.2}                        # ◆ dropout des dimensions du vecteur agrégé
   R47: {strength: 1.0e-2}              # ◆ λ de ½λ‖w − w_logistique‖²
@@ -205,6 +208,14 @@ regularization:
   # du stock ; pseudo-positifs = score ≥ min_score (logit), au plus max_fraction du réservoir,
   # au poids weight ; rounds tours. pool_from: train (micros d'entraînement seulement) ou all.
   R81: {pool: 20000, min_score: 3.0, max_fraction: 0.01, weight: 0.3, rounds: 1, pool_from: train}
+
+# Décision (R73, n° 128). La précision plancher (benchmark.precisions[0], 0,1 : file hebdomadaire
+# ≤ 1 h à 10 s par candidat, §6) se mesure dans le benchmark, où la part de positifs vaut ~1/21.
+# prevalence : part de fenêtres positives dans le stock, mesurée par `blanci prevalence` (strate
+# aléatoire et audit) ; renseignée, `blanci train` choisit le seuil pour la précision attendue
+# dans le stock. null : seuil du benchmark (comportement d'avant).
+decision:
+  prevalence: null
 
 benchmark:
   negatives_per_positive: 20       # négatifs appariés présumés, ratio 1:20 à 1:50 (§2)
@@ -259,7 +270,11 @@ fusion:
   # Autres entrées (ensemble de modèles) : head:<encodeur> (sa tête logistique, hors-pli,
   # ramenée sur la grille de l'encodeur principal), congeners:<perch_v2…> (logits congénères).
   sources: []
-  benchmark_methods: [logistic, logistic+R50, weighted, weight_grid, mean, rank_mean, max, min]
+  # Variantes de la logistique, combinables (n° 127) : +R50 (C par validation groupée), +R52
+  # (poids ≥ 0 sur les entrées orientées), +R53 (sélection L1 des entrées), +R56 (pas de veto).
+  benchmark_methods: [logistic, logistic+R50, logistic+R50+R52, logistic+R50+R53,
+                      logistic+R50+R56, weighted, weight_grid, mean, rank_mean, max, min]
+  R56: {cap: 2.0}                  # pas de veto : les descripteurs déplacent le logit d'au plus 2
   # Emplacements comparés par `fusion-bench` ([] = module séquentiel absent, tête seule).
   benchmark_positions:
     - []

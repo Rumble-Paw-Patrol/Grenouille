@@ -448,6 +448,10 @@ def heads(
             f"Choix par pli : {selection['chosen']}."
         )
         text += ["## Sélection honnête (R74, R80)", "", verdict, ""]
+    by_positive = out.get("by_positive")
+    if by_positive is not None and not by_positive.empty:  # solo, chœur (R43)
+        pivot = by_positive.pivot_table(index="head", columns="positive_type", values="ap")
+        text += ["## Par type de positif (fenêtres)", "", to_markdown(pivot.reset_index()), ""]
     if out["background"]:
         text += ["## Fond capté (différentiel − simple)", "", out["background"]["verdict"], ""]
     (reports / f"{stem}.md").write_text("\n".join(text), encoding="utf-8")
@@ -1467,6 +1471,26 @@ def anuraset_prepare(ctx: typer.Context) -> None:
     )
 
 
+@app.command()
+def prevalence(ctx: typer.Context) -> None:
+    """R73 : part des fenêtres positives dans le stock, mesurée sur les seules fenêtres écoutées
+    sans que le détecteur les ait choisies (strate aléatoire, audit). À reporter dans
+    decision.prevalence de la config pour choisir le seuil (blanci train)."""
+    from blanci.service import estimate_prevalence
+
+    cfg = _cfg(ctx)
+    out = estimate_prevalence(connect(config_path(cfg, "db")))
+    if not out["n_windows"]:
+        typer.echo("aucune fenêtre écoutée au hasard (sources random, audit) : rien à estimer")
+        return
+    typer.echo(
+        f"{out['n_positive']} positives sur {out['n_windows']} fenêtres écoutées au hasard : "
+        f"prévalence {out['prevalence']:.4f} [{out['lo']:.4f} ; {out['hi']:.4f}]"
+    )
+    if out["n_positive"] < 20:
+        typer.echo("moins de 20 positives : intervalle large, à consolider avant de s'en servir")
+
+
 @app.command("anuraset-heads")
 def anuraset_heads(
     ctx: typer.Context,
@@ -1585,6 +1609,13 @@ def cluster(
         typer.echo(
             f"meilleur groupe : rappel {summary['best_recall']:.2f}, enrichissement "
             f"{summary['best_enrichment']:.1f} → C1 {'réussi' if summary['passed'] else 'échoué'}"
+        )
+    if "share_site" in summary:  # site contre micro (27/09)
+        typer.echo(
+            f"variance des embeddings : site {summary['share_site']:.0%}, micro dans son site "
+            f"{summary['share_mic']:.0%}, dans un micro {summary['share_within']:.0%} "
+            f"({summary['n_sites']} sites, {summary['n_mics']} micros)"
+            + (f" ; AMI groupes/sites {summary['ami_site']:.2f}" if "ami_site" in summary else "")
         )
     reports = config_path(cfg, "reports")
     _write_csv(table, reports / f"cluster_{mode}_{encoder}.csv", "groupes")

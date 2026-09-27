@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from blanci.cluster import NOISE, ami, c0_summary, c1_verdict, cluster_embeddings, cluster_table
 from blanci.store import EmbeddingStore
@@ -83,3 +84,22 @@ def test_store_sample_is_proportional_and_reproducible(tmp_path):
     assert again["window_id"].tolist() == meta["window_id"].tolist()
     everything, _ = store.sample(10_000)
     assert len(everything) == 400
+
+
+def test_variance_partition_separates_site_from_mic():
+    """Deux sites très différents, micros presque identiques dans un site : presque toute la
+    variance est « site » ; l'inverse quand les micros d'un site diffèrent plus que les sites."""
+    from blanci.cluster import variance_partition
+
+    rng = np.random.default_rng(0)
+    rows, sites, mics = [], [], []
+    for s in range(2):
+        site_shift = rng.normal(0, 3.0, 8)
+        for m in range(3):
+            mic_shift = rng.normal(0, 0.1, 8)
+            rows.append(site_shift + mic_shift + rng.normal(0, 0.05, (40, 8)) + 5.0)
+            sites += [f"S{s}"] * 40
+            mics += [f"S{s}/M{m}"] * 40
+    out = variance_partition(np.vstack(rows), np.array(sites), np.array(mics))
+    assert out["share_site"] > 0.8 and out["share_mic"] < 0.1
+    assert out["share_site"] + out["share_mic"] + out["share_within"] == pytest.approx(1.0)

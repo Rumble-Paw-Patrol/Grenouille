@@ -467,3 +467,61 @@ def test_full_benchmark_ranks_every_source_on_common_recordings(corpus, cfg):
     assert set(out["comparisons"]["reference"]) == {out["reference"]}
     assert table.loc[table["source"] == "main-1/logistic", "dim"].iloc[0] == 6
     assert len(out["by_site"])
+
+
+# --- R52, R53, R56 : fusion logistique contrainte (n° 127) ----------------------------------------
+
+
+def test_fusion_variants_are_parsed():
+    from blanci.regularization import fusion_variant
+
+    assert fusion_variant("logistic") == set()
+    assert fusion_variant("logistic+R56+R50") == {50, 56}
+    assert fusion_variant("mean") is None
+    with pytest.raises(ValueError, match="R99"):
+        fusion_variant("logistic+R99")
+
+
+def test_R52_keeps_every_oriented_weight_positive():
+    X, y, columns = two_experts()
+    model = fit_fusion_model("logistic+R52", X, y, columns)
+    assert ((model.coef * model.sign) >= -1e-9).all()
+    assert model.coef[2] < 0  # l'entrée inversée garde son sens, par l'orientation
+    assert average_precision(y, model.decision(X)) > 0.75
+
+
+def test_R53_drops_a_useless_input():
+    rng = np.random.default_rng(0)
+    X, y, columns = two_experts()
+    X = np.column_stack([X, rng.normal(0, 1, len(y))])
+    model = fit_fusion_model("logistic+R52+R53", X, y, [*columns, "bruit"], C=0.05)
+    assert model.coef[3] == pytest.approx(0.0, abs=1e-8) and abs(model.coef[0]) > 0
+
+
+def test_R56_bounds_what_the_descriptors_can_do_to_the_head():
+    """Un descripteur très prédictif (le rythme) qui vaut 0 sur une partie des vrais chants :
+    sans plafond, il peut éteindre un score de tête élevé ; avec R56, il ne déplace le logit
+    que de ±cap."""
+    rng = np.random.default_rng(1)
+    n = 600
+    y = rng.integers(0, 2, n)
+    head = y * 1.5 + rng.normal(0, 1, n)
+    rhythm = np.where((y == 1) & (rng.random(n) < 0.7), 3.0, 0.0) + rng.normal(0, 0.2, n)
+    X, columns = np.column_stack([head, rhythm]), ["head", "rythme"]
+    model = fit_fusion_model("logistic+R56", X, y, columns, cap=1.0)
+    z = (X - model.mean) / model.scale
+    free = z[:, 0] * model.coef[0] + model.intercept
+    assert np.abs(model.decision(X) - free).max() <= 1.0 + 1e-9
+    again = FusionModel.from_dict(json.loads(json.dumps(model.to_dict())))
+    assert np.allclose(again.decision(X), model.decision(X))
+    with pytest.raises(ValueError, match="head"):
+        fit_fusion_model("logistic+R56", X, y, ["a", "b"])
+
+
+def test_constrained_variants_run_out_of_fold_with_R50():
+    X, y, columns = two_experts()
+    groups = np.repeat(list("abcdef"), 50)
+    oof = fusion_model_oof(
+        "logistic+R50+R52", X, y, groups, columns, n_splits=3, C_grid=[0.01, 1.0]
+    )
+    assert np.isfinite(oof.values).all() and average_precision(y, oof.values) > 0.75

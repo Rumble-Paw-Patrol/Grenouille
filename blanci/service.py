@@ -29,6 +29,7 @@ from blanci.activity import (
 from blanci.aggregate import aggregate_recording, rank_points
 from blanci.config import config_path
 from blanci.dataset import (
+    EXCLUDED_LABELS,
     current_labels,
     embedded_training_set,
     folds_for,
@@ -45,6 +46,7 @@ from blanci.evaluate import (
     recall_at_precision,
     recall_by_group,
     to_recordings,
+    wilson_interval,
 )
 from blanci.frozen import frozen_recordings, frozen_versions
 from blanci.fusion import FusionWeights
@@ -52,7 +54,14 @@ from blanci.head import Head, oof_scores, train_head
 from blanci.index import search
 from blanci.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
 from blanci.qc import apply_annotation_flags, is_excluded
-from blanci.regularization import cross_fitted_threshold, fold_ids
+from blanci.regularization import (
+    cross_fitted_threshold,
+    fold_ids,
+    operating_curve,
+    platt,
+    precision_at_prevalence,
+    threshold_at_prevalence,
+)
 from blanci.sequential import (
     GATED_SCORE,
     apply_gate,
@@ -159,6 +168,13 @@ def train_and_register(
         assignment=folds_for(con, cfg),
     )
     recall, threshold = recall_at_precision(y, oof.values, min_precision)
+    benchmark_threshold = threshold
+    # R73 : précision voulue dans le stock, où la part de positifs n'est pas celle du benchmark.
+    prevalence = (cfg.get("decision") or {}).get("prevalence")
+    corrected = None
+    if prevalence:
+        corrected = threshold_at_prevalence(y, oof.values, min_precision, float(prevalence))
+        recall, threshold = corrected["recall"], corrected["threshold"]
     # R74 : le même seuil, choisi pli par pli sur les autres plis : ce qu'il fera sur des micros
     # qu'il n'a pas vus (le rappel ci-dessus est mesuré sur les scores qui ont fixé le seuil).
     crossfit = cross_fitted_threshold(y, oof.values, fold_ids(len(y), oof.folds), min_precision)
@@ -184,6 +200,13 @@ def train_and_register(
         "recall_at_threshold": recall,
         "crossfit_recall": crossfit["recall"],
         "crossfit_precision": crossfit["precision"],
+        # R73 : seuil au plancher mesuré dans le benchmark, proportion de positifs du benchmark,
+        # prévalence du stock retenue (config decision.prevalence) et calibration de Platt.
+        "threshold_benchmark": benchmark_threshold,
+        "benchmark_prevalence": float(np.mean(y)),
+        "prevalence": float(prevalence) if prevalence else None,
+        "expected_precision": corrected["precision"] if corrected else None,
+        "platt": list(platt(oof.values[np.isfinite(oof.values)], y[np.isfinite(oof.values)])),
         "trained_at": utc_now(),
         # Jeux gelés exclus à l'entraînement : seuls eux peuvent juger cette tête (§6).
         "frozen_excluded": sorted(frozen_versions(cfg)),
@@ -213,6 +236,7 @@ def train_and_register(
         },
     )
     write_regularization_path(cfg, head, f"chemin_C_{encoder_id}_{version}")
+    write_operating_curve(cfg, y, oof.values, head.meta, f"seuils_{encoder_id}_{version}")
     return TrainResult(
         encoder_id,
         version,
@@ -225,6 +249,74 @@ def train_and_register(
         metrics
         | {"crossfit_recall": crossfit["recall"], "crossfit_precision": crossfit["precision"]},
     )
+
+
+def write_operating_curve(
+    cfg: dict, y: np.ndarray, scores: np.ndarray, meta: dict, stem: str
+) -> Path:
+    """R73 : pour chaque seuil, rappel, précision dans le benchmark et précision attendue dans le
+    stock (si `decision.prevalence` est renseignée), part des fenêtres signalées ; CSV, et PNG
+    si matplotlib est là. De quoi choisir un seuil en connaissance de cause plutôt qu'un point."""
+    reports = config_path(cfg, "reports")
+    reports.mkdir(parents=True, exist_ok=True)
+    curve = operating_curve(y, scores)
+    frame = pd.DataFrame(
+        {
+            "threshold": curve["threshold"],
+            "recall": curve["tpr"],
+            "precision_benchmark": curve["precision"],
+            "false_alarm_rate": curve["fpr"],
+        }
+    )
+    prevalence = meta.get("prevalence")
+    if prevalence:
+        frame["precision_stock"] = precision_at_prevalence(curve["tpr"], curve["fpr"], prevalence)
+        frame["flagged_share_stock"] = prevalence * curve["tpr"] + (1 - prevalence) * curve["fpr"]
+    csv = reports / f"{stem}.csv"
+    frame.to_csv(csv, index=False)
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:  # pragma: no cover - groupe app ou notebook absent
+        return csv
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(frame["recall"], frame["precision_benchmark"], label="benchmark")
+    if prevalence:
+        label = f"stock (prévalence {prevalence:g})"
+        ax.plot(frame["recall"], frame["precision_stock"], label=label)
+    ax.axhline(meta.get("min_precision", 0.1), color="grey", linestyle=":", label="plancher")
+    ax.set_xlabel("rappel")
+    ax.set_ylabel("précision")
+    ax.set_ylim(0, 1.02)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    fig.savefig(reports / f"{stem}.png", dpi=120)
+    plt.close(fig)
+    return csv
+
+
+def estimate_prevalence(con: sqlite3.Connection, sources=("random", "audit")) -> dict[str, Any]:
+    """R73 : part des fenêtres positives parmi celles écoutées **sans que le détecteur les ait
+    choisies** (strate aléatoire de la file, audit d'enregistrements entiers), avec
+    l'intervalle de Wilson. Jamais sur les autres sources : elles sont choisies parce qu'elles
+    ont l'air positives."""
+    from blanci.labels import POSITIVE_LABELS
+
+    labels = current_labels(con)
+    labels = labels[labels["source"].isin(sources) & ~labels["label"].isin(EXCLUDED_LABELS)]
+    n = int(len(labels))
+    k = int(labels["label"].isin(POSITIVE_LABELS).sum())
+    lo, hi = wilson_interval(k, n)
+    return {
+        "n_windows": n,
+        "n_positive": k,
+        "prevalence": k / n if n else float("nan"),
+        "lo": lo,
+        "hi": hi,
+        "sources": list(sources),
+    }
 
 
 def write_regularization_path(cfg: dict, head: Head, stem: str) -> Path:
@@ -717,7 +809,13 @@ def run_clustering(
 
     Renvoie (résumé, tableau par groupe, groupe de chaque fenêtre).
     """
-    from blanci.cluster import c0_summary, c1_verdict, cluster_embeddings, cluster_table
+    from blanci.cluster import (
+        c0_summary,
+        c1_verdict,
+        cluster_embeddings,
+        cluster_table,
+        variance_partition,
+    )
 
     ccfg = cfg["cluster"]
     store = store_for(cfg, encoder_id)
@@ -771,7 +869,8 @@ def run_clustering(
             ccfg["c1_max_ami_mic"],
         )
     else:
-        summary = c0_summary(assignments, mics)
+        sites = rec["site"].astype(str).to_numpy()
+        summary = c0_summary(assignments, mics, sites) | variance_partition(X, sites, mics)
     summary = {"encoder_id": encoder_id, "mode": mode} | summary
     windows = meta[["window_id", "recording_id", "offset_s", "y"]].assign(
         point=mics, cluster=assignments

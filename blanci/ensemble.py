@@ -67,7 +67,9 @@ def run_ensemble(
 ) -> dict[str, Any]:
     """Chaque méthode de combinaison, hors-pli, contre la meilleure source seule."""
     methods = methods or ["mean", "rank_mean", "max", "logistic", "weight_grid"]
-    unknown = sorted(set(methods) - set(FUSION_METHODS))
+    from blanci.regularization import fusion_variant
+
+    unknown = sorted(m for m in methods if m not in FUSION_METHODS and fusion_variant(m) is None)
     if unknown:
         raise ValueError(f"méthodes inconnues : {unknown} (connues : {FUSION_METHODS})")
     table = recording_table(cfg, sources, allow_mixed)

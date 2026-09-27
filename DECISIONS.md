@@ -1260,3 +1260,52 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      régularisations groupées par site ; AP de chaque tête sur chaque site tenu à l'écart.
      Section E (R51–R56, R58) : en attente de Léonard.
 
+## 2026-09-27 — Section E, R43, seuil du stock, site contre micro
+
+126. **R43 et jugement par type de positif.** `attentive+R43=β` : entropie moyenne des poids
+     d'attention ajoutée à la perte × β (`attention_entropy`) ; β > 0 pousse vers une attention
+     piquée (une note brève, un ou deux jetons), β < 0 vers une attention diffuse (chœur).
+     Léonard : comparer les approches sur les chœurs et sur les mâles seuls. `blanci heads`
+     rapporte donc l'AP de chaque tête par label positif (`blanci_solo`, `blanci_chorus`,
+     `blanci`), ses positifs de ce type contre tous les négatifs (`by_positive_type`). Les 345
+     positifs importés sont tous « blanci » (H21, n° 3) : la comparaison vivra avec les
+     prochaines annotations. R48 non programmée : dans l'attentive, query et weight n'ont que
+     2 × d paramètres, rien à factoriser ; le rang faible sert déjà dans R85.
+
+127. **Fusion : R52, R53, R56 ; R51, R54, R55, R58.** Variantes de la fusion logistique,
+     combinables avec R50 : `+R52` (coefficients ≥ 0 sur les entrées orientées : pour classer,
+     une combinaison convexe à l'échelle près), `+R53` (pénalité L1 : les entrées inutiles
+     tombent à 0, exactement avec R52), `+R56` (s = w_tête·z_tête + cap·tanh(Σ autres / cap) :
+     les descripteurs déplacent le logit d'au plus `fusion.R56.cap` = 2, aucun veto sur la
+     tête). Mécanique : `regularization.fit_constrained_logistic`, `fusion_variant`.
+     `fusion-bench` compare `logistic+R50`, `+R52`, `+R53`, `+R56`. R51 : remplacée par R52
+     (Léonard) — R52 prend l'orientation de chaque entrée sur les données (signe de sa
+     corrélation au label à l'entraînement), R51 l'aurait imposée ; sur un site encore peu
+     annoté, un signe imposé est plus sûr qu'un signe appris : à garder en tête. R53 : Léonard
+     fera un tri des descripteurs (redondances) ; la sélection se fait dans chaque pli. R54,
+     R55 : réexpliquées, en discussion. R58 : écartée. `weighted` (poids fixés à la main,
+     `fusion.weights`) reste la voie pour pondérer soi-même les entrées.
+
+128. **R73 : le seuil pour la précision du stock.** La précision plancher (0,1) vient du §6 :
+     la file hebdomadaire doit tenir en 1 h à 10 s par candidat, et le rappel prime (une fausse
+     absence est irréversible, une fausse présence se corrige à l'écoute). Mais la précision
+     dépend de la part de positifs : ~1/21 dans le benchmark, bien moins dans le stock. Démarche
+     retenue, en chaîne : (1) `blanci prevalence` mesure la part de fenêtres positives sur les
+     seules fenêtres écoutées au hasard (sources `random`, `audit`), avec son intervalle de
+     Wilson ; (2) reportée dans `decision.prevalence`, `blanci train` choisit le seuil au plus
+     grand rappel dont la précision attendue dans le stock, π·TPR / (π·TPR + (1 − π)·FPR),
+     atteint le plancher (`threshold_at_prevalence`) — TPR et FPR ne dépendent pas de la part
+     de positifs ; (3) `blanci train` écrit la courbe seuil → rappel, précision du benchmark,
+     précision attendue dans le stock, part des fenêtres signalées (`seuils_<encodeur>_<v>`,
+     CSV et PNG) et range la calibration de Platt (a, b) et la prévalence du benchmark avec
+     la tête, pour des probabilités ramenées au stock (`prior_shift`). Sans prévalence, rien
+     ne change. Hypothèse à garder en vue : les négatifs du benchmark (mêmes micros, mêmes
+     heures que les positifs) représentent-ils ceux du stock ? La strate aléatoire le dira.
+
+129. **Site contre micro.** Question de Léonard : la différence entre micros d'un même site
+     n'est-elle pas déjà aussi forte qu'entre sites ? `blanci cluster --mode c0` rapporte
+     désormais la décomposition de la variance des embeddings (normés) entre site, micro dans
+     son site et intérieur d'un micro (`cluster.variance_partition`, ANOVA emboîtée, parts de
+     somme 1), et l'AMI groupes/sites à côté de l'AMI groupes/micros. À lancer sur un
+     échantillon qui couvre plusieurs sites.
+

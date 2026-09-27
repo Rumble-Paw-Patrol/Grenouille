@@ -346,3 +346,18 @@ def test_new_heads_and_pseudo_labels_run_on_the_stock(corpus, cfg):
     assert set(out["table"]["head"]) == {"logistic", "logistic+R81", "multiclass"}
     assert out["table"]["ap"].notna().all()
     assert out["selection"]["winner"] in {"logistic", "logistic+R81", "multiclass"}
+
+
+def test_heads_are_also_judged_by_type_of_positive():
+    """Solo contre chœur (R43) : l'AP de chaque tête par label positif."""
+    from blanci.head_benchmark import by_positive_type
+
+    data = pd.DataFrame(
+        {
+            "y": [1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+            "label": ["blanci_solo"] * 3 + ["blanci_chorus"] * 3 + [None] * 4,
+        }
+    )
+    scores = {"a": np.array([9, 8, 7, 1, 1, 1, 2, 2, 0, 0], dtype=float)}
+    out = by_positive_type(scores, data, min_windows=3).set_index("positive_type")["ap"]
+    assert out["blanci_solo"] == pytest.approx(1.0) and out["blanci_chorus"] < 0.8
