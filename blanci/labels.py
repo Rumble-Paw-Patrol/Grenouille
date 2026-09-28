@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sqlite3
 import unicodedata
@@ -305,8 +306,12 @@ def parse_offset(value: Any, unit: str, window_s: float) -> float:
     """Secondes depuis un nombre, « mm:ss », « hh:mm:ss », une durée Excel, ou un indice.
 
     Excel rend une cellule au format horaire en `datetime.time` ou en `Timedelta` selon son
-    format : les deux comptent depuis le début de l'enregistrement, pas depuis une date.
+    format : les deux comptent depuis le début de l'enregistrement, pas depuis une date. Une
+    cellule vide (NaN) ou une valeur non finie lève ValueError : « nan » passerait sinon tous
+    les contrôles de bornes (toute comparaison à NaN est fausse).
     """
+    if _is_blank(value):
+        raise ValueError("décalage vide")
     if isinstance(value, timedelta):
         seconds = value.total_seconds()
     elif isinstance(value, time):
@@ -319,7 +324,20 @@ def parse_offset(value: Any, unit: str, window_s: float) -> float:
             seconds = seconds * 60 + float(part.replace(",", "."))
     else:
         seconds = float(str(value).replace(",", "."))
+    if not math.isfinite(seconds):
+        raise ValueError(f"décalage non fini : {value!r}")
     return seconds * window_s if unit == "window_index" else seconds
+
+
+def parse_score(value: Any) -> float:
+    """Score d'un détecteur : nombre, ou texte à virgule décimale (« 0,87 ») ; ValueError si
+    illisible ou non fini."""
+    if _is_blank(value):
+        raise ValueError("score vide")
+    score = float(str(value).strip().replace(",", ".")) if isinstance(value, str) else float(value)
+    if not math.isfinite(score):
+        raise ValueError(f"score non fini : {value!r}")
+    return score
 
 
 # Verdicts d'une colonne « vérif manuelle ». Tout ce qui n'est reconnu ni ici ni comme
@@ -331,6 +349,16 @@ VERDICT_YES = re.compile(
 VERDICT_NO = re.compile(
     r"^(n|non|no|f|faux|false|ko|0|0\.0|rejete[e]?|invalide|absent[e]?|"
     r"pas blanci|non blanci|erreur|faux positif)$"
+)
+
+
+# Verdict nuancé : « blanci ? », « blanci sans doute » (= probablement), « blanci pas sûr »,
+# « peut-être ». L'expert hésite : ni positif ni négatif ferme ; comme tout verdict illisible,
+# la ligne est signalée et l'import attend (DECISIONS n° 142), sauf si elle nomme un faux ami
+# reconnu. « probablement pas blanci » reste un négatif « uncertain ».
+VERDICT_DOUBT = re.compile(
+    r"^[\w' ]{0,30}\?+$|\bsans doute\b|\bpeut[ -]?etre\b|\bpas sure?\b|\bdouteu(?:x|se)\b|"
+    r"\bincertaine?\b|\bhesit|\bpossible(?:ment)?\b"
 )
 
 
@@ -355,7 +383,8 @@ def _is_blank(value: Any) -> bool:
 
 
 def parse_verdict(value: Any) -> bool | None:
-    """True / False depuis une colonne de vérification, None si la valeur n'est pas concluante."""
+    """True / False depuis une colonne de vérification, None si la valeur n'est pas concluante
+    (dont un verdict nuancé, `VERDICT_DOUBT`)."""
     if value is None or (not isinstance(value, str) and pd.isna(value)):
         return None
     if isinstance(value, bool | np.bool_):
@@ -363,6 +392,8 @@ def parse_verdict(value: Any) -> bool | None:
     if isinstance(value, int | float | np.number) and float(value) in (0.0, 1.0):
         return bool(value)
     norm = normalize(value)
+    if VERDICT_DOUBT.search(norm):
+        return None
     if VERDICT_YES.match(norm):
         return True
     if VERDICT_NO.match(norm):
@@ -529,10 +560,11 @@ def import_label_file(
                 if value.strip() not in texts:
                     texts.append(value.strip())
         parsed = parse_comment(" | ".join(texts) or None, row_kind, quality)
-        if "score" in columns:
-            score = record[columns["score"]]
-            if not pd.isna(score):
-                parsed.conditions["previous_model_score"] = float(score)
+        if "score" in columns and not _is_blank(record[columns["score"]]):
+            try:
+                parsed.conditions["previous_model_score"] = parse_score(record[columns["score"]])
+            except ValueError:  # renseignement annexe : gardé tel quel, sans bloquer l'import
+                parsed.conditions["previous_model_score_text"] = str(record[columns["score"]])
 
         referenced = str(record[columns["file"]])
         matches = recordings.get(file_key(referenced), [])
@@ -616,7 +648,8 @@ class DetectionImportReport:
     unverified: int = 0  # détections que personne n'a écoutées
     not_found: int = 0  # fichier absent de l'inventaire (autre relevé, doublon écarté)
     ambiguous: int = 0
-    unreadable: int = 0
+    unreadable: int = 0  # décalage ou score vide, illisible
+    out_of_range: int = 0  # fenêtre hors de l'enregistrement
 
 
 def import_detections(
@@ -645,19 +678,19 @@ def import_detections(
             report.not_found += not matches
             report.ambiguous += len(matches) > 1
             continue
-        score = record[columns["score"]]
         try:
             offset = parse_offset(record[columns["offset_s"]], icfg["offset_unit"], window_s)
+            score = parse_score(record[columns["score"]])
         except ValueError:
             report.unreadable += 1
             continue
-        if pd.isna(score):
-            report.unreadable += 1
+        if offset < 0 or offset + window_s > matches[0]["duration_s"] + 0.05:
+            report.out_of_range += 1  # même contrôle que les labels
             continue
         rid = matches[0]["recording_id"]
         wid = window_id_for(rid, offset, window_s)
         windows.append((wid, rid, round(offset, 2), window_s))
-        scores.append((wid, model_id, float(score)))
+        scores.append((wid, model_id, score))
         if "verdict" in columns and _is_blank(record[columns["verdict"]]):
             report.unverified += 1
     with con:

@@ -406,7 +406,7 @@ def score_and_decide(
     con: sqlite3.Connection,
     encoder_id: str,
     cfg: dict,
-    version: str = "latest",
+    version: str = "default",
     filters: dict | None = None,
     fusion: bool = False,
 ) -> ScoreResult:
@@ -414,8 +414,10 @@ def score_and_decide(
 
     Avec `fusion`, le score de décision est celui de la fusion enregistrée pour cette tête
     (`blanci fusion`) : tête + rythme + persistance, à son propre seuil.
-    Les décisions du même triplet (encodeur, tête, seuil) sont remplacées : elles sont
-    reproductibles, contrairement aux labels qui ne s'écrasent jamais (§13.7).
+    Les décisions du même triplet (encodeur, tête, seuil) sont remplacées pour les
+    enregistrements scorés ici, et pour eux seuls (un `filters` sur un site laisse les autres
+    sites en place) : elles sont reproductibles, contrairement aux labels qui ne s'écrasent
+    jamais (§13.7).
     """
     head, params = load_head(con, encoder_id, version)
     version = params["version"]
@@ -466,8 +468,17 @@ def score_and_decide(
         rows.append({"recording_id": recording_id, "fraction": fraction, "status": status})
     decisions = pd.DataFrame(rows)
 
+    # Seuls les enregistrements décidés ici sont remplacés : `score --site B` ne doit pas
+    # effacer les décisions du site A (même triplet encodeur, tête, seuil).
+    con.execute("CREATE TEMP TABLE IF NOT EXISTS decided (recording_id TEXT PRIMARY KEY)")
+    con.execute("DELETE FROM decided")
+    con.executemany(
+        "INSERT OR IGNORE INTO decided (recording_id) VALUES (?)",
+        [(r,) for r in decisions["recording_id"]],
+    )
     con.execute(
-        "DELETE FROM decisions WHERE encoder_id = ? AND head_version = ? AND threshold_id = ?",
+        "DELETE FROM decisions WHERE encoder_id = ? AND head_version = ? AND threshold_id = ? "
+        "AND recording_id IN (SELECT recording_id FROM decided)",
         (encoder_id, version, tid),
     )
     con.executemany(
@@ -521,7 +532,7 @@ def make_queue(
     encoder_id: str,
     cfg: dict,
     n: int | None = None,
-    version: str = "latest",
+    version: str = "default",
     mix: tuple[float, float, float] | None = None,
 ) -> pd.DataFrame:
     """File d'apprentissage actif : 60 % incertains, 20 % meilleurs, 20 % aléatoire (§5).
@@ -1058,7 +1069,7 @@ def fusion_id(encoder_id: str, head_version: str) -> str:
 
 
 def train_fusion(
-    con: sqlite3.Connection, encoder_id: str, cfg: dict, version: str = "latest"
+    con: sqlite3.Connection, encoder_id: str, cfg: dict, version: str = "default"
 ) -> dict[str, Any]:
     """Évalue puis enregistre la fusion (stacking, §3) au-dessus d'une tête enregistrée.
 

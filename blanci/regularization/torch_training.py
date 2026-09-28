@@ -9,6 +9,33 @@ import numpy as np
 
 from blanci.regularization.selection import grouped_search, usable_folds
 
+# --- Socle commun des têtes torch (attentive, R85, R66) ----------------------------------------
+
+
+def import_torch(what: str):
+    """torch, ou RuntimeError qui dit quoi installer : `what` s'entraîne avec torch."""
+    try:
+        import torch
+    except ImportError as exc:  # pragma: no cover - dépend de l'installation
+        raise RuntimeError(f"{what} s'entraîne avec torch (uv sync --group research)") from exc
+    return torch
+
+
+def feature_scaling(X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(moyenne, écart-type) de chaque dimension sur les lignes de `X`, écart nul → 1, en
+    float32 : la standardisation des têtes torch, rangée avec elles pour l'inférence numpy."""
+    X = np.asarray(X, dtype=np.float32)
+    std = X.std(axis=0)
+    return X.mean(axis=0), np.where(std > 0, std, 1.0).astype(np.float32)
+
+
+def balanced_bce(torch, y: np.ndarray):
+    """Entropie croisée binaire où les positifs pèsent n_négatifs / n_positifs : les deux
+    classes comptent autant, comme `class_weight="balanced"` de la logistique."""
+    n_pos = max(float(np.sum(y)), 1.0)
+    return torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor((len(y) - n_pos) / n_pos))
+
+
 # --- R66 : inversion du gradient (DANN) -------------------------------------------------------
 
 

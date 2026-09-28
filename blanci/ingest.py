@@ -44,14 +44,20 @@ class IngestReport:
 
 
 def iter_audio_files(directory: Path, suffixes: Sequence[str] = AUDIO_SUFFIXES) -> Iterator[Path]:
-    """Fichiers audio triés.
+    """Fichiers audio triés dans l'ordre naturel : « RELEVE 2 » avant « RELEVE 10 », pour que
+    la règle « le premier inventorié l'emporte » suive l'ordre des relevés.
 
     Ignore les fichiers cachés, dont les `._*` que macOS sème sur un disque externe.
     """
     wanted = {s.lower() for s in suffixes}
-    for path in sorted(directory.rglob("*")):
+    for path in sorted(directory.rglob("*"), key=natural_key):
         if path.is_file() and path.suffix.lower() in wanted and not path.name.startswith("."):
             yield path
+
+
+def natural_key(path: Path) -> list[str | int]:
+    """Clé de tri naturel : les nombres du chemin comparés comme des nombres."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", path.as_posix())]
 
 
 def read_guano(source: Path | BinaryIO) -> dict[str, str]:
@@ -203,9 +209,11 @@ def ingest(
     rattaché au relevé où il a été enregistré.
 
     Si l'autre chemin n'existe plus sous la racine (fichiers copiés sur un autre disque,
-    dossiers réorganisés), ce n'est pas un doublon mais un déplacement : l'identifiant ne
-    dépend que du nom de fichier, la ligne est mise à jour et labels, fenêtres et
-    embeddings restent attachés.
+    dossiers réorganisés) et que le site est le même, ce n'est pas un doublon mais un
+    déplacement : l'identifiant ne dépend que du nom de fichier, la ligne est mise à jour et
+    labels, fenêtres et embeddings restent attachés. Sous un autre site, c'est la copie
+    laissée sur une carte SD d'un relevé suivant, vue depuis un disque qui ne porte pas
+    l'original : un doublon, écarté, jamais rattaché au nouveau site.
     """
     root = Path(root)
     directory = Path(scan) if scan is not None else root / dataset
@@ -219,8 +227,10 @@ def ingest(
             "les chemins stockés doivent lui être relatifs"
         ) from exc
 
-    known = {row[0] for row in con.execute("SELECT path FROM recordings")}
+    inventory = con.execute("SELECT path, site FROM recordings").fetchall()
+    known = {row[0] for row in inventory}
     by_stem = {Path(p).stem.lower(): p for p in known}
+    site_of = {Path(p).stem.lower(): str(s or "").lower() for p, s in inventory}
     report = IngestReport()
     columns = (
         "recording_id, path, dataset, site, mic_id, start_utc, duration_s, "
@@ -258,8 +268,13 @@ def ingest(
         except Exception as exc:  # fichier tronqué ou illisible : signalé, pas bloquant
             report.errors.append((rel, f"{type(exc).__name__}: {exc}"))
             continue
+        if moved and str(row["site"] or "").lower() != site_of.get(stem, ""):
+            # Autre site : la copie d'un relevé précédent, pas un déplacement (DECISIONS n° 144).
+            report.duplicates.append((rel, by_stem[stem]))
+            continue
         con.execute(sql, tuple(row.values()))
         by_stem[stem] = rel
+        site_of[stem] = str(row["site"] or "").lower()
         if moved:
             report.relocated += 1
         else:

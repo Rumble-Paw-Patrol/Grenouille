@@ -8,7 +8,9 @@ from typer.testing import CliRunner
 
 from blanci.cli import app
 from blanci.db import connect
-from blanci.encoders.base import BaseEncoder
+from tests.conftest import ToyEncoder
+
+pytestmark = pytest.mark.slow  # pytest -m 'not slow' : suite rapide
 
 SR = 16000
 WINDOW_S = 3.0
@@ -30,22 +32,6 @@ def write_soundscape(path, tone_hz=None, seed=0):
     path.parent.mkdir(parents=True, exist_ok=True)
     sf.write(path, x.astype(np.float32), SR, subtype="PCM_16")
     return path
-
-
-class ToyEncoder(BaseEncoder):
-    """Encodeur factice : l'énergie en bande 4–6 kHz suffit à séparer le corpus de test."""
-
-    name = "toy"
-    version = "1"
-    sample_rate = SR
-    window_s = WINDOW_S
-    dim = 8
-    has_tokens = False
-
-    def _forward(self, batch: np.ndarray) -> np.ndarray:
-        spectrum = np.abs(np.fft.rfft(batch, axis=1))
-        bands = np.array_split(spectrum, self.dim, axis=1)
-        return np.stack([np.log1p(b.mean(axis=1)) for b in bands], axis=1).astype(np.float32)
 
 
 @pytest.fixture

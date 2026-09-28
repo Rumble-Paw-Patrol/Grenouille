@@ -180,6 +180,33 @@ def test_resume_adds_only_the_new_recordings(workspace):
     assert meta["recording_id"].nunique() == 2
 
 
+def test_resume_refuses_another_channel_in_the_same_stock(workspace):
+    """DECISIONS n° 143 : le canal n'est pas dans le nom du stock ; reprendre avec un autre
+    canal y ajouterait des embeddings d'un autre micro, mêlés aux premiers."""
+    con, raw, store_root = workspace
+    add_recording(con, raw, "a.wav", start="2026-02-10T13:00:00Z")
+    embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root, channel=0)
+    add_recording(con, raw, "b.wav", start="2026-02-11T13:00:00Z")
+    with pytest.raises(ValueError, match="channel"):
+        embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root, channel=1)
+    again = embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root, channel=0)
+    assert again.recordings == 1
+
+
+def test_upstream_tag_names_non_default_filter_settings():
+    from blanci.sequential import Upstream
+
+    plain = Upstream(transforms={"bandpass": {"band_hz": [3000, 7000], "order": 4}})
+    assert plain.transform_tag() == "bp3-7k"  # défaut : nom inchangé, stocks existants gardés
+    steep = Upstream(
+        transforms={
+            "bandpass": {"band_hz": [3000, 7000], "order": 6},
+            "denoise": {"strength": 1.0, "floor": 0.2},
+        }
+    )
+    assert steep.transform_tag() == "bp3-7k-o6+dn1-f0.2"
+
+
 def test_flush_does_not_lose_earlier_batches(workspace):
     """Le tampon est vidé plusieurs fois par partition : rien ne doit être écrasé."""
     con, raw, store_root = workspace

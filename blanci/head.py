@@ -186,7 +186,9 @@ class Head:
         ) @ self.coef + self.intercept
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        return 1.0 / (1.0 + np.exp(-self.decision(X)))
+        from scipy.special import expit  # sans débordement sur GATED_SCORE (−1e6)
+
+        return expit(self.decision(X))
 
     def save(self, directory: Path) -> None:
         directory = Path(directory)
@@ -396,20 +398,31 @@ class MulticlassHead:
     classes: list[str]
     meta: dict[str, Any] = field(default_factory=dict)
 
+    def _logits(self, X: np.ndarray) -> np.ndarray:
+        z = ((np.asarray(X, dtype=np.float32) - self.mean) / self.scale) @ self.coef.T
+        return (z + self.intercept).astype(np.float64)
+
     def proba(self, X: np.ndarray) -> np.ndarray:
         """Probabilité de chaque classe (n, classes), dans l'ordre de `classes`."""
-        z = ((np.asarray(X, dtype=np.float32) - self.mean) / self.scale) @ self.coef.T
-        z = z + self.intercept
+        from scipy.special import expit, softmax
+
+        z = self._logits(X)
         if len(self.classes) == 2:
-            p1 = 1.0 / (1.0 + np.exp(-z[:, 0]))
+            p1 = expit(z[:, 0])
             return np.column_stack([1.0 - p1, p1])
-        z = z - z.max(axis=1, keepdims=True)
-        e = np.exp(z)
-        return e / e.sum(axis=1, keepdims=True)
+        return softmax(z, axis=1)
 
     def decision(self, X: np.ndarray) -> np.ndarray:
-        p = np.clip(self.proba(X)[:, self.classes.index("blanci")], 1e-12, 1 - 1e-12)
-        return np.log(p) - np.log1p(-p)
+        """logit P(A. blanci) = z_blanci − log Σ exp(z_autres), en float64 et sans passer par
+        la probabilité : arrondie à 1 en float32 dès un logit de ~17, elle donnait +inf, et
+        l'AP refusait les scores."""
+        from scipy.special import logsumexp
+
+        z = self._logits(X)
+        k = self.classes.index("blanci")
+        if len(self.classes) == 2:  # scikit-learn : z est le logit de la seconde classe
+            return z[:, 0] if k == 1 else -z[:, 0]
+        return z[:, k] - logsumexp(np.delete(z, k, axis=1), axis=1)
 
 
 def fit_multiclass(

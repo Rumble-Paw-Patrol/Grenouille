@@ -182,7 +182,7 @@ def test_weak_only_files_are_left_out_for_that_species_only():
 
 def test_benchmark_ranks_an_encoder_by_site_folds(acfg, tmp_path):
     from blanci.embed import embed_recordings, select_recordings
-    from tests.test_cli_pipeline import ToyEncoder
+    from tests.conftest import ToyEncoder
 
     con = connect(acfg["paths"]["db"])
     prepare(con, acfg)
@@ -202,7 +202,7 @@ def test_heads_are_judged_one_site_out(acfg, tmp_path):
     """R78 : chaque tête apprise sur un site, jugée sur l'autre ; régularisations par site."""
     from blanci.anuraset import run_anuraset_heads, write_anuraset_heads_report
     from blanci.embed import embed_recordings, select_recordings
-    from tests.test_cli_pipeline import ToyEncoder
+    from tests.conftest import ToyEncoder
 
     con = connect(acfg["paths"]["db"])
     prepare(con, acfg)
@@ -250,7 +250,7 @@ def test_campaign_ranks_encoders_then_heads_one_site_out(acfg, tmp_path):
 
     from blanci.anuraset import run_anuraset_campaign, write_campaign_report
     from blanci.embed import embed_recordings, select_recordings
-    from tests.test_cli_pipeline import ToyEncoder
+    from tests.conftest import ToyEncoder
 
     con = connect(acfg["paths"]["db"])
     prepare(con, acfg)

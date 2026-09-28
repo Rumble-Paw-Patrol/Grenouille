@@ -18,7 +18,7 @@ import typer
 from blanci.activity import write_activity_report
 from blanci.baselines import run_baselines, write_baseline_report
 from blanci.benchmark import run_benchmark, write_report
-from blanci.config import config_path, load_config
+from blanci.config import config_path, load_config, project_path
 from blanci.dataset import benchmark_subset, current_labels, recordings_table
 from blanci.db import connect
 from blanci.embed import embed_recordings, select_recordings
@@ -249,7 +249,8 @@ def import_detections_command(
     typer.echo(
         f"{report.stored} détections rangées sous « {model} » sur {report.rows} lignes "
         f"({report.unverified} jamais écoutées) ; {report.not_found} fichiers hors inventaire, "
-        f"{report.ambiguous} ambigus, {report.unreadable} illisibles"
+        f"{report.ambiguous} ambigus, {report.unreadable} illisibles, "
+        f"{report.out_of_range} hors de l'enregistrement"
     )
 
 
@@ -498,7 +499,7 @@ def echantillon(
     cfg = _cfg(ctx)
     reports = config_path(cfg, "reports")
     reports.mkdir(parents=True, exist_ok=True)
-    cache = Path(cfg["paths"]["embeddings"]).parent / "echantillon"
+    cache = config_path(cfg, "embeddings").parent / "echantillon"
     out = run(cfg, encoder, _split(methods), root, cache, by)
     table = out["table"]
     stem = f"echantillon_{encoder}".replace(":", "_")
@@ -762,7 +763,12 @@ def queue(
     ctx: typer.Context,
     encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
     n: Annotated[int | None, typer.Option(help="Défaut : active.batch_recordings.")] = None,
-    head: Annotated[str, typer.Option(help="Version de tête ou latest.")] = "latest",
+    head: Annotated[
+        str,
+        typer.Option(
+            help="Version de tête, latest ou adopted. Défaut : l'adoptée, sinon la plus récente."
+        ),
+    ] = "default",
     mix: Annotated[
         str | None, typer.Option(help="Proportions incertains,top,aléatoire. Défaut : active.mix.")
     ] = None,
@@ -1013,7 +1019,13 @@ def onsets(
 def fusion(
     ctx: typer.Context,
     encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
-    head: Annotated[str, typer.Option(help="Version de tête (v1, v2…) ou latest.")] = "latest",
+    head: Annotated[
+        str,
+        typer.Option(
+            help="Version de tête (v1, v2…), latest ou adopted. Défaut : l'adoptée, "
+            "sinon la plus récente."
+        ),
+    ] = "default",
 ) -> None:
     """Fusion (§3) : évaluée hors-pli contre la tête seule, puis enregistrée pour `score`."""
     cfg = _cfg(ctx)
@@ -1537,7 +1549,7 @@ def anuraset_heads(
     if not chosen:
         raise typer.BadParameter("aucune espèce : --species ou anuraset.species (voir profile)")
     con = connect(config_path(cfg, "db"))
-    calls = read_strong_labels(Path(cfg["anuraset"]["labels"]))
+    calls = read_strong_labels(project_path(cfg["anuraset"]["labels"]))
     out = run_anuraset_heads(con, cfg, encoder, chosen, calls, _split(methods) or None)
     path = write_anuraset_heads_report(out, encoder, config_path(cfg, "reports"))
     table = out["table"]
@@ -1563,7 +1575,7 @@ def anuraset_profile(
 
     cfg = _cfg(ctx)
     acfg = cfg["anuraset"]
-    calls = read_strong_labels(Path(acfg["labels"]))
+    calls = read_strong_labels(project_path(acfg["labels"]))
     profile = species_profile(calls, acfg["max_call_s"])
     if audio:
         con = connect(config_path(cfg, "db"))
@@ -1616,7 +1628,7 @@ def anuraset_campaign(
     con = connect(config_path(cfg, "db"))
     report = prepare(con, cfg)
     typer.echo(f"1. inventaire : {report['extracted']} extraits, {report['added']} ajoutés")
-    calls = read_strong_labels(Path(acfg["labels"]))
+    calls = read_strong_labels(project_path(acfg["labels"]))
     profile = species_profile(calls, acfg["max_call_s"])
     recordings = pd.read_sql_query("SELECT path FROM recordings", con)
     freqs = dominant_frequencies(
@@ -1639,7 +1651,7 @@ def anuraset_campaign(
     # la durée attendue (60 s) est celle des Song Meter ONF ; 9 fichiers d'INCT20955 durent
     # 26 à 57 s (DECISIONS n° 141).
     everything = select_recordings(con, exclude_flags=())
-    wanted = campaign_recordings(everything, calls, Path(weak) if weak else None)
+    wanted = campaign_recordings(everything, calls, weak or None)
     typer.echo(f"   {len(wanted)} enregistrements à encoder (chants datés ou sans espèce)")
     encoder_ids = []
     for name in _split(encoders):
@@ -1687,7 +1699,7 @@ def anuraset_benchmark(
     if not chosen:
         raise typer.BadParameter("aucune espèce : --species ou anuraset.species (voir profile)")
     con = connect(config_path(cfg, "db"))
-    calls = read_strong_labels(Path(cfg["anuraset"]["labels"]))
+    calls = read_strong_labels(project_path(cfg["anuraset"]["labels"]))
     results, comparisons = run_anuraset_benchmark(con, cfg, _split(encoders), chosen, calls)
     path = write_anuraset_report(results, comparisons, config_path(cfg, "reports"))
     for r in results[results["level"] == "window"].to_dict("records"):

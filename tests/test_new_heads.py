@@ -70,6 +70,23 @@ def test_multiclass_head_scores_blanci_and_knows_the_false_friend():
     assert (proba[friends].argmax(axis=1) == head.classes.index("orthoptère")).mean() > 0.8
 
 
+def test_multiclass_score_stays_finite_and_ordered_on_very_sure_windows():
+    """Un logit de 20 arrondissait P(A. blanci) à 1 en float32 : score +inf, AP refusée."""
+    from blanci.head import MulticlassHead
+
+    classes = ["blanci", "fond", "pluie"]
+    coef = np.array([[1.0, 0.0], [0.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    head = MulticlassHead(np.zeros(2), np.ones(2), coef, np.zeros(3), classes)
+    X = np.array([[20.0, 0.0], [40.0, 0.0], [0.0, 0.0], [-40.0, 0.0]], dtype=np.float32)
+    scores = head.decision(X)
+    assert np.isfinite(scores).all() and (np.diff(scores[[3, 2, 0, 1]]) > 0).all()
+    p = head.proba(X)[:, 0]
+    assert np.allclose(scores[2], np.log(p[2]) - np.log1p(-p[2]))  # loin des bornes : le logit
+    binary = MulticlassHead(np.zeros(2), np.ones(2), coef[:1], np.zeros(1), ["fond", "blanci"])
+    assert np.allclose(binary.decision(X), X[:, 0])  # deux classes : z, logit de la seconde
+    assert average_precision(np.array([1, 1, 0, 0]), scores) == 1.0
+
+
 def test_multiclass_runs_in_the_benchmark_and_needs_classes():
     X, y, classes, groups = sounds()
     name, base, reg = regularizer_for("multiclass", {}, Context(groups, classes=classes))

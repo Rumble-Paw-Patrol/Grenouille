@@ -134,6 +134,7 @@ class BacpipeEncoder(BaseEncoder):
         import bacpipe  # noqa: F401  (message clair si absent)
 
         self.name = name or model_name  # nom de la config : birdmae_base ≠ birdmae
+        self.checkpoint = checkpoint  # rangé avec le stock : un autre checkpoint est refusé
         self.version = f"bacpipe{version('bacpipe')}"
         self.device = device or _default_device()
         self.batch_size = batch_size

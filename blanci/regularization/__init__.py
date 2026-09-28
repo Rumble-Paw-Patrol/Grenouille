@@ -207,11 +207,14 @@ from blanci.regularization.selection import (
 from blanci.regularization.torch_training import (
     WeightAverage,
     attention_entropy,
+    balanced_bce,
     dann_strength,
     distillation_loss,
     dropout,
+    feature_scaling,
     fit_with_options,
     grad_reverse,
+    import_torch,
     keep_mask,
     l2_sp_model_penalty,
     l2_sp_penalty,
@@ -237,6 +240,9 @@ from blanci.regularization.windows import (
 
 __all__ = [
     "attention_entropy",
+    "balanced_bce",
+    "feature_scaling",
+    "import_torch",
     "Bagged",
     "bagged",
     "BAGGED_HEADS",

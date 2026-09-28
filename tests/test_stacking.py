@@ -29,6 +29,7 @@ from blanci.stacking import (
     upstream_pass,
 )
 from blanci.store import EmbeddingStore
+from tests.conftest import quick_cfg
 
 # --- Modèles de fusion ---------------------------------------------------------------------------
 
@@ -189,11 +190,7 @@ def test_unset_weights_share_what_is_left():
 
 @pytest.fixture
 def cfg(tmp_path):
-    cfg = load_config()
-    cfg["paths"] = {key: str(tmp_path / key) for key in cfg["paths"]}
-    cfg["benchmark"] |= {"n_boot": 30, "negatives_per_positive": 6}
-    cfg["head"] |= {"n_splits": 3, "C_grid": [1.0]}
-    return cfg
+    return quick_cfg(tmp_path, n_boot=30, negatives_per_positive=6)
 
 
 def write_stock(con, cfg, eid, window_s, hop, rows, seed):

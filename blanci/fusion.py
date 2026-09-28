@@ -60,13 +60,21 @@ class Fusion:
     model: LogisticRegression
 
     def decision(self, head_score: np.ndarray, features: pd.DataFrame) -> np.ndarray:
-        X = _design(head_score, features, self.columns)
+        X = _fill(_design(head_score, features, self.columns), self.scaler.mean_)
         return self.model.decision_function(self.scaler.transform(X))
 
 
 def _design(head_score: np.ndarray, features: pd.DataFrame, columns: list[str]) -> np.ndarray:
-    X = np.column_stack([np.asarray(head_score, dtype=float), features[columns].to_numpy(float)])
-    return np.nan_to_num(X, nan=0.0)
+    """Tête puis descripteurs, NaN compris : un descripteur manquant (`ioi_cv` d'un
+    enregistrement de moins de deux notes) prend la moyenne de l'entraînement (`_fill`), pas
+    0 en unités brutes, qui voudrait dire « rythme parfaitement régulier » (DECISIONS n° 145)."""
+    return np.column_stack([np.asarray(head_score, dtype=float), features[columns].to_numpy(float)])
+
+
+def _fill(X: np.ndarray, mean: np.ndarray) -> np.ndarray:
+    """NaN → moyenne de la colonne à l'entraînement : 0 une fois standardisé, comme
+    `FusionModel._z`."""
+    return np.where(np.isnan(X), np.broadcast_to(mean, X.shape), X)
 
 
 def _check(head_oof: OOFScores, y: np.ndarray, columns: list[str]) -> None:
@@ -86,6 +94,9 @@ def fit_fusion(
 ) -> Fusion:
     _check(head_oof, y, columns)
     X = _design(head_oof.values, features, columns)
+    with warnings.catch_warnings():  # colonne entièrement vide : moyenne 0
+        warnings.simplefilter("ignore", RuntimeWarning)
+        X = _fill(X, np.nan_to_num(np.nanmean(X, axis=0), nan=0.0))
     scaler = StandardScaler().fit(X)
     model = LogisticRegression(C=C, class_weight="balanced", max_iter=2000).fit(
         scaler.transform(X), y
@@ -158,7 +169,7 @@ class FusionWeights:
         )
 
     def decision(self, head_score: np.ndarray, features: pd.DataFrame) -> np.ndarray:
-        X = _design(head_score, features, self.columns)
+        X = _fill(_design(head_score, features, self.columns), self.mean)
         return ((X - self.mean) / self.scale) @ self.coef + self.intercept
 
 

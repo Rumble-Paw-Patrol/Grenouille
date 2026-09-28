@@ -39,7 +39,10 @@ import numpy as np
 
 from blanci.regularization import (
     attention_entropy,
+    balanced_bce,
     dropout,
+    feature_scaling,
+    import_torch,
     keep_mask,
     l2_sp_penalty,
     logistic_start,
@@ -130,20 +133,12 @@ def fit_attentive(
     la courbe de validation est rangée dans `meta["validation_curve"]`. `warmup`, `clip_norm` :
     R59 ; `average`, `ema_decay`, `swa_start` : R64. Toute la mécanique de ces régularisations
     est dans `blanci/regularization/`."""
-    try:
-        import torch
-    except ImportError as exc:  # pragma: no cover - dépend de l'installation
-        raise RuntimeError(
-            "l'attentive probing s'entraîne avec torch (uv sync --group research)"
-        ) from exc
-
+    torch = import_torch("l'attentive probing")
     tokens = np.asarray(tokens, dtype=np.float32)
     if tokens.ndim != 3:
         raise ValueError(f"jetons attendus en (fenêtres, jetons, dim), reçu {tokens.shape}")
     y = np.asarray(y).astype(np.float32)
-    flat = tokens.reshape(-1, tokens.shape[-1])
-    mean = flat.mean(axis=0)
-    scale = np.where(flat.std(axis=0) > 0, flat.std(axis=0), 1.0).astype(np.float32)
+    mean, scale = feature_scaling(tokens.reshape(-1, tokens.shape[-1]))
     x = torch.from_numpy((tokens - mean) / scale)
     target = torch.from_numpy(y)
     n, t, d = x.shape
@@ -159,9 +154,7 @@ def fit_attentive(
         with torch.no_grad():
             weight.copy_(start)
             bias.fill_(b0)
-    n_pos = max(float(y.sum()), 1.0)
-    pos_weight = torch.tensor((len(y) - n_pos) / n_pos)
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    loss_fn = balanced_bce(torch, y)
 
     attention = {}
 
