@@ -249,6 +249,10 @@ benchmark:
   # ouverte (Léonard, 28/09) : garder des réglages fixes pour tous les plis reste possible.
   fold_calibration: none
   calibration_splits: 3
+  # Référence du benchmark complet (`blanci benchmark-all`), fixée d'avance (n° 139) : choisie
+  # comme la meilleure AP sur ces mêmes enregistrements, elle doit une part de sa place à la
+  # chance et les écarts à elle sont gonflés. Vide : la meilleure AP, signalée « après coup ».
+  reference:
 
 # Réentraînement sans intervention (§4, M5) : la nouvelle tête n'est adoptée que si, sur le
 # jeu gelé, son AP (enregistrements) et son rappel au seuil ne perdent pas plus que ceci.

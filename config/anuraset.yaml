@@ -2,8 +2,9 @@
 #   uv run blanci --config config/anuraset.yaml anuraset-prepare
 #   uv run blanci --config config/anuraset.yaml anuraset-profile
 #   uv run blanci --config config/anuraset.yaml embed --encoder perch_v2
-#   uv run blanci --config config/anuraset.yaml anuraset-benchmark --encoders perch_v2-bacpipe1.3.5
-#   uv run blanci --config config/anuraset.yaml anuraset-heads --encoder perch_v2-bacpipe1.3.5
+#   uv run blanci --config config/anuraset.yaml anuraset-benchmark --encoders perch_v2-bacpipe1.3.5@o0
+#   uv run blanci --config config/anuraset.yaml anuraset-heads --encoder perch_v2-bacpipe1.3.5@o0
+# (fenêtres jointives, encoders.overlap: 0 : le stock porte « @o0 » dans son nom)
 # Ou tout d'un coup (espèces choisies, encodage, encodeurs, têtes ; DECISIONS n° 136) :
 #   uv run blanci --config config/anuraset.yaml anuraset-campaign --encoders perch_v2
 paths:
@@ -16,7 +17,8 @@ paths:
 
 # Fenêtres jointives sur AnuraSet (DECISIONS n° 137) : moitié moins de fenêtres à encoder
 # qu'avec le chevauchement de 0,5 ; les chants (médiane ≤ 1 s) tiennent presque toujours
-# entiers dans une fenêtre de 5 s. Stock séparé <encodeur>@o0.
+# entiers dans une fenêtre de 5 s. Un chant coupé par la jonction de deux fenêtres est gardé
+# par celle qui en porte la plus grande part (n° 138). Stock séparé <encodeur>@o0.
 encoders:
   overlap: 0.0
 
@@ -38,7 +40,10 @@ anuraset:
   archive: data/external/anuraset/raw_data.zip
   labels: data/external/anuraset/strong_labels.zip
   # Labels faibles (Zenodo) : les enregistrements sans aucune espèce sont de vrais négatifs,
-  # encodés par la campagne ; ceux qui signalent une espèce sans chant daté sont écartés.
+  # encodés par la campagne ; ceux qui n'ont aucun chant daté mais signalent une espèce ne
+  # sont pas encodés ; pour chaque espèce, les fichiers qui la signalent sans chant daté
+  # d'elle sont écartés de son évaluation (n° 138). Chemin absent : erreur ; retirer la clé
+  # pour s'en passer.
   weak_labels: data/external/anuraset/weak_labels.csv
   # Deux ou trois anoures à note brève en 3–6 kHz (§2) : à fixer après `anuraset-profile`.
   species: []

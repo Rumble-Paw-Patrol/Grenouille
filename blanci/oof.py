@@ -160,9 +160,13 @@ def list_sources(cfg: dict) -> pd.DataFrame:
 
 
 def recording_scores(table: pd.DataFrame) -> pd.DataFrame:
-    """Score par (source, enregistrement) = maximum de ses fenêtres ; label = maximum."""
+    """Score par (source, enregistrement) = maximum de ses fenêtres ; label = maximum ; point
+    (micro) et pli de l'enregistrement (-1 si la source n'en a pas)."""
     return (
-        table.groupby(["source", "recording_id"])
-        .agg(score=("score", "max"), y=("y", "max"), point=("point", "first"))
+        table.assign(fold=table["fold"].fillna(-1).astype(int))
+        .groupby(["source", "recording_id"])
+        .agg(
+            score=("score", "max"), y=("y", "max"), point=("point", "first"), fold=("fold", "first")
+        )
         .reset_index()
     )

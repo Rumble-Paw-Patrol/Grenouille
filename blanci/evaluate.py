@@ -144,6 +144,39 @@ def recall_at_precision(
     return float(recall[best]), float(thresholds[best])
 
 
+def cross_fitted_recall(
+    y: np.ndarray, scores: np.ndarray, folds: np.ndarray, min_precision: float
+) -> dict[str, Any]:
+    """Rappel à précision plancher, le seuil de chaque pli choisi sur les scores hors-pli des
+    **autres** plis puis appliqué à ce pli (R74, DECISIONS n° 140). Le seuil choisi et jugé sur
+    les mêmes scores (`recall_at_precision`) est un oracle : il connaît les labels qu'il
+    mesure, son rappel est optimiste. Les fenêtres sans pli (`folds` < 0) sont ignorées.
+
+    Renvoie `recall`, `k` (positifs retrouvés), `n_pos`, `precision` obtenue, `thresholds`
+    ({pli: seuil}) et `decided` (chaque exemple au-dessus du seuil de son pli)."""
+    y, scores = np.asarray(y).astype(int), np.asarray(scores, dtype=float)
+    folds = np.asarray(folds)
+    known = folds >= 0
+    decided = np.zeros(len(y), dtype=bool)
+    thresholds: dict[int, float] = {}
+    for f in np.unique(folds[known]):
+        other, this = known & (folds != f), folds == f
+        _, t = recall_at_precision(y[other], scores[other], min_precision)
+        thresholds[int(f)] = float(t)
+        if np.isfinite(t):  # NaN : aucun positif ailleurs ; +inf : plancher jamais atteint
+            decided[this] = scores[this] >= t
+    n_pos = int((y[known] == 1).sum())
+    k = int((decided & (y == 1)).sum())
+    return {
+        "recall": k / n_pos if n_pos else float("nan"),
+        "k": k,
+        "n_pos": n_pos,
+        "precision": k / int(decided.sum()) if decided.any() else float("nan"),
+        "thresholds": thresholds,
+        "decided": decided,
+    }
+
+
 def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     """Intervalle de Wilson d'une proportion k/n (rappel compté en enregistrements)."""
     if n == 0:
@@ -171,7 +204,8 @@ def bootstrap_ci(
     seed: int = 0,
     alpha: float = 0.05,
 ) -> tuple[float, float]:
-    """Intervalle percentile, en rééchantillonnant des unités entières (enregistrements)."""
+    """Intervalle percentile, en rééchantillonnant des unités entières : enregistrements, ou
+    micros quand ils sont connus (`evaluate(clusters=…)`, DECISIONS n° 139)."""
     y, scores = np.asarray(y), np.asarray(scores)
     blocks = _unit_index(units)
     rng = np.random.default_rng(seed)
@@ -198,7 +232,10 @@ def paired_bootstrap(
 ) -> dict[str, float]:
     """Différence metric(A) − metric(B) sur les mêmes rééchantillonnages.
 
-    « A meilleur que B » seulement si l'intervalle exclut zéro (§6).
+    « A meilleur que B » seulement si l'intervalle exclut zéro (§6). `units` : l'unité tirée,
+    enregistrement ou micro (DECISIONS n° 139). `p` : p-valeur bilatérale du bootstrap,
+    2 × min(P(Δ ≤ 0), P(Δ ≥ 0)), à corriger par `with_holm` quand un tableau aligne plusieurs
+    comparaisons (n° 139).
     """
     y, a, b = np.asarray(y), np.asarray(scores_a), np.asarray(scores_b)
     blocks = _unit_index(units)
@@ -210,14 +247,58 @@ def paired_bootstrap(
     diffs = np.asarray(diffs, dtype=float)
     diffs = diffs[~np.isnan(diffs)]
     if not len(diffs):  # métrique indéfinie partout (une seule classe) : pas de comparaison
-        return {"diff": float("nan"), "lo": float("nan"), "hi": float("nan"), "significant": False}
+        return {
+            "diff": float("nan"),
+            "lo": float("nan"),
+            "hi": float("nan"),
+            "significant": False,
+            "p": float("nan"),
+        }
     lo, hi = np.quantile(diffs, [alpha / 2, 1 - alpha / 2])
+    p = min(1.0, 2 * min(float((diffs <= 0).mean()), float((diffs >= 0).mean())))
     return {
         "diff": metric(y, a) - metric(y, b),
         "lo": float(lo),
         "hi": float(hi),
         "significant": bool(lo > 0 or hi < 0),
+        "p": p,
     }
+
+
+def holm(p_values: np.ndarray) -> np.ndarray:
+    """p-valeurs ajustées de Holm (risque de se tromper au moins une fois sur la famille) ;
+    les NaN restent NaN et ne comptent pas dans la famille."""
+    p = np.asarray(p_values, dtype=float)
+    out = np.full(len(p), np.nan)
+    ok = np.flatnonzero(np.isfinite(p))
+    order = ok[np.argsort(p[ok], kind="stable")]
+    running = 0.0
+    for rank, i in enumerate(order):
+        running = max(running, min(1.0, (len(order) - rank) * p[i]))
+        out[i] = running
+    return out
+
+
+def with_holm(comparisons: pd.DataFrame, alpha: float = 0.05) -> pd.DataFrame:
+    """Ajoute `p_holm` et `significant_holm` à un tableau de comparaisons appariées (colonne
+    `p`) : vingt têtes comparées à 5 % donnent une « victoire » par hasard (DECISIONS n° 139).
+    `significant` (l'intervalle de chaque comparaison, prise seule) reste pour mémoire."""
+    if comparisons.empty or "p" not in comparisons:
+        return comparisons
+    adjusted = holm(comparisons["p"].to_numpy())
+    return comparisons.assign(p_holm=adjusted, significant_holm=adjusted < alpha)
+
+
+def cluster_units(
+    units: np.ndarray, recordings: np.ndarray, clusters: np.ndarray | None
+) -> np.ndarray:
+    """Unités du bootstrap : le groupe (micro) de chaque enregistrement de `units` quand
+    `clusters` (un par fenêtre, aligné sur `recordings`) est donné, sinon `units` tel quel."""
+    if clusters is None:
+        return np.asarray(units)
+    cluster_of = pd.Series(np.asarray(clusters), index=np.asarray(recordings))
+    cluster_of = cluster_of.groupby(level=0).first()
+    return cluster_of.loc[np.asarray(units)].to_numpy()
 
 
 def to_recordings(
@@ -244,18 +325,26 @@ def evaluate(
     seed: int = 0,
     how: str = "max",
     folds: np.ndarray | None = None,
+    clusters: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Métriques sur des scores hors-pli. `groups` = identifiant d'enregistrement de chaque
-    fenêtre : unité du bootstrap, et unité d'agrégation au niveau « recording ». `folds` (pli
-    de test de chaque fenêtre, `regularization.fold_ids`) : ajoute `ap_fold_mean`, l'AP
-    moyenne par pli (`fold_mean_ap`), et `n_folds_ap`.
+    fenêtre : unité d'agrégation au niveau « recording », et unité du bootstrap sans
+    `clusters`. `clusters` (micro de chaque fenêtre) : unité du bootstrap ; les enregistrements
+    d'un même micro partagent fond et faune, les tirer un à un rend l'intervalle trop étroit
+    (DECISIONS n° 139). `folds` (pli de test de chaque fenêtre, `regularization.fold_ids`) :
+    ajoute `ap_fold_mean`, l'AP moyenne par pli (`fold_mean_ap`), et `n_folds_ap` ; le rappel
+    à précision plancher est alors jugé avec un seuil choisi sur les autres plis
+    (`cross_fitted_recall`, n° 140), l'oracle restant en `recall@p…_oracle`. `threshold@p…` :
+    le seuil choisi sur tous les scores, celui qu'on déploierait.
 
     Valeurs flottantes, sauf `level` (str) et `n_pos` / `n_neg` / `n_folds_ap` (int).
     """
     scores, labels, groups = np.asarray(scores), np.asarray(labels), np.asarray(groups)
     if folds is not None:  # un enregistrement est d'un seul micro, donc d'un seul pli
         fold_of = pd.Series(np.asarray(folds), index=groups).groupby(level=0).first()
+    units = groups if clusters is None else np.asarray(clusters)
     if level == "recording":
+        windows_recordings = groups
         rec = to_recordings(scores, labels, groups, how)
         scores, labels, groups = (
             rec["score"].to_numpy(),
@@ -264,8 +353,9 @@ def evaluate(
         )
         if folds is not None:
             folds = fold_of.loc[groups].to_numpy()
+        units = cluster_units(groups, windows_recordings, clusters)
     ap = average_precision(labels, scores)
-    lo, hi = bootstrap_ci(labels, scores, groups, average_precision, n_boot, seed)
+    lo, hi = bootstrap_ci(labels, scores, units, average_precision, n_boot, seed)
     out = {
         "level": level,
         "n_pos": int(labels.sum()),
@@ -278,8 +368,14 @@ def evaluate(
         out["ap_fold_mean"], out["n_folds_ap"] = fold_mean_ap(labels, scores, folds)
     for p in precisions:
         recall, threshold = recall_at_precision(labels, scores, p)
-        k = int(((scores >= threshold) & (labels == 1)).sum()) if np.isfinite(threshold) else 0
-        w_lo, w_hi = wilson_interval(k, int(labels.sum()))
+        if folds is not None:
+            crossed = cross_fitted_recall(labels, scores, folds, p)
+            out[f"recall@p{p}_oracle"] = recall
+            recall, k, n_pos = crossed["recall"], crossed["k"], crossed["n_pos"]
+        else:
+            k = int(((scores >= threshold) & (labels == 1)).sum()) if np.isfinite(threshold) else 0
+            n_pos = int(labels.sum())
+        w_lo, w_hi = wilson_interval(k, n_pos)
         out |= {
             f"recall@p{p}": recall,
             f"recall@p{p}_lo": w_lo,

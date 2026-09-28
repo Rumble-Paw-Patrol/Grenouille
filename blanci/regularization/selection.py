@@ -147,23 +147,11 @@ def cross_fitted_threshold(
     """R74 : seuil de précision plancher choisi pour chaque pli sur les scores hors-pli des
     *autres* plis, puis appliqué à ce pli. Précision et rappel obtenus : ce que le seuil fera
     sur des micros qu'il n'a pas vus (le seuil choisi et jugé sur les mêmes scores est
-    optimiste)."""
-    from blanci.evaluate import recall_at_precision
+    optimiste). Le calcul vit dans `evaluate.cross_fitted_recall`, que toute évaluation avec
+    plis utilise pour son rappel (DECISIONS n° 140)."""
+    from blanci.evaluate import cross_fitted_recall
 
-    y, scores, folds = np.asarray(y).astype(int), np.asarray(scores, float), np.asarray(folds)
-    decided = np.zeros(len(y), dtype=bool)
-    thresholds = {}
-    for f in np.unique(folds[folds >= 0]):
-        other, this = (folds != f) & (folds >= 0), folds == f
-        _, t = recall_at_precision(y[other], scores[other], min_precision)
-        thresholds[int(f)] = float(t)
-        decided[this] = scores[this] >= t
-    tp = int((decided & (y == 1)).sum())
-    return {
-        "precision": tp / int(decided.sum()) if decided.any() else float("nan"),
-        "recall": tp / max(int((y == 1).sum()), 1),
-        "thresholds": thresholds,
-    }
+    return cross_fitted_recall(y, scores, folds, min_precision)
 
 
 def selection_estimate(

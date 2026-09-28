@@ -128,15 +128,56 @@ def test_window_labels_keep_whole_calls_and_drop_cut_ones():
     )
     windows = pd.DataFrame(
         {
-            "file_key": ["f", "f", "f", "h", "g"],
-            "offset_s": [0.0, 3.0, 9.0, 0.0, 10.0],
+            "file_key": ["f", "f", "f", "h", "g", "f"],
+            "offset_s": [0.0, 3.0, 9.0, 0.0, 10.0, 4.5],
             "dur_s": 3.0,
         }
     )
     y = window_labels(windows, calls, "A")
     assert y[0] == 1 and y[2] == 0 and y[3] == 0  # chant entier ; rien ; autre fichier
-    assert np.isnan(y[1])  # chant coupé en 6 s : écarté
+    assert np.isnan(y[1])  # chant coupé en 6 s, entier dans la fenêtre de 4,5 s : écarté
+    assert y[5] == 1
     assert y[4] == 1  # dans un chœur annoté d'un seul tenant
+
+
+def test_window_labels_keep_a_call_cut_by_the_junction_of_joint_windows():
+    """DECISIONS n° 138 : fenêtres jointives, un chant à cheval sur la jonction garde la
+    fenêtre qui en porte la plus grande part ; sans cela il n'aurait aucune fenêtre positive."""
+    import pandas as pd
+
+    calls = pd.DataFrame(
+        {"file_key": ["f", "f"], "start_s": [4.7, 7.9], "end_s": [5.2, 8.1], "species": "A"}
+    )
+    windows = pd.DataFrame({"file_key": "f", "offset_s": [0.0, 5.0, 10.0], "dur_s": 5.0})
+    alone = window_labels(windows, calls.iloc[:1], "A")
+    assert alone[0] == 1 and np.isnan(alone[1]) and alone[2] == 0  # la plus grande part : 0,3 s
+    both = window_labels(windows, calls, "A")
+    assert both.tolist()[:2] == [1.0, 1.0] and both[2] == 0  # le 2e chant, entier, dans la 2e
+
+
+def test_weak_only_files_are_left_out_for_that_species_only():
+    """DECISIONS n° 138 : un fichier gardé pour les chants d'une espèce, qui en signale une
+    autre sans chant daté, est écarté pour l'autre ; il reste négatif ailleurs."""
+    import pandas as pd
+
+    from blanci.anuraset import weak_only_files
+
+    calls = pd.DataFrame(
+        {"file_key": ["a"], "start_s": [1.0], "end_s": [1.2], "species": ["DENMIN"]}
+    )
+    weak = pd.DataFrame(
+        {
+            "file_key": ["a", "b"],
+            "SPECIES_DENMIN": [1, 0],
+            "SPECIES_BOAFAB": [1, 0],  # a : BOAFAB signalée, aucun chant daté de BOAFAB
+        }
+    )
+    assert weak_only_files(weak, calls, "BOAFAB") == {"a"}
+    assert weak_only_files(weak, calls, "DENMIN") == set()
+    assert weak_only_files(None, calls, "BOAFAB") == set()
+    windows = pd.DataFrame({"file_key": ["a", "b"], "offset_s": 0.0, "dur_s": 5.0})
+    y = window_labels(windows, calls, "BOAFAB", unsure_files={"a"})
+    assert np.isnan(y[0]) and y[1] == 0
 
 
 def test_benchmark_ranks_an_encoder_by_site_folds(acfg, tmp_path):
@@ -249,3 +290,5 @@ def test_campaign_keeps_dated_calls_and_true_negatives_only(tmp_path):
     kept = campaign_recordings(recordings, calls, weak)["path"].str.extract(r"(INCT4_\w)")[0]
     assert kept.tolist() == ["INCT4_A", "INCT4_B"]
     assert len(campaign_recordings(recordings, calls)) == 1  # sans labels faibles
+    with pytest.raises(FileNotFoundError, match="labels faibles"):  # chemin donné mais absent
+        campaign_recordings(recordings, calls, tmp_path / "absent.csv")

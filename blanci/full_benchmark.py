@@ -11,11 +11,15 @@ et une de 5 s ne se comparent pas, deux enregistrements si. Par défaut, sur les
 enregistrements évalués par **toutes** les sources retenues (mêmes positifs, mêmes négatifs) ;
 chacune sur les siens avec `common=False`.
 
-Colonnes : AP [IC bootstrap], rappel aux précisions plancher [Wilson], rappel par site au seuil
-de précision plancher, et pour les encodeurs le coût (dimension, fenêtre, débit mesuré à
-l'encodage). Comparaison appariée de chaque source à la référence (la meilleure, ou celle
-demandée) : « meilleur » seulement si l'intervalle exclut zéro (§6). Une source dont l'empreinte
-des labels n'est plus celle d'aujourd'hui est signalée (`up_to_date`) : à relancer.
+Colonnes : AP [IC bootstrap par micro], AP moyenne par pli, rappel aux précisions plancher
+[Wilson] avec un seuil choisi sur les autres plis (l'oracle en `recall@p…_oracle`), rappel par
+site au même seuil, et pour les encodeurs le coût (dimension, fenêtre, débit mesuré à
+l'encodage). Comparaison appariée de chaque source à la référence, fixée d'avance
+(`benchmark.reference` ou `--reference`) ; à défaut la meilleure AP, signalée comme choisie
+après coup (`reference_post_hoc`) : elle doit une part de sa place à la chance. « Meilleur »
+seulement si la p-valeur corrigée de Holm sur toutes les comparaisons est sous 5 %
+(`significant_holm`, DECISIONS n° 139, 140). Une source dont l'empreinte des labels n'est plus
+celle d'aujourd'hui est signalée (`up_to_date`) : à relancer.
 
 Réserves : Blancinet a peut-être été entraîné sur ces mêmes enregistrements de Mataroni (à
 confirmer avec Biophonia) ; son score est alors optimiste. Licence et prise en main : colonnes à
@@ -33,9 +37,12 @@ import pandas as pd
 from blanci.evaluate import (
     average_precision,
     bootstrap_ci,
+    cross_fitted_recall,
+    fold_mean_ap,
     paired_bootstrap,
     recall_at_precision,
     wilson_interval,
+    with_holm,
 )
 from blanci.fusion import project_scores
 from blanci.oof import (
@@ -128,11 +135,9 @@ def run_full_benchmark(
     rows, by_site = [], []
     for name in names:
         part = per_recording[per_recording["source"] == name]
-        y, s, units = (
-            part["y"].to_numpy(),
-            part["score"].to_numpy(),
-            part["recording_id"].to_numpy(),
-        )
+        y, s = part["y"].to_numpy(), part["score"].to_numpy()
+        units = part["point"].fillna(part["recording_id"]).to_numpy()  # micro (n° 139)
+        folds = part["fold"].to_numpy()
         lo, hi = bootstrap_ci(y, s, units, n_boot=bench["n_boot"], seed=seed)
         row: dict[str, Any] = {
             "source": name,
@@ -142,14 +147,22 @@ def run_full_benchmark(
             "ap": average_precision(y, s),
             "ap_lo": lo,
             "ap_hi": hi,
+            "ap_fold_mean": fold_mean_ap(y, s, folds)[0],
         }
         for p in bench["precisions"]:
             recall, threshold = recall_at_precision(y, s, p)
-            k = int(((s >= threshold) & (y == 1)).sum()) if np.isfinite(threshold) else 0
+            row[f"recall@p{p}_oracle"] = recall
+            if (folds >= 0).any():  # seuil choisi sur les autres plis (n° 140)
+                crossed = cross_fitted_recall(y, s, folds, p)
+                recall, k, n_pos = crossed["recall"], crossed["k"], crossed["n_pos"]
+                decided = crossed["decided"]
+            else:  # source sans plis (externe) : seul l'oracle est calculable
+                decided = s >= threshold if np.isfinite(threshold) else np.zeros(len(s), bool)
+                k, n_pos = int((decided & (y == 1)).sum()), int(y.sum())
             row[f"recall@p{p}"] = recall
-            row[f"recall@p{p}_lo"], row[f"recall@p{p}_hi"] = wilson_interval(k, int(y.sum()))
+            row[f"recall@p{p}_lo"], row[f"recall@p{p}_hi"] = wilson_interval(k, n_pos)
             if p == floor:
-                hits = part.assign(hit=(s >= threshold), site=part["recording_id"].map(site_of))
+                hits = part.assign(hit=decided, site=part["recording_id"].map(site_of))
                 for site, group in hits[hits["y"] == 1].groupby("site"):
                     by_site.append(
                         {
@@ -164,6 +177,8 @@ def run_full_benchmark(
         row["up_to_date"] = fingerprints[name] == current
         rows.append(row)
     result = pd.DataFrame(rows).sort_values("ap", ascending=False, kind="stable")
+    reference = reference or bench.get("reference") or None
+    post_hoc = reference is None
     reference = reference or str(result.iloc[0]["source"])
     if reference not in names:
         raise ValueError(f"référence inconnue : {reference!r}")
@@ -176,6 +191,7 @@ def run_full_benchmark(
         shared = part.index.intersection(ref.index)
         if not len(shared):
             continue
+        units = part.loc[shared, "point"].fillna(pd.Series(shared, index=shared)).to_numpy()
         comparisons.append(
             {
                 "source": name,
@@ -185,7 +201,7 @@ def run_full_benchmark(
                     part.loc[shared, "y"].to_numpy(),
                     part.loc[shared, "score"].to_numpy(),
                     ref.loc[shared, "score"].to_numpy(),
-                    shared.to_numpy(),
+                    units,
                     n_boot=bench["n_boot"],
                     seed=seed,
                 ),
@@ -196,8 +212,9 @@ def run_full_benchmark(
         site_table = site_table.pivot_table(index="source", columns="site", values="recall")
     return {
         "table": result.reset_index(drop=True),
-        "comparisons": pd.DataFrame(comparisons),
+        "comparisons": with_holm(pd.DataFrame(comparisons)),
         "by_site": site_table,
         "reference": reference,
+        "reference_post_hoc": post_hoc,
         "n_common_recordings": int(per_recording["recording_id"].nunique()),
     }

@@ -64,7 +64,14 @@ from blanci.attentive import TokenStore
 from blanci.config import config_path
 from blanci.dataset import embedded_training_set, folds_for, pairing_options
 from blanci.db import encoder_params
-from blanci.evaluate import average_precision, evaluate, paired_bootstrap, to_recordings
+from blanci.evaluate import (
+    average_precision,
+    cluster_units,
+    evaluate,
+    paired_bootstrap,
+    to_recordings,
+    with_holm,
+)
 from blanci.frozen import frozen_recordings
 from blanci.head import METHODS, calibration_options, choose_C, fit_and_score, oof_scores
 from blanci.oof import labels_fingerprint, oof_frame, save_oof
@@ -265,11 +272,12 @@ def run_head_benchmark(
                 f"{encoder_id}/{method}", "encoder_head", data, oof.values, assignment, fingerprint
             ),
         )
-        rows += level_rows(oof, y, recordings, cfg, {"encoder_id": encoder_id, "head": method})
+        labels = {"encoder_id": encoder_id, "head": method}
+        rows += level_rows(oof, y, recordings, cfg, labels, clusters=groups)
     table = pd.DataFrame(rows).sort_values(["level", "ap"], ascending=[True, False], kind="stable")
 
     reference = canonical(head_cfg.get("reference", "logistic"))
-    comparisons = compare_to_reference(scores, reference, y, recordings, cfg)
+    comparisons = compare_to_reference(scores, reference, y, recordings, cfg, clusters=groups)
     # R74, R80 : la variante gagnante doit-elle sa place à la chance ? Choisie pli par pli sur
     # les autres plis, jugée sur le pli.
     selection = (
@@ -282,19 +290,25 @@ def run_head_benchmark(
         "comparisons": comparisons,
         "selection": selection,
         "by_positive": by_positive_type(scores, data),
-        "background": background_diagnostic(scores, y, recordings, cfg),
+        "background": background_diagnostic(scores, y, recordings, cfg, clusters=groups),
         "scores": scores,
         "n_mics": int(len(np.unique(groups))),
     }
 
 
 def level_rows(
-    oof, y: np.ndarray, recordings: np.ndarray, cfg: dict, labels: dict[str, Any]
+    oof,
+    y: np.ndarray,
+    recordings: np.ndarray,
+    cfg: dict,
+    labels: dict[str, Any],
+    clusters: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
     """Une ligne de métriques par niveau (fenêtres, enregistrements) pour des scores hors-pli :
     AP poolée et son intervalle, rappels, `ap_fold_mean` (AP moyenne par pli, n° 133) et, si
     les plis ont été recalibrés (`benchmark.fold_calibration`), `ap_raw` : l'AP poolée des
-    scores d'avant la recalibration (n° 135)."""
+    scores d'avant la recalibration (n° 135). `clusters` (micro de chaque fenêtre) : unité du
+    bootstrap (n° 139)."""
     bench, seed = cfg["benchmark"], cfg["head"]["seed"]
     fids = fold_ids(len(y), oof.folds)
     rows = []
@@ -308,6 +322,7 @@ def level_rows(
             n_boot=bench["n_boot"],
             seed=seed,
             folds=fids,
+            clusters=clusters,
         )
         if getattr(oof, "raw", None) is not None:
             metrics["ap_raw"] = evaluate(oof.raw, y, recordings, level=level, n_boot=0)["ap"]
@@ -350,8 +365,11 @@ def compare_to_reference(
     y: np.ndarray,
     recordings: np.ndarray,
     cfg: dict,
+    clusters: np.ndarray | None = None,
 ) -> pd.DataFrame:
-    """Chaque tête contre la référence, au niveau enregistrement, bootstrap apparié (§6)."""
+    """Chaque tête contre la référence, au niveau enregistrement, bootstrap apparié (§6) : on
+    tire des micros entiers avec `clusters` (micro de chaque fenêtre), sinon des
+    enregistrements ; p-valeurs corrigées de Holm sur toutes les têtes (n° 139)."""
     if reference not in scores:
         return pd.DataFrame()
     rows = []
@@ -360,14 +378,23 @@ def compare_to_reference(
             continue
         labels, a, b, units = _pair(values, scores[reference], y, recordings)
         result = paired_bootstrap(
-            labels, a, b, units, n_boot=cfg["benchmark"]["n_boot"], seed=cfg["head"]["seed"]
+            labels,
+            a,
+            b,
+            cluster_units(units, recordings, clusters),
+            n_boot=cfg["benchmark"]["n_boot"],
+            seed=cfg["head"]["seed"],
         )
         rows.append({"head": method, "reference": reference, **result})
-    return pd.DataFrame(rows)
+    return with_holm(pd.DataFrame(rows))
 
 
 def background_diagnostic(
-    scores: dict[str, np.ndarray], y: np.ndarray, recordings: np.ndarray, cfg: dict
+    scores: dict[str, np.ndarray],
+    y: np.ndarray,
+    recordings: np.ndarray,
+    cfg: dict,
+    clusters: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Le fond sonore pollue-t-il l'embedding ? (§3, notes.md)
 
@@ -378,7 +405,12 @@ def background_diagnostic(
         return {}
     labels, a, b, units = _pair(scores["prototype"], scores["simple_prototype"], y, recordings)
     result = paired_bootstrap(
-        labels, a, b, units, n_boot=cfg["benchmark"]["n_boot"], seed=cfg["head"]["seed"]
+        labels,
+        a,
+        b,
+        cluster_units(units, recordings, clusters),
+        n_boot=cfg["benchmark"]["n_boot"],
+        seed=cfg["head"]["seed"],
     )
     if result["significant"] and result["diff"] > 0:
         verdict = "le fond sonore pollue l'embedding : retrancher les négatifs appariés aide"

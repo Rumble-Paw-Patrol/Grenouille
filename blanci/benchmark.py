@@ -4,11 +4,12 @@ Sondes : kNN cosinus, prototype simple, prototype différentiel, régression log
 L'écart entre les deux prototypes dit combien l'embedding capte le fond sonore partagé.
 Chaque sonde est évaluée en scores hors-pli, groupés par point (site/micro) : un micro ne se
 retrouve jamais des deux côtés d'un pli (§6). Chaque encodeur est jugé au niveau fenêtre et au
-niveau enregistrement, avec AP (IC bootstrap par enregistrement) et rappel aux précisions plancher
-(IC de Wilson en enregistrements).
+niveau enregistrement, avec AP (IC bootstrap par micro, DECISIONS n° 139) et rappel aux précisions
+plancher, seuil choisi sur les autres plis (IC de Wilson en enregistrements, n° 140).
 
 Les encodeurs se départagent sur les mêmes enregistrements par bootstrap apparié : « A meilleur
-que B » seulement si l'intervalle exclut zéro (§6). Un écart d'AP < 0,1 est une égalité, que
+que B » seulement si l'intervalle exclut zéro (§6), p-valeurs corrigées de Holm sur tout le
+tableau (n° 139). Un écart d'AP < 0,1 est une égalité, que
 départagent alors licence, vitesse et prise en main — colonnes renseignées à la main.
 """
 
@@ -22,9 +23,15 @@ import pandas as pd
 
 from blanci.attentive import TokenStore
 from blanci.config import config_path
-from blanci.dataset import embedded_training_set, folds_for, pairing_options
+from blanci.dataset import embedded_training_set, folds_for, pairing_options, recordings_table
 from blanci.db import encoder_params
-from blanci.evaluate import average_precision, evaluate, paired_bootstrap, to_recordings
+from blanci.evaluate import (
+    average_precision,
+    evaluate,
+    paired_bootstrap,
+    to_recordings,
+    with_holm,
+)
 from blanci.frozen import frozen_recordings
 from blanci.head import calibration_options, oof_scores
 from blanci.index import l2_normalize
@@ -71,12 +78,14 @@ def probe_table(
     gated: np.ndarray | None = None,
     assignment: dict[str, int] | None = None,
     calibration: dict | None = None,
+    clusters: np.ndarray | None = None,
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
     """Une ligne par (sonde, niveau) ; renvoie aussi les scores hors-pli de chaque sonde.
 
     Avec `tokens` (fenêtres, jetons, dim), ajoute la sonde « attentive » (§3). Colonnes
     `ap_fold_mean` (AP moyenne par pli) et, avec `calibration` (`head.calibration_options`),
-    `ap_raw` (AP poolée avant la recalibration par pli), DECISIONS n° 133, 135.
+    `ap_raw` (AP poolée avant la recalibration par pli), DECISIONS n° 133, 135. `clusters`
+    (micro de chaque fenêtre) : unité du bootstrap à la place de l'enregistrement (n° 139).
     """
     rows, scores = [], {}
     probes = [(p, X) for p in PROBES] + ([("attentive", tokens)] if tokens is not None else [])
@@ -104,6 +113,7 @@ def probe_table(
                 n_boot=n_boot,
                 seed=seed,
                 folds=fold_ids(len(y), oof.folds),
+                clusters=clusters,
             )
             if oof.raw is not None:
                 metrics["ap_raw"] = evaluate(oof.raw, y, recordings, level=level, n_boot=0)["ap"]
@@ -156,6 +166,7 @@ def benchmark_encoder(
         gated=data["gated"].to_numpy(),
         assignment=assignment,
         calibration=calibration_options(cfg),
+        clusters=groups,
     )
     fingerprint = labels_fingerprint(con, cfg)
     for probe, values in scores.items():  # scores hors-pli : benchmark complet, ensembles
@@ -196,16 +207,21 @@ def run_benchmark(
         per_encoder[encoder_id] = (scores, y, recordings)
     results = pd.concat(tables, ignore_index=True)
     results = results.sort_values(["level", "ap"], ascending=[True, False], kind="stable")
-    return results.reset_index(drop=True), compare_encoders(per_encoder, cfg)
+    points = recordings_table(con).set_index("recording_id")["point"]
+    return results.reset_index(drop=True), compare_encoders(per_encoder, cfg, points)
 
 
 def compare_encoders(
-    per_encoder: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]], cfg: dict
+    per_encoder: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
+    cfg: dict,
+    clusters: pd.Series | None = None,
 ) -> pd.DataFrame:
     """Bootstrap apparié entre encodeurs, au niveau enregistrement (sonde logistique).
 
     Le niveau enregistrement est le seul comparable : deux encodeurs de fenêtres différentes
-    n'ont pas la même grille, mais ils voient les mêmes enregistrements.
+    n'ont pas la même grille, mais ils voient les mêmes enregistrements. `clusters`
+    ({enregistrement: micro}) : on tire des micros entiers (DECISIONS n° 139) ; sans, des
+    enregistrements. p-valeurs corrigées de Holm sur toutes les paires.
     """
     folded = {}
     for encoder_id, (scores, y, recordings) in per_encoder.items():
@@ -219,11 +235,14 @@ def compare_encoders(
             if not len(shared):
                 continue
             left, right = folded[a].loc[shared], folded[b].loc[shared]
+            units = shared.to_numpy()
+            if clusters is not None:
+                units = clusters.reindex(shared).fillna(pd.Series(units, index=shared)).to_numpy()
             result = paired_bootstrap(
                 left["y"].to_numpy(),
                 left["score"].to_numpy(),
                 right["score"].to_numpy(),
-                shared.to_numpy(),
+                units,
                 n_boot=cfg["benchmark"]["n_boot"],
                 seed=cfg["head"]["seed"],
             )
@@ -237,7 +256,7 @@ def compare_encoders(
                     **result,
                 }
             )
-    return pd.DataFrame(rows)
+    return with_holm(pd.DataFrame(rows))
 
 
 # --- Rapports ---------------------------------------------------------------------------------

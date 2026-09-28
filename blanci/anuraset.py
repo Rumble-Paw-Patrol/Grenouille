@@ -13,7 +13,9 @@ Tout vit à part des données ONF (`config/anuraset.yaml` : base, stocks, rappor
 - `species_profile` (+ `dominant_frequencies`) : de quoi choisir les espèces ;
 - `window_labels` : fenêtre positive si elle contient un chant entier de l'espèce (ou tient
   dans un chœur annoté), négative si aucun chant de l'espèce ne la touche ; les fenêtres qui
-  coupent un chant sont écartées ;
+  coupent un chant sont écartées, sauf pour un chant qu'aucune fenêtre ne contient entier
+  (fenêtres jointives) : la fenêtre qui en porte la plus grande part le garde ; les fichiers où
+  les labels faibles signalent l'espèce sans chant daté sont écartés (`weak_only_files`) ;
 - `run_anuraset_benchmark` : sondes du §3 par encodeur et par espèce, comparaisons appariées.
 """
 
@@ -31,6 +33,7 @@ import soundfile as sf
 from blanci.benchmark import compare_encoders, probe_table
 from blanci.config import config_path
 from blanci.db import encoder_params
+from blanci.evaluate import with_holm
 from blanci.head import calibration_options
 from blanci.ingest import ingest
 from blanci.store import EmbeddingStore
@@ -202,29 +205,76 @@ def suggest_species(
 
 
 def window_labels(
-    windows: pd.DataFrame, calls: pd.DataFrame, species: str, eps: float = 1e-6
+    windows: pd.DataFrame,
+    calls: pd.DataFrame,
+    species: str,
+    eps: float = 1e-6,
+    unsure_files: set[str] | frozenset[str] = frozenset(),
 ) -> np.ndarray:
     """1 si la fenêtre contient un chant entier de l'espèce (ou tient dans un chœur annoté
     d'un seul tenant), 0 si aucun ne la touche, NaN sinon (chant coupé : écarté).
+
+    Un chant qu'aucune fenêtre ne contient entier (à cheval sur la jonction de deux fenêtres
+    jointives, `encoders.overlap: 0`, ou plus long que le pas) rend positive la fenêtre qui en
+    porte la plus grande part, la première à égalité : sans cela il n'aurait aucune fenêtre
+    positive, et les chants centrés seraient seuls jugés (DECISIONS n° 138). `unsure_files`
+    (`weak_only_files`) : fichiers où les labels faibles signalent l'espèce sans chant daté ;
+    toutes leurs fenêtres sont écartées (NaN) plutôt que comptées négatives.
     `windows` : file_key, offset_s, dur_s."""
     y = np.zeros(len(windows))
+    keys = windows["file_key"].to_numpy()
+    starts = windows["offset_s"].to_numpy(dtype=float)
+    ends = starts + windows["dur_s"].to_numpy(dtype=float)
     target = calls[calls["species"] == species]
-    by_file = {k: g[["start_s", "end_s"]].to_numpy() for k, g in target.groupby("file_key")}
-    for i, (key, offset, dur) in enumerate(
-        zip(windows["file_key"], windows["offset_s"], windows["dur_s"], strict=True)
-    ):
+    by_file = {
+        k: g[["start_s", "end_s"]].to_numpy(dtype=float) for k, g in target.groupby("file_key")
+    }
+    for key, rows in pd.DataFrame({"key": keys}).groupby("key").indices.items():
         spans = by_file.get(key)
         if spans is None:
             continue
-        start, end = offset, offset + dur
-        overlap = (spans[:, 0] < end) & (spans[:, 1] > start)
-        inside = (spans[:, 0] >= start - eps) & (spans[:, 1] <= end + eps)
-        within = (spans[:, 0] <= start + eps) & (spans[:, 1] >= end - eps)  # chœur continu
-        if inside.any() or within.any():
-            y[i] = 1.0
-        elif overlap.any():
-            y[i] = np.nan
+        a, b = spans[:, :1], spans[:, 1:]  # (chants, 1) face aux fenêtres (1, n)
+        s, e = starts[rows][None, :], ends[rows][None, :]
+        shared = np.minimum(b, e) - np.maximum(a, s)  # durée commune chant × fenêtre
+        touches = shared > 0
+        whole = ((a >= s - eps) & (b <= e + eps)) | ((a <= s + eps) & (b >= e - eps))  # chœur
+        label = np.where(whole.any(axis=0), 1.0, np.where(touches.any(axis=0), np.nan, 0.0))
+        orphan = touches.any(axis=1) & ~whole.any(axis=1)  # aucune fenêtre ne le tient entier
+        if orphan.any():
+            label[np.argmax(np.where(touches[orphan], shared[orphan], -np.inf), axis=1)] = 1.0
+        y[rows] = label
+    if unsure_files:
+        y[np.isin(keys, list(unsure_files))] = np.nan
     return y
+
+
+def read_weak_labels(path: Path | str | None) -> pd.DataFrame | None:
+    """Labels faibles d'AnuraSet (`weak_labels.csv` : un fichier par ligne, une colonne
+    `SPECIES_<code>` par espèce), avec `file_key` ; None sans chemin. Un chemin donné mais
+    absent est une erreur : sans ces labels, ni vrais négatifs à encoder, ni fichiers douteux
+    à écarter (DECISIONS n° 138)."""
+    if not path:
+        return None
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"labels faibles introuvables : {path} (anuraset.weak_labels ; retirer la clé pour "
+            "s'en passer, sans vrais négatifs ni fichiers douteux écartés)"
+        )
+    weak = pd.read_csv(path)
+    return weak.assign(file_key=weak["AUDIO_FILE_ID"].map(file_key))
+
+
+def weak_only_files(weak: pd.DataFrame | None, calls: pd.DataFrame, species: str) -> set[str]:
+    """Fichiers où les labels faibles signalent `species` sans aucun chant daté de l'espèce :
+    ses chants y sont peut-être, non datés. Leurs fenêtres ne sont ni positives ni négatives
+    pour cette espèce (`window_labels(unsure_files=…)`, DECISIONS n° 138). Vide sans labels
+    faibles ou si l'espèce n'y figure pas."""
+    column = f"SPECIES_{species}"
+    if weak is None or column not in weak:
+        return set()
+    flagged = set(weak.loc[weak[column] > 0, "file_key"])
+    return flagged - set(calls.loc[calls["species"] == species, "file_key"])
 
 
 # --- Benchmark ---------------------------------------------------------------------------------
@@ -327,13 +377,14 @@ def run_anuraset_heads(
     if importlib.util.find_spec("torch") is None:
         methods = [m for m in methods if not m.startswith(("dann", "gated"))]
     rng = np.random.default_rng(head_cfg["seed"])
+    weak = read_weak_labels(acfg.get("weak_labels"))
     meta, emb = _encoder_windows(con, cfg, encoder_id)
     sites = meta["site"].astype(str).to_numpy()
     domain = domain_statistics(emb, sites, "site") if needs_domain(methods) else None
     reference = canonical(head_cfg.get("reference", "logistic"))
     tables, per_site, comparisons, selections = [], [], [], []
     for sp in species:
-        y_all = window_labels(meta, calls, sp)
+        y_all = window_labels(meta, calls, sp, unsure_files=weak_only_files(weak, calls, sp))
         rows = species_rows(meta, y_all, sp, acfg["negatives_per_positive"], rng, encoder_id)
         X, y = emb[rows].astype(np.float32), y_all[rows].astype(int)
         groups, recordings = sites[rows], meta["recording_id"].to_numpy()[rows]
@@ -392,12 +443,23 @@ def run_anuraset_heads(
         if len(scores) > 1:
             chosen = selection_estimate(scores, y, fold_ids(len(y), folds), recordings)
             selections.append({"species": sp, **{k: v for k, v in chosen.items()}})
+    compared = pd.concat(comparisons, ignore_index=True) if comparisons else pd.DataFrame()
     return {
         "table": pd.DataFrame(tables),
         "sites": pd.DataFrame(per_site),
-        "comparisons": pd.concat(comparisons, ignore_index=True) if comparisons else pd.DataFrame(),
+        "comparisons": _holm_by_level(compared),
         "selection": pd.DataFrame(selections),
     }
+
+
+def _holm_by_level(comparisons: pd.DataFrame) -> pd.DataFrame:
+    """Holm sur toutes les têtes et toutes les espèces d'un même niveau (fenêtre,
+    enregistrement) : 13 têtes × 4 espèces jugées à 5 % donnent 2 à 3 « victoires » par hasard
+    (DECISIONS n° 139)."""
+    if comparisons.empty or "level" not in comparisons:
+        return with_holm(comparisons)
+    parts = [with_holm(part) for _, part in comparisons.groupby("level", sort=False)]
+    return pd.concat(parts).sort_index()
 
 
 def window_comparisons(
@@ -410,7 +472,9 @@ def window_comparisons(
     """Chaque tête contre la référence au niveau **fenêtre**, bootstrap apparié qui tire des
     enregistrements entiers. Sur AnuraSet, une espèce commune chante dans presque chaque
     enregistrement d'une minute : l'AP par enregistrement n'y est plus définie, celle par
-    fenêtre si (n° 136)."""
+    fenêtre si (n° 136). Les plis sont des sites, mais 2 à 4 sites ne suffisent pas à tirer
+    des sites : l'intervalle reste optimiste, les p-valeurs sont corrigées de Holm
+    (`_holm_by_level`, n° 139)."""
     from blanci.evaluate import paired_bootstrap
 
     rows = []
@@ -483,12 +547,13 @@ def run_anuraset_benchmark(
     """
     acfg, bench, head = cfg["anuraset"], cfg["benchmark"], cfg["head"]
     rng = np.random.default_rng(head["seed"])
+    weak = read_weak_labels(acfg.get("weak_labels"))
     tables, comparisons = [], []
     for sp in species:
         per_encoder = {}
         for encoder_id in encoder_ids:
             meta, emb = _encoder_windows(con, cfg, encoder_id)
-            y = window_labels(meta, calls, sp)
+            y = window_labels(meta, calls, sp, unsure_files=weak_only_files(weak, calls, sp))
             rows = species_rows(meta, y, sp, acfg["negatives_per_positive"], rng, encoder_id)
             table, scores = probe_table(
                 emb[rows].astype(np.float32),
@@ -515,7 +580,7 @@ def run_anuraset_benchmark(
             comparisons.append(compare_encoders(per_encoder, cfg).assign(species=sp))
     results = pd.concat(tables, ignore_index=True)
     compared = pd.concat(comparisons, ignore_index=True) if comparisons else pd.DataFrame()
-    return results, compared
+    return results, with_holm(compared)  # toutes les paires de toutes les espèces (n° 139)
 
 
 def write_anuraset_report(
@@ -649,17 +714,21 @@ def rank_heads(table: pd.DataFrame, level: str = "window") -> pd.DataFrame:
 def campaign_recordings(
     recordings: pd.DataFrame, calls: pd.DataFrame, weak_labels: Path | None = None
 ) -> pd.DataFrame:
-    """Enregistrements à encoder pour la campagne : ceux dont les chants sont datés (strong
-    labels), et ceux que les labels faibles disent sans aucune espèce (vrais négatifs, un
-    quart d'AnuraSet). Écartés : ceux où une espèce est signalée sans chant daté (13 sur
-    1 612) : leurs fenêtres passeraient pour négatives à tort."""
+    """Enregistrements à encoder pour la campagne : ceux qui ont au moins un chant daté
+    (strong labels), et ceux que les labels faibles disent sans aucune espèce (vrais négatifs,
+    un quart d'AnuraSet). Écartés : ceux qui n'ont aucun chant daté mais où les labels faibles
+    signalent une espèce (13 sur 1 612).
+
+    Un fichier gardé pour les chants datés d'une espèce peut en signaler une autre sans chant
+    daté : c'est à l'évaluation, espèce par espèce, que ses fenêtres sont alors écartées
+    (`weak_only_files`, DECISIONS n° 138). `weak_labels` donné mais absent : erreur
+    (`read_weak_labels`)."""
     keys = recordings["path"].map(file_key)
     keep = keys.isin(set(calls["file_key"]))
-    if weak_labels is not None and Path(weak_labels).exists():
-        weak = pd.read_csv(weak_labels)
+    weak = read_weak_labels(weak_labels)
+    if weak is not None:
         species = [c for c in weak.columns if c.startswith("SPECIES_")]
-        empty = weak.loc[weak[species].sum(axis=1) == 0, "AUDIO_FILE_ID"].str.lower()
-        keep |= keys.isin(set(empty))
+        keep |= keys.isin(set(weak.loc[weak[species].sum(axis=1) == 0, "file_key"]))
     return recordings[keep.to_numpy()]
 
 
@@ -731,7 +800,10 @@ def write_campaign_report(out: dict[str, Any], reports_dir: Path) -> Path:
         text += [
             "## Écart apparié à la logistique (bootstrap par enregistrement)",
             "",
-            "Une tête ne bat la logistique que si l'intervalle exclut 0.",
+            "Une tête ne bat la logistique que si `significant_holm` : p-valeur corrigée de "
+            "Holm sur toutes les têtes et toutes les espèces (DECISIONS n° 139). Les "
+            "enregistrements d'un site sont tirés un à un, alors que les plis sont des sites : "
+            "l'intervalle reste optimiste ; l'AP par site tenu à l'écart dit la variabilité.",
             "",
             to_markdown(comparisons),
             "",

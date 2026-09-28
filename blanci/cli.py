@@ -1199,7 +1199,11 @@ def benchmark_all(
         str | None, typer.Option(help="Sources à comparer (défaut : tout le stock hors-pli).")
     ] = None,
     reference: Annotated[
-        str | None, typer.Option(help="Source de référence (défaut : la meilleure AP).")
+        str | None,
+        typer.Option(
+            help="Source de référence (défaut : benchmark.reference, sinon la meilleure AP, "
+            "signalée comme choisie après coup)."
+        ),
     ] = None,
     external: Annotated[
         str | None,
@@ -1230,21 +1234,28 @@ def benchmark_all(
         "ap",
         "ap_lo",
         "ap_hi",
+        "ap_fold_mean",
         "recall@p0.1",
         "dim",
         "windows_per_s",
         "up_to_date",
     ]
     table = out["table"]
+    chosen = (
+        " (la meilleure AP, choisie après coup : les écarts à elle sont gonflés)"
+        if out["reference_post_hoc"]
+        else ""
+    )
     text = [
         "# Benchmark complet des modèles",
         "",
-        f"{out['n_common_recordings']} enregistrements ; référence : {out['reference']}.",
+        f"{out['n_common_recordings']} enregistrements ; référence : {out['reference']}{chosen}.",
+        "Rappel : seuil choisi sur les autres plis (DECISIONS n° 140).",
         "Colonnes à remplir à la main : licence, prise en main (§2).",
         "",
         to_markdown(table[[c for c in shown if c in table]]),
         "",
-        "## Contre la référence (bootstrap apparié par enregistrement)",
+        "## Contre la référence (bootstrap apparié par micro, Holm sur le tableau)",
         "",
         to_markdown(out["comparisons"]),
         "",

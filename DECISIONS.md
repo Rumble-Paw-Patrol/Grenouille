@@ -1514,3 +1514,54 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      efface des écarts de niveau entre sites qui étaient justes (un site où l'espèce abonde
      mérite des scores plus hauts). Décision provisoire : `fold_calibration: none` reste le
      défaut ; l'AP par site (`ap_fold_mean`) est le complément utile.
+
+## 2026-09-28 (soir) — Corrections de l'audit : AnuraSet, comparaisons, rappel
+
+138. **AnuraSet : chants coupés aux jonctions, espèces signalées sans chant daté.** Audit du
+     28/09 (sous-agents, vérifié dans le code et sur les données). Deux défauts de
+     `window_labels` faussaient la campagne du n° 137 :
+     - fenêtres jointives : un chant à cheval sur la jonction de deux fenêtres les rendait
+       toutes deux NaN, il n'avait plus aucune fenêtre positive (biais vers les chants
+       centrés). Désormais, un chant qu'aucune fenêtre ne contient entier rend positive celle
+       qui en porte la plus grande part (la première à égalité), l'autre reste écartée. Grille
+       jointive de 5 s sur tous les fichiers aux chants datés : fenêtres positives DENMIN
+       1 813 → 2 001, PHYCUV 905 → 984, PITAZU 1 415 → 1 475, BOAFAB 1 814 → 1 857. Grille à
+       50 % : rien ne change pour les chants de 2,5 s ou moins ;
+     - labels faibles : un fichier gardé pour les chants datés d'une espèce, qui en signale une
+       autre sans aucun chant daté d'elle, comptait comme négatif pour l'autre (positifs
+       cachés). Fichiers gardés concernés : PITAZU 25, PHYCUV 20, LEPLAT 12, DENMIN 9,
+       BOAFAB 6. Leurs fenêtres sont désormais écartées pour cette espèce-là, à l'évaluation
+       (`weak_only_files`, `window_labels(unsure_files=…)`) ; la docstring de
+       `campaign_recordings` le promettait sans le faire.
+     `anuraset.weak_labels` donné mais absent : erreur explicite (avant : aucun vrai négatif,
+     sans un mot). En-tête de `config/anuraset.yaml` : le stock s'appelle
+     `perch_v2-bacpipe1.3.5@o0`. Pas de réencodage : seuls les labels et l'évaluation
+     changent. Les chiffres du n° 137 sont à refaire.
+
+139. **Comparaisons appariées : micros tirés entiers, Holm, référence fixée d'avance.**
+     - Bootstrap par micro : les enregistrements d'un même micro partagent fond et faune ; les
+       tirer un à un rend l'intervalle trop étroit, et « A meilleur que B » trop fréquent,
+       quand les micros sont peu nombreux. `evaluate(clusters=…)`, `compare_encoders`,
+       `compare_to_reference`, `background_diagnostic` et `benchmark-all` tirent désormais des
+       points (site/micro) sur les données ONF. AnuraSet garde l'enregistrement : 2 à 4 sites
+       ne se tirent pas ; l'intervalle y reste optimiste, l'AP par site tenu à l'écart dit la
+       variabilité.
+     - Holm : `paired_bootstrap` rend une p-valeur bilatérale (2 × min(P(Δ ≤ 0), P(Δ ≥ 0))) ;
+       `with_holm` ajoute `p_holm` et `significant_holm` à chaque tableau de comparaisons
+       (encodeurs, têtes, benchmark complet ; AnuraSet : toutes les têtes et toutes les
+       espèces d'un même niveau). 13 têtes × 4 espèces jugées à 5 % donnent 2 à 3 victoires
+       par hasard : « R37 significativement meilleure sur PITAZU » (n° 137) se rejuge sur
+       `significant_holm`. `significant` (chaque intervalle, seul) reste pour mémoire.
+     - Référence du benchmark complet : `benchmark.reference` ou `--reference` ; à défaut la
+       meilleure AP, signalée comme choisie après coup (`reference_post_hoc`) : elle doit une
+       part de sa place à la chance. Le tableau ajoute `ap_fold_mean`.
+
+140. **Rappel à précision plancher : seuil choisi sur les autres plis.** Le seuil choisi et
+     jugé sur les mêmes scores est un oracle : il connaît les labels qu'il mesure. Avec des
+     plis (`evaluate(folds=…)` ; benchmark complet par la colonne `fold` du stock hors-pli),
+     `recall@p…` est désormais le rappel au seuil choisi pli par pli sur les autres plis
+     (`evaluate.cross_fitted_recall`, le calcul de R74 déplacé depuis `regularization`) ;
+     l'oracle reste en `recall@p…_oracle`, et `threshold@p…` est toujours le seuil qu'on
+     déploierait (choisi sur tous les scores). Le rappel par site du benchmark complet suit
+     le même seuil. Sans plis (baselines, sources externes), seul l'oracle se calcule : il
+     reste en `recall@p…`. Les rappels publiés avant ce numéro sont optimistes.
