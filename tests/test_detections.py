@@ -102,6 +102,23 @@ def test_detections_are_scores_not_labels(con, tmp_path):
     assert con.execute("SELECT COUNT(*) FROM scores").fetchone()[0] == 3
 
 
+def test_detections_outside_the_recording_or_unreadable_are_counted_not_stored(con, tmp_path):
+    rid = add_recording(con, "2LA03550_20260108_143000")  # 120 s
+    table = tmp_path / "detections.csv"
+    key = "2la03550_20260108_143000.flac"
+    pd.DataFrame(
+        {
+            "file_s3_key": [key] * 5,
+            "start_time": ["30", "", "200", "-3", "60"],
+            "score": ["0,87", "0.5", "0.5", "0.5", "abc"],
+        }
+    ).to_csv(table, index=False, sep=";")  # export français : point-virgule, virgule décimale
+    report = import_detections(con, table, CFG)
+    assert report.stored == 1 and report.out_of_range == 2 and report.unreadable == 2
+    scores = dict(con.execute("SELECT window_id, score FROM scores").fetchall())
+    assert scores == {window_id_for(rid, 30.0): pytest.approx(0.87)}  # virgule décimale
+
+
 # --- Commentaires accolés -------------------------------------------------------------------
 
 

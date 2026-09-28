@@ -122,6 +122,34 @@ def test_parse_offset(value, unit, expected):
     assert parse_offset(value, unit, 3.0) == expected
 
 
+@pytest.mark.parametrize("value", [float("nan"), None, "", "  ", "nan", "inf"])
+def test_parse_offset_refuses_an_empty_or_infinite_cell(value):
+    """Un décalage NaN passait tous les contrôles de bornes, puis faisait échouer tout
+    l'import sur la contrainte NOT NULL : il doit être « illisible », ligne par ligne."""
+    with pytest.raises(ValueError):
+        parse_offset(value, "seconds", 3.0)
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("blanci", True),
+        ("Blanci lointain", True),
+        ("pas blanci", False),
+        ("non", False),
+        ("blanci ?", None),  # l'expert hésite : ni positif ni négatif ferme
+        ("blanci sans doute", None),  # « sans doute » = probablement, pas une négation
+        ("Blanci pas sûr", None),
+        ("peut-être blanci", None),
+        ("?", None),
+    ],
+)
+def test_parse_verdict_keeps_doubt_out_of_the_labels(text, expected):
+    from blanci.labels import parse_verdict
+
+    assert parse_verdict(text) is expected
+
+
 def test_detect_columns_ignores_case_accents_and_units():
     df = pd.DataFrame(columns=["Fichier", "Début (s)", "Commentaires", "Qualité"])
     found = detect_columns(

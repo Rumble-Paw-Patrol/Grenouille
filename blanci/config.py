@@ -10,12 +10,18 @@ from typing import Any
 
 import yaml
 
-DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config" / "default.yaml"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CONFIG = PROJECT_ROOT / "config" / "default.yaml"
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """`override` par-dessus `base`, section par section. Une section vide dans le fichier
+    utilisateur (`qc:` suivi de commentaires seulement, lue None) garde celle par défaut au
+    lieu de la remplacer par None."""
     out = dict(base)
     for key, value in override.items():
+        if value is None and isinstance(out.get(key), dict):
+            continue
         if isinstance(value, dict) and isinstance(out.get(key), dict):
             out[key] = _merge(out[key], value)
         else:
@@ -30,5 +36,13 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
     return cfg
 
 
+def project_path(value: str | Path) -> Path:
+    """Chemin de la configuration : un chemin relatif (« data/db/blanci.sqlite ») part de la
+    racine du projet, pas du dossier d'où la commande est lancée ; lancée depuis D:\, elle
+    écrirait sinon sur le disque externe (DECISIONS n° 143)."""
+    path = Path(value)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 def config_path(cfg: dict[str, Any], key: str) -> Path:
-    return Path(cfg["paths"][key])
+    return project_path(cfg["paths"][key])

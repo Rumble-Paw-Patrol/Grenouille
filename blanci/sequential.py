@@ -372,14 +372,21 @@ class Upstream:
         return bool(self.transforms or self.gates)
 
     def transform_tag(self) -> str:
-        """Étiquette des transformations, ajoutée au nom de l'encodeur (« bp3-7k+dn1 »)."""
+        """Étiquette des transformations, ajoutée au nom de l'encodeur (« bp3-7k+dn1 »).
+        Un ordre de filtre ou un plancher de débruitage hors défaut y entre aussi
+        (« bp3-7k-o6 », « dn1-f0.2 ») : deux réglages, deux stocks (DECISIONS n° 142)."""
         parts = []
         for name, opts in self.transforms.items():
             if name == "bandpass":
                 lo, hi = opts["band_hz"]
-                parts.append(f"bp{lo / 1000:g}-{hi / 1000:g}k")
+                order = int(opts.get("order", 4))
+                parts.append(
+                    f"bp{lo / 1000:g}-{hi / 1000:g}k" + (f"-o{order}" if order != 4 else "")
+                )
             elif name == "denoise":
-                parts.append(f"dn{opts.get('strength', 1.0):g}")
+                floor = float(opts.get("floor", 0.1))
+                suffix = f"-f{floor:g}" if abs(floor - 0.1) > 1e-12 else ""
+                parts.append(f"dn{opts.get('strength', 1.0):g}{suffix}")
         return "+".join(parts)
 
     def gate_tag(self) -> str:

@@ -104,6 +104,26 @@ def test_fusion_handles_missing_sequential_features():
     assert not np.isnan(fusion.decision(head, features)).any()
 
 
+def test_a_missing_descriptor_counts_as_the_training_mean_not_zero():
+    """DECISIONS n° 144 : `ioi_cv` NaN (moins de deux notes) remplacé par 0 en unités brutes
+    voulait dire « rythme parfaitement régulier ». Il vaut désormais la moyenne : sa
+    contribution standardisée est nulle, en direct comme rechargé en JSON."""
+    import json
+
+    from blanci.fusion import FusionWeights
+
+    head, features, y, _ = make_case()
+    features = features.assign(frac_ioi_blanci=features["frac_ioi_blanci"] + 5.0)  # loin de 0
+    fusion = fit_fusion(as_oof(head), features, y, COLUMNS)
+    missing = features.iloc[:1].assign(frac_ioi_blanci=np.nan)
+    at_mean = features.iloc[:1].assign(frac_ioi_blanci=fusion.scaler.mean_[2])
+    assert np.allclose(fusion.decision(head[:1], missing), fusion.decision(head[:1], at_mean))
+    saved = FusionWeights.from_dict(
+        json.loads(json.dumps(FusionWeights.from_fusion(fusion).to_dict()))
+    )
+    assert np.allclose(saved.decision(head[:1], missing), fusion.decision(head[:1], at_mean))
+
+
 def test_fusion_uses_only_the_declared_columns():
     head, features, y, _ = make_case()
     features = features.assign(piege=np.arange(len(y), dtype=float))
@@ -124,7 +144,7 @@ def test_saved_fusion_weights_reproduce_the_sklearn_decision():
     y = np.r_[np.ones(60), np.zeros(140)].astype(int)
     head = OOFScores(rng.normal(y * 2, 1.0), (), "logistic")
     features = pd.DataFrame({"a": rng.normal(y, 1.0), "b": rng.normal(0, 1.0, len(y))})
-    features.loc[3, "a"] = np.nan  # descripteur manquant : 0 comme à l'entraînement
+    features.loc[3, "a"] = np.nan  # descripteur manquant : la moyenne, comme à l'entraînement
     fusion = fit_fusion(head, features, y, ["a", "b"])
     saved = FusionWeights.from_dict(
         json.loads(json.dumps(FusionWeights.from_fusion(fusion).to_dict()))

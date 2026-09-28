@@ -291,12 +291,16 @@ def test_verification_text_names_the_false_friend(tmp_path, cfg, ingested):
     assert row["species"] and "ourmilier" in row["species"]
 
 
-def test_unreadable_verdict_blocks_the_import(tmp_path, cfg, ingested):
-    """Un « peut-être » ne doit pas devenir un négatif en silence."""
+@pytest.mark.parametrize(
+    "doubtful", ["peut-être", "blanci ?", "blanci sans doute", "blanci pas sûr"]
+)
+def test_unreadable_verdict_blocks_the_import(tmp_path, cfg, ingested, doubtful):
+    """Un « peut-être » ne doit pas devenir un négatif en silence, ni un « blanci ? » un
+    positif ferme (DECISIONS n° 141)."""
     con, names = ingested
     sheet = write_sheet(
         tmp_path / "a.xlsx",
-        [(names[0], 36, 0.91, "oui"), (names[1], 12, 0.83, "peut-être")],
+        [(names[0], 36, 0.91, "oui"), (names[1], 12, 0.83, doubtful)],
     )
     report = import_label_file(con, sheet, cfg, kind=None)
     assert report.inserted == 0
@@ -675,3 +679,30 @@ def test_moving_to_a_new_disk_keeps_labels(tmp_path, cfg):
         "JOIN recordings r USING (recording_id)"
     ).fetchone()[0]
     assert labelled == 1
+
+
+def test_a_leftover_copy_on_another_disk_is_not_moved_to_another_site(tmp_path, cfg):
+    """Relevé 1 inventorié depuis le disque A ; le disque B ne porte que le relevé 2, dont les
+    cartes SD contiennent encore les fichiers du relevé 1. Ces copies ne sont pas un
+    déplacement : le fichier garde son site, la copie est signalée en doublon (n° 143)."""
+    disk_a, disk_b = tmp_path / "A", tmp_path / "B"
+    write_recording(disk_a / "RELEVE 1" / "2LA04530" / f"{STEMS[0].upper()}.wav", seed=0)
+    con = connect(cfg["paths"]["db"])
+    run_ingest(con, disk_a, "2026", cfg, hash_file=False, scan=disk_a, site="Mataroni")
+    write_recording(disk_b / "RELEVE 2" / "2LA04530" / f"{STEMS[0].upper()}.wav", seed=0)
+    report = run_ingest(
+        con, disk_b, "2026", cfg, run_qc=False, hash_file=False, scan=disk_b, site="CDR"
+    )
+    assert report.relocated == 0 and report.added == 0 and len(report.duplicates) == 1
+    row = con.execute("SELECT site, path FROM recordings").fetchone()
+    assert row["site"] == "Mataroni" and row["path"].startswith("RELEVE 1/")
+
+
+def test_surveys_are_scanned_in_natural_order():
+    from pathlib import Path
+
+    from blanci.ingest import natural_key
+
+    names = ["RELEVE 10 X/a.wav", "RELEVE 2 Y/a.wav", "RELEVE 1 Z/b.wav"]
+    ordered = sorted((Path(n) for n in names), key=natural_key)
+    assert [p.parts[0] for p in ordered] == ["RELEVE 1 Z", "RELEVE 2 Y", "RELEVE 10 X"]

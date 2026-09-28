@@ -31,7 +31,7 @@ import pandas as pd
 import soundfile as sf
 
 from blanci.benchmark import compare_encoders, probe_table
-from blanci.config import config_path
+from blanci.config import config_path, project_path
 from blanci.db import encoder_params
 from blanci.evaluate import with_holm
 from blanci.head import calibration_options
@@ -80,7 +80,7 @@ def prepare(con: sqlite3.Connection, cfg: dict) -> dict[str, Any]:
     """Extraction (si besoin) puis inventaire, sans contrôle qualité ni empreinte."""
     root = config_path(cfg, "raw")
     acfg = cfg["anuraset"]
-    extracted = extract_raw(Path(acfg["archive"]), root)
+    extracted = extract_raw(project_path(acfg["archive"]), root)
     report = ingest(con, root, DATASET, cfg, run_qc=False, hash_file=False)
     return {"extracted": extracted, "added": report.added, "errors": len(report.errors)}
 
@@ -255,7 +255,7 @@ def read_weak_labels(path: Path | str | None) -> pd.DataFrame | None:
     à écarter (DECISIONS n° 138)."""
     if not path:
         return None
-    path = Path(path)
+    path = project_path(path)
     if not path.exists():
         raise FileNotFoundError(
             f"labels faibles introuvables : {path} (anuraset.weak_labels ; retirer la clé pour "

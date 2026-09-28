@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from blanci.config import load_config
 from blanci.db import connect, next_version, recording_id_for, register_model, utc_now
 from blanci.head import Head
 from blanci.service import (
@@ -19,6 +18,7 @@ from blanci.service import (
     train_and_register,
 )
 from blanci.store import EmbeddingStore
+from tests.conftest import quick_cfg
 from tests.test_benchmark import build_recordings, write_embeddings
 
 DIM = 16
@@ -26,13 +26,8 @@ DIM = 16
 
 @pytest.fixture
 def cfg(tmp_path):
-    cfg = load_config()
-    cfg["paths"] = {key: str(tmp_path / key) for key in cfg["paths"]}
+    cfg = quick_cfg(tmp_path, n_boot=30, negatives_per_positive=4)
     cfg["paths"]["db"] = str(tmp_path / "db" / "blanci.sqlite")
-    cfg["benchmark"]["n_boot"] = 30
-    cfg["benchmark"]["negatives_per_positive"] = 4
-    cfg["head"]["n_splits"] = 3
-    cfg["head"]["C_grid"] = [1.0]
     cfg["active"]["batch_recordings"] = 6
     return cfg
 
@@ -164,6 +159,32 @@ def test_scoring_twice_replaces_decisions_not_duplicates(con, cfg, trained):
     first = score_and_decide(con, "good-1", cfg)
     score_and_decide(con, "good-1", cfg)
     assert con.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] == len(first.decisions)
+
+
+def test_scoring_one_site_keeps_the_decisions_of_the_others(con, cfg, trained):
+    """`score --site B` ne remplace que les enregistrements de B : les décisions déjà prises
+    ailleurs, pour la même tête et le même seuil, restent."""
+    first = score_and_decide(con, "good-1", cfg)
+    con.execute(
+        "INSERT INTO decisions (recording_id, encoder_id, head_version, threshold_id, fraction, "
+        "status, created_at) VALUES ('ailleurs', 'good-1', ?, ?, 0.5, 'present', ?)",
+        (first.version, first.threshold_id, utc_now()),
+    )
+    score_and_decide(con, "good-1", cfg)
+    rows = con.execute("SELECT recording_id FROM decisions").fetchall()
+    assert len(rows) == len(first.decisions) + 1
+    assert "ailleurs" in {r["recording_id"] for r in rows}
+
+
+def test_score_and_queue_follow_the_adopted_head_by_default(con, cfg, trained):
+    """`retrain` crée v2 sans l'adopter : `score` et `queue` restent sur v1, l'adoptée ; `queue`
+    sur la plus récente échouait faute de scores v2."""
+    from blanci.service import adopt_head, make_queue
+
+    adopt_head(con, "good-1", "v1", "test", {})
+    train_and_register(con, "good-1", cfg)  # v2, non adoptée
+    assert score_and_decide(con, "good-1", cfg).version == "v1"
+    assert len(make_queue(con, "good-1", cfg, n=4)) > 0
 
 
 def test_score_finds_the_positive_recordings(con, cfg, trained):

@@ -14,6 +14,8 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 from blanci.db import connect  # noqa: E402
 from blanci.ingest import ingest  # noqa: E402
 
+pytestmark = pytest.mark.slow  # pytest -m 'not slow' : suite rapide
+
 # Chemin absolu : Streamlit ≥ 1.5x résout un chemin relatif depuis le fichier de test.
 APP = str(Path(__file__).resolve().parents[1] / "blanci" / "app.py")
 

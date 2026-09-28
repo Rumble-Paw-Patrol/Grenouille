@@ -76,26 +76,24 @@ def fit_dann(
     `domain_on` : "negatives" (défaut) ou "all", les fenêtres sur lesquelles le micro est
     appris ; `strength` : force maximale de l'inversion (0 : pas d'adversaire, un petit réseau
     ordinaire)."""
-    try:
-        import torch
-    except ImportError as exc:  # pragma: no cover - dépend de l'installation
-        raise RuntimeError("R66 s'entraîne avec torch (uv sync --group research)") from exc
-
     from blanci.regularization import (
+        balanced_bce,
         dann_strength,
         dropout,
+        feature_scaling,
         grad_reverse,
+        import_torch,
         optimise,
         validation_criterion,
     )
+
+    torch = import_torch("R66")
 
     if domain_on not in ("negatives", "all"):
         raise ValueError(f"R66 : domain_on {domain_on!r} (negatives ou all)")
     X = np.asarray(X, dtype=np.float32)
     y = np.asarray(y).astype(np.float32)
-    mean = X.mean(axis=0)
-    std = X.std(axis=0)
-    scale = np.where(std > 0, std, 1.0).astype(np.float32)
+    mean, scale = feature_scaling(X)
     x = torch.from_numpy((X - mean) / scale)
     target = torch.from_numpy(y)
     names, codes = np.unique(np.asarray(groups).astype(str), return_inverse=True)
@@ -112,8 +110,7 @@ def fit_dann(
     bias = torch.nn.Parameter(torch.zeros(1))
     dom_weight = torch.nn.Parameter(torch.randn(k, len(names)) * 0.01)
     dom_bias = torch.nn.Parameter(torch.zeros(len(names)))
-    n_pos = max(float(y.sum()), 1.0)
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor((len(y) - n_pos) / n_pos))
+    loss_fn = balanced_bce(torch, y)
     domain_loss = torch.nn.CrossEntropyLoss()
 
     def represent(inputs):

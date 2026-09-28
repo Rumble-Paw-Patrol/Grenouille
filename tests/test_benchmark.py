@@ -12,9 +12,9 @@ from blanci.benchmark import (
     to_markdown,
     write_report,
 )
-from blanci.config import load_config
 from blanci.db import connect, recording_id_for, utc_now, window_id_for
 from blanci.store import EmbeddingStore
+from tests.conftest import quick_cfg
 
 WINDOW_S = 3.0
 HOP_S = 1.5
@@ -24,13 +24,7 @@ DIM = 16
 
 @pytest.fixture
 def cfg(tmp_path):
-    cfg = load_config()
-    cfg["paths"] = {key: str(tmp_path / key) for key in cfg["paths"]}
-    cfg["benchmark"]["n_boot"] = 50  # tests rapides
-    cfg["benchmark"]["negatives_per_positive"] = 4
-    cfg["head"]["n_splits"] = 3
-    cfg["head"]["C_grid"] = [1.0]
-    return cfg
+    return quick_cfg(tmp_path, n_boot=50, negatives_per_positive=4)
 
 
 @pytest.fixture

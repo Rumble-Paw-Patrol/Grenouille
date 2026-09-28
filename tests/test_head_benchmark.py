@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from blanci.attentive import TokenStore
-from blanci.config import load_config
 from blanci.db import connect, recording_id_for, utc_now, window_id_for
 from blanci.head import (
     cascade_scores,
@@ -24,6 +23,7 @@ from blanci.head_benchmark import (
 )
 from blanci.pooling import as_grid, available_poolings, flat_tokens, pool
 from blanci.store import EmbeddingStore
+from tests.conftest import quick_cfg
 
 DIM = 8
 WINDOW_S = 3.0
@@ -120,10 +120,7 @@ def test_head_methods_depend_on_tokens():
 
 @pytest.fixture
 def cfg(tmp_path):
-    cfg = load_config()
-    cfg["paths"] = {key: str(tmp_path / key) for key in cfg["paths"]}
-    cfg["benchmark"] |= {"n_boot": 30, "negatives_per_positive": 6}
-    cfg["head"] |= {"n_splits": 3, "C_grid": [1.0]}
+    cfg = quick_cfg(tmp_path, n_boot=30, negatives_per_positive=6)
     cfg["head"]["curve"] = {
         "by": "point",
         "k": [0, 1, 2],

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
+from blanci.config import config_path
 from blanci.encoders.base import BaseEncoder, Encoder, encoder_id, stock_id
 
 __all__ = ["BaseEncoder", "Encoder", "encoder_id", "get_encoder", "stock_id"]
@@ -47,7 +47,7 @@ def _get_encoder(name: str, cfg: dict[str, Any]) -> Encoder:
         encoder: Encoder = BacpipeEncoder(
             spec["model"],
             batch_size=batch,
-            model_base_path=Path(cfg["paths"]["models"]) / "bacpipe",
+            model_base_path=config_path(cfg, "models") / "bacpipe",
             logit_classes=spec.get("logit_classes"),
             checkpoint=spec.get("checkpoint"),
             name=name if spec.get("checkpoint") else None,
@@ -57,7 +57,7 @@ def _get_encoder(name: str, cfg: dict[str, Any]) -> Encoder:
 
             encoder = LowpassEncoder(encoder, spec["lowpass_hz"])
         return encoder
-    package = Path(cfg["paths"]["models"]) / "encoder" / name
+    package = config_path(cfg, "models") / "encoder" / name
     if (package / "manifest.json").exists():
         from blanci.encoders.onnx_encoder import OnnxEncoder
 

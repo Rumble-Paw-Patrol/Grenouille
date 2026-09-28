@@ -1565,3 +1565,72 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      déploierait (choisi sur tous les scores). Le rappel par site du benchmark complet suit
      le même seuil. Sans plis (baselines, sources externes), seul l'oracle se calcule : il
      reste en `recall@p…`. Les rappels publiés avant ce numéro sont optimistes.
+
+141. **Import des annotations et des détections : cellules vides, verdicts nuancés, bornes.**
+     - Décalage vide (NaN) : `parse_offset` le refuse (« décalage illisible », ligne par
+       ligne). Avant, NaN passait le contrôle de bornes (toute comparaison à NaN est fausse),
+       puis l'INSERT (`offset_s NOT NULL`) faisait échouer tout l'import.
+     - Verdict nuancé (« blanci ? », « blanci sans doute » — qui veut dire *probablement* —,
+       « blanci pas sûr », « peut-être ») : `parse_verdict` ne tranche plus (`VERDICT_DOUBT`).
+       Avant, « blanci ? » devenait un positif ferme et « blanci sans doute » un négatif. La
+       ligne est signalée comme tout verdict illisible, l'import attend. « probablement pas
+       blanci » reste un négatif « uncertain ».
+     - `import-detections` : même contrôle de bornes que les labels (`out_of_range`, compté),
+       score à virgule décimale lu (« 0,87 »), score illisible compté au lieu d'arrêter tout
+       l'import. Côté labels, un score illisible de l'ancien modèle est gardé en texte.
+
+142. **Stocks d'embeddings : canal, checkpoint et transformations vérifiés à la reprise.** Le
+     nom d'un stock ne dit ni le canal lu, ni le checkpoint bacpipe (`birdmae_base`), ni
+     l'ordre du passe-bande ou le plancher du débruitage : reprendre `embed` avec un autre
+     réglage ajoutait au même stock des embeddings qui ne se comparent pas aux siens, et
+     `params_json`, écrasé, effaçait la trace du mélange. Désormais ces réglages sont rangés
+     avec l'encodeur (`stock_identity`) et `embed` refuse de compléter un stock encodé
+     autrement (`check_stock_identity`). Pas de suffixe de canal dans le nom : les stocks
+     existants gardent le leur. L'ordre du passe-bande et le plancher du débruitage entrent
+     dans l'étiquette quand ils ne sont pas à leur défaut (`bp3-7k-o6`, `dn1-f0.2`). Reste
+     ouvert : la révision Hugging Face du checkpoint n'est pas figée.
+
+143. **Inventaire et configuration.**
+     - Copie laissée d'un relevé : après un changement de `paths.raw`, un fichier du relevé 1
+       vu sur le disque du relevé 2 passait pour « déplacé », et prenait le chemin et le
+       **site** du relevé 2. Un déplacement garde désormais son site ; sous un autre site,
+       c'est un doublon, écarté et signalé.
+     - Ordre naturel des dossiers (« RELEVE 2 » avant « RELEVE 10 ») : la règle « le premier
+       inventorié l'emporte » suit l'ordre des relevés même quand un scan en couvre plusieurs.
+     - Chemins relatifs de la configuration résolus depuis la racine du projet
+       (`project_path`), plus depuis le dossier de lancement : lancée depuis D:\, une commande
+       créait une base vide sur le disque externe.
+     - Section vide dans `local.yaml` (`qc:` suivi de commentaires) : la section par défaut
+       est gardée, au lieu d'un None qui cassait plus loin.
+
+144. **Décisions et têtes.**
+     - `score --site B` ne remplace plus que les décisions des enregistrements scorés : celles
+       du site A, même tête et même seuil, restent (et le CSV des points les garde).
+     - `queue`, `fusion` et `score` prennent la même tête par défaut : l'adoptée par
+       `retrain`, sinon la plus récente. `queue` et `fusion` prenaient la plus récente et
+       échouaient après un `retrain` non adopté.
+     - Tête multi-classes (R67) : le logit de P(A. blanci) se calcule directement
+       (z_blanci − logsumexp des autres) en float64. En float32, P arrondie à 1 dès un logit
+       de ~17 donnait un score +inf, et l'AP refusait les scores.
+     - Fusion de première version (`blanci fusion`, `score --fusion`) : un descripteur
+       manquant vaut la moyenne de l'entraînement (0 une fois standardisé, comme
+       `FusionModel`), plus 0 en unités brutes (`ioi_cv` = 0 : « rythme parfaitement
+       régulier », un biais vers A. blanci). Une fusion enregistrée avant ce numéro est à
+       réapprendre.
+
+145. **Hygiène : dépendances de recherche, chemin ONNX testé, socle torch commun, tests.**
+     - Groupe `research` : `torch` (importé directement par attentive, R85, R66,
+       `torch_training`, l'export) et `onnx` (< 1.18 : les suivantes veulent ml-dtypes ≥ 0.5,
+       TensorFlow 2.15 le fige en 0.3). Sans `onnx`, `torch.onnx.export` échouait : l'export
+       du livrable ne pouvait pas tourner.
+     - `tests/test_onnx_export.py` : export d'un petit réseau, équivalence torch/ONNX
+       (cosinus > 0,999), axe de lot dynamique, rééchantillonnage, paquet corrompu ou
+       manifeste incomplet refusés, quantification int8 (cosinus moyen > 0,99).
+     - `regularization.torch_training` : `import_torch`, `feature_scaling`, `balanced_bce`,
+       le socle que recopiaient attentive, R85 et R66 (mêmes calculs).
+     - Tests : marqueur `slow` (suite rapide : `pytest -m "not slow"`, ~3 min 30 contre ~6 min),
+       `-rs` liste les tests sautés faute de torch ou de streamlit, `quick_cfg` et `ToyEncoder`
+       dans `conftest.py`. `test_attentive` : note de force 4 (écart ≥ 0,27 pour un seuil de
+       0,1 sur quatre graines ; 0,13 à force 3).
+     Laissés de côté : réécrire l'historique pour en retirer `pheno-blanci.pdf` (5,2 Mo)
+     forcerait tout clone à repartir de zéro ; la révision Hugging Face du checkpoint (n° 142).

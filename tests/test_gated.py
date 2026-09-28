@@ -9,6 +9,8 @@ from blanci.evaluate import average_precision  # noqa: E402
 from blanci.gated import fit_gated  # noqa: E402
 from blanci.head import fit_logistic, oof_scores  # noqa: E402
 
+pytestmark = pytest.mark.slow  # pytest -m 'not slow' : suite rapide
+
 DIM = 16
 
 

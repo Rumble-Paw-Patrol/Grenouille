@@ -162,12 +162,17 @@ def embed_recordings(
 
     `gates` (module séquentiel en amont, portes actives seulement) : une fenêtre arrêtée n'est
     pas encodée ; elle est rangée avec un embedding nul et `gated` vrai, pour que l'agrégation
-    la compte (score le plus bas) et que l'entraînement l'ignore. Stock `<id>+g-…`."""
+    la compte (score le plus bas) et que l'entraînement l'ignore. Stock `<id>+g-…`.
+
+    Un stock déjà encodé avec un autre canal, un autre checkpoint ou d'autres transformations
+    en amont est refusé (`check_stock_identity`) : la reprise y ajouterait des embeddings qui
+    ne se comparent pas aux siens (DECISIONS n° 142)."""
     eid = stock_id(encoder, overlap)
     if gates is not None and gates.gates:
         eid = f"{eid}+{gates.gate_tag()}"
     else:
         gates = None
+    check_stock_identity(con, eid, stock_identity(encoder, channel))
     protected = positive_recordings(con) if qc_thresholds is not None else set()
     with_onsets = {row[0] for row in con.execute("SELECT recording_id FROM onsets")}
     store = EmbeddingStore(store_root, eid)
@@ -265,6 +270,39 @@ def embed_recordings(
     return report
 
 
+def stock_identity(encoder: Encoder, channel: int | str) -> dict[str, Any]:
+    """Réglages qui font qu'un embedding se compare aux autres de son stock sans être dans son
+    nom : le canal lu, le checkpoint (bacpipe `birdmae_base`), les transformations en amont
+    avec tous leurs réglages. Rangés avec l'encodeur (`register_encoder`)."""
+    identity: dict[str, Any] = {"channel": channel}
+    inner = getattr(encoder, "inner", encoder)  # UpstreamEncoder, LowpassEncoder
+    checkpoint = getattr(encoder, "checkpoint", None) or getattr(inner, "checkpoint", None)
+    if checkpoint:
+        identity["checkpoint"] = checkpoint
+    upstream = getattr(encoder, "upstream", None)
+    if upstream is not None and upstream.transforms:
+        identity["transforms"] = upstream.transforms
+    return json.loads(json.dumps(identity))  # comme relu de la base (listes, pas tuples)
+
+
+def check_stock_identity(con: sqlite3.Connection, eid: str, identity: dict[str, Any]) -> None:
+    """ValueError si le stock `eid` a été encodé avec d'autres réglages (`stock_identity`). Un
+    réglage absent de la base (stock d'avant ce contrôle) n'est pas comparé."""
+    row = con.execute(
+        "SELECT params_json FROM models WHERE model_id = ? AND kind = 'encoder'", (eid,)
+    ).fetchone()
+    if row is None:
+        return
+    stored = json.loads(row[0] or "{}")
+    for key, value in identity.items():
+        if key in stored and stored[key] != value:
+            raise ValueError(
+                f"le stock {eid} a été encodé avec {key} = {stored[key]!r}, pas {value!r} : "
+                "les embeddings ne se comparent pas ; reprendre avec le même réglage, ou "
+                "encoder sous un autre nom (config encoders)"
+            )
+
+
 def register_encoder(
     con: sqlite3.Connection,
     encoder: Encoder,
@@ -278,7 +316,7 @@ def register_encoder(
         "window_s": encoder.window_s,
         "hop_s": hop_s,
         "overlap": round(overlap_of(encoder.window_s, hop_s), 4),
-        "channel": channel,  # micro lu : des embeddings de micros différents ne se comparent pas
+        **stock_identity(encoder, channel),  # canal, checkpoint, transformations (n° 142)
         "dim": encoder.dim,
         "has_tokens": encoder.has_tokens,
         "gates": {"thresholds": gates.gates, "combine": gates.combine} if gates else None,

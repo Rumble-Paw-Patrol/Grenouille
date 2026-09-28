@@ -15,6 +15,8 @@ from blanci.regularization import (  # noqa: E402
     regularizer_for,
 )
 
+pytestmark = pytest.mark.slow  # pytest -m 'not slow' : suite rapide
+
 N_TOKENS, DIM = 16, 8
 
 
@@ -30,8 +32,14 @@ def windows(n_per_class=120, strength=3.0, seed=0):
     return tokens.astype(np.float32), y, groups, where
 
 
+# Note de force 4 : écart ≥ 0,27 et attention ≥ 0,90 sur les graines 0 à 3 ; à force 3, l'écart
+# tombait à 0,13 pour un seuil de 0,1 (graine 0), trop près pour survivre à une autre version
+# de torch.
+STRONG = 4.0
+
+
 def test_attention_beats_the_mean_of_tokens_on_a_brief_note():
-    tokens, y, groups, _ = windows()
+    tokens, y, groups, _ = windows(strength=STRONG)
     attentive = oof_scores(tokens, y, groups, n_splits=3, method="attentive")
     pooled = oof_scores(tokens.mean(axis=1), y, groups, n_splits=3, method="logistic")
     ap_attentive = average_precision(y, attentive.values)
@@ -40,7 +48,7 @@ def test_attention_beats_the_mean_of_tokens_on_a_brief_note():
 
 
 def test_attention_points_at_the_note():
-    tokens, y, _, where = windows()
+    tokens, y, _, where = windows(strength=STRONG)
     head = fit_attentive(tokens, y)
     weights = head.attention(tokens[y == 1])
     assert (weights.argmax(axis=1) == where).mean() > 0.7
