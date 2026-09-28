@@ -14,6 +14,12 @@ paths:
   reports: data/reports/anuraset
   models: data/models                  # poids des encodeurs : partagés avec le projet
 
+# Fenêtres jointives sur AnuraSet (DECISIONS n° 137) : moitié moins de fenêtres à encoder
+# qu'avec le chevauchement de 0,5 ; les chants (médiane ≤ 1 s) tiennent presque toujours
+# entiers dans une fenêtre de 5 s. Stock séparé <encodeur>@o0.
+encoders:
+  overlap: 0.0
+
 recorder:
   filename_utc_offset_h: -3            # Brésil (sites INCT), sans importance ici
 
@@ -31,6 +37,9 @@ qc:
 anuraset:
   archive: data/external/anuraset/raw_data.zip
   labels: data/external/anuraset/strong_labels.zip
+  # Labels faibles (Zenodo) : les enregistrements sans aucune espèce sont de vrais négatifs,
+  # encodés par la campagne ; ceux qui signalent une espèce sans chant daté sont écartés.
+  weak_labels: data/external/anuraset/weak_labels.csv
   # Deux ou trois anoures à note brève en 3–6 kHz (§2) : à fixer après `anuraset-profile`.
   species: []
   negatives_per_positive: 20

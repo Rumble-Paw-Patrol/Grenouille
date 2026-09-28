@@ -646,6 +646,23 @@ def rank_heads(table: pd.DataFrame, level: str = "window") -> pd.DataFrame:
     return out.sort_values(["mean_rank", "ap"], ascending=[True, False]).reset_index()
 
 
+def campaign_recordings(
+    recordings: pd.DataFrame, calls: pd.DataFrame, weak_labels: Path | None = None
+) -> pd.DataFrame:
+    """Enregistrements à encoder pour la campagne : ceux dont les chants sont datés (strong
+    labels), et ceux que les labels faibles disent sans aucune espèce (vrais négatifs, un
+    quart d'AnuraSet). Écartés : ceux où une espèce est signalée sans chant daté (13 sur
+    1 612) : leurs fenêtres passeraient pour négatives à tort."""
+    keys = recordings["path"].map(file_key)
+    keep = keys.isin(set(calls["file_key"]))
+    if weak_labels is not None and Path(weak_labels).exists():
+        weak = pd.read_csv(weak_labels)
+        species = [c for c in weak.columns if c.startswith("SPECIES_")]
+        empty = weak.loc[weak[species].sum(axis=1) == 0, "AUDIO_FILE_ID"].str.lower()
+        keep |= keys.isin(set(empty))
+    return recordings[keep.to_numpy()]
+
+
 def run_anuraset_campaign(
     con: sqlite3.Connection,
     cfg: dict,

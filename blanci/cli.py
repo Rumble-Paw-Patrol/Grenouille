@@ -1621,13 +1621,18 @@ def anuraset_campaign(
     if chosen.empty:
         raise typer.BadParameter("aucune espèce sur deux sites avec assez de chants")
     typer.echo("2. espèces : " + ", ".join(chosen["species"]))
+    from blanci.anuraset import campaign_recordings
+
+    weak = acfg.get("weak_labels")
+    wanted = campaign_recordings(select_recordings(con), calls, Path(weak) if weak else None)
+    typer.echo(f"   {len(wanted)} enregistrements à encoder (chants datés ou sans espèce)")
     encoder_ids = []
     for name in _split(encoders):
         model = get_encoder(name, cfg, upstream_chain(cfg, "none"))
         done = embed_recordings(
             con,
             model,
-            select_recordings(con),
+            wanted,
             config_path(cfg, "raw"),
             config_path(cfg, "embeddings"),
             overlap=overlap_from_cfg(cfg),

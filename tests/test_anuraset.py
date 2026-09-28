@@ -227,3 +227,25 @@ def test_campaign_ranks_encoders_then_heads_one_site_out(acfg, tmp_path):
     text = path.read_text(encoding="utf-8")
     assert "ADEMAR" in text and "site tenu à l'écart" in text
     assert isinstance(out["encoders"], pd.DataFrame) and len(out["encoders"]) == 1
+
+
+def test_campaign_keeps_dated_calls_and_true_negatives_only(tmp_path):
+    import pandas as pd
+
+    from blanci.anuraset import campaign_recordings
+
+    recordings = pd.DataFrame(
+        {"path": [f"anuraset/S/{k}.wav" for k in ("INCT4_A", "INCT4_B", "INCT4_C", "INCT4_D")]}
+    )
+    calls = pd.DataFrame({"file_key": ["inct4_a"], "species": ["DENMIN"]})
+    weak = tmp_path / "weak.csv"
+    pd.DataFrame(
+        {
+            "AUDIO_FILE_ID": ["INCT4_A", "INCT4_B", "INCT4_C", "INCT4_D"],
+            "SPECIES_DENMIN": [1, 0, 1, 0],  # C : espèce signalée sans chant daté
+            "SPECIES_BOAFAB": [0, 0, 0, 1],  # D : idem
+        }
+    ).to_csv(weak, index=False)
+    kept = campaign_recordings(recordings, calls, weak)["path"].str.extract(r"(INCT4_\w)")[0]
+    assert kept.tolist() == ["INCT4_A", "INCT4_B"]
+    assert len(campaign_recordings(recordings, calls)) == 1  # sans labels faibles
