@@ -1554,6 +1554,220 @@ PROTOCOLE = Tableau(
     ],
 )
 
+ANURASET = Tableau(
+    "anuraset",
+    "Campagne AnuraSet du 28/09/2026 (perch_v2)",
+    "Chaque tête est apprise sur les autres sites et jugée sur un site qu'elle n'a jamais vu (un"
+    " pli par site). Fenêtres de 5 s jointives, 20 négatifs par positif et par site, C choisi"
+    " dans chaque pli (DECISIONS n° 137). D'autres anoures que A. blanci : indicateur,"
+    " pas verdict.",
+    [
+        Section(
+            [
+                Colonne("Espèce", 0.8, code=True),
+                Colonne("Pourquoi elle", 2.2),
+                Colonne("Fenêtres positives par site", 2.2),
+                Colonne("Fréquence dominante", 0.9),
+            ],
+            [
+                [
+                    "DENMIN",
+                    "l'analogue le plus proche d'A. blanci (aigu, bref)",
+                    "INCT17 1 606 · INCT20955 195 · INCT4 5",
+                    "5,3 kHz",
+                ],
+                ["BOAFAB", "deux sites équilibrés", "INCT20955 1 043 · INCT4 760", "1,6 kHz"],
+                ["PHYCUV", "trois sites", "INCT17 86 · INCT20955 366 · INCT41 453", "6,3 kHz"],
+                [
+                    "PITAZU",
+                    "note de 0,3 s ; un site presque vide : amorçage",
+                    "INCT17 1 386 · INCT41 29",
+                    "2,1 kHz",
+                ],
+            ],
+            titre="Espèces (choisies parmi les 5 présentes sur au moins 2 sites)",
+        ),
+        Section(
+            [
+                Colonne("Tête", 1.3, code=True),
+                Colonne("DENMIN", 1.0),
+                Colonne("BOAFAB", 1.0),
+                Colonne("PHYCUV", 1.0),
+                Colonne("PITAZU", 1.0),
+                Colonne("Rang moyen", 0.7),
+            ],
+            [
+                [
+                    "logistic+R18=64",
+                    "0,91 · 0,67",
+                    "0,96 · 0,96",
+                    "0,88 · 0,88",
+                    C("0,65 · 0,61", "dur"),
+                    "3,8",
+                ],
+                [
+                    C("logistic", "ref"),
+                    C("0,91 · 0,67", "ref"),
+                    C("0,96 · 0,96", "ref"),
+                    C("0,87 · 0,87", "ref"),
+                    C("0,71 · 0,52", "ref"),
+                    "4,0",
+                ],
+                [
+                    "logistic+R37=glmm",
+                    "0,89 · 0,63",
+                    "0,96 · 0,96",
+                    "0,87 · 0,87",
+                    C("0,75 · 0,55", "bon"),
+                    "5,0",
+                ],
+                ["loss:focal", "0,91 · 0,67", "0,96 · 0,96", "0,87 · 0,87", "0,71 · 0,52", "5,0"],
+                [
+                    "logistic+R37",
+                    "0,90 · 0,62",
+                    "0,96 · 0,96",
+                    "0,87 · 0,87",
+                    C("0,76 · 0,55", "bon"),
+                    "5,8",
+                ],
+                [
+                    "logistic+R13",
+                    C("0,87 · 0,57", "dur"),
+                    "0,97 · 0,96",
+                    "0,87 · 0,88",
+                    C("0,62 · 0,44", "dur"),
+                    "6,2",
+                ],
+                [
+                    "lda_shrunk",
+                    "0,91 · 0,65",
+                    "0,95 · 0,95",
+                    "0,88 · 0,85",
+                    C("0,52 · 0,36", "dur"),
+                    "7,8",
+                ],
+                [
+                    "logistic+R21",
+                    C("0,89 · 0,66", "dur"),
+                    "0,95 · 0,96",
+                    "0,87 · 0,88",
+                    C("0,68 · 0,53", "dur"),
+                    "8,0",
+                ],
+                [
+                    "dann",
+                    "0,91 · 0,62",
+                    "0,96 · 0,97",
+                    "0,86 · 0,85",
+                    C("0,59 · 0,45", "dur"),
+                    "8,0",
+                ],
+                [
+                    "logistic+R19+R37",
+                    C("0,79 · 0,63", "dur"),
+                    "0,95 · 0,96",
+                    "0,88 · 0,87",
+                    C("0,68 · 0,55", "dur"),
+                    "8,5",
+                ],
+                [
+                    "logistic+R19",
+                    C("0,59 · 0,69", "dur"),
+                    "0,95 · 0,96",
+                    "0,88 · 0,87",
+                    C("0,51 · 0,56", "dur"),
+                    "8,8",
+                ],
+                [
+                    "logistic+R20",
+                    C("0,31 · 0,67", "dur"),
+                    "0,96 · 0,96",
+                    "0,87 · 0,87",
+                    C("0,45 · 0,58", "dur"),
+                    "9,8",
+                ],
+                [
+                    "prototype",
+                    C("0,27 · 0,59", "dur"),
+                    "0,95 · 0,97",
+                    C("0,68 · 0,74", "dur"),
+                    C("0,64 · 0,43", "dur"),
+                    "11,8",
+                ],
+                [
+                    "knn:k=5",
+                    C("0,44 · 0,62", "dur"),
+                    "0,95 · 0,95",
+                    C("0,57 · 0,68", "dur"),
+                    C("0,31 · 0,34", "dur"),
+                    "12,8",
+                ],
+            ],
+            titre="Têtes : AP poolée · AP moyenne par site tenu à l'écart (fenêtres)",
+        ),
+        Section(
+            [
+                Colonne("Tête", 1.3, code=True),
+                Colonne("DENMIN", 1.0),
+                Colonne("BOAFAB", 1.0),
+                Colonne("PHYCUV", 1.0),
+                Colonne("PITAZU", 1.0),
+            ],
+            [
+                [
+                    "logistic",
+                    C("0,91 → 0,86", "dur"),
+                    "0,96 → 0,96",
+                    C("0,87 → 0,85", "dur"),
+                    "0,71 → 0,70",
+                ],
+                [
+                    "logistic+R18=64",
+                    "0,91 → 0,91",
+                    "0,96 → 0,96",
+                    C("0,88 → 0,85", "dur"),
+                    "0,65 → 0,64",
+                ],
+                [
+                    "logistic+R19",
+                    C("0,59 → 0,23", "dur"),
+                    "0,95 → 0,95",
+                    "0,88 → 0,87",
+                    "0,51 → 0,50",
+                ],
+                [
+                    "logistic+R20",
+                    C("0,31 → 0,24", "dur"),
+                    "0,96 → 0,96",
+                    "0,87 → 0,87",
+                    "0,45 → 0,44",
+                ],
+                [
+                    "logistic+R37",
+                    C("0,90 → 0,60", "dur"),
+                    "0,96 → 0,96",
+                    "0,87 → 0,85",
+                    "0,76 → 0,74",
+                ],
+            ],
+            titre="Recalibration par pli (fold_calibration: platt) : AP poolée brute → recalibrée",
+        ),
+    ],
+    [
+        "Couleurs : vert = meilleure que la logistique (écart apparié, bootstrap par"
+        " enregistrement, intervalle hors de 0) ; rouge = pire de plus de 0,02.",
+        "AP poolée : tous les sites mis bout à bout (un seul seuil pour tous). AP par site : le"
+        " classement dans chaque site tenu à l'écart, moyenné sur les sites qui ont l'espèce.",
+        "BOAFAB est saturée (≈ 0,96 partout) : elle ne départage rien. DENMIN sur INCT20955 :"
+        " AP ≈ 0,14 pour toutes les têtes, le cas dur (appris surtout sur INCT17).",
+        "R19, R20 : meilleures site par site (DENMIN, PITAZU) mais l'AP poolée s'effondre : le"
+        " centrage par site retire une part du chant là où l'espèce est très abondante"
+        " (DENMIN dans ~38 % des fenêtres d'INCT17). A. blanci est rare : à juger sur les"
+        " données ONF.",
+    ],
+)
+
+
 TABLEAUX = [
     PROTOCOLE,
     ENCODEURS,
@@ -1567,6 +1781,7 @@ TABLEAUX = [
     NEGATIFS,
     BASELINES,
     ENSEMBLES,
+    ANURASET,
 ]
 
 

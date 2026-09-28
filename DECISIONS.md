@@ -1470,3 +1470,47 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      tombait à 0,94 et celle de R37 à 0,81 alors que chaque site était parfaitement classé,
      et R19 la ramenait à 1 : l'effet d'échelle entre plis du n° 133, ici entre sites. Rien
      sur les vraies espèces.
+
+137. **Campagne AnuraSet du 28/09 : premiers résultats réels (perch_v2).** Réseau ouvert par
+     Léonard (zenodo.org, huggingface.co, kaggle.com). Données : `raw_data.zip` (7,2 Go,
+     téléchargé par 12 plages en parallèle), 1 612 enregistrements d'une minute, 4 sites.
+     Encodés : les 1 206 aux chants datés et les 393 sans aucune espèce (vrais négatifs,
+     labels faibles) ; 13 écartés (espèce signalée sans chant daté). perch_v2 via bacpipe
+     installé sans ses dépendances lourdes (ONNX, ni TensorFlow ni CUDA) ; fenêtres de 5 s
+     jointives (`encoders.overlap: 0` dans `config/anuraset.yaml`) : 19 080 fenêtres en 37 min
+     (15,5 fenêtres/s, 4 cœurs).
+     Espèces : les 5 présentes sur au moins 2 sites sont DENMIN, LEPLAT, PITAZU, BOAFAB,
+     PHYCUV. Retenues : DENMIN (5,3 kHz, 3 sites, l'analogue le plus proche d'A. blanci),
+     BOAFAB (2 sites équilibrés), PHYCUV (3 sites), PITAZU (note de 0,3 s ; 1 386 fenêtres
+     positives à INCT17 contre 29 à INCT41 : un test d'amorçage). LEPLAT (1 270 contre 79)
+     laissée pour une prochaine passe. Aucune n'est dans la bande 3–6 kHz avec une note
+     ≤ 0,3 s : `choose_species` aurait pris PITAZU, DENMIN, PHYCUV.
+     Protocole : un pli par site, 20 négatifs par positif et par site, C sur la grille
+     complète dans chaque pli, 14 têtes (`CAMPAIGN_HEADS`), 4 espèces en parallèle (5 à
+     15 min chacune). Rapport complet : `documentation/anuraset/`, tableau
+     `documentation/tableaux/anuraset.png`.
+     Ce que ça dit (indicateur, pas verdict ; A. blanci n'y est pas) :
+     - la logistique domine les têtes par similarité d'un site à l'autre : prototype et
+       knn:k=5 s'effondrent sur DENMIN (AP poolée 0,27 et 0,44 contre 0,91) et PHYCUV
+       (0,68 et 0,57 contre 0,87) ; amorcer un site par similarité à quelques exemples
+       d'ailleurs ne suffit pas ;
+     - R37 (et R37=glmm, identique) : seule régularisation significativement meilleure, sur
+       PITAZU (+0,045 d'AP poolée), l'espèce au site presque vide ; −0,01 à −0,02 ailleurs ;
+     - R18=64 (ACP) : égale ailleurs, et la meilleure sur le site presque vide de PITAZU
+       (AP 0,53 contre 0,28 à INCT41) ; l'ACP n'a pas jeté le chant ici ;
+     - R19, R20 : meilleures site par site sur DENMIN et PITAZU (AP par site 0,69 et 0,67
+       contre 0,67 ; 0,56 et 0,58 contre 0,52) mais l'AP poolée s'effondre (DENMIN 0,59 et
+       0,31 contre 0,91). Mécanisme probable : le centrage par site retire une part du chant
+       là où l'espèce est très abondante (DENMIN dans ~38 % des fenêtres d'INCT17). A. blanci
+       est rare dans le stock : l'hypothèse de Léonard (R19/R20 pour amorcer un site) reste
+       à juger sur les données ONF, où ce mécanisme devrait peser bien moins ;
+     - R13, R21, DANN, lda_shrunk, loss:focal : aucun gain ; R13 perd (DENMIN −0,04,
+       PITAZU −0,09) ;
+     - BOAFAB est saturée (≈ 0,96 partout) ; DENMIN sur INCT20955 reste à ≈ 0,14 pour toutes
+       les têtes : le cas dur, où rien ne généralise.
+     Recalibration par pli (n° 135) sur 5 têtes : elle **dégrade** l'AP poolée (DENMIN :
+     logistique 0,91 → 0,86, R37 0,90 → 0,60, R19 0,59 → 0,23). Les plis internes sont ici
+     d'autres sites : la calibration apprise sur eux se transpose mal au site testé, et elle
+     efface des écarts de niveau entre sites qui étaient justes (un site où l'espèce abonde
+     mérite des scores plus hauts). Décision provisoire : `fold_calibration: none` reste le
+     défaut ; l'AP par site (`ap_fold_mean`) est le complément utile.
