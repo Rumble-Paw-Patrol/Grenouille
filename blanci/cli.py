@@ -1635,7 +1635,11 @@ def anuraset_campaign(
     from blanci.anuraset import campaign_recordings
 
     weak = acfg.get("weak_labels")
-    wanted = campaign_recordings(select_recordings(con), calls, Path(weak) if weak else None)
+    # Aucun drapeau QC n'écarte un enregistrement AnuraSet : jeu déjà trié par ses auteurs, et
+    # la durée attendue (60 s) est celle des Song Meter ONF ; 9 fichiers d'INCT20955 durent
+    # 26 à 57 s (DECISIONS n° 141).
+    everything = select_recordings(con, exclude_flags=())
+    wanted = campaign_recordings(everything, calls, Path(weak) if weak else None)
     typer.echo(f"   {len(wanted)} enregistrements à encoder (chants datés ou sans espèce)")
     encoder_ids = []
     for name in _split(encoders):

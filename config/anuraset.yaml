@@ -32,6 +32,8 @@ qc:
   # Pas de contrôle audio : les seuils sont calibrés sur les Song Meter ONF, et les positifs
   # d'AnuraSet ne sont pas dans la table labels, donc pas protégés d'une exclusion.
   during_embed: false
+  # Enregistrements d'une minute ; les 9 plus courts d'INCT20955 (26–57 s) sont signalés
+  # duration_off mais encodés quand même : la campagne n'écarte aucun drapeau (n° 141).
   expected_duration_s: 60.0            # enregistrements d'une minute
   duration_tolerance_s: 1.0
   campaign_gap_days: 100000            # pas de notion de relevé ici

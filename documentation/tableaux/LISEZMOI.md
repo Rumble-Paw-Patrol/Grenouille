@@ -17,8 +17,6 @@ Xcode (DECISIONS n° 118). Cliquer sur l'image dans le navigateur de fichiers d'
 - `negatifs-apparies.png` : les stratégies de négatifs présumés et leur contamination.
 - `baselines.png` : les baselines sans encodeur.
 - `ensembles.png` : les trois façons de combiner des modèles.
-- `anuraset.png` : la campagne AnuraSet du 28/09 (perch_v2, 4 espèces, 14 têtes, un pli par
-  site) et l'essai de la recalibration par pli.
 
 Une seule source : `generer.py` (données et rendu). Pour ajouter un benchmark ou corriger un
 tableau, modifier la liste `TABLEAUX` puis :
@@ -27,3 +25,6 @@ tableau, modifier la liste `TABLEAUX` puis :
 
 Rendu avec Pillow et les polices fournies par matplotlib : rien à télécharger. Images en
 palette réduite, 20 à 130 Ko chacune (~600 Ko en tout).
+
+Les rapports de benchmark complets (figures, données, hypothèses) sont dans
+`documentation/benchmarks/`.

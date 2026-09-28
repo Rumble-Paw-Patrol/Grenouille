@@ -1565,3 +1565,27 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      déploierait (choisi sur tous les scores). Le rappel par site du benchmark complet suit
      le même seuil. Sans plis (baselines, sources externes), seul l'oracle se calcule : il
      reste en `recall@p…`. Les rappels publiés avant ce numéro sont optimistes.
+
+141. **Campagne AnuraSet refaite après l'audit ; premier rapport de benchmark.** Branche
+     `corrections-audit` fusionnée (n° 138–140), 803 tests réussis (le seul échec, le jeu gelé,
+     tient à l'exécution en root). Les 9 enregistrements d'INCT20955 de 26 à 57 s, écartés par
+     le drapeau `duration_off` (durée attendue 60 s, celle des Song Meter ONF), sont réintégrés
+     sur décision de Léonard : la campagne n'écarte plus aucun drapeau QC sur AnuraSet
+     (`select_recordings(exclude_flags=())`) ; 86 fenêtres de plus, 1 599 enregistrements,
+     19 166 fenêtres. Relance sur le stock perch_v2 existant, 5 espèces (LEPLAT ajoutée),
+     14 têtes, un pli par site. Rapport complet, figures et données :
+     `documentation/benchmarks/2026-09-28_anuraset_perch_v2/` ; modèle réutilisable :
+     `documentation/benchmarks/MODELE_RAPPORT.md`. Ce qui change par rapport au n° 137 :
+     - positifs : DENMIN 1 806 → 2 002, PITAZU 1 415 → 1 475, PHYCUV 905 → 984 ; AP poolée
+       moyenne sur les têtes +0,04 (PITAZU), +0,01 ailleurs ; haut et bas du classement
+       inchangés ;
+     - R37 (et R37=glmm) sur PITAZU : +0,05, survit à Holm, et meilleure sur ses deux sites
+       tenus à l'écart ; neutre ailleurs ;
+     - R19, R20 : l'effondrement de l'AP poolée (DENMIN, PITAZU, LEPLAT) suit la part de
+       fenêtres positives du site (26 à 41 %) ; rien sur PHYCUV (2 à 12 %). Hypothèse : le
+       centrage retire le chant là où l'espèce est partout ; à vérifier sur les données ONF,
+       où A. blanci est rare ;
+     - rappel à précision 0,5 au seuil choisi sur les autres sites (n° 140) : PITAZU 0,01
+       contre 0,92 au seuil choisi sur place ; un nouveau site demandera son propre seuil ;
+     - recalibration par pli : jamais meilleure (DENMIN logistique 0,91 → 0,86) ; défaut
+       `none` confirmé.
