@@ -1571,6 +1571,82 @@ def anuraset_profile(
     _write_csv(profile, config_path(cfg, "reports") / "anuraset_especes.csv", "profil")
 
 
+@app.command("anuraset-campaign")
+def anuraset_campaign(
+    ctx: typer.Context,
+    encoders: Annotated[
+        str, typer.Option(help="Encodeurs à passer (noms de encoders.models), ex. perch_v2.")
+    ] = "perch_v2",
+    species: Annotated[
+        str | None, typer.Option(help="Codes AnuraSet ; défaut : anuraset.species, sinon choisis.")
+    ] = None,
+    n_species: Annotated[int, typer.Option(help="Espèces choisies si aucune n'est fixée.")] = 3,
+    methods: Annotated[
+        str | None, typer.Option(help="Têtes (défaut : anuraset.CAMPAIGN_HEADS).")
+    ] = None,
+) -> None:
+    """Campagne AnuraSet d'un seul tenant (DECISIONS n° 136) : extraction et inventaire,
+    profil des espèces et choix (note brève en 3–6 kHz d'abord), embeddings, encodeurs puis
+    têtes et régularisations, un pli par site. Reprenable : ce qui est fait est sauté."""
+    from blanci.anuraset import (
+        choose_species,
+        dominant_frequencies,
+        prepare,
+        read_strong_labels,
+        run_anuraset_campaign,
+        species_profile,
+        write_campaign_report,
+    )
+
+    cfg = _cfg(ctx)
+    if "anuraset" not in cfg:
+        raise typer.BadParameter("lancer avec --config config/anuraset.yaml")
+    acfg = cfg["anuraset"]
+    con = connect(config_path(cfg, "db"))
+    report = prepare(con, cfg)
+    typer.echo(f"1. inventaire : {report['extracted']} extraits, {report['added']} ajoutés")
+    calls = read_strong_labels(Path(acfg["labels"]))
+    profile = species_profile(calls, acfg["max_call_s"])
+    recordings = pd.read_sql_query("SELECT path FROM recordings", con)
+    freqs = dominant_frequencies(
+        calls, config_path(cfg, "raw"), recordings, acfg["profile_per_species"]
+    )
+    profile = profile.merge(freqs, left_on="species", right_index=True, how="left")
+    _write_csv(profile, config_path(cfg, "reports") / "anuraset_especes.csv", "profil")
+    fixed = _split(species) or list(acfg.get("species") or [])
+    if fixed:
+        chosen = profile[profile["species"].isin(fixed)].assign(criterion="fixée")
+    else:
+        chosen = choose_species(profile, n_species)
+    if chosen.empty:
+        raise typer.BadParameter("aucune espèce sur deux sites avec assez de chants")
+    typer.echo("2. espèces : " + ", ".join(chosen["species"]))
+    encoder_ids = []
+    for name in _split(encoders):
+        model = get_encoder(name, cfg, upstream_chain(cfg, "none"))
+        done = embed_recordings(
+            con,
+            model,
+            select_recordings(con),
+            config_path(cfg, "raw"),
+            config_path(cfg, "embeddings"),
+            overlap=overlap_from_cfg(cfg),
+            channel=cfg["audio"]["channel"],
+            signal_cfg=cfg["signal"],
+        )
+        typer.echo(
+            f"3. {done.encoder_id} : {done.recordings} encodés, {done.skipped} déjà faits "
+            f"({done.windows_per_s:.1f} fenêtres/s)"
+        )
+        encoder_ids.append(done.encoder_id)
+    out = run_anuraset_campaign(con, cfg, encoder_ids, calls, chosen, _split(methods) or None)
+    path = write_campaign_report(out, config_path(cfg, "reports"))
+    typer.echo(f"4. meilleur encodeur : {out['best_encoder']}")
+    for r in out["head_ranking"].to_dict("records"):
+        typer.echo(f"  {r['head']:<22} rang moyen {r['mean_rank']:.1f}  AP {r['ap']:.3f}")
+    typer.echo(f"rapport : {path}")
+
+
 @app.command("anuraset-benchmark")
 def anuraset_benchmark(
     ctx: typer.Context,

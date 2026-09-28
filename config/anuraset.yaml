@@ -4,6 +4,8 @@
 #   uv run blanci --config config/anuraset.yaml embed --encoder perch_v2
 #   uv run blanci --config config/anuraset.yaml anuraset-benchmark --encoders perch_v2-bacpipe1.3.5
 #   uv run blanci --config config/anuraset.yaml anuraset-heads --encoder perch_v2-bacpipe1.3.5
+# Ou tout d'un coup (espèces choisies, encodage, encodeurs, têtes ; DECISIONS n° 136) :
+#   uv run blanci --config config/anuraset.yaml anuraset-campaign --encoders perch_v2
 paths:
   raw: data/external/anuraset          # l'archive est extraite sous anuraset/<site>/
   db: data/db/anuraset.sqlite

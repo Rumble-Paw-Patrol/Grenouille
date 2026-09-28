@@ -177,3 +177,53 @@ def test_heads_are_judged_one_site_out(acfg, tmp_path):
     assert not out["comparisons"].empty and not out["selection"].empty
     path = write_anuraset_heads_report(out, "toy-1", tmp_path / "reports")
     assert "tenu à l'écart" in path.read_text(encoding="utf-8")
+
+
+# --- Campagne d'un seul tenant (DECISIONS n° 136) -----------------------------------------------
+
+
+def test_choose_species_starts_close_to_blanci_then_widens():
+    import pandas as pd
+
+    from blanci.anuraset import choose_species
+
+    profile = pd.DataFrame(
+        {
+            "species": ["PROCHE", "LARGE", "GRAVE", "UNSITE", "RARE"],
+            "n_calls": [400, 200, 5000, 9000, 50],
+            "n_sites": [2, 3, 4, 1, 3],
+            "duration_median_s": [0.2, 0.4, 0.8, 0.1, 0.1],
+            "dominant_hz": [4500.0, 2500.0, 800.0, 4000.0, 4000.0],
+        }
+    )
+    chosen = choose_species(profile, n=3)
+    assert chosen["species"].tolist() == ["PROCHE", "LARGE", "GRAVE"]
+    assert chosen["criterion"].str.startswith(("proche", "élargi", "multi")).all()
+    assert choose_species(profile, n=1)["species"].tolist() == ["PROCHE"]
+    no_audio = choose_species(profile.drop(columns="dominant_hz"), n=3)
+    assert no_audio["species"].tolist() == ["GRAVE", "LARGE", "PROCHE"]  # sites, puis chants
+
+
+def test_campaign_ranks_encoders_then_heads_one_site_out(acfg, tmp_path):
+    import pandas as pd
+
+    from blanci.anuraset import run_anuraset_campaign, write_campaign_report
+    from blanci.embed import embed_recordings, select_recordings
+    from tests.test_cli_pipeline import ToyEncoder
+
+    con = connect(acfg["paths"]["db"])
+    prepare(con, acfg)
+    embed_recordings(
+        con, ToyEncoder(), select_recordings(con), acfg["paths"]["raw"], tmp_path / "emb"
+    )
+    calls = read_strong_labels(acfg["anuraset"]["labels"])
+    species = species_profile(calls).query("species == 'ADEMAR'").assign(criterion="fixée")
+    methods = ["logistic", "prototype", "logistic+R19", "logistic+R37=glmm"]
+    out = run_anuraset_campaign(con, acfg, ["toy-1"], calls, species, methods)
+    assert out["best_encoder"] == "toy-1"
+    assert set(out["head_ranking"]["head"]) == set(methods)
+    assert "ap_fold_mean" in out["head_ranking"]
+    path = write_campaign_report(out, tmp_path / "reports")
+    text = path.read_text(encoding="utf-8")
+    assert "ADEMAR" in text and "site tenu à l'écart" in text
+    assert isinstance(out["encoders"], pd.DataFrame) and len(out["encoders"]) == 1

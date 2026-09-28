@@ -382,7 +382,12 @@ def run_anuraset_heads(
                 )
         if reference in scores:
             comparisons.append(
-                compare_to_reference(scores, reference, y, recordings, cfg).assign(species=sp)
+                compare_to_reference(scores, reference, y, recordings, cfg).assign(
+                    species=sp, level="recording"
+                )
+            )
+            comparisons.append(
+                window_comparisons(scores, reference, y, recordings, cfg).assign(species=sp)
             )
         if len(scores) > 1:
             chosen = selection_estimate(scores, y, fold_ids(len(y), folds), recordings)
@@ -393,6 +398,35 @@ def run_anuraset_heads(
         "comparisons": pd.concat(comparisons, ignore_index=True) if comparisons else pd.DataFrame(),
         "selection": pd.DataFrame(selections),
     }
+
+
+def window_comparisons(
+    scores: dict[str, np.ndarray],
+    reference: str,
+    y: np.ndarray,
+    recordings: np.ndarray,
+    cfg: dict,
+) -> pd.DataFrame:
+    """Chaque tête contre la référence au niveau **fenêtre**, bootstrap apparié qui tire des
+    enregistrements entiers. Sur AnuraSet, une espèce commune chante dans presque chaque
+    enregistrement d'une minute : l'AP par enregistrement n'y est plus définie, celle par
+    fenêtre si (n° 136)."""
+    from blanci.evaluate import paired_bootstrap
+
+    rows = []
+    for method, values in scores.items():
+        if method == reference:
+            continue
+        result = paired_bootstrap(
+            y,
+            values,
+            scores[reference],
+            recordings,
+            n_boot=cfg["benchmark"]["n_boot"],
+            seed=cfg["head"]["seed"],
+        )
+        rows.append({"head": method, "reference": reference, **result, "level": "window"})
+    return pd.DataFrame(rows)
 
 
 def write_anuraset_heads_report(out: dict, encoder_id: str, reports_dir: Path) -> Path:
@@ -527,5 +561,169 @@ def write_anuraset_report(
             "",
         ]
     path = reports_dir / "anuraset_benchmark.md"
+    path.write_text("\n".join(text), encoding="utf-8")
+    return path
+
+
+# --- Campagne d'un seul tenant (28/09) -----------------------------------------------------------
+
+# Têtes de la campagne, par ordre de priorité (DECISIONS n° 136). Chacune répond à une question
+# sur la généralisation d'un site à l'autre ; toutes sont jugées sur un site tenu à l'écart.
+CAMPAIGN_HEADS = [
+    "logistic",  # référence
+    "prototype",  # amorcer un site avec quelques exemples, sans apprentissage
+    "knn:k=5",
+    "logistic+R19",  # fond du site retiré par le stock non annoté (amorçage d'un site)
+    "logistic+R20",
+    "logistic+R21",  # directions du site effacées
+    "dann",  # le même, appris
+    "logistic+R37",  # biais par site, σ fixé
+    "logistic+R37=glmm",  # biais par site, σ estimé (GLMM)
+    "logistic+R19+R37",
+    "logistic+R13",  # chaque site pèse autant
+    "loss:focal",  # déséquilibre des classes
+    "logistic+R18=64",  # ACP : jette-t-elle le chant ?
+    "lda_shrunk",
+]
+
+# Choix des espèces, du plus strict au plus large : on descend d'un cran tant qu'il manque
+# des espèces. (étiquette, bande de fréquence dominante en Hz ou None, durée médiane max en s,
+# chants min, sites min)
+SPECIES_LEVELS = [
+    ("proche d'A. blanci : note ≤ 0,3 s, 3–6 kHz, ≥ 300 chants", (3000.0, 6000.0), 0.3, 300, 2),
+    ("élargi : note ≤ 0,5 s, 2–7 kHz, ≥ 150 chants", (2000.0, 7000.0), 0.5, 150, 2),
+    ("multi-sites : note ≤ 1 s, ≥ 100 chants, fréquence libre", None, 1.0, 100, 2),
+]
+
+
+def choose_species(profile: pd.DataFrame, n: int = 3) -> pd.DataFrame:
+    """Jusqu'à `n` espèces pour la campagne, par niveaux (`SPECIES_LEVELS`) : d'abord celles
+    qui ressemblent à A. blanci (note brève en 3–6 kHz), puis on élargit. Toujours au moins
+    deux sites : sans cela, un pli par site n'a pas de sens. Colonne `criterion` : le niveau
+    qui a retenu l'espèce."""
+    chosen: list[pd.DataFrame] = []
+    taken: set[str] = set()
+    for label, band, max_duration, min_calls, min_sites in SPECIES_LEVELS:
+        ok = (
+            (profile["duration_median_s"] <= max_duration)
+            & (profile["n_calls"] >= min_calls)
+            & (profile["n_sites"] >= min_sites)
+            & ~profile["species"].isin(taken)
+        )
+        if band is not None:
+            if "dominant_hz" not in profile:
+                continue
+            ok &= profile["dominant_hz"].between(*band)
+        found = profile[ok].sort_values(["n_sites", "n_calls"], ascending=False)
+        found = found.head(n - len(taken)).assign(criterion=label)
+        chosen.append(found)
+        taken |= set(found["species"])
+        if len(taken) >= n:
+            break
+    return pd.concat(chosen, ignore_index=True) if chosen else profile.head(0)
+
+
+def rank_encoders(results: pd.DataFrame, level: str = "window") -> pd.DataFrame:
+    """Encodeurs classés par l'AP moyenne de la sonde logistique sur les espèces (un pli par
+    site), avec l'AP moyenne par pli et le nombre d'espèces. Niveau fenêtre par défaut : une
+    espèce commune chante dans presque tous les enregistrements d'une minute, et l'AP par
+    enregistrement n'y est plus définie (répétition générale du n° 136)."""
+    part = results[(results["probe"] == "logistic") & (results["level"] == level)]
+    columns = {"ap": "mean"} | ({"ap_fold_mean": "mean"} if "ap_fold_mean" in part else {})
+    table = part.groupby("encoder_id").agg(columns | {"species": "nunique"})
+    return table.rename(columns={"species": "n_species"}).sort_values("ap", ascending=False)
+
+
+def rank_heads(table: pd.DataFrame, level: str = "window") -> pd.DataFrame:
+    """Têtes classées par leur AP moyenne sur les espèces (poolée et par site), avec leur rang
+    moyen : une tête qui gagne sur une espèce et s'effondre sur une autre descend."""
+    part = table[table["level"] == level].copy()
+    part["rank"] = part.groupby("species")["ap"].rank(ascending=False)
+    columns = {"ap": "mean", "rank": "mean"}
+    if "ap_fold_mean" in part:
+        columns["ap_fold_mean"] = "mean"
+    out = part.groupby("head").agg(columns).rename(columns={"rank": "mean_rank"})
+    return out.sort_values(["mean_rank", "ap"], ascending=[True, False]).reset_index()
+
+
+def run_anuraset_campaign(
+    con: sqlite3.Connection,
+    cfg: dict,
+    encoder_ids: list[str],
+    calls: pd.DataFrame,
+    species: pd.DataFrame,
+    methods: list[str] | None = None,
+) -> dict[str, Any]:
+    """Campagne AnuraSet (DECISIONS n° 136) : les encodeurs sur les espèces choisies (sonde
+    logistique et autres sondes du §3, un pli par site), puis toutes les têtes de
+    `CAMPAIGN_HEADS` sur le meilleur encodeur. `species` : sortie de `choose_species`."""
+    codes = list(species["species"])
+    results, comparisons = run_anuraset_benchmark(con, cfg, encoder_ids, codes, calls)
+    encoders = rank_encoders(results)
+    best = str(encoders.index[0])
+    heads = run_anuraset_heads(con, cfg, best, codes, calls, methods or CAMPAIGN_HEADS)
+    return {
+        "species": species,
+        "encoder_results": results,
+        "encoder_comparisons": comparisons,
+        "encoders": encoders.reset_index(),
+        "best_encoder": best,
+        "heads": heads,
+        "head_ranking": rank_heads(heads["table"]),
+    }
+
+
+def write_campaign_report(out: dict[str, Any], reports_dir: Path) -> Path:
+    """`anuraset_campagne.md` : espèces et pourquoi, encodeurs, têtes (classement moyen, AP par
+    site tenu à l'écart, écarts appariés à la logistique), et les rapports détaillés."""
+    from blanci.benchmark import to_markdown
+
+    reports_dir = Path(reports_dir)
+    write_anuraset_report(out["encoder_results"], out["encoder_comparisons"], reports_dir)
+    heads_path = write_anuraset_heads_report(out["heads"], out["best_encoder"], reports_dir)
+    species_cols = ["species", "criterion", "n_calls", "n_recordings", "n_sites"]
+    species_cols += ["duration_median_s", "dominant_hz"]
+    species = out["species"][[c for c in species_cols if c in out["species"]]]
+    text = [
+        "# Campagne AnuraSet",
+        "",
+        "Chaque modèle est appris sur les autres sites et jugé sur un site qu'il n'a jamais vu "
+        "(un pli par site) : c'est la généralisation d'un site à l'autre qu'on mesure. "
+        "Indicateur sur d'autres anoures que A. blanci, pas un verdict (DECISIONS n° 136).",
+        "",
+        "## Espèces",
+        "",
+        to_markdown(species),
+        "",
+        "## Encodeurs (sonde logistique, fenêtres, moyenne sur les espèces)",
+        "",
+        to_markdown(out["encoders"]),
+        "",
+        f"Meilleur : **{out['best_encoder']}** ; les têtes sont jugées sur ses embeddings.",
+        "",
+        "## Têtes : classement sur les espèces (fenêtres)",
+        "",
+        "Rang moyen (1 = la meilleure pour chaque espèce), AP poolée moyenne, AP moyenne par "
+        "site tenu à l'écart (`ap_fold_mean`).",
+        "",
+        to_markdown(out["head_ranking"]),
+        "",
+    ]
+    comparisons = out["heads"]["comparisons"]
+    if not comparisons.empty:
+        text += [
+            "## Écart apparié à la logistique (bootstrap par enregistrement)",
+            "",
+            "Une tête ne bat la logistique que si l'intervalle exclut 0.",
+            "",
+            to_markdown(comparisons),
+            "",
+        ]
+    sites = out["heads"]["sites"]
+    if not sites.empty:
+        pivot = sites.pivot_table(index=["species", "head"], columns="held_out_site", values="ap")
+        text += ["## AP sur chaque site tenu à l'écart", "", to_markdown(pivot.reset_index()), ""]
+    text += [f"Détails : `{heads_path.name}`, `anuraset_benchmark.md`.", ""]
+    path = reports_dir / "anuraset_campagne.md"
     path.write_text("\n".join(text), encoding="utf-8")
     return path

@@ -90,6 +90,7 @@ uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchma
 A="uv run blanci --config config/anuraset.yaml"
 $A anuraset-prepare && $A anuraset-profile            # extraction, inventaire, espèces
 $A embed --encoder perch_v2 && $A anuraset-benchmark --encoders perch_v2-bacpipe1.3.5
+$A anuraset-campaign --encoders perch_v2             # tout d'un coup : espèces, encodage, têtes (n° 136)
 
 # --- Détection (§1, §5) --------------------------------------------------
 uv run blanci train --encoder birdmae-1               # tête + seuil à précision ≥ 0,1

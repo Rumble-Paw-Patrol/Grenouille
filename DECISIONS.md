@@ -1435,3 +1435,38 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      écart d'échelle, et ne coûte, ailleurs, que le bruit de sa propre estimation. `blanci
      train` n'est pas touché (seuil sur les scores hors-pli bruts) : à reprendre si l'option
      est retenue.
+
+136. **Campagne AnuraSet d'un seul tenant : `blanci anuraset-campaign`.** Demande de Léonard
+     (28/09) : choisir les espèces, encoder, benchmarker, essayer les régularisations. Dans
+     cet environnement cloud, l'accès réseau est restreint : zenodo.org (les données
+     AnuraSet), huggingface.co et kaggle.com (les poids des encodeurs) sont refusés par le
+     proxy ; seuls PyPI et GitHub passent. Aucune donnée AnuraSet n'a donc pu être
+     téléchargée ici, et aucun résultat réel n'existe encore. Tout est prêt pour qu'une seule
+     commande fasse la campagne dès que les données sont là (cloud avec zenodo.org et
+     huggingface.co autorisés, ou un poste bien connecté) :
+         uv run blanci --config config/anuraset.yaml anuraset-campaign --encoders perch_v2
+     Étapes, reprenables : extraction et inventaire (`prepare`) ; profil des espèces et
+     fréquence dominante ; choix des espèces (`choose_species`, sauf `anuraset.species` ou
+     `--species`) par niveaux : d'abord note ≤ 0,3 s en 3–6 kHz avec ≥ 300 chants (proche
+     d'A. blanci), puis élargi (≤ 0,5 s, 2–7 kHz, ≥ 150 chants), puis multi-sites (≤ 1 s,
+     ≥ 100 chants) ; toujours ≥ 2 sites, classées par nombre de sites puis de chants ;
+     embeddings de chaque encodeur ; sondes du §3 par encodeur et espèce, encodeurs classés
+     par l'AP moyenne de la logistique (`rank_encoders`) ; sur le meilleur, les têtes de
+     `CAMPAIGN_HEADS`, par priorité : logistique (référence) ; prototype et knn:k=5
+     (amorcer avec quelques exemples) ; R19, R20 (fond du site retiré par le stock non
+     annoté : l'hypothèse de Léonard pour amorcer un site) ; R21 et dann (directions du site
+     effacées) ; R37, R37=glmm, R19+R37 (biais par site) ; R13, loss:focal (déséquilibre) ;
+     R18=64 (l'ACP jette-t-elle le chant ?) ; lda_shrunk. Toutes jugées un site à la fois ;
+     classement par rang moyen sur les espèces (`rank_heads`), AP poolée et AP moyenne par
+     site, écarts appariés à la logistique, AP de chaque site tenu à l'écart.
+     Rapport `anuraset_campagne.md` (et les rapports détaillés). Répétition générale sur un
+     AnuraSet simulé (4 sites × 6 enregistrements d'une minute, 3 espèces, fond propre à
+     chaque site, encodeur factice ; 1 à 2 min) : toute la chaîne tourne, les 14 têtes
+     comprises. Elle a trouvé un défaut : une espèce qui chante dans chaque enregistrement
+     d'une minute rend l'AP par enregistrement indéfinie (aucun enregistrement négatif) ; le
+     classement se fait donc au niveau fenêtre, et les écarts appariés à la logistique sont
+     aussi calculés par fenêtre (`window_comparisons`, bootstrap par enregistrement). Sur ce
+     jeu factice (trop facile : AP par site de 1 partout), l'AP poolée de la logistique
+     tombait à 0,94 et celle de R37 à 0,81 alors que chaque site était parfaitement classé,
+     et R19 la ramenait à 1 : l'effet d'échelle entre plis du n° 133, ici entre sites. Rien
+     sur les vraies espèces.
