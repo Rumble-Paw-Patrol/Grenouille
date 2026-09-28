@@ -269,7 +269,7 @@ def ingest(
             report.errors.append((rel, f"{type(exc).__name__}: {exc}"))
             continue
         if moved and str(row["site"] or "").lower() != site_of.get(stem, ""):
-            # Autre site : la copie d'un relevé précédent, pas un déplacement (DECISIONS n° 143).
+            # Autre site : la copie d'un relevé précédent, pas un déplacement (DECISIONS n° 144).
             report.duplicates.append((rel, by_stem[stem]))
             continue
         con.execute(sql, tuple(row.values()))

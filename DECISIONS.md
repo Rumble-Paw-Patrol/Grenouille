@@ -1566,7 +1566,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      le même seuil. Sans plis (baselines, sources externes), seul l'oracle se calcule : il
      reste en `recall@p…`. Les rappels publiés avant ce numéro sont optimistes.
 
-141. **Import des annotations et des détections : cellules vides, verdicts nuancés, bornes.**
+142. **Import des annotations et des détections : cellules vides, verdicts nuancés, bornes.**
      - Décalage vide (NaN) : `parse_offset` le refuse (« décalage illisible », ligne par
        ligne). Avant, NaN passait le contrôle de bornes (toute comparaison à NaN est fausse),
        puis l'INSERT (`offset_s NOT NULL`) faisait échouer tout l'import.
@@ -1579,7 +1579,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        score à virgule décimale lu (« 0,87 »), score illisible compté au lieu d'arrêter tout
        l'import. Côté labels, un score illisible de l'ancien modèle est gardé en texte.
 
-142. **Stocks d'embeddings : canal, checkpoint et transformations vérifiés à la reprise.** Le
+143. **Stocks d'embeddings : canal, checkpoint et transformations vérifiés à la reprise.** Le
      nom d'un stock ne dit ni le canal lu, ni le checkpoint bacpipe (`birdmae_base`), ni
      l'ordre du passe-bande ou le plancher du débruitage : reprendre `embed` avec un autre
      réglage ajoutait au même stock des embeddings qui ne se comparent pas aux siens, et
@@ -1590,7 +1590,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      dans l'étiquette quand ils ne sont pas à leur défaut (`bp3-7k-o6`, `dn1-f0.2`). Reste
      ouvert : la révision Hugging Face du checkpoint n'est pas figée.
 
-143. **Inventaire et configuration.**
+144. **Inventaire et configuration.**
      - Copie laissée d'un relevé : après un changement de `paths.raw`, un fichier du relevé 1
        vu sur le disque du relevé 2 passait pour « déplacé », et prenait le chemin et le
        **site** du relevé 2. Un déplacement garde désormais son site ; sous un autre site,
@@ -1603,7 +1603,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      - Section vide dans `local.yaml` (`qc:` suivi de commentaires) : la section par défaut
        est gardée, au lieu d'un None qui cassait plus loin.
 
-144. **Décisions et têtes.**
+145. **Décisions et têtes.**
      - `score --site B` ne remplace plus que les décisions des enregistrements scorés : celles
        du site A, même tête et même seuil, restent (et le CSV des points les garde).
      - `queue`, `fusion` et `score` prennent la même tête par défaut : l'adoptée par
@@ -1618,7 +1618,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        régulier », un biais vers A. blanci). Une fusion enregistrée avant ce numéro est à
        réapprendre.
 
-145. **Hygiène : dépendances de recherche, chemin ONNX testé, socle torch commun, tests.**
+146. **Hygiène : dépendances de recherche, chemin ONNX testé, socle torch commun, tests.**
      - Groupe `research` : `torch` (importé directement par attentive, R85, R66,
        `torch_training`, l'export) et `onnx` (< 1.18 : les suivantes veulent ml-dtypes ≥ 0.5,
        TensorFlow 2.15 le fige en 0.3). Sans `onnx`, `torch.onnx.export` échouait : l'export
@@ -1633,4 +1633,4 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        dans `conftest.py`. `test_attentive` : note de force 4 (écart ≥ 0,27 pour un seuil de
        0,1 sur quatre graines ; 0,13 à force 3).
      Laissés de côté : réécrire l'historique pour en retirer `pheno-blanci.pdf` (5,2 Mo)
-     forcerait tout clone à repartir de zéro ; la révision Hugging Face du checkpoint (n° 142).
+     forcerait tout clone à repartir de zéro ; la révision Hugging Face du checkpoint (n° 143).

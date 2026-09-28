@@ -1,4 +1,4 @@
-"""Configuration : sections vides du fichier utilisateur, chemins relatifs (DECISIONS n° 143)."""
+"""Configuration : sections vides du fichier utilisateur, chemins relatifs (DECISIONS n° 144)."""
 
 from pathlib import Path
 

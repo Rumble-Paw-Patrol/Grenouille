@@ -30,7 +30,7 @@ dev = [
 research = [
     "bacpipe>=1.3.5",
     # Têtes apprises en torch (attentive, gated, DANN, regularization.torch_training) et export
-    # ONNX : importé directement, pas seulement à travers bacpipe (DECISIONS n° 145).
+    # ONNX : importé directement, pas seulement à travers bacpipe (DECISIONS n° 146).
     "torch>=2.6,<3",
     # torch.onnx.export et la quantification int8 (encoders/export.py) en ont besoin. < 1.18 :
     # la 1.18 et suivantes veulent ml-dtypes ≥ 0.5, TensorFlow 2.15 le fige en 0.3.

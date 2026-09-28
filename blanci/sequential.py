@@ -374,7 +374,7 @@ class Upstream:
     def transform_tag(self) -> str:
         """Étiquette des transformations, ajoutée au nom de l'encodeur (« bp3-7k+dn1 »).
         Un ordre de filtre ou un plancher de débruitage hors défaut y entre aussi
-        (« bp3-7k-o6 », « dn1-f0.2 ») : deux réglages, deux stocks (DECISIONS n° 142)."""
+        (« bp3-7k-o6 », « dn1-f0.2 ») : deux réglages, deux stocks (DECISIONS n° 143)."""
         parts = []
         for name, opts in self.transforms.items():
             if name == "bandpass":

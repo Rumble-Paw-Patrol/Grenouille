@@ -105,7 +105,7 @@ def test_fusion_handles_missing_sequential_features():
 
 
 def test_a_missing_descriptor_counts_as_the_training_mean_not_zero():
-    """DECISIONS n° 144 : `ioi_cv` NaN (moins de deux notes) remplacé par 0 en unités brutes
+    """DECISIONS n° 145 : `ioi_cv` NaN (moins de deux notes) remplacé par 0 en unités brutes
     voulait dire « rythme parfaitement régulier ». Il vaut désormais la moyenne : sa
     contribution standardisée est nulle, en direct comme rechargé en JSON."""
     import json

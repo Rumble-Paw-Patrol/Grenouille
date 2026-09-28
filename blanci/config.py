@@ -39,7 +39,7 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
 def project_path(value: str | Path) -> Path:
     """Chemin de la configuration : un chemin relatif (« data/db/blanci.sqlite ») part de la
     racine du projet, pas du dossier d'où la commande est lancée ; lancée depuis D:\, elle
-    écrirait sinon sur le disque externe (DECISIONS n° 143)."""
+    écrirait sinon sur le disque externe (DECISIONS n° 144)."""
     path = Path(value)
     return path if path.is_absolute() else PROJECT_ROOT / path
 

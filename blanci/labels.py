@@ -354,7 +354,7 @@ VERDICT_NO = re.compile(
 
 # Verdict nuancé : « blanci ? », « blanci sans doute » (= probablement), « blanci pas sûr »,
 # « peut-être ». L'expert hésite : ni positif ni négatif ferme ; comme tout verdict illisible,
-# la ligne est signalée et l'import attend (DECISIONS n° 141), sauf si elle nomme un faux ami
+# la ligne est signalée et l'import attend (DECISIONS n° 142), sauf si elle nomme un faux ami
 # reconnu. « probablement pas blanci » reste un négatif « uncertain ».
 VERDICT_DOUBT = re.compile(
     r"^[\w' ]{0,30}\?+$|\bsans doute\b|\bpeut[ -]?etre\b|\bpas sure?\b|\bdouteu(?:x|se)\b|"

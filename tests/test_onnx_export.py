@@ -1,7 +1,7 @@
 """Chemin du livrable (§7, §13.6) : export torch → ONNX, `OnnxEncoder`, critère cosinus > 0,99.
 
 Un petit réseau forme d'onde → embedding tient lieu d'encodeur : ce qui se teste ici est le
-paquet (manifeste, empreinte, axes dynamiques, lots), pas un modèle réel (DECISIONS n° 145).
+paquet (manifeste, empreinte, axes dynamiques, lots), pas un modèle réel (DECISIONS n° 146).
 """
 
 import json

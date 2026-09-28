@@ -296,7 +296,7 @@ def test_verification_text_names_the_false_friend(tmp_path, cfg, ingested):
 )
 def test_unreadable_verdict_blocks_the_import(tmp_path, cfg, ingested, doubtful):
     """Un « peut-être » ne doit pas devenir un négatif en silence, ni un « blanci ? » un
-    positif ferme (DECISIONS n° 141)."""
+    positif ferme (DECISIONS n° 142)."""
     con, names = ingested
     sheet = write_sheet(
         tmp_path / "a.xlsx",
@@ -684,7 +684,7 @@ def test_moving_to_a_new_disk_keeps_labels(tmp_path, cfg):
 def test_a_leftover_copy_on_another_disk_is_not_moved_to_another_site(tmp_path, cfg):
     """Relevé 1 inventorié depuis le disque A ; le disque B ne porte que le relevé 2, dont les
     cartes SD contiennent encore les fichiers du relevé 1. Ces copies ne sont pas un
-    déplacement : le fichier garde son site, la copie est signalée en doublon (n° 143)."""
+    déplacement : le fichier garde son site, la copie est signalée en doublon (n° 144)."""
     disk_a, disk_b = tmp_path / "A", tmp_path / "B"
     write_recording(disk_a / "RELEVE 1" / "2LA04530" / f"{STEMS[0].upper()}.wav", seed=0)
     con = connect(cfg["paths"]["db"])

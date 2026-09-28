@@ -166,7 +166,7 @@ def embed_recordings(
 
     Un stock déjà encodé avec un autre canal, un autre checkpoint ou d'autres transformations
     en amont est refusé (`check_stock_identity`) : la reprise y ajouterait des embeddings qui
-    ne se comparent pas aux siens (DECISIONS n° 142)."""
+    ne se comparent pas aux siens (DECISIONS n° 143)."""
     eid = stock_id(encoder, overlap)
     if gates is not None and gates.gates:
         eid = f"{eid}+{gates.gate_tag()}"
@@ -316,7 +316,7 @@ def register_encoder(
         "window_s": encoder.window_s,
         "hop_s": hop_s,
         "overlap": round(overlap_of(encoder.window_s, hop_s), 4),
-        **stock_identity(encoder, channel),  # canal, checkpoint, transformations (n° 142)
+        **stock_identity(encoder, channel),  # canal, checkpoint, transformations (n° 143)
         "dim": encoder.dim,
         "has_tokens": encoder.has_tokens,
         "gates": {"thresholds": gates.gates, "combine": gates.combine} if gates else None,

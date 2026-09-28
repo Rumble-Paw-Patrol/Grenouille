@@ -67,7 +67,7 @@ class Fusion:
 def _design(head_score: np.ndarray, features: pd.DataFrame, columns: list[str]) -> np.ndarray:
     """Tête puis descripteurs, NaN compris : un descripteur manquant (`ioi_cv` d'un
     enregistrement de moins de deux notes) prend la moyenne de l'entraînement (`_fill`), pas
-    0 en unités brutes, qui voudrait dire « rythme parfaitement régulier » (DECISIONS n° 144)."""
+    0 en unités brutes, qui voudrait dire « rythme parfaitement régulier » (DECISIONS n° 145)."""
     return np.column_stack([np.asarray(head_score, dtype=float), features[columns].to_numpy(float)])
 
 

@@ -181,7 +181,7 @@ def test_resume_adds_only_the_new_recordings(workspace):
 
 
 def test_resume_refuses_another_channel_in_the_same_stock(workspace):
-    """DECISIONS n° 142 : le canal n'est pas dans le nom du stock ; reprendre avec un autre
+    """DECISIONS n° 143 : le canal n'est pas dans le nom du stock ; reprendre avec un autre
     canal y ajouterait des embeddings d'un autre micro, mêlés aux premiers."""
     con, raw, store_root = workspace
     add_recording(con, raw, "a.wav", start="2026-02-10T13:00:00Z")
