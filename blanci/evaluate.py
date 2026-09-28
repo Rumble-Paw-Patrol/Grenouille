@@ -106,6 +106,23 @@ def average_precision(y: np.ndarray, scores: np.ndarray) -> float:
     return float(average_precision_score(y, scores))
 
 
+def fold_mean_ap(y: np.ndarray, scores: np.ndarray, folds: np.ndarray) -> tuple[float, int]:
+    """(AP moyenne des plis, nombre de plis comptés) : l'AP de chaque pli, ses scores entre eux,
+    puis la moyenne sur les plis qui ont les deux classes (DECISIONS n° 133, 135).
+
+    L'AP « poolée » met bout à bout les scores de modèles différents, un par pli : si les plis
+    retiennent des réglages différents (C, σ, époques), leurs scores ne sont pas sur la même
+    échelle et le classement commun se dégrade, sans que le classement dans chaque pli change.
+    L'AP par pli ne compare jamais deux modèles : elle ne voit que le classement. Plus bruitée
+    (chaque pli a peu de positifs), elle se lit à côté de l'AP poolée, pas à sa place."""
+    y, scores, folds = np.asarray(y).astype(int), np.asarray(scores), np.asarray(folds)
+    values = [
+        average_precision(y[folds == f], scores[folds == f]) for f in np.unique(folds[folds >= 0])
+    ]
+    values = [v for v in values if np.isfinite(v)]
+    return (float(np.mean(values)) if values else float("nan")), len(values)
+
+
 def recall_at_precision(
     y: np.ndarray, scores: np.ndarray, min_precision: float
 ) -> tuple[float, float]:
@@ -226,13 +243,18 @@ def evaluate(
     n_boot: int = 1000,
     seed: int = 0,
     how: str = "max",
+    folds: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Métriques sur des scores hors-pli. `groups` = identifiant d'enregistrement de chaque
-    fenêtre : unité du bootstrap, et unité d'agrégation au niveau « recording ».
+    fenêtre : unité du bootstrap, et unité d'agrégation au niveau « recording ». `folds` (pli
+    de test de chaque fenêtre, `regularization.fold_ids`) : ajoute `ap_fold_mean`, l'AP
+    moyenne par pli (`fold_mean_ap`), et `n_folds_ap`.
 
-    Valeurs flottantes, sauf `level` (str) et `n_pos` / `n_neg` (int).
+    Valeurs flottantes, sauf `level` (str) et `n_pos` / `n_neg` / `n_folds_ap` (int).
     """
     scores, labels, groups = np.asarray(scores), np.asarray(labels), np.asarray(groups)
+    if folds is not None:  # un enregistrement est d'un seul micro, donc d'un seul pli
+        fold_of = pd.Series(np.asarray(folds), index=groups).groupby(level=0).first()
     if level == "recording":
         rec = to_recordings(scores, labels, groups, how)
         scores, labels, groups = (
@@ -240,6 +262,8 @@ def evaluate(
             rec["y"].to_numpy(),
             rec["recording_id"].to_numpy(),
         )
+        if folds is not None:
+            folds = fold_of.loc[groups].to_numpy()
     ap = average_precision(labels, scores)
     lo, hi = bootstrap_ci(labels, scores, groups, average_precision, n_boot, seed)
     out = {
@@ -250,6 +274,8 @@ def evaluate(
         "ap_lo": lo,
         "ap_hi": hi,
     }
+    if folds is not None:
+        out["ap_fold_mean"], out["n_folds_ap"] = fold_mean_ap(labels, scores, folds)
     for p in precisions:
         recall, threshold = recall_at_precision(labels, scores, p)
         k = int(((scores >= threshold) & (labels == 1)).sum()) if np.isfinite(threshold) else 0

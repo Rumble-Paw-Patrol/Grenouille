@@ -70,7 +70,7 @@ def fit_gated(
     `dim_dropout` : R46, dropout de x̃ ⊙ g ; `validation`, `patience` et `monitor` : arrêt
     précoce (R42, `regularization.fit_with_options`) ; `warmup`, `clip_norm` : R59 ;
     `average` : R64. Mécanique
-    dans `blanci/regularization.py`."""
+    dans `blanci/regularization/`."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation

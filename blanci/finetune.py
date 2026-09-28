@@ -20,7 +20,7 @@ excellente). Deux voies honnêtes :
 Réglages réservés : section `finetune` de la config (méthode, rang et alpha du LoRA, modules
 ciblés, époques, pas d'apprentissage).
 
-Régularisations (`blanci/regularization.py`, DECISIONS n° 121, 123), toutes décidées :
+Régularisations (`blanci/regularization/`, DECISIONS n° 121, 123), toutes décidées :
 
 - R60, LoRA sur les **couches hautes seulement** (`finetune.lora.layers` derniers blocs, rang
   `finetune.lora.rank`). Les couches basses d'un encodeur apprennent des choses génériques

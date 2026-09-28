@@ -125,6 +125,7 @@ $A anuraset-heads --encoder perch_v2-bacpipe1.3.5     # têtes jugées un site �
 $B prevalence                                        # part de positifs au hasard → decision.prevalence (n° 128)
 $B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic+R37,logistic+R37=glmm  # σ du biais estimé (GLMM, n° 131)
 $B pca --encoder perch_v2-bacpipe1.3.5               # variance perdue selon les dimensions gardées (n° 132)
+# Rapports : AP poolée et AP moyenne par pli ; benchmark.fold_calibration: platt recalibre chaque pli (n° 135)
 $B fusion-bench --encoder birdmae-bacpipe1.3.5 --sources head:perch_v2-bacpipe1.3.5
 $B fusion-bench --encoder birdmae-bacpipe1.3.5         # dont logistic+R50+R54, +R50+R55 (n° 130)
 $B ensemble --sources birdmae-bacpipe1.3.5/logistic,perch_v2-bacpipe1.3.5/logistic

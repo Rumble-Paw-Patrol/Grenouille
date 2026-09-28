@@ -41,6 +41,7 @@ class OOFScores:
     values: np.ndarray
     folds: tuple[tuple[np.ndarray, np.ndarray], ...]
     method: str
+    raw: np.ndarray | None = None  # avant la recalibration par pli (`fold_calibration`)
 
 
 # --- Prototype différentiel et kNN ----------------------------------------------------------
@@ -260,7 +261,7 @@ def fit_logistic(
     """Standardisation + logistique à classes équilibrées. `sample_weight` : R13, R15, R36 ;
     `l1_ratio` : R27, R28 ; `bias_columns`, `bias_scale` (σ, écart-type a priori des biais de
     micro, en logit ; un σ par niveau avec `bias_levels`, micro puis site ; « glmm » : σ estimé
-    sur les données, `regularization.glmm_scales`) : R37 (`blanci/regularization.py`,
+    sur les données, `regularization.glmm_scales`) : R37 (`blanci/regularization/`,
     `standardize`)."""
     scales = list(np.atleast_1d(np.asarray(bias_scale, dtype=object)))
     if bias_columns and "glmm" in [str(v) for v in scales]:
@@ -621,7 +622,7 @@ def fit_and_score(
     `C` fixe le C des têtes logistiques ; sinon il est choisi sur `train` (validation groupée
     interne sur `C_grid`). Brique commune de la validation croisée (`oof_scores`) et de la
     courbe selon le nombre d'annotations (`head_benchmark.annotation_curve`).
-    `regularizer` (`blanci/regularization.py`) : transformations de X ajustées sur `train`,
+    `regularizer` (`blanci/regularization/`) : transformations de X ajustées sur `train`,
     poids des fenêtres et pénalité des têtes logistiques.
     """
     X, sw, fit_kw = _prepared(X, y, train, regularizer, seed)
@@ -758,6 +759,8 @@ def oof_scores(
     tokens: np.ndarray | None = None,
     cascade_fraction: float = 0.2,
     regularizer=None,
+    calibration: str | None = None,
+    calibration_splits: int = 3,
 ) -> OOFScores:
     """Scores hors-pli sur plis groupés (par micro).
 
@@ -771,26 +774,108 @@ def oof_scores(
     Pour `logistic`, le C est choisi dans chaque pli sur les seules données d'entraînement.
     `gated` (seuillage en amont) : fenêtres arrêtées, jamais apprises, score `GATED_SCORE`.
     `assignment` : plis communs à tous les modèles ({point: pli}, `dataset.folds_for`).
+    `calibration` = "platt" : scores de chaque pli recalibrés avant d'être mis bout à bout
+    (`calibrated_fold_scores`, DECISIONS n° 135) ; `raw` garde les scores d'avant.
     """
     X, y, groups = np.asarray(X, dtype=np.float32), np.asarray(y).astype(int), np.asarray(groups)
     gated = np.zeros(len(y), dtype=bool) if gated is None else np.asarray(gated, dtype=bool)
     folds = grouped_folds(y, groups, n_splits, seed, assignment)
     out = np.full(len(y), np.nan, dtype=np.float64)
+    raw = None if calibration is None else np.full(len(y), np.nan, dtype=np.float64)
+    options = {
+        "C_grid": C_grid,
+        "n_splits": n_splits,
+        "seed": seed,
+        "tokens": tokens,
+        "cascade_fraction": cascade_fraction,
+        "regularizer": regularizer,
+    }
     for train, test in folds:
         train = train[~gated[train]]
-        out[test] = fit_and_score(
-            method,
-            X,
-            y,
-            groups,
-            train,
-            test,
-            C_grid=C_grid,
-            n_splits=n_splits,
-            seed=seed,
-            tokens=tokens,
-            cascade_fraction=cascade_fraction,
-            regularizer=regularizer,
-        )
+        if calibration is None:
+            out[test] = fit_and_score(method, X, y, groups, train, test, **options)
+        else:
+            out[test], raw[test] = calibrated_fold_scores(
+                method, X, y, groups, train, test, calibration, calibration_splits, **options
+            )
     out[gated] = GATED_SCORE
-    return OOFScores(out, tuple(folds), method)
+    if raw is not None:
+        raw[gated] = GATED_SCORE
+    return OOFScores(out, tuple(folds), method, raw)
+
+
+FOLD_CALIBRATIONS = ("platt",)
+# Têtes entraînées sans C mais dont l'échelle dépend de l'entraînement du pli (recalibrées).
+TRAINED_METHODS = ("gated", "dann", "multiclass", "attentive")
+
+
+def calibration_options(cfg: dict) -> dict[str, Any]:
+    """Options de `oof_scores` et `fusion_model_oof` pour la recalibration par pli, d'après
+    `benchmark.fold_calibration` (none | platt) et `benchmark.calibration_splits` ; {} sans."""
+    bench = cfg.get("benchmark") or {}
+    method = bench.get("fold_calibration")
+    if method in (None, "none", False):
+        return {}
+    splits = int(bench.get("calibration_splits", 3))
+    return {"calibration": str(method), "calibration_splits": splits}
+
+
+def calibrated_fold_scores(
+    method: str,
+    X: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    train: np.ndarray,
+    test: np.ndarray,
+    calibration: str = "platt",
+    splits: int = 3,
+    **options,
+) -> tuple[np.ndarray, np.ndarray]:
+    """(scores recalibrés, scores bruts) des fenêtres `test` : remède (b) du n° 133.
+
+    Chaque pli choisit ses réglages (C, R26) sur son entraînement ; un C petit resserre les
+    scores. Mis bout à bout, des scores d'échelles différentes faussent le classement commun.
+    Ici, le C du pli est choisi une fois ; des plis internes (par micro, `splits`) donnent,
+    **avec ce même C**, des scores hors-pli de l'entraînement : même échelle que le modèle du
+    pli, sans qu'il les ait vus. Une calibration de Platt à classes équilibrées apprise sur
+    eux (`regularization.fold_platt`) ramène les scores du pli testé sur une échelle commune :
+    la cote « A. blanci contre fond », indépendante de la part de positifs du pli. Dans un pli,
+    le classement ne change pas (a > 0) ; seule la mise bout à bout change.
+
+    Les réglages sans C (époques R42, weight decay R40, σ de R37=glmm) sont re-choisis dans
+    chaque pli interne : approximation. Les têtes par similarité (prototypes, exemplar, knn,
+    LDA) ne choisissent rien pli par pli et gardent la même échelle d'un pli à l'autre : non
+    recalibrées (la recalibration n'y ajouterait que le bruit de son estimation, mesuré au
+    n° 135). Sans plis internes utilisables (moins de deux micros à positifs dans
+    l'entraînement), les scores restent tels quels."""
+    from blanci.regularization import fold_platt, usable_folds
+
+    if calibration not in FOLD_CALIBRATIONS:
+        raise ValueError(f"recalibration par pli inconnue : {calibration!r} ({FOLD_CALIBRATIONS})")
+    if _fitter(method) is None and method not in TRAINED_METHODS:
+        raw = fit_and_score(method, X, y, groups, train, test, **options)
+        return raw, raw
+    C = choose_C(
+        method,
+        X,
+        y,
+        groups,
+        train,
+        options.get("C_grid"),
+        options.get("n_splits", 5),
+        options.get("seed", 0),
+        options.get("regularizer"),
+    )
+    fixed = options | ({"C": C} if C is not None else {})
+    raw = fit_and_score(method, X, y, groups, train, test, **fixed)
+    inner_folds = usable_folds(y[train], groups[train], splits, options.get("seed", 0))
+    if not inner_folds:
+        return raw, raw
+    inner = np.full(len(train), np.nan)
+    for inner_train, inner_test in inner_folds:
+        inner[inner_test] = fit_and_score(
+            method, X, y, groups, train[inner_train], train[inner_test], **fixed
+        )
+    seen = np.isfinite(inner)
+    a, b = fold_platt(inner[seen], y[train][seen])
+    return a * raw + b, raw

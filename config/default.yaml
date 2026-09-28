@@ -134,7 +134,7 @@ head:
     methods: [prototype, logistic, simple_prototype, exemplar, logistic_to_prototype, lda_shrunk,
               exemplar:k=3, knn, knn:k=3]
 
-# Régularisations des têtes (DECISIONS n° 108, `blanci/regularization.py`), numérotées comme la
+# Régularisations des têtes (DECISIONS n° 108, `blanci/regularization/`), numérotées comme la
 # liste du 25/09/2026 (documentation/regularisation.md). Toutes coupées : on les active tête par
 # tête dans le nom, `blanci heads --methods logistic,logistic+R18,logistic+R19+R18=16` (« =v »
 # remplace le réglage principal, noté ◆). Le nom canonique (R triées) est celui des rapports et
@@ -240,6 +240,15 @@ benchmark:
   same_day_min_gap_min: 30         # 30 = l'enregistrement voisin (programme : 2 min / 30 min)
   n_boot: 1000
   precisions: [0.1, 0.5]
+  # Mise bout à bout des plis (n° 133, 135). Chaque pli choisit ses réglages (C…) : un C petit
+  # resserre ses scores, et l'AP « poolée » (tous les plis ensemble) le paie sans que le
+  # classement dans le pli change. Les rapports donnent toujours aussi ap_fold_mean (AP moyenne
+  # par pli). fold_calibration: platt = chaque pli recalibré (Platt à classes équilibrées sur
+  # des scores hors-pli internes, au C du pli) avant la mise bout à bout ; ap_raw = l'AP poolée
+  # d'avant. Coût : (1 + calibration_splits) entraînements par pli. none = comme avant. Question
+  # ouverte (Léonard, 28/09) : garder des réglages fixes pour tous les plis reste possible.
+  fold_calibration: none
+  calibration_splits: 3
 
 # Réentraînement sans intervention (§4, M5) : la nouvelle tête n'est adoptée que si, sur le
 # jeu gelé, son AP (enregistrements) et son rappel au seuil ne perdent pas plus que ceci.

@@ -1208,7 +1208,7 @@ REGULARISATIONS = Tableau(
         )
     ],
     [
-        "Mécanique de chaque régularisation : blanci/regularization.py, qui sert d'index (où"
+        "Mécanique de chaque régularisation : blanci/regularization/, qui sert d'index (où"
         " chacune prend effet, comment l'activer).",
         "Ordre d'application : R19/R20 → R17 → R18 → R21 → R37 → tête (poids R13/R15/R36,"
         " pénalité R27/R28). Groupe de R13, R19–R21, R37 : regularization.by (point = site/micro).",

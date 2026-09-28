@@ -31,6 +31,7 @@ import soundfile as sf
 from blanci.benchmark import compare_encoders, probe_table
 from blanci.config import config_path
 from blanci.db import encoder_params
+from blanci.head import calibration_options
 from blanci.ingest import ingest
 from blanci.store import EmbeddingStore
 
@@ -307,9 +308,9 @@ def run_anuraset_heads(
     `selection` (R74 : la gagnante doit-elle sa place à la chance ?)."""
     import importlib.util
 
-    from blanci.evaluate import average_precision, evaluate
+    from blanci.evaluate import average_precision
     from blanci.head import oof_scores
-    from blanci.head_benchmark import _inputs, compare_to_reference, expand_methods
+    from blanci.head_benchmark import _inputs, compare_to_reference, expand_methods, level_rows
     from blanci.regularization import (
         Context,
         canonical,
@@ -321,7 +322,7 @@ def run_anuraset_heads(
         selection_estimate,
     )
 
-    acfg, bench, head_cfg = cfg["anuraset"], cfg["benchmark"], cfg["head"]
+    acfg, head_cfg = cfg["anuraset"], cfg["head"]
     methods = expand_methods(methods) or list(acfg.get("heads") or HEADS)
     if importlib.util.find_spec("torch") is None:
         methods = [m for m in methods if not m.startswith(("dann", "gated"))]
@@ -363,19 +364,11 @@ def run_anuraset_heads(
                 C_grid=head_cfg["C_grid"],
                 seed=head_cfg["seed"],
                 regularizer=regularizer,
+                **calibration_options(cfg),
             )
             scores[name], folds = oof.values, oof.folds
-            for level in ("window", "recording"):
-                metrics = evaluate(
-                    oof.values,
-                    y,
-                    recordings,
-                    level=level,
-                    precisions=tuple(bench["precisions"]),
-                    n_boot=bench["n_boot"],
-                    seed=head_cfg["seed"],
-                )
-                tables.append({"species": sp, "head": name, "n_sites": n_sites, **metrics})
+            labels = {"species": sp, "head": name, "n_sites": n_sites}
+            tables += level_rows(oof, y, recordings, cfg, labels)
             for site in np.unique(groups):
                 mask = groups == site
                 per_site.append(
@@ -411,7 +404,8 @@ def write_anuraset_heads_report(out: dict, encoder_id: str, reports_dir: Path) -
     for key, frame in out.items():
         frame.to_csv(reports_dir / f"{stem}_{key}.csv", index=False)
     table = out["table"]
-    shown = ["species", "head", "level", "n_pos", "n_neg", "ap", "ap_lo", "ap_hi", "recall@p0.1"]
+    shown = ["species", "head", "level", "n_pos", "n_neg", "ap", "ap_lo", "ap_hi"]
+    shown += ["ap_fold_mean", "ap_raw", "recall@p0.1"]  # par site ; avant recalibration
     text = [
         f"# Têtes sur AnuraSet, un pli par site (R78) : {encoder_id}",
         "",
@@ -472,6 +466,7 @@ def run_anuraset_benchmark(
                 precisions=tuple(bench["precisions"]),
                 n_boot=bench["n_boot"],
                 seed=head["seed"],
+                calibration=calibration_options(cfg),
             )
             table.insert(0, "species", sp)
             table.insert(0, "encoder_id", encoder_id)

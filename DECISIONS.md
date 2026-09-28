@@ -1391,7 +1391,47 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      change. Même effet possible pour toute tête dont C (R26), σ (R37=glmm), les époques
      (R42) ou le nombre de composantes varient d'un pli à l'autre. À garder en tête en
      lisant `heads` et `fusion-bench` : un écart d'AP poolée entre une méthode à réglage fixe
-     et une méthode à réglage choisi n'est pas forcément un écart de classement. Remèdes
-     possibles, non programmés (à décider) : rapporter aussi l'AP moyenne par pli, ou
-     recalibrer chaque pli (Platt sur son entraînement) avant de mettre les scores bout à
-     bout. Le seuil (R74, sur les scores hors-pli des autres plis) subit le même effet.
+     et une méthode à réglage choisi n'est pas forcément un écart de classement. Remèdes :
+     l'AP moyenne par pli, et la recalibration de chaque pli avant la mise bout à bout, tous
+     deux programmés au n° 135. Le seuil (R74, sur les scores hors-pli des autres plis) subit
+     le même effet.
+
+134. **`regularization.py` devient un paquet.** À ~2 100 lignes, découpé comme Léonard
+     l'avait demandé (« si c'est trop long, des sous-modules ») : `blanci/regularization/`
+     avec `names` (noms des têtes, validation), `windows` (R13, R15, R17–R21, R36,
+     indicatrices R37), `assembly` (`Context`, `Regularizer`, `regularizer_for`), `selection`
+     (R26, R40, R74–R76, R79, R81), `torch_training` (R40–R47, R59, R61–R64, R66), `glmm`
+     (R37), `fusion_logistic` (R50, R52–R56), `decision` (R73), `classes` (R67), `neighbors`
+     (R39). Le code est déplacé tel quel (découpage par sections, imports entre sous-modules
+     calculés, aucun cycle) ; `__init__.py` garde l'index et réexporte tout :
+     `from blanci.regularization import …` ne change nulle part. Suite de tests identique
+     avant et après (793 réussis).
+
+135. **AP moyenne par pli et recalibration par pli (remèdes du n° 133).** Accord de Léonard
+     (28/09), sans conclusion avant les grands jeux (base complète, AnuraSet).
+     (a) Toujours là : `ap_fold_mean`, l'AP de chaque pli (ses scores entre eux) moyennée
+     sur les plis à deux classes (`evaluate.fold_mean_ap`, option `folds` de `evaluate`),
+     dans `heads`, `fusion-bench`, `anuraset-heads`, le benchmark des encodeurs et
+     AnuraSet. Elle ne met jamais bout à bout deux modèles : elle ne voit que le classement.
+     Plus bruitée (peu de positifs par pli) : elle se lit à côté de l'AP poolée. Un grand
+     écart entre les deux signale des plis sur des échelles différentes.
+     (b) Option `benchmark.fold_calibration: platt` (défaut `none`) : chaque pli choisit son C
+     une fois, puis 3 plis internes (par micro, `calibration_splits`) donnent, **avec ce même
+     C**, des scores hors-pli de son entraînement ; une calibration de Platt à classes
+     équilibrées apprise dessus (`regularization.fold_platt`) ramène les scores du pli sur une
+     échelle commune (la cote « A. blanci contre fond », indépendante de la part de positifs
+     du pli) avant la mise bout à bout. Les réglages restent choisis pli par pli : seule
+     l'échelle change, jamais le classement dans un pli (pente > 0). Une Platt apprise sur
+     les scores d'entraînement du pli eux-mêmes ne marche pas ici : avec plus de dimensions
+     que de fenêtres, l'entraînement est séparable et la pente part à l'infini. Non
+     recalibrées : les têtes par similarité (rien n'y est choisi pli par pli) et les règles
+     de fusion fixes. `ap_raw` garde l'AP poolée d'avant ; les scores rangés (stock hors-pli,
+     entrées de la fusion) sont les recalibrés. Coût : 1 + 3 entraînements par pli.
+     Mesuré sur données simulées : fusion `logistic+R50`, AP poolée 0,48 → 0,58 (par pli
+     0,59) ; `logistic` à C fixé 0,601 → 0,601 ; `logistic+R50+R55` 0,756 → 0,761 ; têtes
+     logistiques (C par pli, 3 tirages) 0,189 → 0,223, 0,175 → 0,173, 0,139 → 0,129 ; une
+     première version qui recalibrait aussi le prototype le faisait perdre (0,243 → 0,218),
+     d'où l'exclusion des têtes par similarité. Lecture : la recalibration répare un vrai
+     écart d'échelle, et ne coûte, ailleurs, que le bruit de sa propre estimation. `blanci
+     train` n'est pas touché (seuil sur les scores hors-pli bruts) : à reprendre si l'option
+     est retenue.

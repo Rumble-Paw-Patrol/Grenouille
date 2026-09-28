@@ -415,15 +415,20 @@ def fusion_model_oof(
     n_splits: int = 5,
     seed: int = 0,
     assignment: dict[str, int] | None = None,
+    calibration: str | None = None,
+    calibration_splits: int = 3,
     **options,
 ) -> OOFScores:
     """Scores hors-pli d'une fusion sur les plis communs : chaque pli apprend sa fusion sans
     le micro testé (les entrées sont déjà hors-pli, §3) ; R50 choisit son C dans chaque pli,
-    sur les seuls micros d'entraînement."""
+    sur les seuls micros d'entraînement. `calibration` = "platt" : chaque pli recalibré avant
+    la mise bout à bout, comme `head.calibrated_fold_scores` (C du pli gardé dans les plis
+    internes) ; `raw` garde les scores d'avant (DECISIONS n° 135)."""
     y = np.asarray(y).astype(int)
     X = np.asarray(X, dtype=float)
     folds = grouped_folds(y, groups, n_splits, seed, assignment)
     out = np.full(len(y), np.nan)
+    raw = None if calibration is None else np.full(len(y), np.nan)
     groups = np.asarray(groups)
     for train, test in folds:
         model = fit_fusion_model(
@@ -437,7 +442,67 @@ def fusion_model_oof(
             **options,
         )
         out[test] = model.decision(X[test])
-    return OOFScores(out, tuple(folds), f"fusion:{method}")
+        if calibration is not None:
+            raw[test] = out[test]
+            a, b = _fold_calibration(
+                method,
+                model,
+                X[train],
+                y[train],
+                groups[train],
+                columns,
+                seed,
+                calibration,
+                calibration_splits,
+                options,
+            )
+            out[test] = a * raw[test] + b
+    return OOFScores(out, tuple(folds), f"fusion:{method}", raw)
+
+
+def _fold_calibration(
+    method: str,
+    model: FusionModel,
+    X: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    columns: list[str],
+    seed: int,
+    calibration: str,
+    splits: int,
+    options: dict,
+) -> tuple[float, float]:
+    """(a, b) de Platt du pli (`regularization.fold_platt`), appris sur des scores hors-pli
+    internes de l'entraînement du pli, avec le C retenu par le pli (R50 retiré : même échelle
+    que la fusion du pli). (1, 0) sans plis internes utilisables, et pour les règles fixes
+    (`weighted`, `mean`, `rank_mean`, `max`, `min`) : rien n'y est choisi pli par pli."""
+    from blanci.head import FOLD_CALIBRATIONS
+    from blanci.regularization import fold_platt, fusion_settings, usable_folds
+
+    if calibration not in FOLD_CALIBRATIONS:
+        raise ValueError(f"recalibration par pli inconnue : {calibration!r} ({FOLD_CALIBRATIONS})")
+    if method in ("weighted", "mean", "rank_mean", "max", "min"):
+        return 1.0, 0.0
+    inner_folds = usable_folds(y, groups, splits, seed)
+    if not inner_folds:
+        return 1.0, 0.0
+    settings = fusion_settings(method)
+    fixed = dict(options)
+    if settings and 50 in settings:
+        kept = [
+            f"R{n}" if v is None else f"R{n}={v:g}" for n, v in sorted(settings.items()) if n != 50
+        ]
+        method = "+".join(["logistic", *kept])
+    if model.C is not None:
+        fixed["C"] = model.C
+    inner = np.full(len(y), np.nan)
+    for inner_train, inner_test in inner_folds:
+        fitted = fit_fusion_model(
+            method, X[inner_train], y[inner_train], columns, seed=seed, **fixed
+        )
+        inner[inner_test] = fitted.decision(X[inner_test])
+    seen = np.isfinite(inner)
+    return fold_platt(inner[seen], y[seen])
 
 
 def project_scores(target: pd.DataFrame, source: pd.DataFrame) -> np.ndarray:

@@ -26,9 +26,10 @@ from blanci.dataset import embedded_training_set, folds_for, pairing_options
 from blanci.db import encoder_params
 from blanci.evaluate import average_precision, evaluate, paired_bootstrap, to_recordings
 from blanci.frozen import frozen_recordings
-from blanci.head import oof_scores
+from blanci.head import calibration_options, oof_scores
 from blanci.index import l2_normalize
 from blanci.oof import labels_fingerprint, oof_frame, save_oof
+from blanci.regularization import fold_ids
 from blanci.store import EmbeddingStore
 
 PROBES = ("knn", "simple_prototype", "prototype", "logistic")
@@ -69,10 +70,13 @@ def probe_table(
     tokens: np.ndarray | None = None,
     gated: np.ndarray | None = None,
     assignment: dict[str, int] | None = None,
+    calibration: dict | None = None,
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
     """Une ligne par (sonde, niveau) ; renvoie aussi les scores hors-pli de chaque sonde.
 
-    Avec `tokens` (fenêtres, jetons, dim), ajoute la sonde « attentive » (§3).
+    Avec `tokens` (fenêtres, jetons, dim), ajoute la sonde « attentive » (§3). Colonnes
+    `ap_fold_mean` (AP moyenne par pli) et, avec `calibration` (`head.calibration_options`),
+    `ap_raw` (AP poolée avant la recalibration par pli), DECISIONS n° 133, 135.
     """
     rows, scores = [], {}
     probes = [(p, X) for p in PROBES] + ([("attentive", tokens)] if tokens is not None else [])
@@ -87,6 +91,7 @@ def probe_table(
             seed=seed,
             gated=gated,
             assignment=assignment,
+            **(calibration or {}),
         )
         scores[probe] = oof.values
         for level in LEVELS:
@@ -98,7 +103,10 @@ def probe_table(
                 precisions=precisions,
                 n_boot=n_boot,
                 seed=seed,
+                folds=fold_ids(len(y), oof.folds),
             )
+            if oof.raw is not None:
+                metrics["ap_raw"] = evaluate(oof.raw, y, recordings, level=level, n_boot=0)["ap"]
             rows.append({"probe": probe, **metrics})
     return pd.DataFrame(rows), scores
 
@@ -147,6 +155,7 @@ def benchmark_encoder(
         tokens=TokenStore(config_path(cfg, "tokens"), encoder_id).load(data["window_id"].tolist()),
         gated=data["gated"].to_numpy(),
         assignment=assignment,
+        calibration=calibration_options(cfg),
     )
     fingerprint = labels_fingerprint(con, cfg)
     for probe, values in scores.items():  # scores hors-pli : benchmark complet, ensembles

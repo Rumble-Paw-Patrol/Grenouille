@@ -622,3 +622,36 @@ def test_curved_fusions_run_out_of_fold_with_R50():
     for method in ("logistic+R50+R54", "logistic+R50+R55"):
         oof = fusion_model_oof(method, X, y, groups, columns, n_splits=4, C_grid=[0.01, 1.0])
         assert np.isfinite(oof.values).all() and average_precision(y, oof.values) > 0.6
+
+
+# --- Recalibration par pli (DECISIONS n° 133, 135) ------------------------------------------------
+
+
+def test_fold_calibration_repairs_the_pooled_ap_of_a_per_fold_C():
+    """Le cas du n° 133 : R50 retient des C différents selon les plis ; mis bout à bout, les
+    scores resserrés d'un pli perdent contre ceux des autres. Recalibrés, l'AP poolée rejoint
+    l'AP par pli ; une règle fixe (`mean`) n'est pas touchée."""
+    from blanci.evaluate import fold_mean_ap
+    from blanci.regularization import fold_ids
+
+    rng = np.random.default_rng(0)
+    n = 3000
+    y = (rng.random(n) < 0.06).astype(int)
+    X = np.column_stack(
+        [
+            rng.normal(0, 1, n) + 1.5 * y,
+            rng.exponential(1.0, n) + 2.5 * y * (rng.random(n) < 0.6),
+            rng.normal(0, 1, n) * np.where(y == 1, 0.4, 1.3),
+        ]
+    )
+    columns = ["head", "longest_run", "rate"]
+    groups = np.array([f"s{i % 3}/m{i % 12}" for i in range(n)])
+    grid = [0.001, 0.01, 0.1, 1, 10]
+    oof = fusion_model_oof(
+        "logistic+R50", X, y, groups, columns, n_splits=4, C_grid=grid, calibration="platt"
+    )
+    raw_ap, fixed_ap = average_precision(y, oof.raw), average_precision(y, oof.values)
+    per_fold, _ = fold_mean_ap(y, oof.values, fold_ids(len(y), oof.folds))
+    assert fixed_ap > raw_ap + 0.05 and abs(fixed_ap - per_fold) < 0.05
+    rule = fusion_model_oof("mean", X, y, groups, columns, n_splits=4, calibration="platt")
+    assert np.allclose(rule.values, rule.raw)

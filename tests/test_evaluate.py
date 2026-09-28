@@ -286,3 +286,37 @@ def test_R77_leave_one_micro_out_puts_each_positive_mic_alone():
     assert fold_assignment(groups, y, "lomo") == out
     with pytest.raises(ValueError, match="deux micros"):
         lomo_assignment(np.array(["a", "b"]), np.array([1, 0]))
+
+
+# --- AP moyenne par pli (DECISIONS n° 133, 135) ---------------------------------------------------
+
+
+def two_folds_on_different_scales():
+    """Deux plis qui classent parfaitement, l'un avec des scores resserrés et décalés : mis bout
+    à bout, les négatifs du premier passent devant les positifs du second."""
+    rng = np.random.default_rng(0)
+    y = np.tile(np.r_[np.ones(5), np.zeros(45)], 2).astype(int)
+    scores = y * 2.0 + rng.uniform(0, 0.5, len(y))
+    folds = np.repeat([0, 1], 50)
+    scores[folds == 1] = scores[folds == 1] * 0.1 - 1.0
+    return y, scores, folds
+
+
+def test_fold_mean_ap_sees_only_the_ranking_within_each_fold():
+    from blanci.evaluate import fold_mean_ap
+
+    y, scores, folds = two_folds_on_different_scales()
+    assert average_precision(y, scores) < 0.9
+    assert fold_mean_ap(y, scores, folds) == (pytest.approx(1.0), 2)
+    one_class = np.where(folds == 1, 0, y)  # un pli sans positif ne compte pas
+    assert fold_mean_ap(one_class, scores, folds)[1] == 1
+
+
+def test_evaluate_adds_the_fold_mean_at_both_levels():
+    y, scores, folds = two_folds_on_different_scales()
+    recordings = np.array([f"r{i // 2}" for i in range(len(y))])  # deux fenêtres par enregistrement
+    for level in ("window", "recording"):
+        out = evaluate(scores, y, recordings, level, n_boot=10, folds=folds)
+        assert out["ap_fold_mean"] == pytest.approx(1.0) and out["n_folds_ap"] == 2
+        assert out["ap"] < 0.95
+    assert "ap_fold_mean" not in evaluate(scores, y, recordings, "window", n_boot=10)

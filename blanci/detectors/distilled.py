@@ -23,7 +23,7 @@ Attention au benchmark : l'élève doit être distillé **pli par pli** à parti
 lui-même appris sans le micro testé ; sinon il hérite de scores en-pli et paraît meilleur qu'il
 n'est.
 
-Régularisations (`blanci/regularization.py`, DECISIONS n° 121) : perte de distillation
+Régularisations (`blanci/regularization/`, DECISIONS n° 121) : perte de distillation
 `distillation_loss` (R63, température) ; boucle `optimise` avec R41 (AdamW), R42 (arrêt
 précoce, `fit_with_options`), R46 (`dropout`), R59 (warm-up, écrêtage du gradient).
 """

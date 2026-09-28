@@ -22,7 +22,7 @@ Têtes comparées sur les embeddings gelés d'un encodeur (`head.METHODS`, `pool
 Groupes de têtes pour `--methods` : `losses` (logistique + toutes les pertes), `neighbors`
 (logistique, prototype et toutes les variantes par similarité, R39).
 
-Régularisations (`blanci/regularization.py`, DECISIONS n° 108) : dans le nom de la tête,
+Régularisations (`blanci/regularization/`, DECISIONS n° 108) : dans le nom de la tête,
 `logistic+R18=16+R19`. Le nom canonique figure dans les tableaux et les scores hors-pli ;
 `regularization.variants` ajoute des têtes régularisées à la liste par défaut.
 
@@ -66,7 +66,7 @@ from blanci.dataset import embedded_training_set, folds_for, pairing_options
 from blanci.db import encoder_params
 from blanci.evaluate import average_precision, evaluate, paired_bootstrap, to_recordings
 from blanci.frozen import frozen_recordings
-from blanci.head import METHODS, choose_C, fit_and_score, oof_scores
+from blanci.head import METHODS, calibration_options, choose_C, fit_and_score, oof_scores
 from blanci.oof import labels_fingerprint, oof_frame, save_oof
 from blanci.pooling import as_grid, available_poolings, pool
 from blanci.regularization import (
@@ -226,7 +226,7 @@ def run_head_benchmark(
     filters: dict | None = None,
 ) -> dict[str, Any]:
     """Tableau des têtes, comparaisons à la référence, diagnostic du fond capté."""
-    head_cfg, bench = cfg["head"], cfg["benchmark"]
+    head_cfg = cfg["head"]
     data, X, tokens = benchmark_data(con, cfg, encoder_id, filters)
     variants = (cfg.get("regularization", {}) or {}).get("variants", [])
     methods = expand_methods(methods) or head_methods(tokens, variants)
@@ -255,6 +255,7 @@ def run_head_benchmark(
             tokens=tokens,
             cascade_fraction=head_cfg.get("cascade_fraction", 0.2),
             regularizer=regularizer,
+            **calibration_options(cfg),
         )
         scores[method] = oof.values
         folds = oof.folds
@@ -264,17 +265,7 @@ def run_head_benchmark(
                 f"{encoder_id}/{method}", "encoder_head", data, oof.values, assignment, fingerprint
             ),
         )
-        for level in LEVELS:
-            metrics = evaluate(
-                oof.values,
-                y,
-                recordings,
-                level=level,
-                precisions=tuple(bench["precisions"]),
-                n_boot=bench["n_boot"],
-                seed=head_cfg["seed"],
-            )
-            rows.append({"encoder_id": encoder_id, "head": method, **metrics})
+        rows += level_rows(oof, y, recordings, cfg, {"encoder_id": encoder_id, "head": method})
     table = pd.DataFrame(rows).sort_values(["level", "ap"], ascending=[True, False], kind="stable")
 
     reference = canonical(head_cfg.get("reference", "logistic"))
@@ -295,6 +286,33 @@ def run_head_benchmark(
         "scores": scores,
         "n_mics": int(len(np.unique(groups))),
     }
+
+
+def level_rows(
+    oof, y: np.ndarray, recordings: np.ndarray, cfg: dict, labels: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Une ligne de métriques par niveau (fenêtres, enregistrements) pour des scores hors-pli :
+    AP poolée et son intervalle, rappels, `ap_fold_mean` (AP moyenne par pli, n° 133) et, si
+    les plis ont été recalibrés (`benchmark.fold_calibration`), `ap_raw` : l'AP poolée des
+    scores d'avant la recalibration (n° 135)."""
+    bench, seed = cfg["benchmark"], cfg["head"]["seed"]
+    fids = fold_ids(len(y), oof.folds)
+    rows = []
+    for level in LEVELS:
+        metrics = evaluate(
+            oof.values,
+            y,
+            recordings,
+            level=level,
+            precisions=tuple(bench["precisions"]),
+            n_boot=bench["n_boot"],
+            seed=seed,
+            folds=fids,
+        )
+        if getattr(oof, "raw", None) is not None:
+            metrics["ap_raw"] = evaluate(oof.raw, y, recordings, level=level, n_boot=0)["ap"]
+        rows.append(labels | metrics)
+    return rows
 
 
 def by_positive_type(

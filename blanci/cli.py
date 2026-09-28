@@ -431,7 +431,7 @@ def heads(
     stem = f"tetes_{encoder}".replace(":", "_")
     table.to_csv(reports / f"{stem}.csv", index=False)
     out["comparisons"].to_csv(reports / f"{stem}_comparaisons.csv", index=False)
-    shown = ["head", "level", "n_pos", "n_neg", "ap", "ap_lo", "ap_hi"]
+    shown = ["head", "level", "n_pos", "n_neg", "ap", "ap_lo", "ap_hi", "ap_fold_mean", "ap_raw"]
     shown += ["recall@p0.1", "recall@p0.5"]
     text = [f"# Benchmark des têtes : {encoder}", ""]
     for level in ("window", "recording"):
@@ -455,8 +455,8 @@ def heads(
     if out["background"]:
         text += ["## Fond capté (différentiel − simple)", "", out["background"]["verdict"], ""]
     (reports / f"{stem}.md").write_text("\n".join(text), encoding="utf-8")
-    for row in table[table["level"] == "recording"].itertuples():
-        typer.echo(f"  {row.head:<22} AP {row.ap:.3f} [{row.ap_lo:.3f} ; {row.ap_hi:.3f}]")
+    for row in table[table["level"] == "recording"].to_dict("records"):
+        typer.echo(f"  {row['head']:<22} {_ap_line(row)}")
     if out["background"]:
         typer.echo(f"fond capté : {out['background']['verdict']}")
     if selection:
@@ -465,6 +465,18 @@ def heads(
             f"{selection['fold_ap_winner']:.3f} pour la gagnante {selection['winner']}"
         )
     typer.echo(f"rapport : {reports / (stem + '.md')}")
+
+
+def _ap_line(row: dict) -> str:
+    """« AP 0,612 [lo ; hi] ; par pli 0,590 ; avant recalibration 0,480 » (n° 133, 135)."""
+    text = f"AP {row['ap']:.3f}"
+    if "ap_lo" in row:
+        text += f" [{row['ap_lo']:.3f} ; {row['ap_hi']:.3f}]"
+    if pd.notna(row.get("ap_fold_mean")):
+        text += f" ; par pli {row['ap_fold_mean']:.3f}"
+    if pd.notna(row.get("ap_raw")):
+        text += f" ; avant recalibration {row['ap_raw']:.3f}"
+    return text
 
 
 @app.command()
@@ -1074,16 +1086,17 @@ def fusion_bench(
     for name in ("table", "comparisons", "weights"):
         out[name].to_csv(reports / f"{stem}_{name}.csv", index=False)
     table = out["table"]
-    shown = ["position", "method", "inputs", "level", "ap", "ap_lo", "ap_hi", "recall@p0.1"]
+    shown = ["position", "method", "inputs", "level", "ap", "ap_lo", "ap_hi", "ap_fold_mean"]
+    shown += ["ap_raw", "recall@p0.1"]
     text = [f"# Benchmark de la fusion : {encoder}", ""]
     for level in ("recording", "window"):
         part = table[table["level"] == level]
-        text += [f"## Niveau {level}", "", to_markdown(part[shown]), ""]
+        text += [f"## Niveau {level}", "", to_markdown(part[[c for c in shown if c in part]]), ""]
     text += ["## Contre la tête seule (enregistrements)", "", to_markdown(out["comparisons"]), ""]
     text += ["## Part de chaque entrée", "", to_markdown(out["weights"]), ""]
     (reports / f"{stem}.md").write_text(chr(10).join(text), encoding="utf-8")
-    for row in table[table["level"] == "recording"].itertuples():
-        typer.echo(f"  {row.position:<28} {row.method:<12} AP {row.ap:.3f}")
+    for row in table[table["level"] == "recording"].to_dict("records"):
+        typer.echo(f"  {row['position']:<28} {row['method']:<12} {_ap_line(row)}")
     typer.echo(f"rapport : {reports / (stem + '.md')}")
 
 

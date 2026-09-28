@@ -239,3 +239,45 @@ def test_oof_logistic_picks_C_inside_each_fold():
     X, y = two_clusters(n=60)
     out = oof_scores(X, y, mics(60), n_splits=3, method="logistic", C_grid=[0.01, 1.0])
     assert not np.isnan(out.values).any()
+
+
+# --- Recalibration par pli (DECISIONS n° 135) -----------------------------------------------------
+
+
+def test_fold_platt_gives_a_rising_prevalence_free_scale():
+    from blanci.regularization import fold_platt
+
+    rng = np.random.default_rng(0)
+    y = (rng.random(400) < 0.1).astype(int)
+    scores = 0.05 * (y * 2.0 + rng.normal(0, 1, len(y)))  # des scores très resserrés
+    a, b = fold_platt(scores, y)
+    assert a > 1.0  # l'échelle est rouverte
+    logit = a * scores + b
+    assert abs(np.median(logit[y == 1]) + np.median(logit[y == 0])) < 1.0  # classes équilibrées
+    separable = np.r_[np.zeros(20), np.ones(5)] * 10.0
+    a, b = fold_platt(separable, np.r_[np.zeros(20), np.ones(5)].astype(int))
+    assert np.isfinite([a, b]).all() and a > 0
+    assert fold_platt(scores, np.zeros(len(y), dtype=int))[0] == pytest.approx(1 / scores.std())
+
+
+def test_fold_calibration_keeps_each_fold_ranking_and_the_raw_scores():
+    from blanci.head import calibration_options
+
+    X, y = two_clusters(n=60, sep=0.8)
+    groups = mics(60)
+    oof = oof_scores(
+        X, y, groups, n_splits=3, method="logistic", C_grid=[0.01, 1.0], calibration="platt"
+    )
+    assert oof.raw is not None and not np.allclose(oof.raw, oof.values)
+    for _, test in oof.folds:  # dans un pli : même classement
+        order_raw = np.argsort(oof.raw[test], kind="stable")
+        assert np.array_equal(order_raw, np.argsort(oof.values[test], kind="stable"))
+    plain = oof_scores(X, y, groups, n_splits=3, method="logistic", C_grid=[0.01, 1.0])
+    assert plain.raw is None and np.allclose(plain.values, oof.raw)
+    with pytest.raises(ValueError, match="recalibration"):
+        oof_scores(X, y, groups, n_splits=3, method="prototype", calibration="isotonic")
+    assert calibration_options({"benchmark": {"fold_calibration": "none"}}) == {}
+    assert calibration_options({"benchmark": {"fold_calibration": "platt"}}) == {
+        "calibration": "platt",
+        "calibration_splits": 3,
+    }

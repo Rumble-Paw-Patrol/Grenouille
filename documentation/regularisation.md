@@ -152,7 +152,7 @@ sur données simulées ou sur l'échantillon vérifient le code, elles ne classe
 
 # Tri de Léonard du 26/09, section F (R59–R67, réseaux entraînés)
 
-Toute la mécanique des régularisations est dans `blanci/regularization.py`, qui sert d'index
+Toute la mécanique des régularisations est dans `blanci/regularization/`, qui sert d'index
 (DECISIONS n° 121).
 
 - R59 : warm-up et écrêtage du gradient programmés (`attentive+R59`, `gated+R59`) ; dropout,
@@ -169,7 +169,7 @@ Toute la mécanique des régularisations est dans `blanci/regularization.py`, qu
 
 Règle posée par Léonard : ne pas supposer 51 positifs pour toujours ; d'autres annotations
 viendront, des sites resteront peu ou pas annotés. Toute la mécanique est dans
-`blanci/regularization.py` (index en tête du module) ; les régularisations qui sont une tête à
+`blanci/regularization/` (index en tête du paquet, `__init__.py`) ; les régularisations qui sont une tête à
 part entière vivent dans leur module.
 
 - R59 : écrêtage du gradient et warm-up programmés. R60 : LoRA sur les couches hautes,
@@ -211,3 +211,15 @@ part entière vivent dans leur module.
   remède à décider. DECISIONS n° 133.
 - À faire (notes.md) : `blanci prevalence` après une écoute au hasard ; le diagnostic
   site/micro (`blanci cluster --mode c0` sur plusieurs sites).
+
+# Retours de Léonard du 28/09
+
+- GLMM (`logistic+R37=glmm`) : à tester plus tôt que prévu, pour la généralisation entre
+  sites.
+- ACP : utile seulement si elle ne jette pas les dimensions qui portent A. blanci ; le
+  benchmark `logistic+R18=k` le dira.
+- AP moyenne par pli dans tous les rapports ; recalibration par pli en option
+  (`benchmark.fold_calibration: platt`), question ouverte (réglages fixes pour tous les
+  plis possibles). DECISIONS n° 135.
+- `blanci/regularization/` : le module découpé en sous-modules, index dans `__init__.py`.
+  DECISIONS n° 134.

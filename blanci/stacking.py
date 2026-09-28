@@ -50,7 +50,7 @@ from blanci.fusion import (
     fusion_model_oof,
     project_scores,
 )
-from blanci.head import OOFScores, _choose_C, fit_logistic
+from blanci.head import OOFScores, _choose_C, calibration_options, fit_logistic
 from blanci.oof import labels_fingerprint, oof_frame, save_oof
 from blanci.sequential import (
     GATED_SCORE,
@@ -368,13 +368,26 @@ def fused_oof(
 ) -> tuple[np.ndarray, list[str]]:
     """Score hors-pli de la chaîne (emplacement × méthode) ; tête seule s'il n'y a rien à
     fusionner. Portes réappliquées : amont (rythme) et seuillage en amont."""
+    values, _, columns = _fused(level1, method, position, cfg, sources)
+    return values, columns
+
+
+def _fused(
+    level1: Level1,
+    method: str,
+    position: list[str],
+    cfg: dict,
+    sources: list[str] | tuple[str, ...] = (),
+) -> tuple[np.ndarray, np.ndarray | None, list[str]]:
+    """(scores hors-pli, scores d'avant la recalibration par pli ou None, entrées)."""
     X, columns = design_matrix(level1, position, cfg, sources)
+    raw = None
     if len(columns) == 1:
         out = level1.head.values.astype(float).copy()
     else:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            out = fusion_model_oof(
+            oof = fusion_model_oof(
                 method,
                 X,
                 level1.y,
@@ -383,11 +396,17 @@ def fused_oof(
                 cfg["head"]["n_splits"],
                 cfg["head"]["seed"],
                 level1.assignment,
+                **calibration_options(cfg),
                 **fusion_options(cfg, columns),
-            ).values
+            )
+        out, raw = oof.values, oof.raw
+    gates = [~level1.data["gated"].to_numpy()]
     if "upstream" in position:
-        out = apply_gate(out, upstream_pass(level1.counts, cfg))
-    return apply_gate(out, ~level1.data["gated"].to_numpy()), columns
+        gates.insert(0, upstream_pass(level1.counts, cfg))
+    for keep in gates:
+        out = apply_gate(out, keep)
+        raw = None if raw is None else apply_gate(raw, keep)
+    return out, raw, columns
 
 
 def fusion_benchmark(
@@ -410,13 +429,17 @@ def fusion_benchmark(
     bench, seed = cfg["benchmark"], cfg["head"]["seed"]
     fingerprint = labels_fingerprint(con, cfg)
     reference = level1.head.values
+    folds = grouped_folds(level1.y, level1.groups, cfg["head"]["n_splits"], seed, level1.assignment)
+    fids = np.full(len(level1.y), -1)
+    for f, (_, test) in enumerate(folds):  # les plis de `fusion_model_oof`
+        fids[test] = f
     rows, comparisons, weights = [], [], []
     for position in positions:
         _, columns = design_matrix(level1, position, cfg, sources)
         for method in methods if len(columns) > 1 else ["none"]:
             if method == "weighted" and not fcfg.get("weights"):
                 continue  # pas de poids fixés à la main : rien à évaluer
-            values, _ = fused_oof(level1, method, position, cfg, sources)
+            values, raw, _ = _fused(level1, method, position, cfg, sources)
             name = f"{position_tag(position)}/{method}"
             save_oof(
                 cfg,
@@ -438,7 +461,12 @@ def fusion_benchmark(
                     precisions=tuple(bench["precisions"]),
                     n_boot=bench["n_boot"],
                     seed=seed,
+                    folds=fids,
                 )
+                if raw is not None:  # recalibration par pli (n° 135) : l'AP poolée d'avant
+                    metrics["ap_raw"] = evaluate(
+                        raw, level1.y, level1.recordings, level=level, n_boot=0
+                    )["ap"]
                 rows.append(
                     {
                         "position": position_tag(position),

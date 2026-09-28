@@ -129,7 +129,7 @@ def fit_attentive(
     complète) et `monitor` ("loss" ou "ap") pour R42 (`regularization.fit_with_options`) ;
     la courbe de validation est rangée dans `meta["validation_curve"]`. `warmup`, `clip_norm` :
     R59 ; `average`, `ema_decay`, `swa_start` : R64. Toute la mécanique de ces régularisations
-    est dans `blanci/regularization.py`."""
+    est dans `blanci/regularization/`."""
     try:
         import torch
     except ImportError as exc:  # pragma: no cover - dépend de l'installation
