@@ -39,7 +39,8 @@ from blanci.db import connect
 from blanci.evaluate import average_precision, to_recordings
 from blanci.head import choose_C, fit_and_score
 from blanci.head_benchmark import _inputs
-from blanci.regularization import Context, domain_statistics, needs_domain, regularizer_for
+from blanci.regularization import Context, needs_domain, regularizer_for
+from blanci.regularization.windows import _Accumulator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from jetons import charger, stock_of  # noqa: E402
@@ -77,6 +78,7 @@ calls = read_strong_labels(project_path(acfg["labels"]))
 weak = read_weak_labels(acfg.get("weak_labels"))
 meta, emb = _encoder_windows(con, cfg, encoder_id)
 X_all = emb.astype(np.float32)
+del emb  # 480 000 trames × 2048 : la mémoire compte
 sites = meta["site"].astype(str).str.replace("INCT04", "INCT4").to_numpy()
 recordings = meta["recording_id"].to_numpy()
 unsure = weak_only_files(weak, calls, sp)
@@ -91,7 +93,12 @@ rows = species_rows(
     np.random.default_rng([seed, SPECIES.index(sp)]),
 )
 methods = sorted(set(TRANSFER) | (set(CURVE) if curve else set()))
-domain = domain_statistics(X_all, sites, "site") if needs_domain(methods) else None
+domain = None
+if needs_domain(methods):  # par paquets : un site entier en float64 ne tient pas (rcl_fs_bsed)
+    acc = _Accumulator()
+    for i in range(0, len(X_all), 20000):
+        acc.add(X_all[i : i + 20000], sites[i : i + 20000])
+    domain = acc.stats("site")
 context = Context(
     sites,
     domain=domain,
