@@ -10,6 +10,7 @@
    réserve (régime courant, site déjà annoté). Mêmes moitiés pour tous les encodeurs.
 
 Usage : global_bench.py <encodeur> <ESPECE> <sortie> [--curve]
+(`<sortie>/<encodeur>_<ESPECE>.delegue` présent : tâche sautée, confiée à une autre machine.)
 """
 
 import sys
@@ -46,6 +47,8 @@ SITES = ["INCT17", "INCT20955", "INCT4", "INCT41"]
 name, sp, out = sys.argv[1], sys.argv[2], Path(sys.argv[3])
 curve = "--curve" in sys.argv
 out.mkdir(parents=True, exist_ok=True)
+if (out / f"{name}_{sp}.delegue").exists():  # confiée à une autre machine
+    sys.exit(f"délégué : {name} {sp}")
 encoder_id = f"{name}-bacpipe1.3.5@o0"
 cfg = load_config(Path("config/anuraset.yaml"))
 cfg["regularization"]["R37"]["glmm_grid"] = [0.3, 1.0, 3.0]  # comme les benchmarks 01 à 06
