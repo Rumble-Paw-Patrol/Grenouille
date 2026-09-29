@@ -114,13 +114,31 @@ encoders:
     # Bird-MAE-Large : celle qu'évaluent la revue et MetaPerch ; référence de benchmark.
     birdmae_large: {backend: bacpipe, model: birdmae, checkpoint: DBD-research-group/Bird-MAE-Large}
     # BirdNET+ V3.0, préversion 3.1 (32 kHz, 3 s dans bacpipe) ; CC BY-SA 4.0, déployable.
-    birdnet_v3: {backend: bacpipe, model: birdnet_v3}
+    birdnet_v3:
+      backend: bacpipe
+      model: birdnet_v3
+      # Probabilités de son classifieur rangées dans `scores` (n° 151) : quatre espèces
+      # d'AnuraSet (PITAZU n'y est pas) et le congénère d'A. blanci.
+      logit_classes: [Dendropsophus minutus, Leptodactylus latrans, Physalaemus cuvieri,
+                      Hypsiboas faber, Anomaloglossus baeobatrachus]
     audioprotopnet: {backend: bacpipe, model: audioprotopnet}   # jetons gardés par bacpipe
     avesecho_passt: {backend: bacpipe, model: avesecho_passt}
     biolingual: {backend: bacpipe, model: biolingual}           # fenêtre de 10 s
     insect66: {backend: bacpipe, model: insect66}
     insect459: {backend: bacpipe, model: insect459}
     rcl_fs_bsed: {backend: bacpipe, model: rcl_fs_bsed}         # trames de 0,2 s
+    # esp-aves2 (bibliothèque AVEX, `pip install avex`) : 16 kHz, fenêtres de 5 s ;
+    # CC-BY-NC-SA-4.0, références de benchmark seulement (n° 151).
+    esp_aves2_effnetb0_bio: {backend: avex, model: esp_aves2_effnetb0_bio}
+    esp_aves2_effnetb0_all: {backend: avex, model: esp_aves2_effnetb0_all}
+    esp_aves2_effnetb0_audioset: {backend: avex, model: esp_aves2_effnetb0_audioset}
+    esp_aves2_eat_bio: {backend: avex, model: esp_aves2_eat_bio}
+    esp_aves2_eat_all: {backend: avex, model: esp_aves2_eat_all}
+    esp_aves2_sl_eat_bio_ssl_all: {backend: avex, model: esp_aves2_sl_eat_bio_ssl_all}
+    esp_aves2_sl_eat_all_ssl_all: {backend: avex, model: esp_aves2_sl_eat_all_ssl_all}
+    esp_aves2_sl_beats_bio: {backend: avex, model: esp_aves2_sl_beats_bio}
+    esp_aves2_sl_beats_all: {backend: avex, model: esp_aves2_sl_beats_all}
+    esp_aves2_naturelm_audio_v1_beats: {backend: avex, model: esp_aves2_naturelm_audio_v1_beats}
 
 head:
   C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]

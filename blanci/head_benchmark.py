@@ -177,10 +177,10 @@ def _inputs(method: str, X: np.ndarray, tokens: np.ndarray | None) -> tuple[str,
         if tokens is None:
             raise ValueError(f"{method} demande les jetons de l'encodeur (blanci tokens)")
         return "logistic", pool(tokens, method.split(":", 1)[1])
-    if method == "attentive":
+    if method in ("attentive", "proto_probe"):
         if tokens is None:
-            raise ValueError("attentive demande les jetons de l'encodeur (blanci tokens)")
-        return "attentive", tokens
+            raise ValueError(f"{method} demande les jetons de l'encodeur (blanci tokens)")
+        return method, tokens
     return method, X
 
 

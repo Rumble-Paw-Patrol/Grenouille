@@ -1810,3 +1810,33 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        AnuraSet y est peut-être, et un score spectaculaire se revérifiera sur les données ONF.
      - MetaPerch : d'après l'article, la localisation et la date servent de pertes auxiliaires
        à l'entraînement seulement ; rien à fournir à l'inférence. Poids non vérifiés.
+
+152. **Prérequis de la vague d'encodage 2 : jetons, têtes sur jetons, classifieur de BirdNET 3,
+     esp-aves2.** Codés et testés sur de vrais enregistrements d'AnuraSet (plan des sessions :
+     `documentation/benchmarks/outils_anuraset/VAGUE_ENCODAGE_2.md`).
+     - Jetons (`BacpipeEncoder.embed_tokens`) : Bird-MAE (dernière couche cachée, jeton de
+       classe retiré, 32 temps × 8 fréquences), BEATs et NatureBEATs (jetons avant la moyenne de
+       bacpipe, 31 × 8), AudioProtoPNet (carte de la dernière couche, 19 × 8, celle que lit sa
+       tête à prototypes ; orientation vérifiée : entrée 256 bandes × 626 trames). Contrôle :
+       cosinus embedding / moyenne des jetons 0,999–1 pour Bird-MAE et BEATs. `jetons.py`
+       extrait tout un stock (Bird-MAE-Base : ~2,5 s par enregistrement, ≈ 1 Go en float16,
+       moyenne sur la fréquence).
+     - Têtes sur jetons (`global_bench.py --tokens`, transfert seul) : `attentive`,
+       `logistic:max`, et `proto_probe`, nouvelle sonde à prototypes (`blanci/proto_probe.py` :
+       K = 8 prototypes appris, cosinus avec chaque jeton, maximum sur la fenêtre, couche
+       linéaire ; version simplifiée du sondage par prototypes des auteurs de Bird-MAE).
+       `simple_prototype` rejoint les têtes du transfert (tête d'origine de protoclr et de
+       rcl_fs_bsed).
+     - birdnet_v3 : les probabilités de son classifieur (`model.predictions`) sont rangées à
+       l'encodage comme les logits de perch_v2 (`logit_classes` : DENMIN, LEPLAT, PHYCUV,
+       BOAFAB sous « Hypsiboas faber », *A. baeobatrachus*) ; `global_bench.py --native` les
+       juge sans entraînement. 32 kHz, fenêtres de 3 s, 1 280 dimensions (vérifié).
+     - esp-aves2 : `blanci/encoders/avex_encoder.py` (`backend: avex`, dix entrées dans
+       `encoders.models`), fenêtres de 5 s (grille de perch_v2). Embedding : l'agrégation d'AVEX
+       (jeton de classe pour EAT, moyenne pour BEATs et EfficientNet) ; jetons en grille, sans
+       les lignes de temps du complément à 10 s d'EAT (vérifié : elles ne varient plus d'une
+       fenêtre à l'autre après la 32ᵉ).
+     - MetaPerch : bloqué. Le dépôt `google-research/perch` n'a qu'un README (« will be
+       provided here soon ») et Kaggle n'a rien ; la session 15 attend.
+     - `importer_stock.py` ajoute le stock d'une branche de données à la base locale sans
+       l'écraser. Tests : 790 réussis (le seul échec, le jeu gelé, tient à l'exécution en root).

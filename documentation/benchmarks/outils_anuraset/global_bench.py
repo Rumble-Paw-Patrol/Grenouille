@@ -9,7 +9,12 @@
    de la réserve (et des négatifs en proportion) ajoutés à l'entraînement ; `None` = toute la
    réserve (régime courant, site déjà annoté). Mêmes moitiés pour tous les encodeurs.
 
-Usage : global_bench.py <encodeur> <ESPECE> <sortie> [--curve]
+Options (n° 151, tête adaptée à la sortie de l'encodeur) : `--tokens` ajoute au transfert les
+têtes sur jetons (`TOKEN_HEADS`, jetons de `jetons.py`) ; `--native` ajoute le classifieur de
+l'encodeur lui-même, sans entraînement (probabilités rangées dans `scores` par l'encodage,
+`logit_classes` : birdnet_v3). Jetons lourds : 2 processus en parallèle au plus.
+
+Usage : global_bench.py <encodeur> <ESPECE> <sortie> [--curve] [--tokens] [--native]
 (`<sortie>/<encodeur>_<ESPECE>.delegue` présent : tâche sautée, confiée à une autre machine.)
 """
 
@@ -36,7 +41,18 @@ from blanci.head import choose_C, fit_and_score
 from blanci.head_benchmark import _inputs
 from blanci.regularization import Context, domain_statistics, needs_domain, regularizer_for
 
-TRANSFER = ["logistic", "logistic+R37=glmm", "lda_shrunk"]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jetons import charger, stock_of  # noqa: E402
+
+TRANSFER = ["logistic", "logistic+R37=glmm", "lda_shrunk", "simple_prototype"]
+TOKEN_HEADS = ["attentive", "logistic:max", "proto_probe"]
+# Classe du classifieur d'origine de chaque espèce (étiquettes de birdnet_v3 ; PITAZU absente).
+NATIVE = {
+    "DENMIN": "Dendropsophus minutus",
+    "LEPLAT": "Leptodactylus latrans",
+    "PHYCUV": "Physalaemus cuvieri",
+    "BOAFAB": "Hypsiboas faber",
+}
 CURVE = ["logistic", "logistic+R37=glmm", "lda_shrunk", "logistic+R20", "prototype"]
 K = [0, 1, 2, 5, 10, 20, None]
 REPEATS = 2
@@ -49,8 +65,8 @@ curve = "--curve" in sys.argv
 out.mkdir(parents=True, exist_ok=True)
 if (out / f"{name}_{sp}.delegue").exists():  # confiée à une autre machine
     sys.exit(f"délégué : {name} {sp}")
-encoder_id = f"{name}-bacpipe1.3.5@o0"
 cfg = load_config(Path("config/anuraset.yaml"))
+encoder_id = stock_of(name, config_path(cfg, "embeddings"))  # bacpipe ou avex
 cfg["regularization"]["R37"]["glmm_grid"] = [0.3, 1.0, 3.0]  # comme les benchmarks 01 à 06
 acfg, head_cfg = cfg["anuraset"], cfg["head"]
 seed, C_grid = head_cfg["seed"], head_cfg["C_grid"]
@@ -122,17 +138,55 @@ def minute_ap(values: np.ndarray, test: np.ndarray) -> float:
     return average_precision(labels[ok], rec["score"].to_numpy()[ok])
 
 
+def native_scores() -> np.ndarray | None:
+    """Probabilités du classifieur de l'encodeur pour l'espèce, alignées sur les fenêtres."""
+    if sp not in NATIVE:
+        return None
+    rows_db = con.execute(
+        "SELECT window_id, score FROM scores WHERE model_id = ?",
+        (f"{encoder_id}:logit:{NATIVE[sp]}",),
+    ).fetchall()
+    if not rows_db:
+        raise SystemExit(f"--native : aucun score {NATIVE[sp]} pour {encoder_id} (logit_classes)")
+    by_window = dict(rows_db)
+    values = meta["window_id"].map(by_window).to_numpy(dtype=np.float32)
+    if np.isnan(values).mean() > 0.01:
+        raise SystemExit(f"--native : {np.isnan(values).mean():.0%} des fenêtres sans score")
+    return values
+
+
+token_heads = TOKEN_HEADS if "--tokens" in sys.argv else []
+tokens = charger(encoder_id, meta["window_id"].tolist()) if token_heads else None
+native = native_scores() if "--native" in sys.argv else None
+
 with threadpool_limits(limits=1, user_api="blas"):
     # 1. Transfert, un pli par site : toutes les fenêtres du site tenu à l'écart.
-    transfer = np.full((len(TRANSFER), len(y)), np.nan, dtype=np.float32)
+    names = TRANSFER + token_heads + (["classifieur_origine"] if native is not None else [])
+    transfer = np.full((len(names), len(y)), np.nan, dtype=np.float32)
     for site in SITES:
         test = np.flatnonzero(sites == site)
         train = rows[sites[rows] != site]
         for i, spec in enumerate(TRANSFER):
             transfer[i, test] = score(spec, train, test)
+        for j, spec in enumerate(token_heads):  # sans régularisation, C par plis internes
+            method, inputs = _inputs(spec, X_all, tokens)
+            transfer[len(TRANSFER) + j, test] = fit_and_score(
+                method,
+                inputs,
+                y,
+                sites,
+                train,
+                test,
+                C_grid=C_grid,
+                n_splits=max(2, len(np.unique(sites[train]))),
+                seed=seed,
+            )
+        print(f"  pli {site} {time.time() - t0:.0f} s", flush=True)
+    if native is not None:
+        transfer[-1] = native
     np.savez_compressed(
         out / f"{name}_{sp}_transfert.npz",
-        heads=np.array(TRANSFER),
+        heads=np.array(names),
         scores=transfer,
         y=y_all,
         site=sites,

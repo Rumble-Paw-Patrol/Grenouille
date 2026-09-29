@@ -18,7 +18,13 @@ Validé contre bacpipe 1.3.5 (torch 2.6, TensorFlow 2.15, Windows) le 23/09/2026
 - perch_v2 (ONNX, sans TensorFlow) garde les logits de ses 14 795 classes après chaque appel
   (`model.results["logits"]`, noms dans `model.classes`) : `logit_classes` en retient
   quelques-unes (les trois *Anomaloglossus* congénères, §2), relues par `pop_logits` après
-  `embed`, sans seconde inférence.
+  `embed`, sans seconde inférence. birdnet_v3 fait de même avec les probabilités de son
+  classifieur (`model.predictions`, 11 560 classes) ;
+- jetons (DECISIONS n° 151 : un transformer se juge sur ses jetons) : Bird-MAE (dernière couche
+  cachée, jeton de classe retiré, 32 temps × 8 fréquences), BEATs et NatureBEATs (jetons avant
+  la moyenne que fait bacpipe, temps × 8 fréquences), AudioProtoPNet (carte de la dernière
+  couche, celle que lit sa tête à prototypes) ; `embed_tokens` les rend en grille
+  (fenêtres, temps, fréquence, dim).
 """
 
 from __future__ import annotations
@@ -96,6 +102,11 @@ def _load_bacpipe_model(
     return module, model
 
 
+# Modèles dont on sait lire les jetons, et leur nombre de bandes de fréquence (grille temps
+# d'abord : jeton t·F + f) ; audioprotopnet rend une carte (lot, canaux, fréquence, temps).
+TOKEN_FREQ_BANDS = {"birdmae": 8, "beats": 8, "naturebeats": 8, "audioprotopnet": None}
+
+
 def _default_device() -> str:
     try:
         import torch
@@ -118,6 +129,7 @@ class BacpipeEncoder(BaseEncoder):
     logit_names: tuple[str, ...] | list[str] = ()
     _logit_index: tuple[int, ...] | list[int] = ()  # aucun logit gardé par défaut
     _last_tokens: np.ndarray | None = None
+    model_name: str = ""  # nom du module bacpipe (birdmae…), distinct de `name` (birdmae_base)
 
     def __init__(
         self,
@@ -141,6 +153,7 @@ class BacpipeEncoder(BaseEncoder):
         module, self._model = _load_bacpipe_model(
             model_name, self.device, Path(model_base_path), checkpoint
         )
+        self.model_name = model_name
         self.sample_rate = int(module.SAMPLE_RATE)
         self.window_s = module.LENGTH_IN_SAMPLES / module.SAMPLE_RATE
         self._last_tokens: np.ndarray | None = None
@@ -148,14 +161,17 @@ class BacpipeEncoder(BaseEncoder):
         self._logit_index = self._resolve_classes(self.logit_names)
         self._logits: list[np.ndarray] = []
         probe = self._raw(np.zeros((1, module.LENGTH_IN_SAMPLES), np.float32))
-        self.has_tokens = probe.ndim == 3 or self._last_tokens is not None
+        self.has_tokens = (
+            probe.ndim == 3 or self._last_tokens is not None or model_name in TOKEN_FREQ_BANDS
+        )
         self.dim = int(probe.shape[-1])
         self._logits.clear()
 
     def _resolve_classes(self, names: list[str]) -> list[int]:
         if not names:
             return []
-        classes = list(getattr(self._model, "classes", []) or [])
+        classes = getattr(self._model, "classes", None)
+        classes = [] if classes is None else list(classes)  # liste ou tableau numpy
         missing = [n for n in names if n not in classes]
         if missing:
             raise ValueError(f"{self.name} n'a pas de classe {missing} (logit_classes)")
@@ -180,10 +196,14 @@ class BacpipeEncoder(BaseEncoder):
         with torch.no_grad():
             x = self._model.preprocess(torch.from_numpy(np.ascontiguousarray(batch)))
             out = _to_numpy(self._model(x))
-        if self._logit_index:
-            logits = _to_numpy(self._model.results["logits"]).reshape(len(batch), -1)
-            self._logits.append(logits[:, self._logit_index])
         results = getattr(self._model, "results", None)
+        if self._logit_index:
+            if isinstance(results, dict) and "logits" in results:  # perch_v2
+                raw = results["logits"]
+            else:  # birdnet_v3 : probabilités du dernier appel
+                raw = self._model.predictions
+            logits = _to_numpy(raw).reshape(len(batch), -1)
+            self._logits.append(logits[:, self._logit_index])
         if isinstance(results, dict) and "spatial_embeddings" in results:
             # perch_v2 : (lot, temps, fréquence, dim), grille gardée (poolings, DECISIONS n° 92).
             self._last_tokens = _to_numpy(results["spatial_embeddings"])
@@ -200,7 +220,35 @@ class BacpipeEncoder(BaseEncoder):
         return out.reshape(len(batch), -1)
 
     def _forward_tokens(self, batch: np.ndarray) -> np.ndarray | None:
+        if self.model_name in TOKEN_FREQ_BANDS:
+            return self._model_tokens(batch)
         out = self._raw(batch)
         if out.ndim == 3:
             return out
         return self._last_tokens  # jetons spatiaux du dernier appel (perch_v2), ou None
+
+    def _model_tokens(self, batch: np.ndarray) -> np.ndarray:
+        """Jetons en grille (lot, temps, fréquence, dim) des modèles de `TOKEN_FREQ_BANDS`."""
+        import torch
+
+        with torch.no_grad():
+            x = self._model.preprocess(torch.from_numpy(np.ascontiguousarray(batch)))
+            if self.model_name == "birdmae":
+                out = self._model.model(x, output_hidden_states=True)
+                tokens = _to_numpy(out.hidden_states[-1])[:, 1:, :]  # sans le jeton de classe
+            elif self.model_name in ("beats", "naturebeats"):
+                holder = getattr(self._model, "beats", None) or self._model.model
+                holder.avg_pooling = False  # sans la moyenne de bacpipe, le temps d'un appel
+                try:
+                    tokens = _to_numpy(self._model(x))
+                finally:
+                    holder.avg_pooling = True
+            else:  # audioprotopnet : carte (lot, canaux, fréquence, temps)
+                self._model(x)
+                fmap = _to_numpy(self._model.results.last_hidden_state)
+                return np.ascontiguousarray(fmap.transpose(0, 3, 2, 1))
+        bands = TOKEN_FREQ_BANDS[self.model_name]
+        n, count, dim = tokens.shape
+        if count % bands:
+            raise ValueError(f"{self.name} : {count} jetons, pas un multiple de {bands} bandes")
+        return tokens.reshape(n, count // bands, bands, dim)

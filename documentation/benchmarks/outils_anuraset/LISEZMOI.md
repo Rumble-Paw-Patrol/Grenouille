@@ -17,3 +17,13 @@ Benchmark global (07), sur les stocks des six encodeurs réunis dans une même b
   (k enregistrements positifs du site cible ajoutés à l'entraînement).
 - `rassembler_global.py <sorties> <dossier du rapport>` : `donnees/` (niveaux fenêtre et minute,
   comparaisons appariées à perch_v2 + logistique, Holm ; seuil choisi ailleurs ; courbe).
+
+Vague d'encodage 2 (n° 151, 152 ; plan des sessions : `VAGUE_ENCODAGE_2.md`) :
+
+- `telecharger_anuraset.sh` : `raw_data.zip` d'AnuraSet par 12 plages d'octets en parallèle.
+- `jetons.py <encodeur>` : jetons de toutes les fenêtres d'un stock (moyennés sur la fréquence,
+  float16, par paquets de 50 enregistrements), pour `global_bench.py --tokens`.
+- `importer_stock.py <encodeur>` : stock et modèle d'une branche `donnees-anuraset-*` ajoutés
+  à la base locale, sans l'écraser.
+- `global_bench.py` : `--tokens` (attentive, logistic:max, proto_probe), `--native`
+  (classifieur de l'encodeur, sans entraînement) ; stock trouvé sur le disque (bacpipe, avex).

@@ -528,6 +528,7 @@ METHODS = (
     "dann",  # R66 (torch)
     "multiclass",  # R67
     "attentive",
+    "proto_probe",  # n° 151 : prototypes sur les jetons (Bird-MAE, AudioProtoPNet)
     "cascade",
 )
 # Têtes à C, et leur ajustement. `loss:<nom>` : benchmark des pertes (`blanci/losses.py`).
@@ -724,6 +725,11 @@ def fit_and_score(
         return fit_with_options(
             fit_attentive, T, ytr, groups[train], seed, **torch_options
         ).decision(flat_tokens(X[test]))
+    if method == "proto_probe":  # X = jetons, comme attentive (n° 151)
+        from blanci.pooling import flat_tokens
+        from blanci.proto_probe import fit_proto_probe
+
+        return fit_proto_probe(flat_tokens(Xtr), ytr, seed=seed).decision(flat_tokens(X[test]))
     if method == "cascade":
         if tokens is None:
             raise ValueError("la cascade a besoin des jetons (tokens=…)")

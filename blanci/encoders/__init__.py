@@ -57,6 +57,12 @@ def _get_encoder(name: str, cfg: dict[str, Any]) -> Encoder:
 
             encoder = LowpassEncoder(encoder, spec["lowpass_hz"])
         return encoder
+    if spec is not None and spec["backend"] == "avex":  # esp-aves2 (n° 151)
+        from blanci.encoders.avex_encoder import AvexEncoder
+
+        return AvexEncoder(
+            spec["model"], batch_size=batch, window_s=spec.get("window_s", 5.0), name=name
+        )
     package = config_path(cfg, "models") / "encoder" / name
     if (package / "manifest.json").exists():
         from blanci.encoders.onnx_encoder import OnnxEncoder
