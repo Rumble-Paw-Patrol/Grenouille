@@ -1840,3 +1840,23 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        provided here soon ») et Kaggle n'a rien ; la session 15 attend.
      - `importer_stock.py` ajoute le stock d'une branche de données à la base locale sans
        l'écraser. Tests : 790 réussis (le seul échec, le jeu gelé, tient à l'exécution en root).
+
+## 2026-09-29 — Inventaire de la phénologie 2023 terminé
+
+153. **Inventaire 2023 complet** (reprise du 23/09, `ingest --no-qc --no-hash` dossier par
+     dossier, relevés dans l'ordre chronologique). « Projet Phénologie blanci », 6 relevés
+     (déc. 2023 → nov. 2024), 3 sites : 66 779 enregistrements, dont 66 754 de 120 s (2 225 h,
+     1 538 Go) ; avec 2026, la base compte 96 292 enregistrements, 3 204 h de 120 s, 2 216 Go
+     (tableau dans le README). Aucune erreur à la reprise ; `blanci flag` relancé. Contrôles :
+     - **fichiers illisibles** : 2 (pas 3), SMA14163 à Molokoi et SMA13417 à Trésor, datés du
+       25/10/2023 (avant la pose) : 262 144 octets de zéros, fichiers vides de l'enregistreur,
+       rien à récupérer ;
+     - **horaires hors programme** (107 hors 5 h–20 h locales) : 5 sont des déclenchements
+       de test de quelques secondes avant la pose (juillet–octobre 2023), déjà écartés pour
+       durée anormale ; les 102 autres viennent de **Molokoi SMA14636 au relevé 3** (avril
+       2024), dont les **1 520 fichiers** ont une heure GUANO en avance d'une heure sur le nom
+       de fichier. Le nom (5 h–19 h 30) suit le programme, le GUANO (6 h–20 h 30) non : le
+       fuseau de l'enregistreur était sans doute réglé sur UTC−4. Ailleurs, l'heure du nom et
+       celle du GUANO concordent (sauf un fichier de test par enregistreur). **Non corrigé** :
+       `start_utc` de ces 1 520 enregistrements est à décaler d'une heure (heure d'activité,
+       négatifs appariés au créneau), sur accord de Léonard.

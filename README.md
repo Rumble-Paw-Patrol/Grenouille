@@ -28,6 +28,37 @@ Enregistrements de 2 min, 48 kHz stéréo. Le micro est le numéro de série (GU
 préfixe du nom), l'heure vient du GUANO avec le fuseau de l'enregistreur. WAV et FLAC sont
 inventoriés ; l'appariement avec les annotations se fait sur le nom sans extension.
 
+### Inventaire (base au 29/09/2026)
+
+| Jeu | Site | Enregistrements | dont 120 s | Heures (120 s) | Go |
+|---|---|---:|---:|---:|---:|
+| 2023 (phénologie, déc. 2023 → nov. 2024, 6 relevés) | Kaw | 22 659 | 22 650 | 755,0 | 521,9 |
+| | Molokoi | 21 007 | 20 999 | 700,0 | 483,9 |
+| | Trésor | 23 113 | 23 105 | 770,2 | 532,7 |
+| | **total 2023** | **66 779** | **66 754** | **2 225,2** | **1 538,5** |
+| 2026 (Projet blanci 2025) | CDR | 5 438 | 5 391 | 179,7 | 124,3 |
+| | Mataroni | 13 059 | 12 974 | 432,5 | 299,4 |
+| | Patawa Est | 2 624 | 2 621 | 87,4 | 60,4 |
+| | Patawa Ouest | 1 107 | 1 099 | 36,6 | 25,4 |
+| | RNRT | 7 285 | 7 280 | 242,7 | 167,8 |
+| | **total 2026** | **29 513** | **29 365** | **978,9** | **677,3** |
+| **Total** | | **96 292** | **96 119** | **3 204** | **2 216** |
+
+Go : taille réelle des fichiers sur les disques (10⁹ octets), aucun fichier inventorié
+manquant. 96 176 enregistrements sont en 48 kHz stéréo, les autres (116) en 24 ou 32 kHz.
+Fenêtres potentielles, chevauchement de 50 % (`encoders.overlap`), sur les 96 119
+enregistrements de 120 s :
+
+| Fenêtre | Pas | Par enregistrement | Au total |
+|---|---|---:|---:|
+| 3 s | 1,5 s | 79 | 7 593 401 |
+| 5 s | 2,5 s | 47 | 4 517 593 |
+| 6 s | 3 s | 39 | 3 748 641 |
+
+Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 8 micros
+dans le sac ; 96 109 enregistrements de 120 s restent encodables. Détail et anomalies :
+DECISIONS n° 153.
+
 Annotations : l'export Excel de Blancinet v0.1.0 (une ligne par détection de 3 s, clé S3,
 score, vérification `True` / `False`, commentaires). Seules les lignes vérifiées deviennent des
 labels.
