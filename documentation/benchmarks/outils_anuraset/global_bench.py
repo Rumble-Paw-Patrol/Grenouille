@@ -56,7 +56,7 @@ NATIVE = {
     "BOAFAB": "Hypsiboas faber",
 }
 CURVE = ["logistic", "logistic+R37=glmm", "lda_shrunk", "logistic+R20", "prototype"]
-CHUNK = 30000
+CHUNK = 60000
 TRAIN_CAP = 60000  # rcl_fs_bsed : 262 000 × 2 048 ne tient pas en 15 Go
 K = [0, 1, 2, 5, 10, 20, None]
 REPEATS = 2
@@ -195,7 +195,16 @@ with threadpool_limits(limits=1, user_api="blas"):
     # 1. Transfert, un pli par site : toutes les fenêtres du site tenu à l'écart.
     names = TRANSFER + token_heads + (["classifieur_origine"] if native is not None else [])
     transfer = np.full((len(names), len(y)), np.nan, dtype=np.float32)
+    partial = out / f"{name}_{sp}_partiel.npz"  # reprise après un redémarrage de la machine
+    done = set()
+    if partial.exists():
+        saved = np.load(partial, allow_pickle=True)
+        if list(saved["heads"]) == names:
+            transfer, done = saved["scores"], set(saved["done"].tolist())
     for site in SITES:
+        if site in done:
+            print(f"  pli {site} déjà fait (reprise)", flush=True)
+            continue
         test = np.flatnonzero(sites == site)
         train = rows[sites[rows] != site]
         if len(train) > TRAIN_CAP:  # apprentissage plafonné (mémoire) : tous les positifs
@@ -219,6 +228,8 @@ with threadpool_limits(limits=1, user_api="blas"):
                 n_splits=max(2, len(np.unique(sites[train]))),
                 seed=seed,
             )
+        done.add(site)
+        np.savez(partial, heads=np.array(names), scores=transfer, done=np.array(sorted(done)))
         print(f"  pli {site} {time.time() - t0:.0f} s", flush=True)
     if native is not None:
         transfer[-1] = native
