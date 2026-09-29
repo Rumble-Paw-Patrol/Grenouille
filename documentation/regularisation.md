@@ -85,6 +85,7 @@ R64 : Moyenne des poids (SWA / EMA) : des poids plus lisses, sans coût d'annota
 R65 : Pré-entraînement sur AnuraSet puis ajustement : une régularisation par transfert (les deux anoures multi-sites de tes notes).
 R66 : Apprentissage multi-tâches : prédire aussi le micro, le site, la pluie avec inversion du gradient (DANN), pour une représentation invariante au site. C'est la version « réseau » de R21.
 R67 : Tête multi-classes (blanci / congénères / faux amis / bruit, comme dans tes notes « sigmoïde et modèle de classification ») : les classes auxiliaires régularisent la frontière blanci.
+R67 bis (29/09, V5 §5.11) : sous-classes positives (solo / chœur) et qualité A/B/C comme tâches auxiliaires : même mécanisme, côté positifs ; sortie binaire inchangée. Conditions : ≥ 30 enregistrements par sous-classe, adoption si l'AP binaire progresse sur les points tenus à l'écart.
 # G. Niveau enregistrement, point et temps (post-traitement)
 R68 : Lissage temporel des scores entre fenêtres voisines (moyenne glissante, médiane, HMM à deux états « chante / ne chante pas »). C'est le « lissage temporel » de BirdCLEF, et il colle au chant continu.
 R69 : HMM / CRF sur la séquence de fenêtres avec une probabilité de transition faible : une régularisation par a priori de persistance.

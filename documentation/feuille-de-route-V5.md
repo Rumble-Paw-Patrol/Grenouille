@@ -320,6 +320,30 @@ Proposition : 60 % aux heures de pic, 40 % ailleurs (§5.4).
 - Export du paquet d'experts (WAV + Excel, à l'aveugle) et réimport de leurs réponses comme labels.
 - YAPAT et Whombat restent des possibilités (v4). Ce sont des outils de travail, pas le livrable.
 
+### 5.11 Classification : à trancher avant la première écoute
+
+**Pourquoi maintenant** : ce qu'on note à l'écoute fixe ce que la tête pourra apprendre. Une sous-classe non notée au lot 1 ne se rattrape qu'en réécoutant tout. La décision précède donc le lot 1 (P0 bis, §8).
+
+**Les options**
+
+| Option | Classes | Pour | Contre |
+|---|---|---|---|
+| A. Une seule classe | *A. blanci* / non | la décision gestionnaire est binaire (présence) ; toutes les données servent une seule frontière | la tête ne sait pas qu'un chœur proche et un mâle lointain sont le même animal dans deux situations |
+| B. Trois niveaux de détection | clair / chevauchement / lointain (qualité A/B/C de Courtois et al. 2025) | rappel par niveau (§6) ; le niveau C est celui qu'on rate | ce n'est pas une classe mais un **degré** de la même classe : ordinal, et flou entre deux niveaux voisins |
+| C. Chœur contre solo | *A. blanci* chœur / solo / non | le solo pèse sur la phénologie (début et fin de saison) et sur le module séquentiel (H21) | H21 non levée : les distingue-t-on à l'oreille ? (Q8) ; peu de solos attendus |
+| D. Hiérarchie | niveau 1 : *A. blanci* / non ; niveau 2 : solo / chœur ; attribut : qualité A/B/C | garde A pour décider, B et C pour apprendre et mesurer | annotation un peu plus longue ; sous-classes rares |
+
+**Classes et sous-classes, ça existe** : c'est la classification hiérarchique (les étiquettes forment un arbre, comme une taxonomie), proche de l'apprentissage multi-tâches (une tête principale et des tâches auxiliaires sur la même entrée). BirdNET et Perch l'utilisent déjà à leur façon : leurs classes d'espèces sont rangées par genre et par famille. La tête multi-classes R67 du projet (blanci / congénères / faux amis / bruit, DECISIONS n° 124) en est une version à un seul niveau, côté négatifs.
+
+**Est-ce une régularisation ? Oui**, au sens large : une tâche auxiliaire contraint la représentation sans changer ce qu'on décide. C'est le même mécanisme que R67, rangé à ce titre dans `regularisation.md`. Apprendre à séparer solo et chœur, ou A et C, oblige la tête à s'appuyer sur ce qui est commun à tous les *A. blanci* (la note, le rythme). Le fond sonore d'un site ne suffit plus. L'effet n'est pas garanti : avec peu d'exemples par sous-classe, la tâche auxiliaire ajoute du bruit plutôt qu'elle n'en retire.
+
+**Recommandation (jugement)** : **annoter fin, décider gros** (option D).
+1. **À l'écoute** : chaque intervalle positif reçoit sa sous-classe (solo, chœur, indécis) et sa qualité (A, B, C). « Incertain » reste un doute de l'annotateur : ce n'est ni une sous-classe ni un niveau, et il est exclu de l'entraînement (n° 3). Les négatifs gardent leurs familles du schéma de labels.
+2. **Décision et livrable** : une seule sortie, *A. blanci* présente ou non (option A). C'est elle que mesurent l'AP et le rappel, et elle seule que l'ONF voit.
+3. **Qualité A/B/C** : attribut, pas classe. Elle sert au rappel par qualité (§6), et éventuellement de poids d'entraînement.
+4. **Sous-classes comme tâches auxiliaires** : essayées seulement si chacune compte au moins 30 enregistrements indépendants après le lot 1, et adoptées seulement si l'AP binaire sur les points tenus à l'écart progresse (intervalle apparié qui exclut zéro, §6). Sinon, elles restent des variables de rapport.
+5. Toute sous-classe se replie sur *A. blanci* : le schéma fin ne coûte donc rien à l'option A.
+
 **Schéma de labels** (levé H14, inchangé) : positifs {blanci-solo, blanci-chœur, blanci-incertain} ; négatifs par famille {oiseau:<espèce>, amphibien:<espèce>, orthoptère, cri-de-contact-amphibien, pluie, artefact:micro-dans-sac, fond, autre} ; espèces recensées : fourmilier tacheté (le plus fréquent), moucherolle, manakin, tangara mordoré, pigeon plombé, évêque de Rothschild, sclérures, myrmidon, psittacidés, pic à cou rouge, martinet ; *Adenomera andreae*, *Allobates femoralis*, *A. hahneli*, *Hyalinobatrachium cappellei / mondolfii / iaspidiense*, *Amazophrynella teko*, *Otophryne* ; grillons. Les noms scientifiques des oiseaux sont `[À VÉRIFIER]` avant publication.
 
 **Budget (v5)** : Léonard, ≈ 20 h d'écoute (lot 1 : 8–10 h ; évaluation : ≈ 12 h), soit ≈ 25 h avec la manipulation, de S4 à S7. Experts : ≈ 2 h 30 chacun (§5.7). Le budget de la v4 (« quand on a le temps », 66 h pour le stagiaire) ne tient plus : l'annotation est devenue le chemin critique.
@@ -422,7 +446,7 @@ Proposition : 60 % aux heures de pic, 40 % ailleurs (§5.4).
 | Phase | Semaines | Contenu | Livrable | Go / no-go |
 |---|---|---|---|---|
 | P0 Cadrage (fait) | S1–S3 | lecture ; inventaire complet (96 292 enregistrements) ; chaîne CLI (M0–M5 écrits) ; benchmarks AnuraSet 01–07 | inventaire ; benchmarks | — |
-| P0 bis Clôture et plan | S3–S4 (29/09–09/10) | vague 2 AnuraSet close le 09/10 ; licences relevées (§2) ; partition des points et plan de tirage figés et versionnés (§5.2–5.5) ; mode « extrait + intervalles » du poste ; essai chronométré sur 50 extraits ; avis de Sylvain ; lecture du rapport Biophonia ; essai d'empaquetage `.exe` (§7) | plan d'échantillonnage v1 ; tableau des licences ; `.exe` d'essai | plan validé par Sylvain et Élodie ; au plus deux non libres retenus |
+| P0 bis Clôture et plan | S3–S4 (29/09–09/10) | vague 2 AnuraSet close le 09/10 ; classification tranchée (§5.11) ; licences relevées (§2) ; partition des points et plan de tirage figés et versionnés (§5.2–5.5) ; mode « extrait + intervalles » du poste ; essai chronométré sur 50 extraits ; avis de Sylvain ; lecture du rapport Biophonia ; essai d'empaquetage `.exe` (§7) | plan d'échantillonnage v1 ; tableau des licences ; `.exe` d'essai | plan validé par Sylvain et Élodie ; au plus deux non libres retenus |
 | P1 Annotation v1 | S4–S7 (05/10–30/10) | lot d'entraînement 1 (≈ 450 extraits) ; jeu d'évaluation (≈ 250 enregistrements entiers) ; paquet de vérification envoyé fin S6 ; **en parallèle** : application v0 (Analyser, Résultats) | jeu v1, non validé ; paquet de vérification | ≥ 60 enregistrements positifs dans le jeu d'évaluation, sinon tirage complémentaire |
 | Go des experts | S7–S8 (≈ 06/11) | retour d'Élodie et Benoît ; corrections ; règle du go (§5.7) | go écrit dans `DECISIONS.md` ; jeu gelé v1 | sans go : pas de benchmark ONF, l'application continue |
 | P2 Benchmark ONF borné | S8–S10 (02/11–20/11) | encodeurs libres + au plus deux non libres × logistique (+ tête sur jetons pour un transformer libre) ; courbe d'amorçage par point ; seuil par site ; lot 2 par apprentissage actif ; module séquentiel seulement s'il reste du temps | tableau ONF ; **choix de l'encodeur le 20/11** | rappel ≥ 0,85 à précision ≥ 0,1 sur le site tenu à l'écart ; sinon pivot. Fin S12 = limite de pivot (v4) |

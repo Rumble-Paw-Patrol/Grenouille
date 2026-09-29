@@ -1925,3 +1925,13 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      lignes PowerShell. Essai d'empaquetage du poste actuel en S4. La règle du §13.7 « ne pas
      toucher à la GUI avant M4 » est levée : l'application avance pendant que les experts
      vérifient. PAMGuard est écarté.
+
+160. **Classification à trancher avant le lot 1** (demande de Léonard ; V5 §5.11). Options :
+     une seule classe, trois niveaux de détection (qualité A/B/C), chœur contre solo,
+     hiérarchie. Recommandation : **annoter fin, décider gros**. À l'écoute : sous-classe
+     (solo, chœur, indécis) et qualité par intervalle positif. En sortie : une classe binaire.
+     La qualité est un attribut (rappel par qualité), pas une classe. Les sous-classes deviennent
+     des tâches auxiliaires (une régularisation, du même type que R67) seulement si chacune
+     compte au moins 30 enregistrements indépendants, et elles ne sont adoptées que si l'AP
+     binaire progresse sur les points tenus à l'écart. À valider avec Élodie, Benoît (H21 : solo
+     et chœur s'entendent-ils ?) et Sylvain.
