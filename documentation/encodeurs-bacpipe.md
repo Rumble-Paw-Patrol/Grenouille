@@ -5,6 +5,11 @@ et dans notre adaptateur (`blanci/encoders/bacpipe_encoder.py`). Aucun modèle n
 pour ce relevé : les tailles de grille marquées « à mesurer » se vérifient au premier chargement
 (méthode dans `notes.md` : comparer l'embedding à la moyenne, au maximum et au jeton de classe).
 
+**Convention** : ce fichier est la mémoire de tout ce qu'on apprend sur les encodeurs (articles,
+cartes de modèles, mesures, explications échangées avec Léonard). Toute information nouvelle y
+est consignée avec sa source et son niveau de vérification ; « Ce qui n'a pas été vérifié »
+(fin de fichier) est tenu à jour.
+
 **Mise à jour du 29/09/2026** (session « justification des exclusions ») : décision de
 benchmarker douze encodeurs, corrections sur BEANS, licences, mémoire des jetons, familles à
 variantes, Perch 2.0. Les sections ajoutées citent leurs sources en fin de fichier, et la
@@ -412,6 +417,59 @@ distillation 1,5–4,5 (4,22 au final). Le gain est modeste : ROC-AUC BirdSet 0,
 que la distillation atténue le bruit d'étiquettes (Xeno-canto : les espèces de fond ne sont pas
 annotées) au point que des fenêtres aléatoires valent des fenêtres choisies au pic d'énergie.
 
+### Lire ces têtes par rapport aux nôtres (précisions du 29/09)
+
+Schéma (la carte spatiale E_S vaut 5 × 3 × 1 536 dans le papier, 16 × 4 × 1 536 dans l'ONNX de
+bacpipe) :
+
+```
+fenêtre 5 s → réseau (EfficientNet-B3) → carte spatiale E_S
+   moyenne de E_S → E_A (1 536) → tête linéaire → 14 795 scores           (élève)
+                                → tête de source
+   E_S (cases locales) → prototypes, 4 par classe → 14 795 scores         (enseignant, stop-gradient)
+phase 2 : perte = CE(linéaire, étiquettes) + λ · CE(linéaire, probabilités des prototypes)
+```
+
+- **Classifieur à prototypes (ProtoPNet, repris par AudioProtoPNet puis Perch 2.0)** : pour
+  chaque classe, **4 vecteurs appris** (« prototypes », de la taille d'une case de la carte
+  spatiale, 1 536), appris par descente de gradient. Une case de la carte est comparée aux
+  prototypes ; le score d'une classe est l'activation maximale sur ses 4 prototypes (papier).
+  « 4 par classe » : quatre motifs typiques par espèce (variantes de chant, par exemple) ; la
+  perte d'orthogonalité les empêche de se recopier. Le maximum sur les cases de la carte est la
+  définition classique de ProtoPNet (non relu dans le papier de Perch).
+- **Ce n'est pas notre « prototype »** (`blanci/head.py`, `differential_prototype`) : le nôtre est
+  **un seul** vecteur par espèce, w = moyenne des positifs − moyenne des négatifs, calculé en
+  forme fermée (pas de gradient), sur l'embedding **moyenné** de la fenêtre ; le score est
+  linéaire (w·x + b). Celui de Perch 2.0 est appris, multiple, **local** (une note brève dans une
+  seule case n'est pas diluée par la moyenne) et non linéaire (maximum). Même idée de
+  ressemblance à un exemple type, mécanisme différent. Il se rapproche plutôt de notre sonde
+  attentive (`blanci/attentive.py`), qui vise elle aussi la dilution d'une note dans la fenêtre.
+- **Classifieur linéaire de Perch 2.0 ≠ notre linear probe** : même forme (une couche linéaire
+  sur l'embedding moyen), mais il est appris **pendant le préentraînement**, avec tout le
+  réseau, sur 14 795 classes, et façonne l'embedding. Notre linear probe est une logistique
+  apprise **après**, sur embeddings gelés, avec nos quelques annotations. Ses 14 795 logits sont
+  ceux que le projet lit pour les congénères d'A. blanci (`logit_classes`, n° 70).
+- **Pourquoi deux phases** : l'enseignant doit exister avant d'enseigner. En phase 1, la tête à
+  prototypes apprend en « observant » l'embedding (stop-gradient : elle ne le modifie pas) ;
+  quand elle est bonne, la phase 2 reprend le meilleur modèle de la phase 1 et allume la perte
+  de distillation. La phase 2 est un raffinement : pas de mixup (N = 1 le plus souvent), taux
+  d'apprentissage plus petit, moins de dropout, poids de la source réduit, poids de la
+  distillation élevé (1,5–4,5). Deux recherches d'hyperparamètres (Vizier), une par phase.
+- **Ce que la distillation apporte** : les probabilités de l'enseignant sont plus nuancées que
+  l'étiquette (par exemple 0,7 / 0,2 / 0,1 au lieu de 1 / 0 / 0) : elles disent qu'une fenêtre
+  contient sans doute aussi une seconde espèce que l'étiquette Xeno-canto ignore. L'article
+  invoque seulement Allen-Zhu et Li (2022) : « la self-distillation améliore la performance ».
+  L'explication par le bruit d'étiquettes est l'hypothèse des auteurs.
+- **Transposition à notre projet (piste, non testée)** : la distillation de Perch 2.0 change
+  l'**embedding** parce que l'encodeur s'entraîne ; avec un encodeur gelé, seule la
+  distillation **entre têtes** est possible (enseignant : sonde attentive ou prototype ;
+  élève : logistique sur l'embedding moyen, entraînée sur les probabilités de l'enseignant
+  sur des fenêtres non annotées du site cible). Elle diffère de R30 (`logistic_to_prototype`),
+  qui tire les **poids** vers le prototype, et de R47, qui tire vers la logistique : ici on tire
+  les **sorties**. Le gain observé dans Perch 2.0 est petit (+0,005 de ROC-AUC).
+  L'hypothèse « la prédiction de source encode le micro » (plus haut) est une autre affaire :
+  elle concerne la prédiction de source, pas l'auto-distillation.
+
 ## MetaPerch (arXiv 2607.14072, ICML 2026)
 
 Chasmai, Dumoulin, Hamer (Google), juillet 2026. Même réseau que « BioBaseline » : EfficientNet-B3
@@ -444,6 +502,9 @@ fournir à l'inférence.
   `effnetb0-audioset`) ; l'identité des poids `naturelm-audio-v1-beats` et `naturebeats` ; le
   caractère auto-supervisé ou non de `eat-*` (cartes contre page AVEX).
 - Les Terms of Use de BirdNET+ V3.0 préversion.
+- Perch 2.0 : la forme exacte de la perte de distillation (température, mélange avec la perte
+  sur les étiquettes) et le maximum spatial du classifieur à prototypes ne sont pas relus dans le
+  texte du papier ; le schéma ci-dessus est une lecture, pas une citation.
 - Le point de contrôle que bacpipe charge pour `audioprotopnet` et `beats` ; que 66 et 459 sont
   bien des nombres d'espèces pour `insect66` et `insect459`.
 - Les fiches ESP et BirdNET ont été lues par un outil de synthèse de pages web (pas en texte
