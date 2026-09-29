@@ -87,7 +87,7 @@ DENMIN 0,13 (0,51), PITAZU 0,00 (0,00), PHYCUV 0,12 (0,04), LEPLAT 0,00 (0,00), 
    rétrécie) estime moins de paramètres que la logistique sur 384 dimensions et se laisse
    moins tirer vers ce qui est propre aux sites d'apprentissage. Elle perd là où la logistique
    avait déjà un signal (DENMIN, LEPLAT). Test : même comparaison sur birdnet et perch_bird
-   (benchmarks 03, 04).
+   (benchmarks 03, 05) ; birdmae_base (benchmark 04) montre le même renversement.
 3. **Seuil.** Quand l'AP d'un site est proche de sa prévalence, aucun seuil n'atteint 0,5 de
    précision, ni ailleurs ni sur place : l'amorçage échoue en amont du seuil.
 4. **LEPLAT à INCT4, R18 (ACP à 64) : 0,52 d'AP du site** contre 0,25 pour la logistique ; un

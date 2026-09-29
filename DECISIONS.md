@@ -1680,3 +1680,34 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        torch CPU ; une espèce par processus avec `OMP_NUM_THREADS=1` (sans limite, 5 processus
        saturaient 4 cœurs, charge 32). Le conteneur a redémarré deux fois pendant l'encodage :
        reprise sans perte (`embed_recordings` saute ce qui est fait).
+
+## 2026-09-29 — Benchmarks 02, 03, 05 : protoclr, perch_bird, birdnet sur AnuraSet
+
+148. **Encodeurs légers sur le protocole du benchmark 01 : indicateurs.** Encodés dans le
+     cloud, CPU seul, l'un après l'autre, même sélection que le n° 141 (1 599 enregistrements,
+     fenêtres jointives à la durée native de chaque modèle) ; stocks et base sur les branches
+     `donnees-anuraset-<encodeur>`. Têtes : les 14 de `CAMPAIGN_HEADS`, 5 espèces, un pli par
+     site, une espèce par processus (1 thread BLAS), Holm sur toutes les espèces. Rapports :
+     `documentation/benchmarks/2026-09-29_anuraset_{protoclr,perch_bird,birdnet}/` ; outils
+     communs (encodage, une espèce par processus, rassemblement, modèle de `generer.py`) :
+     `documentation/benchmarks/outils_anuraset/`.
+     - Logistique, AP poolée (DENMIN / PITAZU / PHYCUV / LEPLAT / BOAFAB) : perch_v2 0,91 /
+       0,74 / 0,89 / 0,79 / 0,97 (n° 141) ; perch_bird 0,93 / 0,76 / 0,84 / 0,75 / 0,98 ;
+       birdnet 0,92 / 0,68 / 0,58 / 0,34 / 0,96 ; protoclr 0,57 / 0,24 / 0,14 / 0,33 / 0,85.
+       Runs séparés (tirages de négatifs indépendants, grilles de 3, 5 et 6 s) : pas d'écart
+       apparié entre encodeurs.
+     - birdnet décroche sur les deux espèces aux chants les plus longs (PHYCUV, LEPLAT, p90
+       3,6 et 2,7 s) : hypothèse de la fenêtre de 3 s, à tester (niveau enregistrement ou
+       overlap 0,5). A. blanci, notes ≤ 0,3 s, ressemble plutôt à DENMIN et PITAZU, où birdnet
+       égale perch_v2.
+     - Têtes : avec les trois encodeurs forts, famille logistique en tête et R37 (ou
+       R37=glmm) meilleure sur PITAZU (+0,025 à +0,034, Holm) ; R19, R20 : même chute de l'AP
+       poolée là où l'espèce est partout. Avec protoclr (comme birdmae_base, n° 147),
+       `lda_shrunk` mène le rang moyen : le classement des têtes dépend de l'encodeur.
+     - Amorçage (seuil de précision 0,5 choisi sur les autres sites) : LEPLAT/INCT4 avec
+       perch_bird, rappel 0,79 à précision 0,66 ; PITAZU/INCT41, échec partout (précision
+       ≤ 0,18 pour la logistique). Le seuil voyage quand le site ressemble aux autres.
+     - Environnement : `bacpipe` 1.3.5 sans dépendances, puis les modules manquants ; torch,
+       torchvision, torchaudio en roues CPU (les roues CUDA remplissaient le disque) ;
+       tensorflow 2.21 (roue CPU) pour birdnet et perch_bird. Durées d'encodage : protoclr
+       25 min, perch_bird 88 min (3,7 fenêtres/s, TensorFlow), birdnet 23 min.
