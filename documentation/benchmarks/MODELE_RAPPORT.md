@@ -16,6 +16,10 @@ tableaux recalculés depuis `donnees/`, sans rien relancer d'autre). Exemple :
 - Séparer ce qu'on mesure (Résultats) de ce qu'on suppose (Hypothèses), et chaque hypothèse
   s'appuie sur un chiffre ou propose un test.
 - Statut en tête : indicateur ou décision.
+- Un encodeur ne s'écarte qu'avec la tête qui correspond à sa sortie (jetons et sondage
+  attentif ou par prototypes pour les transformers auto-supervisés) et après le témoin BOAFAB ;
+  sinon il est « en retrait en sondage linéaire », pas « écarté » (`encodeurs-bacpipe.md`,
+  « Règle », n° 151).
 
 ## Plan
 

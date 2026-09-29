@@ -25,6 +25,11 @@ continue à benchmarker, sur AnuraSet puis sur les données ONF, en plus des cin
 `naturebeats`, `beats`, `convnext_birdset`, `birdnet_v3`, `rcl_fs_bsed`, `audioprotopnet`,
 `avesecho_passt`, `biolingual`, `insect66`, `insect459`, `esp-aves2`, `MetaPerch`.
 
+Précisions de Léonard le 29/09 après-midi : **`birdmae_large` s'ajoute à la liste** ;
+`birdmae_large` et `esp-aves2` (variantes `-all` comprises) sont en **priorité 1 comme
+références de benchmark**, pas comme livrables ; **gros plan sur `birdnet_v3`**, annoncé comme
+meilleur partout : à vérifier sur nos données.
+
 Inchangés : `mix2` (données ONF seulement : entraîné sur AnuraSet) ; `aves_especies` et
 `birdaves_especies` (écartés : AVES est en bas du classement BirdSet de la revue de Schwinger
 et al., voir « Écartés ») ; `surfperch`, `vggish`, `audiomae`, `bat`, `batdetect2_*`,
@@ -48,6 +53,47 @@ et al., voir « Écartés ») ; `surfperch`, `vggish`, `audiomae`, `bat`, `batde
   seulement) ; (4) `esp-aves2` : les six points de contrôle « architecture × bio/all » d'abord
   (effnetb0, eat, sl-beats), qui testent l'affirmation centrale de l'article (mélanger de
   l'audio général aide), un seul adaptateur AVEX pour tous.
+
+## Règle : juger un encodeur avec la tête qui correspond à sa sortie (29/09/2026, n° 151)
+
+Un test cassé fait écarter un bon modèle. Les transformers auto-supervisés (Bird-MAE, BEATs,
+NatureBEATs, les EAT d'esp-aves2) ne donnent leur mesure qu'avec une tête sur leurs **jetons**
+(sondage attentif, ou sondage par prototypes pour Bird-MAE). Un sondage linéaire sur leur
+embedding moyenné les sous-estime : BEATs passe de 94,10 à 97,98 AUROC sur BEANS et de 72,70 à
+82,28 sur BirdSet en changeant seulement de tête (revue de Schwinger et al.). Nos benchmarks 04
+et 06 (Bird-MAE en sondage linéaire) ne sont donc **pas** un verdict sur Bird-MAE.
+
+Avant d'écarter un encodeur, trois vérifications :
+
+1. **La tête d'origine, ou son équivalent, a été essayée** (colonne « À essayer » ci-dessous).
+   Sans elle, le statut est « en retrait en sondage linéaire », jamais « écarté ».
+2. **On lit bien la sortie que ses auteurs évaluent** : couche, agrégation, normalisation
+   (exemple : le `last_hidden_state` de Bird-MAE dans bacpipe est déjà une moyenne des patchs
+   suivie de `fc_norm`, n° 111), f_e et durée de fenêtre du modèle.
+3. **Un témoin passe** : BOAFAB, l'espèce facile d'AnuraSet, a une AP moyenne par site (minute)
+   d'au moins 0,85 avec les six encodeurs déjà testés (benchmark 07). Un nouvel encodeur
+   nettement en dessous signale d'abord un tuyau cassé (mauvaise f_e, fenêtre, couche), pas un
+   mauvais modèle.
+
+| Encodeur | Réseau et apprentissage | Tête de ses auteurs | À essayer chez nous avant verdict | État au 29/09 |
+|---|---|---|---|---|
+| perch_v2, MetaPerch | CNN (EfficientNet-B3), supervisé | linéaire sur l'embedding moyen, et prototypes sur la carte spatiale | logistique (fait) ; prototypes ou attentive sur les jetons spatiaux (déjà stockés pour perch_v2) | linéaire : référence |
+| perch_bird, birdnet (v2.4) | CNN, supervisé | linéaire sur l'embedding | logistique | fait |
+| birdnet_v3 | réseau non documenté (« improved architecture »), supervisé | son classifieur, 11 560 classes | logistique, et **son propre classifieur sans entraînement** sur 4 de nos 5 espèces | à faire |
+| convnext_birdset, esp-aves2 effnetb0, insect66, insect459, mix2 | CNN, supervisé (réseau des insect* à lire) | linéaire | logistique ; l'attention n'apporte rien à ConvNeXt (revue) | à faire |
+| audioprotopnet | CNN (ConvNeXt) + couche à prototypes (ProtoPNet) | prototypes sur les cases de la carte | logistique, puis prototypes sur les jetons (bacpipe les garde déjà) | à faire |
+| birdmae_base, _large, _huge | ViT, auto-supervisé (MAE) | **sondage par prototypes sur les jetons** (proposé par ses auteurs) | jetons (32 × 8 patchs) + sonde à prototypes ou attentive | **en retrait en linéaire, verdict suspendu** (n° 147, 149) |
+| beats, naturebeats, esp-aves2 eat-* | transformer, auto-supervisé (BEATs affiné sur AudioSet ; NatureBEATs dans NatureLM-audio) | sondage attentif (revue) | jetons + `attentive` | à faire |
+| esp-aves2 sl-beats-*, sl-eat-* | transformer, auto-supervisé puis supervisé | linéaire et attentif (article) | les deux | à faire |
+| avesecho_passt, biolingual | transformer, supervisé (PaSST) ; contrastif audio-texte (CLAP) | linéaire ; biolingual : similarité au texte, attentive dans la revue | logistique, puis attentive si en retrait | à faire |
+| protoclr | CvT-13 (transformer à convolutions), contrastif supervisé | prototypes de classe, peu d'exemples (article, à relire) | `simple_prototype` (prototype simple, jamais lancé sur AnuraSet) ; prototype différentiel et kNN : faits, en retrait | en retrait |
+| rcl_fs_bsed | CNN, contrastif régularisé, trames de 0,2 s | prototypes à peu d'exemples, détection trame par trame | grille de 0,2 s, prototype sur les candidats | à faire |
+
+Conséquence pratique : l'adaptateur ne sait extraire les jetons que de perch_v2
+(`spatial_embeddings`). Pour les transformers, l'extraction des jetons est un **prérequis** du
+benchmark, pas une option. Les jetons ne tiennent pas dans une branche git (« Jetons et
+mémoire ») : ils restent sur la machine qui encode, qui calcule aussi les têtes sur jetons et ne
+pousse que les résultats.
 
 ## Vocabulaire
 
@@ -140,9 +186,19 @@ couches ; intérêt ici). Les modèles marqués **[29/09]** sont à benchmarker 
   classe) : voir « Familles à plusieurs variantes ».
 - `birdnet_v3` **[29/09]** : ONNX (dans une enveloppe PyTorch), 32 kHz, 3 s dans bacpipe (le
   modèle accepte une durée variable) ; BirdNET+ V3.0, **préversion** (« preview 3.1 », 11 000
-  espèces dont des non-oiseaux) ; modèles sous CC BY-SA 4.0 mais « developer preview » avec
-  des Terms of Use (non lus) : déployable **sous réserve** de les lire, contrairement à la
-  v2.4 (non commerciale).
+  espèces dont des non-oiseaux) ; modèles sous CC BY-SA 4.0, Terms of Use **lus le 29/09**
+  (`TERMS_OF_USE.txt` du dépôt Zenodo 20703646) : usage commercial permis, dérivés sous la même
+  licence, attribution obligatoire (« Powered by BirdNET »), interdits : braconnage et tout
+  usage militaire ; la description dit « fourni pour la recherche et l'évaluation ».
+  **Déployable**, contrairement à la v2.4 (non commerciale). Étiquettes (fichier
+  `…_Global_11K_Labels.csv`, lu) : 11 560 classes, dont 9 834 oiseaux, 699 insectes,
+  **647 amphibiens** et 350 mammifères. 4 de nos 5 espèces AnuraSet y sont (DENMIN, LEPLAT,
+  PHYCUV, BOAFAB sous « Hypsiboas faber » ; pas PITAZU, *Pithecopus azureus*) : son classifieur
+  se juge **sans entraînement** sur ces quatre-là. A. blanci n'y est pas ; son congénère
+  *Anomaloglossus baeobatrachus* (Guyane) y est, générateur de candidats possible comme les
+  congénères de Perch (n° 70). Sources d'entraînement non publiées : AnuraSet y est peut-être
+  (fuite possible, comme mix2) ; un score spectaculaire sur AnuraSet se revérifie sur les
+  données ONF.
 - `aves_especies`, `birdaves_especies` : PyTorch (wav2vec2), 16 kHz, 1 s, animaux ; **toutes
   les couches** rendues par `extract_features` ; moyen (fenêtre courte, adaptée à une note).
   Écartés (voir « Écartés »).
@@ -320,8 +376,10 @@ encodeur) : des jetons n'y tiennent pas.
   (`feuille-de-route-V4.md`, option « Distillation (modèle maison) »).
 - **Licences** (règle du projet : non commerciale = « non déployable », appliquée à BirdNET
   v2.4) :
-  - **esp-aves2** : CC-BY-NC-SA-4.0 sur toutes les cartes lues (effnetb0-bio, effnetb0-all,
-    eat-bio, sl-beats-bio, sl-beats-all, naturelm-audio-v1-beats) → non déployable. Le tableau
+  - **esp-aves2** : CC-BY-NC-SA-4.0 sur les **dix** points de contrôle publiés, variantes `-all`
+    comprises (métadonnées Hugging Face lues le 29/09 : effnetb0-bio, -all, -audioset ; eat-bio,
+    -all ; sl-eat-bio-ssl-all, sl-eat-all-ssl-all ; sl-beats-bio, -all ;
+    naturelm-audio-v1-beats) → non déployable ; référence de benchmark, priorité 1. Le tableau
     du 29/09 matin disait effnetb0 « déployable sur l'i5 » : vrai pour la taille, faux pour la
     licence.
   - **naturebeats** : `esp-aves2-naturelm-audio-v1-beats` (l'encodeur BEATs de NatureLM-audio
@@ -339,7 +397,7 @@ projet sont des candidats à ajouter) :
 
 | Famille | Variantes | Dans le projet ou bacpipe |
 |---|---|---|
-| Bird-MAE (DBD) | Base, Large, Huge (`DBD-research-group/Bird-MAE-*`) | `birdmae_base`, `birdmae_huge` testés ; la **Large** (≈ 300 M de paramètres, celle qu'évaluent la revue et MetaPerch, « BirdMAE-L ») ne l'est pas |
+| Bird-MAE (DBD) | Base, Large, Huge (`DBD-research-group/Bird-MAE-*`, les trois dépôts existent, vérifié le 29/09) | `birdmae_base`, `birdmae_huge` testés en linéaire ; la **Large** (≈ 300 M de paramètres, celle qu'évaluent la revue et MetaPerch, « BirdMAE-L ») : priorité 1 comme référence de benchmark (décision du 29/09) |
 | AudioProtoPNet (DBD) | 1, 5, 10, 20 prototypes par classe (`AudioProtoPNet-{1,5,10,20}-BirdSet-XCL`) ; 5, 10 et 20 se valent, 1 est un peu moins bon | `audioprotopnet` : checkpoint chargé par bacpipe à lire dans son code |
 | ESP-AVES2 | 11 points de contrôle (tableau ci-dessous) | aucun : adaptateur AVEX à écrire |
 | AVES, BirdAVES (ESP, génération précédente) | plusieurs points de contrôle (non relevés) | bacpipe en expose un chacun (`aves_especies`, `birdaves_especies`), écartés |
@@ -498,10 +556,10 @@ fournir à l'inférence.
 - La grille de jetons de BEATs (8 × 31 × 768) : à mesurer au premier chargement (méthode du
   `notes.md`).
 - Les poids et la licence de MetaPerch : le dépôt `google-research/perch` n'a pas été ouvert.
-- Les licences des points de contrôle esp-aves2 non lus (`eat-all`, `sl-eat-*`,
-  `effnetb0-audioset`) ; l'identité des poids `naturelm-audio-v1-beats` et `naturebeats` ; le
-  caractère auto-supervisé ou non de `eat-*` (cartes contre page AVEX).
-- Les Terms of Use de BirdNET+ V3.0 préversion.
+- L'identité des poids `naturelm-audio-v1-beats` et `naturebeats` (à comparer sur quelques
+  fenêtres) ; le caractère auto-supervisé ou non de `eat-*` (cartes contre page AVEX).
+- Les sources d'entraînement de BirdNET+ V3.0 (AnuraSet y est-il ?) et son architecture.
+- La licence de Bird-MAE (absente des métadonnées Hugging Face).
 - Perch 2.0 : la forme exacte de la perte de distillation (température, mélange avec la perte
   sur les étiquettes) et le maximum spatial du classifieur à prototypes ne sont pas relus dans le
   texte du papier ; le schéma ci-dessus est une lecture, pas une citation.

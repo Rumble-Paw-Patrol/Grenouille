@@ -112,7 +112,8 @@ Seuil choisi sur les autres sites (perch_v2, logistique, fenêtre, précision vi
 
 - **Encodeur : perch_v2.** Il fait jeu égal avec perch_bird, en 2,4 fois plus rapide, et rend
   ses jetons. perch_bird et birdnet restent les candidats à départager sur les données ONF (le
-  §2 du projet). Bird-MAE et protoclr sont écartés pour le sondage linéaire.
+  §2 du projet). Bird-MAE et protoclr sont en retrait en sondage linéaire ; pas de verdict sur Bird-MAE
+  avant une tête sur ses jetons (n° 151).
 - **Tête : la logistique, dans les deux régimes.** R37=glmm n'apporte rien de mesurable ici, et
   dégrade l'AP poolée si la file d'annotation mélange des sites.
 - **Pipeline d'amorçage d'un site : même encodeur, même tête, mais une stratégie

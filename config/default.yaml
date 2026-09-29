@@ -110,6 +110,17 @@ encoders:
     protoclr: {backend: bacpipe, model: protoclr}
     perch_bird: {backend: bacpipe, model: perch_bird}
     convnext_birdset: {backend: bacpipe, model: convnext_birdset}
+    # Décision du 29/09 (encodeurs-bacpipe.md) : à benchmarker sur AnuraSet puis les données ONF.
+    # Bird-MAE-Large : celle qu'évaluent la revue et MetaPerch ; référence de benchmark.
+    birdmae_large: {backend: bacpipe, model: birdmae, checkpoint: DBD-research-group/Bird-MAE-Large}
+    # BirdNET+ V3.0, préversion 3.1 (32 kHz, 3 s dans bacpipe) ; CC BY-SA 4.0, déployable.
+    birdnet_v3: {backend: bacpipe, model: birdnet_v3}
+    audioprotopnet: {backend: bacpipe, model: audioprotopnet}   # jetons gardés par bacpipe
+    avesecho_passt: {backend: bacpipe, model: avesecho_passt}
+    biolingual: {backend: bacpipe, model: biolingual}           # fenêtre de 10 s
+    insect66: {backend: bacpipe, model: insect66}
+    insect459: {backend: bacpipe, model: insect459}
+    rcl_fs_bsed: {backend: bacpipe, model: rcl_fs_bsed}         # trames de 0,2 s
 
 head:
   C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]

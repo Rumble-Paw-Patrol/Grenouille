@@ -1773,3 +1773,40 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        `documentation/encodeurs-bacpipe.md` : naturebeats, birdnet_v3 (préversion, licence
        déployable) et esp-aves2 (ESP, ICLR 2026, hors bacpipe) d'abord. mix2 a été appris sur
        AnuraSet : il est exclu de ces benchmarks, mais reste candidat sur les données ONF.
+
+## 2026-09-29 (après-midi) — Tête adaptée à chaque encodeur ; encodeurs à benchmarker
+
+151. **Un encodeur se juge avec la tête qui correspond à sa sortie.** Demandé par Léonard :
+     un test cassé fait écarter un bon modèle. Les transformers auto-supervisés (Bird-MAE, BEATs,
+     NatureBEATs, EAT) ne donnent leur mesure qu'avec une tête sur leurs jetons (BEATs : 94,10 →
+     97,98 AUROC sur BEANS en passant du linéaire à l'attentif, revue de Schwinger et al.).
+     Règle, avec un tableau par encodeur (sortie, tête des auteurs, tête à essayer), dans
+     `documentation/encodeurs-bacpipe.md` (« Règle ») ; rappel dans `MODELE_RAPPORT.md`.
+     - Avant d'écarter un encodeur : sa tête d'origine ou son équivalent a été essayée ; on lit
+       bien la sortie que ses auteurs évaluent (couche, agrégation, f_e, fenêtre ; n° 111) ; le
+       témoin BOAFAB passe (AP moyenne par site, minute, ≥ 0,85 pour les six encodeurs du
+       benchmark 07 : nettement en dessous, c'est d'abord le tuyau qu'on soupçonne).
+     - Vocabulaire des rapports : « en retrait en sondage linéaire » tant que la tête adaptée
+       n'a pas été essayée, « écarté » seulement ensuite. Bird-MAE : verdict suspendu (n° 147,
+       149) ; le rapport 07 est corrigé en ce sens.
+     - Prérequis : l'adaptateur n'extrait les jetons que de perch_v2. Pour les transformers,
+       l'extraction des jetons précède leur benchmark. Les jetons restent sur la machine qui
+       encode ; elle calcule les têtes sur jetons et ne pousse que les résultats.
+
+     **Encodeurs à benchmarker** (décision de Léonard, `encodeurs-bacpipe.md`) : naturebeats,
+     beats, convnext_birdset, birdnet_v3, rcl_fs_bsed, audioprotopnet, avesecho_passt,
+     biolingual, insect66, insect459, esp-aves2, MetaPerch, et birdmae_large. Bird-MAE-Large et
+     esp-aves2 (variantes `-all` comprises) : priorité 1 comme références de benchmark, pas
+     comme livrables. Gros plan sur birdnet_v3. Entrées ajoutées à `encoders.models` pour les
+     modèles de bacpipe (birdmae_large, birdnet_v3, audioprotopnet, avesecho_passt, biolingual,
+     insect66, insect459, rcl_fs_bsed) ; esp-aves2 (bibliothèque AVEX) et MetaPerch demandent
+     un adaptateur.
+     - Vérifié le 29/09 : les dix points de contrôle esp-aves2 sont sous CC-BY-NC-SA-4.0,
+       variantes `-all` comprises (non déployables). BirdNET+ V3.0 : CC BY-SA 4.0, conditions
+       d'utilisation lues (commercial permis ; interdits : braconnage, usage militaire),
+       déployable. Ses 11 560 classes comptent 647 amphibiens, dont 4 de nos 5 espèces AnuraSet
+       (pas PITAZU) : son classifieur se jugera sans entraînement. A. blanci n'y est pas, mais
+       son congénère *A. baeobatrachus* y est. Ses sources d'entraînement ne sont pas publiées :
+       AnuraSet y est peut-être, et un score spectaculaire se revérifiera sur les données ONF.
+     - MetaPerch : d'après l'article, la localisation et la date servent de pertes auxiliaires
+       à l'entraînement seulement ; rien à fournir à l'inférence. Poids non vérifiés.
