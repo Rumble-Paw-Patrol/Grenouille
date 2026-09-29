@@ -29,6 +29,43 @@ PATCH = 16  # jetons de 16 trames × 16 bandes (BEATs, EAT)
 FREQ_BANDS = 8  # 128 bandes mel / 16
 
 
+def remap_fairseq_eat(state: dict, model_keys) -> dict | None:
+    """Clés fairseq d'un point de contrôle EAT → clés du modèle d'AVEX, ou None s'il n'est pas
+    au format fairseq.
+
+    `eat_bio` et `eat_all` (EAT auto-supervisé seul) sont publiés au format fairseq
+    (`blocks.*`, `modality_encoders.IMAGE.*`, `context_encoder.norm`) ; AVEX 1.3.0 n'ajoute que
+    le préfixe `backbone.` et n'en charge aucun tenseur (0/150) : le modèle garde alors les
+    poids de l'EAT générique d'AudioSet. Le décodeur de reconstruction est laissé de côté.
+    """
+    if not any(k.startswith("modality_encoders.IMAGE.") for k in state):
+        return None
+    out = {}
+    for key, value in state.items():
+        key = key.replace("modality_encoders.IMAGE.", "")
+        key = key.replace("context_encoder.norm.", "pre_norm.")
+        out["backbone.model." + key] = value
+    missing = sorted(set(model_keys) - set(out))
+    if missing:
+        raise ValueError(f"point de contrôle EAT fairseq : clés absentes {missing[:5]}")
+    return {k: out[k] for k in model_keys}
+
+
+def _load_fairseq_eat(model, model_name: str) -> None:
+    from avex.models.utils.load import get_checkpoint_path
+    from huggingface_hub import hf_hub_download
+    from safetensors.torch import load_file
+
+    path = get_checkpoint_path(model_name)
+    if not path or not path.startswith("hf://"):
+        return
+    org, repo, filename = path[len("hf://") :].split("/", 2)
+    state = load_file(hf_hub_download(f"{org}/{repo}", filename))
+    remapped = remap_fairseq_eat(state, list(model.state_dict()))
+    if remapped is not None:
+        model.load_state_dict(remapped, strict=True)
+
+
 class AvexEncoder(BaseEncoder):
     def __init__(
         self,
@@ -52,6 +89,8 @@ class AvexEncoder(BaseEncoder):
         self.sample_rate = int(spec.audio_config.sample_rate)
         self.window_s = float(window_s)
         self._model = avex.load_model(model_name, device=device, return_features_only=True)
+        if self.family.startswith("eat"):
+            _load_fairseq_eat(self._model, model_name)
         self._model.eval()
         probe = self._grid(self._features(np.zeros((1, self._samples()), np.float32)))
         self.dim = int(probe[1].shape[-1])
