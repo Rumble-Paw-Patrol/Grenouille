@@ -1,0 +1,6 @@
+species,n_calls,n_recordings,n_sites,n_long,duration_median_s,duration_p90_s,dominant_hz,criterion
+DENMIN,1724,266,3,137,0.614058,1.953177599999999,5321.538519397447,"5,3 kHz, 3 sites : l'analogue le plus proche d'A. blanci"
+LEPLAT,1199,188,2,167,0.763373000000001,2.739643,2043.7133435013009,2 sites déséquilibrés (1 270 / 79)
+PITAZU,1057,187,2,128,0.3070299999999974,1.252913999999996,2142.6872342659126,"note de 0,3 s ; 1 386 contre 29 : amorcer un site avec très peu d'exemples"
+BOAFAB,540,193,2,195,0.566823000000003,1.7382572000000007,1584.8991907510629,2 sites équilibrés (1 043 / 760 fenêtres positives)
+PHYCUV,429,184,3,244,0.9958599999999996,3.6283841999999993,6298.613904457379,3 sites (86 / 366 / 453)

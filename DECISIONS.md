@@ -1658,3 +1658,25 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        0,1 sur quatre graines ; 0,13 à force 3).
      Laissés de côté : réécrire l'historique pour en retirer `pheno-blanci.pdf` (5,2 Mo)
      forcerait tout clone à repartir de zéro ; la révision Hugging Face du checkpoint (n° 143).
+
+## 2026-09-29 — Benchmark 04 : birdmae_base sur AnuraSet
+
+147. **birdmae_base (Bird-MAE-Base gelé) sur le protocole du benchmark 01 : indicateur.**
+     Encodé dans le cloud, CPU seul : 1 599 enregistrements, 19 166 fenêtres de 5 s jointives,
+     7,3–7,9 fenêtres/s (≈ 45 min) ; stock et base sur la branche
+     `donnees-anuraset-birdmae_base`. Rapport :
+     `documentation/benchmarks/2026-09-29_anuraset_birdmae_base/RAPPORT.md`.
+     - Logistique, AP poolée : 0,31 à 0,70 sur 4 espèces sur 5 (perch_v2 : 0,74 à 0,91) ;
+       BOAFAB 0,94. Poids vérifiés (152 tenseurs identiques au checkpoint).
+     - `lda_shrunk` mène le rang moyen (+0,23 PHYCUV, +0,10 PITAZU, Holm), comme avec
+       protoclr, alors qu'elle perdait 0,39 sur LEPLAT avec perch_v2 : le choix de la tête
+       dépend de l'encodeur.
+     - Amorçage d'un site peu annoté (seuil de précision 0,5 choisi sur les autres sites) :
+       PITAZU/INCT41, AP 0,04, rappel 0 ; LEPLAT/INCT4, AP 0,25, rappel 0,71 à précision 0,13
+       (perch_v2, refait à l'identique : 0,78 ; 0,84 à précision 0,40).
+     - Pas de verdict sur Bird-MAE : une tête sur jetons (sondage par prototypes, celui que
+       proposent ses auteurs) reste à essayer avant de l'écarter.
+     - Environnement : transformers < 5 (la 5.17 ne charge pas le code distant du modèle) ;
+       torch CPU ; une espèce par processus avec `OMP_NUM_THREADS=1` (sans limite, 5 processus
+       saturaient 4 cœurs, charge 32). Le conteneur a redémarré deux fois pendant l'encodage :
+       reprise sans perte (`embed_recordings` saute ce qui est fait).
