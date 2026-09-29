@@ -1711,3 +1711,29 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        torchvision, torchaudio en roues CPU (les roues CUDA remplissaient le disque) ;
        tensorflow 2.21 (roue CPU) pour birdnet et perch_bird. Durées d'encodage : protoclr
        25 min, perch_bird 88 min (3,7 fenêtres/s, TensorFlow), birdnet 23 min.
+
+## 2026-09-29 — Benchmark 06 : birdmae_huge sur AnuraSet
+
+149. **birdmae_huge (Bird-MAE-Huge gelé) sur le protocole du benchmark 01 : indicateur.**
+     Nouvelle entrée `encoders.models.birdmae_huge` : le calcul de `birdmae` (bacpipe :
+     extracteur de Base, réseau Huge ; embeddings vérifiés identiques), avec le checkpoint
+     explicite pour que le stock porte un nom distinct de `birdmae_base`. Encodé dans le cloud,
+     CPU seul : 1 599 enregistrements, 19 166 fenêtres, 1,1 fenêtre/s (4 h 50) ; stock et base
+     sur la branche `donnees-anuraset-birdmae_huge`. Les 14 têtes de `CAMPAIGN_HEADS`, une
+     espèce par processus. Rapport :
+     `documentation/benchmarks/2026-09-29_anuraset_birdmae_huge/RAPPORT.md`.
+     - Logistique, AP poolée : 0,33 à 0,63 sur les 4 espèces non saturées (perch_v2 : 0,74 à
+       0,91), soit −0,29 à −0,42 ; l'AP par site perd autant. BOAFAB 0,93.
+     - Huge ne fait pas mieux que Base (n° 147) : écarts de −0,07 à +0,08 selon l'espèce, sans
+       tendance, pour un encodage 7 fois plus lent.
+     - `lda_shrunk` mène encore le rang moyen (PHYCUV +0,19 sur la logistique, Holm). Les
+       embeddings sont presque alignés (cosinus médian 0,997 avec leur moyenne, norme
+       constante) : hypothèse, le chant tient dans des directions de faible variance, que la
+       LDA décorrèle et que la logistique standardisée seule ne dégage pas. Test proposé :
+       logistique sur embeddings blanchis.
+     - R37 sur PITAZU : +0,07 (Holm), comme avec perch_v2 (+0,05).
+     - Amorçage : PITAZU/INCT41, AP ≈ 0,05 pour toutes les têtes (le hasard) ; LEPLAT/INCT4,
+       0,12 (perch_v2 0,78).
+     - Pas de verdict sur Bird-MAE (comme au n° 147) : blanchiment et sonde sur les jetons
+       restent à essayer. En attendant, perch_v2 reste la référence, et Base est préférable à
+       Huge pour la même AP.
