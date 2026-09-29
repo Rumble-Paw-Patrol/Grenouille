@@ -389,6 +389,13 @@ encodeur) : des jetons n'y tiennent pas.
     Terms of Use non lus.
   - **MetaPerch** : licence des poids non lue. Bird-MAE, ConvNeXt-BirdSet, AudioProtoPNet,
     BEATs : non relevée.
+  - **Relevé du 29/09 au soir** (fiches Hugging Face ; feuille de route V5 §2, DECISIONS
+    n° 156) : AudioProtoPNet CC BY-NC 4.0 → non libre ; NatureLM-audio CC BY-NC-SA 4.0
+    (confirme la réserve sur naturebeats) ; Bird-MAE Base, Large et Huge, ConvNeXt-BirdSet et
+    BioLingual : **aucune licence déclarée**, donc non libres tant que les auteurs n'en publient
+    pas ; BEATs : dépôt `microsoft/unilm` sous MIT.
+  - **Règle V5** : encodeur libre impératif pour le livrable ; au benchmark ONF, au plus deux
+    non libres, seulement s'ils font mieux que le meilleur libre sur AnuraSet.
 
 ## Familles à plusieurs variantes (29/09/2026)
 

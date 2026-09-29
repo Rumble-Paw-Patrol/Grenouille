@@ -5,6 +5,10 @@ bloquée, poids non publiés.** Léonard écrit « go » dans une session quand 
 Ce fichier prime sur le message de création de la session ; les précisions de Léonard au
 moment du go priment sur ce fichier. Décisions : n° 141, 150, 151, 152.
 
+**Clôture (feuille de route V5, DECISIONS n° 156)** : la vague se termine le **09/10/2026** ;
+les sessions non finies ce jour-là sont abandonnées. Licence de chaque encodeur : V5 §2 ; les
+non libres ne servent plus que d'objectifs à battre.
+
 ## Sessions
 
 | Session | Encodeurs | Têtes (options de `global_bench.py`) | Prête |

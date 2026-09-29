@@ -1876,3 +1876,52 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      écarté de l'encodage (`select_recordings`) : s'il y chante, il revient dans le corpus,
      avec son heure à corriger d'une heure (`start_utc` − 1 h) avant toute analyse par heure
      ou tout appariement au créneau.
+
+## 2026-09-29 (soir) — Entretien avec Élodie : objectifs révisés, feuille de route V5
+
+155. **Feuille de route V5** (entretien de Léonard avec Élodie, 29/09/2026).
+     `documentation/feuille-de-route-V5.md` remplace la V4, archivée dans `documentation/old/`.
+     Numéros de section conservés : les renvois des entrées précédentes restent valables.
+     Nouveaux : §0 (objectifs, ordre des critères, définition de « libre ») et §14 (pour aller
+     plus loin : article de phénologie, gabarit multi-espèces). Ordre des critères (Élodie) :
+     licence libre (filtre), puis performance, puis facilité d'utilisation, puis durée
+     d'encodage ; un naturaliste n'écrit pas plus d'une ou deux lignes de code, zéro visé.
+
+156. **Encodeur libre d'accès impératif** (V5 §0, §2). Définition de travail, à confirmer par
+     Élodie : poids publics **et** licence qui permet l'usage par l'ONF (établissement public à
+     caractère industriel et commercial) ; clause non commerciale ou licence absente = non libre.
+     Relevé du 29/09 (fiches Hugging Face) : AudioProtoPNet CC BY-NC 4.0 ; NatureLM-audio (source
+     probable de naturebeats) CC BY-NC-SA 4.0 ; esp-aves2 CC BY-NC-SA 4.0 (n° 151) ; **aucune
+     licence déclarée** pour Bird-MAE (Base, Large, Huge), ConvNeXt-BirdSet et BioLingual ;
+     BEATs : dépôt `microsoft/unilm` sous MIT. Libres : perch_v2 (Apache 2.0), birdnet_v3
+     (CC BY-SA 4.0), beats et perch_bird sous réserve. Après AnuraSet, **au plus deux non
+     libres** restent pour le benchmark ONF, et seulement s'ils font mieux que le meilleur libre ;
+     au 29/09, aucun ne le fait (perch_v2 en tête du benchmark 07). La vague 2 d'AnuraSet se
+     clôt le **09/10/2026** ; ce qui n'est pas fini ce jour-là est abandonné.
+
+157. **Annotations reprises de zéro** (V5 §5). Les 345 positifs et 150 négatifs Blancinet
+     (n° 34) restent dans la base (ajout seul) mais sortent de l'entraînement et de
+     l'évaluation. Jeu v1 tiré par plan, avant écoute, sans aucun détecteur : partition des
+     points (un site 2026 entier, 20 % des points des autres sites, une station 2023 sur deux
+     tenus à l'écart) ; lot d'entraînement 1 d'environ 450 extraits de 30 s (3 par point 2026,
+     50 par station 2023 ; 60 % aux heures de pic) ; jeu d'évaluation d'environ 250
+     enregistrements entiers, probabilités de tirage notées et métriques repondérées ; labels
+     par intervalles, dont se déduisent les fenêtres de chaque grille. Avis sur les
+     propositions d'Élodie (février–mars, pics journaliers) et questions pour Sylvain : V5 §5.8.
+     À coder (V5 §13, liste v5) : `candidates --plan`, mode « extrait + intervalles »,
+     filtre des sources `import`, `active` et `similarity`, pondération des métriques.
+
+158. **Aucun benchmark sur les données ONF avant le go d'Élodie et Benoît** (V5 §5.7).
+     Paquet de vérification à l'aveugle : tous les incertains, tous les positifs du jeu
+     d'évaluation, 20 % de ses négatifs, 60 positifs et 100 négatifs d'entraînement, 30 éléments
+     écoutés par les deux experts (≈ 2 h 30 chacun). Go si 0 erreur sur 60 positifs et au plus
+     un chant manqué sur 100 négatifs (bornes unilatérales à 95 % : ≤ 5 % et ≤ 4,7 %) ; sinon
+     réécoute de la strate fautive. Le go s'écrira ici, avec ses chiffres. Benchmark ONF borné
+     ensuite : choix de l'encodeur le **20/11/2026**, puis plus aucun benchmark d'encodeur.
+
+159. **Livrable : application Windows installable, sans code** (V5 §7). PyInstaller + Inno
+     Setup, construite par GitHub Actions ; interface locale (poste Streamlit repris, Gradio en
+     repli), sur le modèle de BirdNET-Analyzer ; étape intermédiaire et repli : `uv`, deux
+     lignes PowerShell. Essai d'empaquetage du poste actuel en S4. La règle du §13.7 « ne pas
+     toucher à la GUI avant M4 » est levée : l'application avance pendant que les experts
+     vérifient. PAMGuard est écarté.
