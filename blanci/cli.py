@@ -67,6 +67,7 @@ from blanci.workbench import agreement as annotator_agreement
 from blanci.workbench import (
     blancinet_candidates,
     congener_candidates,
+    flagged_candidates,
     random_candidates,
     recording_candidates,
 )
@@ -169,7 +170,8 @@ def ingest(
 def _echo_flags(flagged: dict[str, int]) -> None:
     typer.echo(
         f"signalés (jamais encodés) : {flagged.get('duration_off', 0)} de durée anormale, "
-        f"{flagged.get('off_campaign', 0)} hors relevé"
+        f"{flagged.get('off_campaign', 0)} hors relevé, "
+        f"{flagged.get('clock_off', 0)} à l'horloge douteuse"
     )
 
 
@@ -193,7 +195,7 @@ def flag(ctx: typer.Context) -> None:
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
-    _echo_flags(apply_metadata_flags(con, cfg["qc"]))
+    _echo_flags(apply_metadata_flags(con, cfg["qc"], cfg["recorder"]["filename_utc_offset_h"]))
     audio = apply_audio_flags(con, cfg["qc"])
     typer.echo(
         "audio (enregistrements déjà contrôlés) : "
@@ -1853,6 +1855,13 @@ def candidates(
     reason: Annotated[
         str, typer.Option(help="Motif des enregistrements entiers : audit_aleatoire, jeu_gele…")
     ] = "audit_aleatoire",
+    flag: Annotated[
+        str | None,
+        typer.Option(
+            "--drapeau",
+            help="Enregistrements écartés par ce drapeau (ex. clock_off), à écouter en entier.",
+        ),
+    ] = None,
     sites: Annotated[str | None, typer.Option(help="Sites, ex. « CDR,PatawaOuest ».")] = None,
     name: Annotated[str, typer.Option(help="Nom de la file : candidats_<nom>.csv.")] = "lot1",
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
@@ -1871,8 +1880,12 @@ def candidates(
         parts.append(random_candidates(con, cfg, random, wanted, seed=seed))
     if whole:
         parts.append(recording_candidates(con, cfg, whole, wanted, reason=reason, seed=seed))
+    if flag:
+        parts.append(flagged_candidates(con, flag, wanted, seed=seed))
     if not parts:
-        raise typer.BadParameter("rien à tirer : --from, --congeners, --random ou --entiers")
+        raise typer.BadParameter(
+            "rien à tirer : --from, --congeners, --random, --entiers ou --drapeau"
+        )
     queue = pd.concat(parts, ignore_index=True).sample(frac=1.0, random_state=seed)
     if queue.empty:
         typer.echo("aucun candidat")

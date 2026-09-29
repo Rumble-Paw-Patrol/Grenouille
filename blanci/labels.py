@@ -43,6 +43,8 @@ QUALITIES = ("A", "B", "C")
 # négatifs durs). « bulk » : label propagé sans écoute à tout un groupe homogène (étiquetage en
 # bloc, `selection.label_cluster`) ; les fenêtres écoutées de ce groupe restent « cluster ».
 # « gap » : faux négatif suspect, fenêtre négative encadrée de positives (n° 102).
+# « flag » : enregistrement écarté par un drapeau (horloge douteuse…), écouté pour juger
+# ce qu'il vaut (n° 154) ; jamais mêlé à l'audit aléatoire, qui mesure le rappel.
 SOURCES = (
     "import",
     "similarity",
@@ -57,6 +59,7 @@ SOURCES = (
     "bulk",
     "gap",
     "yapat",
+    "flag",
 )
 TARGET_SPECIES = "Anomaloglossus blanci"
 

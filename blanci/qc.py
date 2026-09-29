@@ -3,7 +3,7 @@
 Un drapeau est une remarque sur un enregistrement, rangée dans `recordings.qc_flags` (le
 fichier n'est jamais touché). Trois origines :
 - inventaire, sans lire l'audio : durée anormale (`duration_off`), hors relevé
-  (`off_campaign`) ;
+  (`off_campaign`), horloge douteuse (`clock_off`) ;
 - audio, calculé sur le son (à l'inventaire avec contrôle, ou pendant `embed`) : silencieux,
   saturation, micro dans sac, pluie ; indices simples (numpy/scipy), seuils de
   config/default.yaml calibrés par `blanci qc-calibrate` ;
@@ -32,7 +32,7 @@ from blanci.labels import POSITIVE_LABELS
 
 # Drapeaux qui écartent un enregistrement du corpus : jamais encodé, donc ni négatif apparié,
 # ni candidat à écouter, ni score. Les autres (pluie, saturation) sont des remarques.
-EXCLUDING_FLAGS = ("in_bag", "silent", "duration_off", "off_campaign")
+EXCLUDING_FLAGS = ("in_bag", "silent", "duration_off", "off_campaign", "clock_off")
 AUDIO_FLAGS = ("silent", "saturation", "in_bag", "rain")
 
 
@@ -100,11 +100,13 @@ def qc_flags(indices: dict[str, float], thresholds: dict[str, float]) -> dict[st
 
 # --- Drapeaux d'inventaire : calculés sur les métadonnées, sans lire l'audio -----------------
 
-METADATA_FLAGS = ("duration_off", "off_campaign")
+METADATA_FLAGS = ("duration_off", "off_campaign", "clock_off")
 
 
-def metadata_flags(recordings: pd.DataFrame, thresholds: dict[str, Any]) -> pd.DataFrame:
-    """`duration_off` et `off_campaign` par enregistrement.
+def metadata_flags(
+    recordings: pd.DataFrame, thresholds: dict[str, Any], utc_offset_h: float = -3.0
+) -> pd.DataFrame:
+    """`duration_off`, `off_campaign` et `clock_off` par enregistrement.
 
     - duration_off : durée hors du programme (2 min ± tolérance) — tests, déclenchements
       manuels, fichiers coupés.
@@ -113,8 +115,13 @@ def metadata_flags(recordings: pd.DataFrame, thresholds: dict[str, Any]) -> pd.D
       `campaign_gap_days` ; le plus gros bloc est la campagne, les autres en sortent (tests
       d'avant pose, restes de carte SD d'un autre lieu). Un micro posé en continu sur
       plusieurs relevés d'un même site reste un seul bloc.
+    - clock_off : l'heure du nom de fichier (heure locale de l'enregistreur, à
+      `utc_offset_h`) et celle de l'en-tête (`start_utc`, GUANO) diffèrent de plus de
+      `clock_tolerance_min` : on ne sait pas laquelle croire (DECISIONS n° 154 : Molokoi
+      SMA14636 en avril 2024, en-tête en avance d'une heure). Sans `path`, ou sans
+      horodatage dans le nom, rien n'est signalé.
 
-    `recordings` : recording_id, dataset, site, mic_id, start_utc, duration_s.
+    `recordings` : recording_id, dataset, site, mic_id, start_utc, duration_s ; path.
     """
     expected = float(thresholds["expected_duration_s"])
     tolerance = float(thresholds["duration_tolerance_s"])
@@ -133,23 +140,35 @@ def metadata_flags(recordings: pd.DataFrame, thresholds: dict[str, Any]) -> pd.D
         main = block.value_counts().idxmax()
         outside = group.index[block != main]
         out.loc[outside, "off_campaign"] = True
+
+    out["clock_off"] = False
+    if "path" in recordings:
+        stamp = recordings["path"].astype(str).str.extract(r"_(\d{8}_\d{6})\.\w+$")[0]
+        named = pd.to_datetime(stamp, format="%Y%m%d_%H%M%S", errors="coerce")
+        header = pd.to_datetime(recordings["start_utc"], utc=True, errors="coerce")
+        local = (header + pd.Timedelta(hours=utc_offset_h)).dt.tz_localize(None)
+        minutes = (local - named).dt.total_seconds().abs() / 60
+        tolerance_min = float(thresholds.get("clock_tolerance_min", 5.0))
+        out["clock_off"] = (minutes > tolerance_min).fillna(False).to_numpy()
     return out
 
 
-def apply_metadata_flags(con: sqlite3.Connection, thresholds: dict[str, Any]) -> dict[str, int]:
+def apply_metadata_flags(
+    con: sqlite3.Connection, thresholds: dict[str, Any], utc_offset_h: float = -3.0
+) -> dict[str, int]:
     """Recalcule les drapeaux d'inventaire et les fusionne dans `recordings.qc_flags`.
 
-    Seules les clés `duration_off` et `off_campaign` sont réécrites : les indices audio déjà
+    Seules les clés de `METADATA_FLAGS` sont réécrites : les indices audio déjà
     calculés (pluie, saturation…) sont conservés. Rien n'est supprimé.
     """
     recordings = pd.read_sql_query(
-        "SELECT recording_id, dataset, site, mic_id, start_utc, duration_s, qc_flags "
+        "SELECT recording_id, path, dataset, site, mic_id, start_utc, duration_s, qc_flags "
         "FROM recordings",
         con,
     )
     if recordings.empty:
         return dict.fromkeys(METADATA_FLAGS, 0)
-    flags = metadata_flags(recordings, thresholds).set_index("recording_id")
+    flags = metadata_flags(recordings, thresholds, utc_offset_h).set_index("recording_id")
     updates = []
     for rid, current in zip(recordings["recording_id"], recordings["qc_flags"], strict=True):
         merged = json.loads(current) if isinstance(current, str) and current else {}

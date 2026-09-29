@@ -284,7 +284,7 @@ def ingest(
             print(f"  {n} fichiers parcourus ({report.added} ajoutés)", flush=True)
     con.commit()
     # Les drapeaux d'inventaire dépendent de toute la série d'un micro : recalculés ici.
-    report.flagged = apply_metadata_flags(con, cfg["qc"])
+    report.flagged = apply_metadata_flags(con, cfg["qc"], cfg["recorder"]["filename_utc_offset_h"])
     # Un contrôle audio refait réécrit qc_flags : les drapeaux posés à l'écoute sont remis.
     apply_annotation_flags(con)
     return report

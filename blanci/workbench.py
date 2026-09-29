@@ -309,6 +309,33 @@ def _bin_name(b: int) -> str:
     return f"{lo:.1f}-{hi:.1f}"
 
 
+def flagged_candidates(
+    con: sqlite3.Connection, flag: str, sites: list[str] | None = None, seed: int = 0
+) -> pd.DataFrame:
+    """Enregistrements écartés par le drapeau `flag` (ex. `clock_off`), à écouter en entier
+    pour juger ce qu'ils valent (DECISIONS n° 154). Écartés, ils ne sont jamais encodés : seule
+    l'écoute les rend utiles. Source « flag », motif = le drapeau. Sautés : ceux qu'un autre
+    drapeau écarte aussi (un test de quelques secondes resterait écarté quoi qu'on entende), et
+    ceux qui portent déjà un label d'enregistrement entier."""
+    from blanci.qc import EXCLUDING_FLAGS, flag_raised, is_excluded, parse_flags
+
+    recordings = recordings_table(con)
+    others = tuple(k for k in EXCLUDING_FLAGS if k != flag)
+    raised = recordings["qc_flags"].map(
+        lambda q: flag_raised(parse_flags(q), flag) and not is_excluded(q, others)
+    )
+    recordings = recordings[raised]
+    if sites:
+        wanted = {s.lower() for s in sites}
+        recordings = recordings[recordings["site"].str.lower().isin(wanted)]
+    recordings = recordings.assign(
+        offset_s=0.0, dur_s=recordings["duration_s"].astype(float).round(2)
+    )
+    recordings = _drop_labelled(con, recordings)
+    out = recordings.assign(score=np.nan, reason=flag, source="flag")
+    return _finish(out, seed)
+
+
 def _drop_labelled(con: sqlite3.Connection, candidates: pd.DataFrame) -> pd.DataFrame:
     done = {row[0] for row in con.execute("SELECT DISTINCT window_id FROM labels")}
     return candidates[[i not in done for i in _window_ids(candidates)]]

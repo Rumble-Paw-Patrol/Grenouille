@@ -349,3 +349,29 @@ def test_congener_candidates_need_logits(corpus):
     con, _, _ = corpus
     with pytest.raises(ValueError, match="aucun logit"):
         congener_candidates(con, "perch_v2-bacpipe1.3.5")
+
+
+def test_flagged_recordings_go_whole_to_the_listening_queue(corpus):
+    """Écartés par un drapeau (horloge douteuse), jamais encodés : on les écoute en entier."""
+    from blanci.service import append_label
+    from blanci.workbench import flagged_candidates
+
+    con, _, _ = corpus
+    con.execute(
+        "UPDATE recordings SET qc_flags = ? WHERE path LIKE '%P1_2026021%'",
+        (json.dumps({"clock_off": True}),),
+    )
+    con.execute(  # test de quelques secondes : déjà écarté pour sa durée, pas à écouter
+        "UPDATE recordings SET qc_flags = ? WHERE path LIKE '%P2_20260210%'",
+        (json.dumps({"clock_off": True, "duration_off": True}),),
+    )
+    queue = flagged_candidates(con, "clock_off")
+    assert list(queue.columns) == CANDIDATE_COLUMNS and len(queue) == 4
+    assert queue["path"].str.contains("P1_2026021").all()
+    assert (queue["offset_s"] == 0).all() and (queue["dur_s"] == DURATION_S).all()
+    assert set(queue["source"]) == {"flag"} and set(queue["reason"]) == {"clock_off"}
+    heard = queue.iloc[0]
+    wid = ensure_window(con, heard["recording_id"], 0.0, DURATION_S)
+    append_label(con, wid, "background", "flag")
+    assert len(flagged_candidates(con, "clock_off")) == 3  # déjà écouté : sauté
+    assert flagged_candidates(con, "clock_off", sites=["CDR"]).empty

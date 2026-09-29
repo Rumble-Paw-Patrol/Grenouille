@@ -56,6 +56,9 @@ qc:
   expected_duration_s: 120.0       # programme des Song Meter : 2 min toutes les 30 min
   duration_tolerance_s: 1.0        # au-delà : duration_off (test, déclenchement manuel)
   campaign_gap_days: 7             # trou plus long dans la série d'un micro : sort du relevé
+  # Heure du nom de fichier contre heure de l'en-tête GUANO : au-delà de cet écart, on ne sait
+  # pas laquelle croire, l'enregistrement est écarté (clock_off, DECISIONS n° 154).
+  clock_tolerance_min: 5
 
 
 labels:

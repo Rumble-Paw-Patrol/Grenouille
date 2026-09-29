@@ -164,7 +164,8 @@ def con(tmp_path):
 
 def test_flags_are_written_without_losing_audio_qc(con):
     counts = apply_metadata_flags(con, THRESHOLDS)
-    assert counts == {"duration_off": 1, "off_campaign": 1}
+    # Le test de juillet est nommé 08 h 17 locales, son en-tête dit 08 h 17 UTC : horloge douteuse.
+    assert counts == {"duration_off": 1, "off_campaign": 1, "clock_off": 1}
     first = json.loads(con.execute("SELECT qc_flags FROM recordings LIMIT 1").fetchone()[0])
     assert first["rain"] is True and first["off_campaign"] is False
 
@@ -181,3 +182,27 @@ def test_flagging_is_idempotent_and_deletes_nothing(con):
     first = apply_metadata_flags(con, THRESHOLDS)
     assert apply_metadata_flags(con, THRESHOLDS) == first
     assert con.execute("SELECT COUNT(*) FROM recordings").fetchone()[0] == before
+
+
+# --- Horloge douteuse (DECISIONS n° 154) ----------------------------------------------------
+
+
+def test_clock_off_when_file_name_and_header_disagree():
+    """Molokoi SMA14636, avril 2024 : nom de fichier à 19 h, en-tête GUANO à 20 h locales."""
+    rows = campaign()
+    for row in rows:
+        row["path"] = f"x/{row['recording_id']}.wav"
+    rows += [
+        recording("decale", "2024-02-20T23:00:00Z") | {"path": "m/SMA14636_20240220_190000.wav"},
+        recording("juste", "2024-02-20T22:00:00Z") | {"path": "m/SMA14636_20240220_190000.wav"},
+    ]
+    flags = flags_of(rows)
+    assert flags.at["decale", "clock_off"] and not flags.at["juste", "clock_off"]
+    assert flags["clock_off"].sum() == 1  # sans horodatage dans le nom : rien
+
+
+def test_clock_off_needs_the_path_and_excludes_the_recording():
+    from blanci.qc import EXCLUDING_FLAGS, is_excluded
+
+    assert not flags_of(campaign())["clock_off"].any()
+    assert "clock_off" in EXCLUDING_FLAGS and is_excluded({"clock_off": True})

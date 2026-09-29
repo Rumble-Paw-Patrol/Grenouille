@@ -56,8 +56,9 @@ enregistrements de 120 s :
 | 6 s | 3 s | 39 | 3 748 641 |
 
 Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 8 micros
-dans le sac ; 96 109 enregistrements de 120 s restent encodables. Détail et anomalies :
-DECISIONS n° 153.
+dans le sac, 1 521 à l'horloge douteuse (Molokoi SMA14636, avril 2024, en file d'écoute) ;
+94 588 enregistrements de 120 s restent encodables. Détail et anomalies : DECISIONS n° 153
+et 154.
 
 Annotations : l'export Excel de Blancinet v0.1.0 (une ligne par détection de 3 s, clé S3,
 score, vérification `True` / `False`, commentaires). Seules les lignes vérifiées deviennent des
@@ -104,6 +105,8 @@ $B annotate                                          # poste d'écoute dans le n
 
 # Enregistrements entiers (audit aléatoire, jeu gelé) ; accord entre deux annotateurs
 $B candidates --entiers 300 --sites Mataroni --reason audit_aleatoire --random 0 --name audit
+# Écartés par un drapeau, à écouter en entier pour juger ce qu'ils valent (source « flag »)
+$B candidates --drapeau clock_off --random 0 --name horloge_SMA14636
 $B agreement --annotators léonard,tuteur
 
 # --- Relevé des encodeurs (§2, §7) : bruit synthétique, rien n'est lu -----

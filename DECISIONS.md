@@ -1860,3 +1860,19 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        celle du GUANO concordent (sauf un fichier de test par enregistreur). **Non corrigé** :
        `start_utc` de ces 1 520 enregistrements est à décaler d'une heure (heure d'activité,
        négatifs appariés au créneau), sur accord de Léonard.
+
+154. **Horloge douteuse : enregistrements écartés, en file d'écoute** (décision de Léonard,
+     29/09/2026). Nouveau drapeau d'inventaire `clock_off`, qui écarte (`EXCLUDING_FLAGS`) :
+     l'heure du nom de fichier (heure locale de l'enregistreur) et celle de l'en-tête GUANO
+     diffèrent de plus de `qc.clock_tolerance_min` (5 min). Il lève 1 599 enregistrements :
+     les 1 521 de Molokoi SMA14636 en avril 2024 (1 520 du relevé 3, un resté sur la carte du
+     relevé 4 ; en-tête en avance d'une heure, n° 153) et 78 déclenchements de test de
+     quelques secondes, déjà écartés pour leur durée (un par enregistreur en 2026, en-tête en
+     UTC). Pas de correction de l'heure pour l'instant. Les 1 521 sont dans la file
+     `data/reports/candidats_horloge_SMA14636.csv` (`candidates --drapeau clock_off`),
+     enregistrements entiers, source de label « flag » — nouvelle source, pour ne jamais les
+     mêler à l'audit aléatoire qui mesure le rappel. La file ne prend que les enregistrements
+     écartés par ce seul drapeau. Un enregistrement où A. blanci est entendu n'est jamais
+     écarté de l'encodage (`select_recordings`) : s'il y chante, il revient dans le corpus,
+     avec son heure à corriger d'une heure (`start_utc` − 1 h) avant toute analyse par heure
+     ou tout appariement au créneau.
