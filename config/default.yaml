@@ -90,6 +90,8 @@ encoders:
   batch_size: 64
   models:
     birdmae: {backend: bacpipe, model: birdmae}
+    # Même calcul que birdmae (bacpipe : extracteur Base, réseau Huge), nommé face à birdmae_base.
+    birdmae_huge: {backend: bacpipe, model: birdmae, checkpoint: DBD-research-group/Bird-MAE-Huge}
     # bacpipe charge Bird-MAE-Huge (lent sur l'i5) ; le §7 prévoit la version Base.
     birdmae_base: {backend: bacpipe, model: birdmae, checkpoint: DBD-research-group/Bird-MAE-Base}
     beats: {backend: bacpipe, model: beats}
