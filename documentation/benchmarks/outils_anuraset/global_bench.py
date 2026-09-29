@@ -20,6 +20,7 @@ Usage : global_bench.py <encodeur> <ESPECE> <sortie> [--curve] [--tokens] [--nat
 
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -55,6 +56,8 @@ NATIVE = {
     "BOAFAB": "Hypsiboas faber",
 }
 CURVE = ["logistic", "logistic+R37=glmm", "lda_shrunk", "logistic+R20", "prototype"]
+CHUNK = 30000
+TRAIN_CAP = 60000  # rcl_fs_bsed : 262 000 × 2 048 ne tient pas en 15 Go
 K = [0, 1, 2, 5, 10, 20, None]
 REPEATS = 2
 MIN_POS_REC = 30
@@ -77,7 +80,8 @@ con = connect(config_path(cfg, "db"))
 calls = read_strong_labels(project_path(acfg["labels"]))
 weak = read_weak_labels(acfg.get("weak_labels"))
 meta, emb = _encoder_windows(con, cfg, encoder_id)
-X_all = emb.astype(np.float32)
+# float16 tel que stocké (converti par paquets dans `score`) : 480 000 × 2048 en float32 = 4 Go
+X_all = emb.astype(np.float32) if curve else emb
 del emb  # 480 000 trames × 2048 : la mémoire compte
 sites = meta["site"].astype(str).str.replace("INCT04", "INCT4").to_numpy()
 recordings = meta["recording_id"].to_numpy()
@@ -120,22 +124,43 @@ rec_table["y"] = np.where(
 
 
 def score(spec: str, train: np.ndarray, test: np.ndarray, C=None) -> np.ndarray:
+    """Tête apprise sur `train`, scores de `test` par paquets : un site peut peser 370 000
+    fenêtres (rcl_fs_bsed) et les régularisations copient la matrice qu'on leur donne."""
     _, base, regularizer = heads[spec]
-    method, inputs = _inputs(base, X_all, None)
     n_groups = len(np.unique(sites[train]))
-    return fit_and_score(
-        method,
-        inputs,
-        y,
-        sites,
-        train,
-        test,
-        C=C,
-        C_grid=C_grid,
-        n_splits=max(2, n_groups),
-        seed=seed,
-        regularizer=regularizer,
-    )
+
+    def restricted(rows: np.ndarray):
+        reg = regularizer
+        if reg is not None:
+            reg = replace(reg, context=reg.context.subset(rows))
+        method, inputs = _inputs(base, X_all[rows].astype(np.float32), None)
+        return method, inputs, reg
+
+    if C is None:
+        method, inputs, reg = restricted(train)
+        C = choose_C(
+            method, inputs, y[train], sites[train], np.arange(len(train)), C_grid,
+            max(2, n_groups), seed, reg,
+        )
+    values = np.empty(len(test), dtype=np.float32)
+    for a in range(0, len(test), CHUNK):
+        part = test[a : a + CHUNK]
+        sub = np.union1d(train, part)
+        method, inputs, reg = restricted(sub)
+        values[a : a + CHUNK] = fit_and_score(
+            method,
+            inputs,
+            y[sub],
+            sites[sub],
+            np.searchsorted(sub, train),
+            np.searchsorted(sub, part),
+            C=C,
+            C_grid=C_grid,
+            n_splits=max(2, n_groups),
+            seed=seed,
+            regularizer=reg,
+        )
+    return values
 
 
 def minute_ap(values: np.ndarray, test: np.ndarray) -> float:
@@ -173,6 +198,12 @@ with threadpool_limits(limits=1, user_api="blas"):
     for site in SITES:
         test = np.flatnonzero(sites == site)
         train = rows[sites[rows] != site]
+        if len(train) > TRAIN_CAP:  # apprentissage plafonné (mémoire) : tous les positifs
+            rng = np.random.default_rng([seed, SPECIES.index(sp), SITES.index(site)])
+            pos, neg = train[y[train] == 1], train[y[train] == 0]
+            keep = max(TRAIN_CAP - len(pos), 0)
+            train = np.sort(np.r_[pos, rng.choice(neg, min(keep, len(neg)), replace=False)])
+            print(f"  {site} : apprentissage plafonné à {len(train)} fenêtres", flush=True)
         for i, spec in enumerate(TRANSFER):
             transfer[i, test] = score(spec, train, test)
         for j, spec in enumerate(token_heads):  # sans régularisation, C par plis internes
