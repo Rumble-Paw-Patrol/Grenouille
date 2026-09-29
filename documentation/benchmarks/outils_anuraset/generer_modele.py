@@ -1,6 +1,7 @@
 """Figures et tableaux du rapport, recalculés depuis `donnees/*.csv` (rien d'autre à lancer).
 
-    uv run --group notebook python documentation/benchmarks/__DOSSIER__/generer.py
+    uv run --group notebook python \
+        documentation/benchmarks/__DOSSIER__/generer.py
 
 Couleurs : palette de référence du skill dataviz (catégorielle pour les sites, rampe bleue pour
 les AP, bleu/orange pour AP poolée / AP par site, formes différentes en plus de la couleur).
