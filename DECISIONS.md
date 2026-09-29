@@ -1769,7 +1769,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      - Seuil de précision 0,5 choisi sur les autres sites : tient sur 5 couples espèce × site
        sur 12. Aucune alerte pour les deux espèces présentes sur deux sites seulement (PITAZU,
        LEPLAT) : c'est le cas d'A. blanci tant que Mataroni sera seul annoté.
-     - Encodeurs : 6 des 26 modèles de bacpipe testés. État de l'art et priorités dans
+     - Encodeurs : 5 des 26 modèles de bacpipe testés (Bird-MAE en deux tailles). État de l'art et priorités dans
        `documentation/encodeurs-bacpipe.md` : naturebeats, birdnet_v3 (préversion, licence
        déployable) et esp-aves2 (ESP, ICLR 2026, hors bacpipe) d'abord. mix2 a été appris sur
        AnuraSet : il est exclu de ces benchmarks, mais reste candidat sur les données ONF.

@@ -115,8 +115,8 @@ couches ; intérêt ici) :
 ## État de l'art hors bacpipe et encodeurs à tester ensuite (29/09/2026)
 
 Relevé en ligne le 29/09 ; utilisés sur AnuraSet à cette date (benchmarks 01 à 07) : perch_v2,
-perch_bird, birdnet (v2.4), protoclr, birdmae_base, birdmae_huge, soit 6 des 26 modèles de
-bacpipe 1.3.5. Critère de tri : l'encodeur a-t-il appris sur des sons proches des nôtres
+perch_bird, birdnet (v2.4), protoclr, birdmae_base, birdmae_huge, soit 5 des 26 modèles de
+bacpipe 1.3.5 (Bird-MAE en deux tailles). Critère de tri : l'encodeur a-t-il appris sur des sons proches des nôtres
 (notes brèves et tonales de 4 à 6 kHz, dans un fond de forêt tropicale : insectes, autres
 anoures, oiseaux) ? Les modèles appris sur des taxons lointains (cétacés, chauves-souris,
 éléphants) apprennent d'autres échelles de fréquence et de temps : aucun intérêt ici. En
