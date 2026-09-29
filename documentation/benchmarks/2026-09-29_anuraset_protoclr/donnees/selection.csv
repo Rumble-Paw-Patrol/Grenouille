@@ -1,0 +1,6 @@
+species,winner,winner_ap,chosen,fold_ap_winner,fold_ap_selection
+DENMIN,loss:focal,0.7236271517373878,"{0: 'loss:focal', 1: 'lda_shrunk', 2: 'loss:focal', 3: 'loss:focal'}",0.3487124905487199,0.267358559306248
+PITAZU,lda_shrunk,0.4446782167772116,"{0: 'dann', 1: 'lda_shrunk', 2: 'lda_shrunk', 3: 'lda_shrunk'}",0.3408869353234297,0.2873825996815595
+PHYCUV,lda_shrunk,0.3769922930179001,"{0: 'lda_shrunk', 1: 'lda_shrunk', 2: 'lda_shrunk', 3: 'lda_shrunk'}",0.3997634892579256,0.3997634892579256
+LEPLAT,prototype,0.4801323401544168,"{0: 'logistic+R19', 1: 'prototype', 2: 'prototype', 3: 'prototype'}",0.3096969027887206,0.2879600788342786
+BOAFAB,dann,0.8784927407924766,"{0: 'dann', 1: 'dann', 2: 'lda_shrunk', 3: 'dann'}",0.8867934394202355,0.8615864649744885
