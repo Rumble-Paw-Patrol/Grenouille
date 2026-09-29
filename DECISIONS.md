@@ -1737,3 +1737,39 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      - Pas de verdict sur Bird-MAE (comme au n° 147) : blanchiment et sonde sur les jetons
        restent à essayer. En attendant, perch_v2 reste la référence, et Base est préférable à
        Huge pour la même AP.
+
+## 2026-09-29 — Benchmark 07 : six encodeurs côte à côte, amorçage d'un site
+
+150. **Encodeurs comparés en apparié, et courbe d'amorçage sur AnuraSet : indicateur.** Les
+     stocks des six encodeurs (branches `donnees-anuraset*`) sont réunis dans une même base. Têtes
+     réapprises sur un protocole commun : un site tenu à l'écart à la fois, et **toutes** ses
+     fenêtres jugées, à la prévalence réelle (les benchmarks 01 à 06 tiraient 20 négatifs par
+     positif). Unité commune : la minute (max des fenêtres), seule identique pour des grilles de
+     3, 5 et 6 s ; référence fixée d'avance, perch_v2 + logistique ; Holm. Rapport :
+     `documentation/benchmarks/2026-09-29_anuraset_global/RAPPORT.md` ; outils :
+     `outils_anuraset/global_bench.py`, `rassembler_global.py` ; sorties brutes : branche
+     `resultats-anuraset-07`.
+     - AP moyenne par site (minute, moyenne des 5 espèces) : perch_v2 0,79, perch_bird 0,78
+       (aucun écart significatif, Holm), birdnet 0,68 (égal sur DENMIN, PITAZU, BOAFAB ; −0,15
+       sur PHYCUV, −0,35 sur LEPLAT, Holm), birdmae_base 0,60, birdmae_huge 0,56, protoclr
+       0,43 (meilleure version de chacun).
+     - **Encodeur retenu : perch_v2** (égal à perch_bird, 2,4 fois plus rapide, jetons
+       disponibles). perch_bird et birdnet restent à départager sur les données ONF.
+     - Amorçage (9 sites cibles, k enregistrements positifs du site ajoutés) : perch_v2 +
+       logistique 0,81 (k = 0) → 0,85 (5) → 0,89 (10) → 0,91 (moitié du site). Le gain vient
+       des sites où le transfert échoue (DENMIN/INCT20955 0,12 → 0,60 à 10). 1 ou 2
+       enregistrements n'apportent presque rien (+0,01).
+     - **Même tête dans les deux pipelines : la logistique.** R20 : +0,01 à k = 0 seulement,
+       puis −0,02 à −0,03. Prototype : 0,73 à 0,76 à tout k (l'hypothèse du `notes.md`, prototype
+       meilleur quand le site est peu annoté, ne tient pas ici). R37=glmm : égale à la
+       logistique en AP par site, mais fait baisser l'AP poolée (BOAFAB 0,96 → 0,90) : à écarter
+       d'une file d'annotation qui mélange des sites, tant que le biais d'un site neuf n'est pas
+       réglé. La pipeline d'amorçage se distingue par sa stratégie d'annotation (au moins 5 à 10
+       enregistrements positifs du site) et par son seuil, fixé sur place.
+     - Seuil de précision 0,5 choisi sur les autres sites : tient sur 5 couples espèce × site
+       sur 12. Aucune alerte pour les deux espèces présentes sur deux sites seulement (PITAZU,
+       LEPLAT) : c'est le cas d'A. blanci tant que Mataroni sera seul annoté.
+     - Encodeurs : 6 des 26 modèles de bacpipe testés. État de l'art et priorités dans
+       `documentation/encodeurs-bacpipe.md` : naturebeats, birdnet_v3 (préversion, licence
+       déployable) et esp-aves2 (ESP, ICLR 2026, hors bacpipe) d'abord. mix2 a été appris sur
+       AnuraSet : il est exclu de ces benchmarks, mais reste candidat sur les données ONF.

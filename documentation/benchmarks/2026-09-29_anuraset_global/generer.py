@@ -159,6 +159,9 @@ def figure_fenetres(transfert: pd.DataFrame) -> None:
     plt.close(fig)
 
 
+DECALAGE = {"perch_bird": (-8, 6, "right"), "perch_v2": (8, 6, "left")}
+
+
 def figure_cout(transfert: pd.DataFrame, encodeurs: pd.DataFrame) -> None:
     """Qualité (AP moyenne par site, minute, moyenne des espèces) contre vitesse d'encodage."""
     t = transfert[transfert["level"] == "minute"]
@@ -169,16 +172,21 @@ def figure_cout(transfert: pd.DataFrame, encodeurs: pd.DataFrame) -> None:
         ax.scatter(
             e["temps_reel"], ap, s=70, color=color, marker=marker, edgecolor=SURFACE, zorder=2
         )
+        dx, dy, ha = DECALAGE.get(enc, (7, 4, "left"))
         ax.annotate(
             f"{enc} ({int(e['dim'])} d)",
             (e["temps_reel"], ap),
-            xytext=(7, 4),
+            xytext=(dx, dy),
             textcoords="offset points",
+            ha=ha,
             fontsize=8.5,
             color=ENCRE,
         )
     ax.set_xscale("log")
-    ax.set_xlabel("vitesse d'encodage, fois le temps réel (CPU 4 cœurs, échelle log)")
+    ticks = [5, 10, 20, 50, 100, 200]
+    ax.set_xticks(ticks, [f"×{t}" for t in ticks])
+    ax.minorticks_off()
+    ax.set_xlabel("vitesse d'encodage, fois le temps réel (CPU 4 cœurs du cloud, échelle log)")
     ax.set_ylabel("AP moyenne par site (minute)")
     ax.set_ylim(0, 1)
     _axes(ax)
@@ -187,30 +195,61 @@ def figure_cout(transfert: pd.DataFrame, encodeurs: pd.DataFrame) -> None:
     plt.close(fig)
 
 
-def figure_courbe(courbe: pd.DataFrame, level: str, encodeur_tetes: str) -> None:
+def figure_courbe(courbe: pd.DataFrame, level: str, encodeur: str) -> None:
     """AP sur la moitié test du site cible selon le nombre k d'enregistrements positifs du
-    site ajoutés à l'entraînement (« tout » : toute l'autre moitié). À gauche, la meilleure
-    version de chaque encodeur ; à droite, les têtes d'un encodeur."""
+    site ajoutés à l'entraînement (« tout » : toute l'autre moitié). (a) meilleure version de
+    chaque encodeur ; (b) têtes, avec `encodeur` ; (c) cible par cible, logistique."""
     column = f"ap_{level}"
     mean = courbe.groupby(["encoder", "head", "k"])[column].mean()
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.0), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), sharey=True)
     x = np.arange(len(K_ORDRE))
     for enc, (color, marker) in ENCODEURS.items():
-        if (enc, MEILLEURE[enc]) not in mean.index.droplevel("k"):
+        if (enc, MEILLEURE[enc], 0) not in mean.index:
             continue
         values = mean.loc[(enc, MEILLEURE[enc])].reindex(K_ORDRE).to_numpy()
         axes[0].plot(x, values, color=color, marker=marker, linewidth=2, markersize=7, label=enc)
     for head, (color, marker) in TETES_COURBE.items():
-        values = mean.loc[(encodeur_tetes, head)].reindex(K_ORDRE).to_numpy()
+        values = mean.loc[(encodeur, head)].reindex(K_ORDRE).to_numpy()
         axes[1].plot(x, values, color=color, marker=marker, linewidth=2, markersize=7, label=head)
-    axes[0].set_title("meilleure version de chaque encodeur", fontsize=10, color=ENCRE)
-    axes[1].set_title(f"têtes, avec {encodeur_tetes}", fontsize=10, color=ENCRE)
-    axes[0].set_ylabel(f"AP sur le site cible ({'fenêtre' if level == 'window' else 'minute'})")
+    part = courbe[(courbe["encoder"] == encodeur) & (courbe["head"] == "logistic")]
+    by_target = part.groupby(["species", "site", "k"])[column].mean()
+    for (sp, site), values in by_target.groupby(level=[0, 1]):
+        values = values.droplevel([0, 1]).reindex(K_ORDRE).to_numpy()
+        gain = values[-1] - values[0] >= 0.12  # cibles où les annotations changent tout
+        axes[2].plot(
+            x,
+            values,
+            color=ENCRE_2 if gain else "#c9c8c1",
+            linewidth=2 if gain else 1.2,
+            marker="o" if gain else None,
+            markersize=5,
+            zorder=2 if gain else 1,
+        )
+        if gain:
+            axes[2].annotate(
+                f"{sp} {site}",
+                (x[3], values[3]),
+                xytext=(8, -14),
+                textcoords="offset points",
+                fontsize=8.5,
+                color=ENCRE,
+            )
+    axes[0].set_title("(a) meilleure version de chaque encodeur", fontsize=10, color=ENCRE)
+    axes[1].set_title(f"(b) têtes, avec {encodeur}", fontsize=10, color=ENCRE)
+    axes[2].set_title(
+        f"(c) cible par cible, {encodeur} + logistique (gris : les autres)",
+        fontsize=10,
+        color=ENCRE,
+    )
+    axes[0].set_ylabel(
+        f"AP sur le site cible ({'fenêtre' if level == 'window' else 'minute'}), moyenne des cibles"
+    )
     for ax in axes:
         ax.set_xticks(x, K_NOMS)
         ax.set_xlabel("enregistrements positifs du site annotés (k)")
         ax.set_ylim(0, 1)
         _axes(ax)
+    for ax in axes[:2]:
         ax.legend(frameon=False, fontsize=8.5, loc="lower right")
     fig.tight_layout()
     fig.savefig(FIGURES / "4_courbe_amorcage.png", dpi=150)

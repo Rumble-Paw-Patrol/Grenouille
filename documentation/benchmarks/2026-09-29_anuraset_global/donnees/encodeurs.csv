@@ -1,0 +1,7 @@
+encoder,window_s,sample_rate,dim,fenetres_par_s,temps_reel
+perch_v2,5.0,32000,1536,8.633333333333333,43.166666666666664
+perch_bird,5.0,32000,1280,3.66,18.3
+birdnet,3.0,48000,1024,24.25,72.75
+birdmae_base,5.0,32000,768,7.6,38.0
+birdmae_huge,5.0,32000,1280,1.11,5.550000000000001
+protoclr,6.0,16000,384,29.84,179.04

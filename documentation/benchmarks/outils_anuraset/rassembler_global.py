@@ -72,24 +72,45 @@ def site_mean_ap(y: np.ndarray, s: np.ndarray, site: np.ndarray) -> float:
     return float(np.mean(aps)) if aps else np.nan
 
 
+class _Sorted:
+    """Scores d'un site triés une fois ; l'AP d'un tirage bootstrap ne change que les poids
+    (nombre de tirages de chaque enregistrement) : même valeur que l'AP sur les fenêtres
+    dupliquées (ex æquo groupés aux seuils distincts, comme `average_precision`)."""
+
+    def __init__(self, y: np.ndarray, s: np.ndarray, rec_index: np.ndarray):
+        order = np.argsort(-s, kind="mergesort")
+        self.y, self.rec = y[order], rec_index[order]
+        self.last = np.r_[np.flatnonzero(np.diff(s[order])), len(s) - 1]  # fin de chaque ex æquo
+
+    def ap(self, counts: np.ndarray) -> float:
+        w = counts[self.rec]
+        tp = np.cumsum(w * self.y)[self.last]
+        fp = np.cumsum(w * (1 - self.y))[self.last]
+        if tp[-1] == 0:
+            return np.nan
+        precision = np.divide(tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) > 0)
+        return float(np.sum(np.diff(np.r_[0.0, tp]) / tp[-1] * precision))
+
+
 def paired(frame: pd.DataFrame, a: np.ndarray, b: np.ndarray) -> dict:
     """AP moyenne par site, A − B ; enregistrements tirés avec remise dans chaque site."""
     y, site, rec = frame["y"].to_numpy(), frame["site"].to_numpy(), frame["rec"].to_numpy()
-    blocks = {
-        g: [np.flatnonzero(rec == r) for r in np.unique(rec[site == g])] for g in np.unique(site)
-    }
+    parts = []
+    for g in np.unique(site):
+        m = site == g
+        if not y[m].sum():
+            continue
+        codes, index = np.unique(rec[m], return_inverse=True)
+        parts.append((len(codes), _Sorted(y[m], a[m], index), _Sorted(y[m], b[m], index)))
     rng = np.random.default_rng(SEED)
     diffs = []
     for _ in range(N_BOOT):
-        idx = np.concatenate(
-            [
-                np.concatenate([bl[i] for i in rng.integers(0, len(bl), len(bl))])
-                for bl in blocks.values()
-            ]
-        )
-        diffs.append(
-            site_mean_ap(y[idx], a[idx], site[idx]) - site_mean_ap(y[idx], b[idx], site[idx])
-        )
+        da, db = [], []
+        for n, sa, sb in parts:
+            counts = np.bincount(rng.integers(0, n, n), minlength=n).astype(float)
+            da.append(sa.ap(counts))
+            db.append(sb.ap(counts))
+        diffs.append(np.nanmean(da) - np.nanmean(db))
     d = np.asarray(diffs)
     d = d[~np.isnan(d)]
     return {
