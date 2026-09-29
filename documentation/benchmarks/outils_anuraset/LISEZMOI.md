@@ -9,3 +9,11 @@
   `amorcage.csv` : seuil de précision 0,5 choisi sur les autres sites, appliqué au site).
 - `generer_modele.py` : modèle du `generer.py` d'un rapport (remplacer `__DOSSIER__`,
   `__ENCODEUR__`, `__FENETRE__`).
+
+Benchmark global (07), sur les stocks des six encodeurs réunis dans une même base :
+
+- `global_bench.py <encodeur> <ESPÈCE> <sorties> [--curve]` : transfert vers un site neuf (un pli
+  par site, toutes les fenêtres du site jugées, scores gardés) ; `--curve` : courbe d'amorçage
+  (k enregistrements positifs du site cible ajoutés à l'entraînement).
+- `rassembler_global.py <sorties> <dossier du rapport>` : `donnees/` (niveaux fenêtre et minute,
+  comparaisons appariées à perch_v2 + logistique, Holm ; seuil choisi ailleurs ; courbe).

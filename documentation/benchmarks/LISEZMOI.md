@@ -10,3 +10,4 @@ Chaque benchmark a son dossier et son rapport, sur le modèle de `MODELE_RAPPORT
 | 04 | `2026-09-29_anuraset_birdmae_base/` | têtes et régularisations, un site à la fois, AnuraSet, birdmae_base (+ amorçage perch_v2) | indicateur |
 | 05 | `2026-09-29_anuraset_birdnet/` | têtes et régularisations, un site à la fois, AnuraSet, birdnet (+ amorçage) | indicateur |
 | 06 | `2026-09-29_anuraset_birdmae_huge/` | têtes et régularisations, un site à la fois, AnuraSet, birdmae_huge (+ amorçage) | indicateur |
+| 07 | `2026-09-29_anuraset_global/` | les six encodeurs côte à côte (minute, apparié) ; amorçage d'un site selon le nombre d'annotations | indicateur |

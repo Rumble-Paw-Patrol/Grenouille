@@ -80,13 +80,18 @@ couches ; intérêt ici) :
 
 - `audioprotopnet` : PyTorch, Hugging Face, 32 kHz, 5 s, oiseaux (BirdSet) ; jetons **déjà
   gardés** par bacpipe (`results.last_hidden_state`) ; à considérer (oiseaux, 32 kHz).
-- `birdnet_v3` : PyTorch, 32 kHz, 3 s, oiseaux ; à lire ; à considérer si la licence le permet.
+- `birdnet_v3` : ONNX (dans une enveloppe PyTorch), 32 kHz, 3 s ; BirdNET+ V3.0, **préversion**
+  (« preview 3.1 », 11 000 espèces dont des non-oiseaux) ; modèles sous CC BY-SA 4.0, donc
+  déployables, contrairement à la v2.4 (non commerciale). À encoder (voir plus bas).
 - `aves_especies`, `birdaves_especies` : PyTorch (wav2vec2), 16 kHz, 1 s, animaux ; **toutes
   les couches** rendues par `extract_features` ; moyen (fenêtre courte, adaptée à une note).
 - `avesecho_passt` : PyTorch (PaSST), 32 kHz, 3 s, oiseaux ; hook ; moyen.
-- `mix2` : PyTorch, 16 kHz, 3 s, amphibiens / insectes (à vérifier) ; hook ; à lire.
-- `rcl_fs_bsed` : PyTorch, 22,05 kHz, 0,2 s, détection d'événements à peu d'exemples ; hook ;
-  à lire (fenêtre de la taille d'une note).
+- `mix2` : PyTorch (MobileNetV3-Large), 16 kHz, 3 s ; **entraîné sur AnuraSet** (Moummad et
+  al., EUSIPCO 2024, 42 espèces d'anoures) : exclu de nos benchmarks AnuraSet (il en a vu les
+  labels) ; seul encodeur spécialisé anoures, très léger ; candidat pour les données ONF.
+- `rcl_fs_bsed` : PyTorch, 22,05 kHz, 0,2 s ; contrastif régularisé pour la détection à peu
+  d'exemples (Moummad et al., DCASE few-shot) ; fenêtre de la taille d'une note d'A. blanci,
+  mais 300 embeddings par minute : pour plus tard, sur les candidats seulement.
 - `surfperch` : TensorFlow (Perch), 32 kHz, 5 s, récifs coralliens ; comme Perch v1 ; faible.
 - `biolingual` : PyTorch (CLAP), 48 kHz, 10 s, bioacoustique + texte ; couches du modèle audio
   via Hugging Face ; faible (fenêtre de 10 s).
@@ -106,3 +111,37 @@ couches ; intérêt ici) :
 - **Couches intermédiaires** (R23) : faciles pour les modèles PyTorch et BirdNET, difficiles
   pour Perch v1 et v2. Le coût est ailleurs : stocker plusieurs couches multiplie le volume des
   embeddings, sur des centaines de milliers de fenêtres.
+
+## État de l'art hors bacpipe et encodeurs à tester ensuite (29/09/2026)
+
+Relevé en ligne le 29/09 ; utilisés sur AnuraSet à cette date (benchmarks 01 à 07) : perch_v2,
+perch_bird, birdnet (v2.4), protoclr, birdmae_base, birdmae_huge, soit 6 des 26 modèles de
+bacpipe 1.3.5. Critère de tri : l'encodeur a-t-il appris sur des sons proches des nôtres
+(notes brèves et tonales de 4 à 6 kHz, dans un fond de forêt tropicale : insectes, autres
+anoures, oiseaux) ? Les modèles appris sur des taxons lointains (cétacés, chauves-souris,
+éléphants) apprennent d'autres échelles de fréquence et de temps : aucun intérêt ici. En
+revanche, ajouter des taxons variés à un modèle généraliste l'améliore (Perch 2.0, « The Bittern
+Lesson ») : un généraliste qui a entendu des anoures vaut mieux qu'un spécialiste d'autre chose.
+
+| Encodeur | Origine | Dans bacpipe | Pourquoi le tester | Priorité |
+|---|---|---|---|---|
+| naturebeats | ESP, encodeur BEATs de NatureLM-audio (2024) | oui (déjà dans `encoders.models`) | premier sur BEANS (dont des anoures) en sondage attentif (revue comparative 2025–2026) ; 16 kHz, 5 s : même grille que perch_v2 | 1 |
+| birdnet_v3 | BirdNET+ V3.0, préversion 3.1 (2026) | oui | 11 000 espèces dont des non-oiseaux ; licence déployable ; à refaire à la version finale | 1 |
+| esp-aves2 (effnetb0-bio, eat-bio, sl-beats-bio) | ESP, « What Matters for Bioacoustic Encoding » (ICLR 2026) | non (Hugging Face) | encodeurs bioacoustiques récents, multi-taxons ; effnetb0 est un CNN léger, déployable sur l'i5 ; demande un adaptateur | 1 |
+| convnext_birdset | DBD, BirdSet (2024) | oui (déjà dans `encoders.models`) | CNN appris sur BirdSet ; même famille que Bird-MAE, sans son besoin de sondage attentif | 2 |
+| beats | Microsoft, audio général (2022) | oui | point de comparaison : un modèle général fait-il aussi bien ? | 2 |
+| mix2 | Moummad et al., AnuraSet (2024) | oui | seul encodeur spécialisé anoures ; **pas sur AnuraSet** (vu à l'entraînement) : sur les données ONF | 2 (ONF) |
+| MetaPerch | Google, Perch + métadonnées (arXiv, juillet 2026) | non | à surveiller ; poids publics non confirmés | veille |
+| rcl_fs_bsed | Moummad et al. (2024) | oui | fenêtre de 0,2 s, à peu d'exemples ; sur les candidats seulement | 3 |
+
+Écartés : `surfperch` (récifs), `google_whale`, `hbdet` (cétacés), `bat`, `batdetect2_*`
+(ultrasons), `insect66`, `insect459` (insectes : ce sont nos faux amis, pas nos cibles), `vggish`
+et `audiomae` (audio général, supplantés par BEATs), `biolingual` (fenêtre de 10 s, fait pour
+l'interrogation par texte), `avesecho_passt` (oiseaux d'Europe), `aves_especies` et
+`birdaves_especies` (supplantés par esp-aves2, du même laboratoire).
+
+À retenir de la revue comparative (Foundation Models for Bioacoustics, arXiv 2508.01277, 2025 ;
+Ecological Informatics 2026) : Perch 2.0 mène en sondage linéaire, les transformers (BEATs,
+Bird-MAE) ne donnent leur mesure qu'en **sondage attentif sur les jetons**. Cohérent avec nos
+benchmarks 04 et 06 (Bird-MAE loin derrière en sondage linéaire) : un encodeur transformer ne
+s'écarte qu'après l'essai d'une tête sur jetons.
