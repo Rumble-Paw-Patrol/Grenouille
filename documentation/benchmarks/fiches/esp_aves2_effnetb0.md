@@ -1,5 +1,4 @@
 # esp-aves2 EfficientNet-B0 (bio, all, audioset) sur AnuraSet : benchmark 07, vague 2 (session 12)
-
 **Réglages lus** : adaptateur `avex` (n° 152), f_e 16 kHz, fenêtre 5 s jointive, embedding 1280
 (jetons 16 × 4 × 1280 non utilisés : ligne 12 = `--curve` seul). avex 1.3.0, torch 2.14.0+cpu,
 transformers 4.57.6, onnxruntime 1.30.0 ; tensorflow et librosa non installés (inutiles).
