@@ -34,6 +34,13 @@ identifier des régularisations : L1, L2, Elastic Net (L1 + L2), autres
 
 # Trucs à faire
 
+lire le rapport Biophonia
+
+check les audios suspects de mon notebook 1 (`notebooks/01_explorer_une_fenetre.ipynb`)
+
+entretien avec Élodie du 29/09 : objectifs révisés → `feuille-de-route-V5.md` (§0, §5, §7, §14),
+DECISIONS n° 155–159 ; envoyer à Sylvain les questions du §5.8
+
 télécharger le drive au cas où j'ai pas de co demain
 
 Estimer la prévalence de A. blanci dans le stock (R73, DECISIONS n° 128) : écouter des fenêtres

@@ -1,7 +1,8 @@
 # blanci — détection acoustique d'*Anomaloglossus blanci*
 
 Stage ONF Guyane, 15/09/2026 → 14/03/2027. Feuille de route :
-`documentation/feuille-de-route-V4.md` (§13 = spécification d'implémentation).
+`documentation/feuille-de-route-V5.md` (objectifs révisés le 29/09/2026 : §0 ;
+§13 = spécification d'implémentation).
 Écarts et précisions : `DECISIONS.md`. Tableaux de tous les benchmarks, en images lisibles
 partout (Xcode compris) : `documentation/tableaux/`.
 
@@ -244,6 +245,9 @@ encodage sur le premier micro (gain 6 dB), les deux micros à l'écoute (DECISIO
 Négatifs appariés changés (DECISIONS n° 88, 101 : les plus proches, même enregistrement
 compris) : **relancer les baselines** avant de comparer quoi que ce soit.
 
-**Reste à faire avant M1** : regrouper les enregistrements sur le disque du stage puis
-réinventorier (les labels suivent, DECISIONS n° 46) ; inventorier la phénologie 2023-2024 ;
-encoder (ce week-end) les données ONF et AnuraSet.
+**Depuis le 29/09 (feuille de route V5, DECISIONS n° 155–159)** : encodeur libre d'accès
+impératif ; annotations reprises de zéro par plan de tirage (les labels Blancinet sortent de
+l'entraînement et de l'évaluation) ; **aucun benchmark sur les données ONF avant le go
+d'Élodie et Benoît** ; AnuraSet clos le 09/10, choix de l'encodeur le 20/11 ; application
+Windows installable, sans code. Prochaines étapes : partition des points et plan de tirage,
+mode « extrait + intervalles » du poste d'annotation, essai d'empaquetage `.exe`.
