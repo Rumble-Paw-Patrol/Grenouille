@@ -12,18 +12,19 @@
   - aves2 sl_beats_bio : 0,79 ;
   - perch_bird : 0,78.
 
-  Après Holm, aucun encodeur ne bat la référence. Sans les deux sites presque vides, naturebeats
-  reste devant (0,88 contre 0,84 à 0,87).
+  Après Holm, aucun autre encodeur ne bat la référence. Sans les deux sites presque vides,
+  naturebeats reste devant (0,88 contre 0,84 à 0,87).
 - **La règle du n° 151 a tout changé** pour les transformers auto-supervisés. La sonde à
-  prototypes sur les jetons bat la logistique sur les cinq espèces pour 6 d'entre eux sur 7 :
-  Bird-MAE-Base passe de 0,51 à 0,74, naturebeats de 0,69 à 0,84. La sonde attentive n'aide
-  presque jamais.
+  prototypes sur les jetons bat la logistique sur les cinq espèces pour 7 des 10 transformers
+  (eat_all : 4 sur 5) : Bird-MAE-Base passe de 0,51 à 0,74, naturebeats de 0,69 à 0,84. Elle
+  n'aide pas les EAT affinés sur étiquettes (sl_eat), ni guère perch_v2 (2 espèces sur 5,
+  +0,03 en moyenne). La sonde attentive n'aide presque jamais.
 - **Meilleur libre** (n° 156) : perch_v2 + sonde à prototypes (0,81). Les deux meilleurs non
   libres, naturebeats et aves2 sl_beats_bio (licence non commerciale), ne le battent sur aucune
   espèce après Holm (`comparaisons_meilleur_libre.csv`).
 - **Site sans aucune annotation** (courbe d'amorçage, logistique) : perch_v2 est le meilleur
-  (0,81, contre 0,71 pour naturebeats). naturebeats ne le rejoint qu'à partir de 10
-  enregistrements annotés.
+  (0,81, contre 0,71 pour naturebeats). naturebeats ne le rejoint que vers 20 enregistrements
+  annotés.
 - **BirdNET 3 ne « pète pas tous les scores » ici.** Il obtient 0,74, mieux que BirdNET 2.4
   (0,69) sur les chants longs, mais sous perch_v2. Son classifieur, sans aucun entraînement,
   égale la logistique sur BOAFAB (0,99) et bat même la logistique de BirdNET 3 sur DENMIN.
@@ -71,8 +72,9 @@ Rouge : moins bonne que la référence (Holm, écart ≥ 0,02). Aucune case vert
 
 ![Tête adaptée](figures/2_tete_adaptee.png)
 
-*Figure 2 — De la logistique à la meilleure tête : les transformers auto-supervisés gagnent
-+0,09 à +0,23 ; les CNN supervisés, presque rien.*
+*Figure 2 — De la logistique à la meilleure tête : +0,09 à +0,23 pour les transformers
+auto-supervisés, +0,03 à +0,05 pour les BEATs affinés d'esp-aves2, presque rien pour les CNN
+supervisés.*
 
 ![Coût, qualité et licence](figures/3_cout_qualite_licence.png)
 
@@ -82,7 +84,16 @@ le temps réel ; naturebeats, 30 fois.*
 ![Courbe d'amorçage](figures/4_courbe_amorcage.png)
 
 *Figure 4 — Site neuf, k enregistrements positifs annotés (logistique seule : les têtes sur
-jetons ne sont pas dans la courbe). perch_v2 mène jusqu'à k = 5.*
+jetons ne sont pas dans la courbe). perch_v2 mène jusqu'à k = 10, naturebeats l'égale ensuite.*
+
+Contre le meilleur libre (perch_v2 + sonde à prototypes), écart d'AP moyenne par site
+(minute) ; aucun ne survit à Holm :
+
+| Non libre (meilleure tête) | DENMIN | PITAZU | PHYCUV | LEPLAT | BOAFAB |
+|---|---|---|---|---|---|
+| naturebeats · proto_probe | +0,07 | −0,10 | +0,03 | +0,14 | +0,00 |
+| aves2 sl_beats_bio · proto_probe | +0,01 | −0,15 | −0,03 | +0,06 | +0,01 |
+| aves2 sl_beats_all · proto_probe | −0,11 | −0,14 | −0,01 | +0,10 | +0,01 |
 
 Robustesse : sans les sites à moins de 10 minutes positives (DENMIN à INCT4, 2 ; PITAZU à
 INCT41, 9), l'ordre reste proche : naturebeats 0,88, perch_bird 0,87, aves2 sl_beats 0,85,
@@ -121,8 +132,8 @@ perch_v2 + prototypes 0,85 (en logistique, 0,84), birdnet_v3 0,83.
 ## 7. Limites
 
 - **Meilleure tête choisie après coup** parmi 3 à 7 têtes selon l'encodeur. Garde-fou : la sonde
-  à prototypes gagne sur les cinq espèces pour 6 transformers sur 7 ; ce n'est pas un gagnant de
-  hasard.
+  à prototypes gagne sur les cinq espèces pour 7 transformers sur 10 ; ce n'est pas un gagnant
+  de hasard.
 - **Têtes sur jetons en transfert seulement**, pas dans la courbe d'amorçage.
 - **Vague 2 incomplète** (sessions 8 et 9). rcl_fs_bsed : apprentissage plafonné à 60 000
   fenêtres et témoin non passé.

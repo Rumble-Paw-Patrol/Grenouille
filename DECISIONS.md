@@ -1935,3 +1935,34 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      compte au moins 30 enregistrements indépendants, et elles ne sont adoptées que si l'AP
      binaire progresse sur les points tenus à l'écart. À valider avec Élodie, Benoît (H21 : solo
      et chœur s'entendent-ils ?) et Sylvain.
+
+## 2026-09-30 — Benchmark 08 : 22 encodeurs sur AnuraSet, têtes adaptées
+
+161. **Pré-benchmark AnuraSet des encodeurs : indicateur.** Protocole 07 (un site tenu à
+     l'écart, toutes ses fenêtres jugées, minute commune), 22 encodeurs à cinq espèces
+     complètes, chacun avec les têtes sur embedding et, pour ceux qui ont des jetons, les têtes
+     sur jetons (n° 151, 152) ; perch_v2 réévalué sur ses jetons spatiaux (16 × 1 536) pour une
+     comparaison équitable. Rapport : `documentation/benchmarks/2026-09-30_anuraset_encodeurs/` ;
+     outils : `rassembler_08.py`, `apparie.py` (bootstrap apparié commun aux 07 et 08).
+     - AP moyenne par site (minute, meilleure tête, choisie après coup) : naturebeats + sonde à
+       prototypes 0,84 ; perch_v2 + sonde à prototypes 0,81 ; perch_v2 + logistique 0,79 ; aves2
+       sl_beats_bio 0,79 ; perch_bird 0,78 ; Bird-MAE-Base + prototypes 0,74 ; birdnet_v3 0,74.
+       Aucun autre encodeur ne bat perch_v2 + logistique après Holm (230 comparaisons).
+     - **Meilleur libre : perch_v2 + sonde à prototypes.** Aucun non libre ne le bat sur une
+       espèce après Holm (naturebeats : +0,14 sur LEPLAT, −0,10 sur PITAZU). Au sens strict du
+       n° 156, aucun non libre ne gagne sa place au benchmark ONF ; naturebeats et aves2
+       sl_beats_bio (sondes à prototypes), au même niveau, sont proposés à Élodie comme les
+       deux non libres possibles.
+     - La sonde à prototypes bat la logistique sur les cinq espèces pour 7 des 10 transformers
+       (Bird-MAE-Base 0,51 → 0,74, naturebeats 0,69 → 0,84) ; pas pour les EAT affinés sur
+       étiquettes, à peine pour perch_v2 (+0,03, 2 espèces sur 5). Elle rejoint les têtes de
+       référence. La sonde attentive n'aide presque jamais.
+     - Site sans annotation (courbe, logistique) : perch_v2 0,81, naturebeats 0,71 ; naturebeats
+       le rejoint vers 20 enregistrements annotés.
+     - birdnet_v3 : 0,74 (birdnet 2.4 : 0,69), sous perch_v2 ; son classifieur sans entraînement
+       égale la logistique sur BOAFAB (0,99). Insectes (0,40–0,41), rcl_fs_bsed (0,47, témoin
+       non passé) derniers ; EfficientNet AudioSet seul (0,50) sous la version bioacoustique
+       (0,59) ; bio ≈ all pour esp-aves2 ; Bird-MAE Base ≥ Large ≥ Huge.
+     - Manquent avant la clôture de la vague 2 (09/10, n° 156) : convnext_birdset,
+       audioprotopnet (session 8), avesecho_passt, biolingual (session 9), toutes deux arrêtées
+       sans rien pousser ; MetaPerch (poids non publiés).

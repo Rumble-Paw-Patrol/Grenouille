@@ -20,3 +20,4 @@ esp_aves2_sl_beats_all,transformer auto-supervisé puis supervisé (BEATs),5,768
 insect66,réseau non lu (insectes),5.5,1280,24.1,non relevée,non relevée,fiche insect66
 insect459,réseau non lu (insectes),5.5,1280,26.7,non relevée,non relevée,fiche insect66
 rcl_fs_bsed,CNN contrastif (trames),0.2,2048,80.5,non relevée,non relevée,fiche rcl_fs_bsed
+esp_aves2_eat_bio,transformer auto-supervisé (EAT),5,768,2.75,CC BY-NC-SA 4.0,non,fiche esp_aves2_eat
