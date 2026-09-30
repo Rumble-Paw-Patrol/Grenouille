@@ -3,8 +3,7 @@
 (MAE), f_e 32 kHz (AnuraSet à 22,05 kHz rééchantillonné), fenêtre 5 s jointive, embedding 1 024
 = moyenne des patchs de la dernière couche puis `fc_norm`. Jetons 32 temps × 8 fréquences ×
 1 024, moyennés sur la fréquence (`jetons.py`). torch 2.6.0+cpu, transformers 4.57.6,
-onnxruntime 1.30.0, tensorflow 2.20.0 (importé par bacpipe, inutilisé), librosa 0.11.0.
-19 166 fenêtres.
+onnxruntime 1.30.0, tensorflow 2.20.0 (importé, inutilisé), librosa 0.11.0. 19 166 fenêtres.
 **Débit** (4 cœurs) : encodage 2,0 f/s (~2 h 45) ; jetons 10 003 s ; benchmark `--curve
 --tokens`, 2 processus : 582 (PITAZU) à 1 997 s (PHYCUV) par espèce.
 **Témoin BOAFAB** (logistique, AP moyenne par site, minute) : **0,938**, tuyau sain.
@@ -19,7 +18,6 @@ onnxruntime 1.30.0, tensorflow 2.20.0 (importé par bacpipe, inutilisé), libros
 | *jetons* logistic:max | 0,330 / 0,647 | 0,286 / 0,112 | 0,454 / 0,302 | 0,365 / 0,090 | 0,941 / 0,759 |
 | *jetons* attentive | 0,385 / 0,813 | **0,339** / 0,080 | 0,703 / 0,578 | 0,316 / 0,080 | 0,951 / 0,804 |
 | *réf.* perch_v2 logistique | 0,666 / 0,911 | 0,507 / 0,150 | 0,960 / 0,946 | 0,824 / 0,253 | 0,985 / 0,964 |
-
 Autres têtes et scores : `resultats/global/birdmae_large_*` (branche `resultats-anuraset-07`).
 **Courbe d'amorçage** (logistique, AP minute, moyenne des sites, k = 0 → 20 positifs du site) :
 DENMIN 0,50→0,80, PITAZU 0,54→0,90, PHYCUV 0,57→0,79, LEPLAT 0,52→0,82, BOAFAB 0,95→0,96.
@@ -28,6 +26,5 @@ logistique, Large ne fait pas mieux que Base ni Huge (benchmark 07). La sonde à
 jetons, tête de ses auteurs, change la donne : +0,04 (PITAZU, BOAFAB) à +0,35 (PHYCUV) d'AP par site sur
 la logistique, DENMIN au niveau de perch_v2 (0,654 contre 0,666) ; reste sous perch_v2 +
 logistique sur PITAZU, PHYCUV et LEPLAT. La sonde attentive n'apporte presque rien.
-**Anomalies** : deux redémarrages du conteneur (encodage repris à 1 350 enregistrements sur
-1 599 ; benchmark de Base relancé) ; aucun effet sur les résultats. Stock : branche
-`donnees-anuraset-birdmae_large`.
+**Anomalies** : redémarrages du conteneur (encodage repris à 1 350/1 599), sans effet.
+Stock : branche `donnees-anuraset-birdmae_large`.
