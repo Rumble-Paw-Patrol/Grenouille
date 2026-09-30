@@ -3,8 +3,7 @@
 **Réglages lus** (bacpipe 1.3.5) : f_e 22 050 Hz (celle d'AnuraSet), fenêtre 0,2 s jointive,
 dimension 2048, pas de jetons. Essai de 5 min sain. Versions : torch 2.6.0+cpu, transformers
 4.57.6, onnxruntime 1.30.0, tensorflow 2.20.0, librosa 0.11.0.
-**Débit** (CPU 4 cœurs) : 80,5 trames/s, 478 995 trames, 7197 s. Stock : branche
-`donnees-anuraset-rcl_fs_bsed`.
+**Débit** (CPU 4 cœurs) : 80,5 trames/s, 478 995 trames, 7197 s. Stock : `donnees-anuraset-rcl_fs_bsed`.
 **Benchmark** : transfert seul. **Écart de protocole** (accord de Léonard) : le pli le plus
 lourd (262 125 fenêtres × 2048) ne tient pas en 15 Go ; **apprentissage plafonné à 60 000
 fenêtres par pli** (tous les positifs, négatifs tirés, graine fixe), test par paquets. Non
