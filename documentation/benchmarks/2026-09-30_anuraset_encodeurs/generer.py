@@ -36,7 +36,7 @@ COURBE = [  # encodeurs de la figure 4 (ordre fixe des couleurs)
     "esp_aves2_sl_beats_bio",
     "perch_bird",
     "birdnet_v3",
-    "birdmae_base",
+    "convnext_birdset",
 ]
 K_ORDRE, K_NOMS = [0, 1, 2, 5, 10, 20, -1], ["0", "1", "2", "5", "10", "20", "tout"]
 LIBRE = {"oui": "libre", "sous réserve": "libre ?", "non": "non libre", "non relevée": "?"}
@@ -177,7 +177,8 @@ def figure_tete(d: dict[str, pd.DataFrame]) -> None:
 
 
 DECALAGE = {  # étiquettes voisines écartées à la main
-    "perch_v2": (7, 7, "left"),
+    "perch_v2": (7, -12, "left"),
+    "convnext_birdset": (-7, 9, "right"),
     "esp_aves2_sl_beats_bio": (-7, 6, "right"),
     "esp_aves2_sl_beats_all": (-7, -11, "right"),
     "birdmae_large": (6, -12, "left"),
