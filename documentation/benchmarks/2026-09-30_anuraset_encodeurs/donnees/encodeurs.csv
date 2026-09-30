@@ -1,0 +1,22 @@
+encoder,famille,fenetre_s,dim,fenetres_par_s,licence,libre,source
+perch_v2,CNN supervisé,5,1536,8.6,Apache 2.0,oui,n° 141 et 156
+perch_bird,CNN supervisé,5,1280,3.66,Apache 2.0 (sous réserve),sous réserve,n° 148 et 156
+birdnet,CNN supervisé,3,1024,24.25,CC BY-NC-SA 4.0,non,n° 148
+birdnet_v3,supervisé (réseau non documenté),3,1280,22.0,CC BY-SA 4.0,oui,fiche birdnet_v3 ; n° 151
+protoclr,transformer contrastif (CvT-13),6,384,29.84,non relevée,non relevée,n° 148
+birdmae_base,transformer auto-supervisé (MAE),5,768,7.6,aucune déclarée,non,n° 147 et 156
+birdmae_large,transformer auto-supervisé (MAE),5,1024,2.0,aucune déclarée,non,fiche birdmae_large ; n° 156
+birdmae_huge,transformer auto-supervisé (MAE),5,1280,1.11,aucune déclarée,non,n° 149 et 156
+beats,transformer auto-supervisé (BEATs AudioSet),5,768,8.3,MIT (sous réserve),sous réserve,fiche beats ; n° 156
+naturebeats,transformer (BEATs de NatureLM-audio),5,768,6.0,CC BY-NC-SA 4.0,non,fiches naturebeats et esp_aves2_sl_beats ; n° 156
+esp_aves2_effnetb0_bio,CNN supervisé,5,1280,44.6,CC BY-NC-SA 4.0,non,fiche esp_aves2_effnetb0
+esp_aves2_effnetb0_all,CNN supervisé,5,1280,43.4,CC BY-NC-SA 4.0,non,fiche esp_aves2_effnetb0
+esp_aves2_effnetb0_audioset,CNN supervisé,5,1280,42.6,CC BY-NC-SA 4.0,non,fiche esp_aves2_effnetb0
+esp_aves2_eat_all,transformer auto-supervisé (EAT),5,768,2.75,CC BY-NC-SA 4.0,non,fiche esp_aves2_eat
+esp_aves2_sl_eat_all_ssl_all,transformer auto-supervisé puis supervisé (EAT),5,768,2.75,CC BY-NC-SA 4.0,non,fiche esp_aves2_eat
+esp_aves2_sl_eat_bio_ssl_all,transformer auto-supervisé puis supervisé (EAT),5,768,2.75,CC BY-NC-SA 4.0,non,fiche esp_aves2_eat
+esp_aves2_sl_beats_bio,transformer auto-supervisé puis supervisé (BEATs),5,768,6.8,CC BY-NC-SA 4.0,non,fiche esp_aves2_sl_beats
+esp_aves2_sl_beats_all,transformer auto-supervisé puis supervisé (BEATs),5,768,6.8,CC BY-NC-SA 4.0,non,fiche esp_aves2_sl_beats
+insect66,réseau non lu (insectes),5.5,1280,24.1,non relevée,non relevée,fiche insect66
+insect459,réseau non lu (insectes),5.5,1280,26.7,non relevée,non relevée,fiche insect66
+rcl_fs_bsed,CNN contrastif (trames),0.2,2048,80.5,non relevée,non relevée,fiche rcl_fs_bsed
