@@ -69,17 +69,19 @@ def fig_sequentiel(key: str, titre: str):
     thr = med + 4.0 * (np.median(np.abs(env - med)) + 1e-6)
 
     fig, (a1, a2) = plt.subplots(
-        2, 1, figsize=(8.6, 4.6), sharex=True, gridspec_kw={"height_ratios": [2.3, 1]}
+        2, 1, figsize=(5.0, 3.3), sharex=True, gridspec_kw={"height_ratios": [2.3, 1]}
     )
     keep = f <= 12000
     vmax = np.percentile(s[keep], 99.5)
-    a1.pcolormesh(t, f[keep] / 1000, s[keep], shading="auto", cmap="magma", vmin=vmax - 60, vmax=vmax)
+    a1.pcolormesh(
+        t, f[keep] / 1000, s[keep], shading="auto", cmap="magma", vmin=vmax - 60, vmax=vmax
+    )
     for b in BAND:
         a1.axhline(b / 1000, color="white", ls=":", lw=1)
     for x in on:
         a1.axvline(x, color=CYAN, lw=1.4, alpha=0.9)
     a1.set_ylabel("kHz", color=MUTED)
-    a1.set_title(titre, loc="left", color=INK, fontsize=11)
+    # Titre et descripteurs : dans la légende de la diapo (lisibles à la taille projetée).
     style(a1)
 
     a2.plot(te, env, color=INK, lw=0.6)
@@ -91,13 +93,6 @@ def fig_sequentiel(key: str, titre: str):
     a2.set_ylabel("dB en bande", color=MUTED)
     a2.set_xlabel("temps (s)", color=MUTED)
     style(a2)
-    iois = np.diff(on)
-    txt = (
-        f"{len(on)} notes · IOI médian "
-        + (f"{r['ioi_median_s']:.2f} s" if len(iois) else "—")
-        + f" · part d'IOI d'A. blanci {r['frac_ioi_blanci']:.0%}"
-    )
-    a2.text(0.01, 0.92, txt, transform=a2.transAxes, color=INK, fontsize=9, va="top")
     fig.tight_layout()
     fig.savefig(OUT / f"seq_{key}.png", dpi=200)
     plt.close(fig)
@@ -126,7 +121,9 @@ def fig_specaugment():
         masks.append(("t", t0, w))
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 3.2), sharey=True)
-    for ax, m, ttl in zip(axes, [s, masked], ["original", "après SpecAugment (2 masques f, 2 masques t)"]):
+    for ax, m, ttl in zip(
+        axes, [s, masked], ["original", "après SpecAugment (2 masques f, 2 masques t)"], strict=True
+    ):
         ax.pcolormesh(t, fk, m, shading="auto", cmap="magma", vmin=vmax - 60, vmax=vmax)
         ax.set_title(ttl, loc="left", color=INK, fontsize=10)
         ax.set_xlabel("temps (s)", color=MUTED)
@@ -163,8 +160,15 @@ def fig_patchs_attention():
     vmax = np.percentile(s, 99.5)
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 3.4), sharey=True)
     for ax in (a1, a2):
-        ax.pcolormesh(t, fk, s, shading="auto", cmap="gray_r" if ax is a2 else "magma",
-                      vmin=vmax - 60, vmax=vmax)
+        ax.pcolormesh(
+            t,
+            fk,
+            s,
+            shading="auto",
+            cmap="gray_r" if ax is a2 else "magma",
+            vmin=vmax - 60,
+            vmax=vmax,
+        )
         for x in ti[1:-1]:
             ax.axvline(t[min(x, len(t) - 1)], color="white" if ax is a1 else "#9DB3A6", lw=0.6)
         for y in fi[1:-1]:
@@ -175,10 +179,25 @@ def fig_patchs_attention():
         for j in range(n_t):
             x0, x1 = t[min(ti[j], len(t) - 1)], t[min(ti[j + 1], len(t) - 1)]
             y0, y1 = fk[min(fi[i], len(fk) - 1)], fk[min(fi[i + 1], len(fk) - 1)]
-            a2.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, color=ORANGE,
-                                   alpha=float(min(1.0, w[i, j] / w.max())) * 0.85, lw=0))
-    a1.set_title(f"une fenêtre de 5 s = {n_t} × {n_f} = {n_t * n_f} jetons", loc="left", color=INK, fontsize=10)
-    a2.set_title("poids d'attention (illustration) : opacité ∝ poids", loc="left", color=INK, fontsize=10)
+            a2.add_patch(
+                Rectangle(
+                    (x0, y0),
+                    x1 - x0,
+                    y1 - y0,
+                    color=ORANGE,
+                    alpha=float(min(1.0, w[i, j] / w.max())) * 0.85,
+                    lw=0,
+                )
+            )
+    a1.set_title(
+        f"une fenêtre de 5 s = {n_t} × {n_f} = {n_t * n_f} jetons",
+        loc="left",
+        color=INK,
+        fontsize=10,
+    )
+    a2.set_title(
+        "poids d'attention (illustration) : opacité ∝ poids", loc="left", color=INK, fontsize=10
+    )
     a1.set_ylabel("kHz", color=MUTED)
     fig.tight_layout()
     fig.savefig(OUT / "patchs_attention.png", dpi=200)
@@ -203,8 +222,15 @@ def fig_titre():
     vmax = np.percentile(s[keep], 99.5)
     fig = plt.figure(figsize=(6, 7.5))
     ax = fig.add_axes([0, 0, 1, 1])
-    ax.pcolormesh(t[: len(t) * 6 // 10], f[keep], s[keep][:, : len(t) * 6 // 10], shading="auto",
-                  cmap="magma", vmin=vmax - 55, vmax=vmax)
+    ax.pcolormesh(
+        t[: len(t) * 6 // 10],
+        f[keep],
+        s[keep][:, : len(t) * 6 // 10],
+        shading="auto",
+        cmap="magma",
+        vmin=vmax - 55,
+        vmax=vmax,
+    )
     ax.set_axis_off()
     fig.savefig(OUT / "titre.png", dpi=150)
     plt.close(fig)
@@ -212,8 +238,11 @@ def fig_titre():
 
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
+    AUDIO.mkdir(exist_ok=True)
     fig_titre()
-    fig_specaugment()
     print(fig_patchs_attention())
-    # Module séquentiel (retiré de la présentation, gardé pour le rapport) :
-    # AUDIO.mkdir(exist_ok=True); fig_sequentiel("blanci_net", "..."); extraits_audio()
+    print(fig_sequentiel("blanci_net", "A. blanci, chant net (Mataroni)"))
+    print(fig_sequentiel("faux_ami", "Faux ami : Adenomera andreae (Mataroni)"))
+    print(fig_sequentiel("blanci_faible", "A. blanci, chant faible (Mataroni, RB04)"))
+    extraits_audio()
+    # SpecAugment (retiré de la présentation) : fig_specaugment()

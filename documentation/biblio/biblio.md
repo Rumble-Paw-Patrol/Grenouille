@@ -54,19 +54,36 @@ pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
 
 - Page du concours : <https://www.kaggle.com/competitions/birdclef-2026> ·
   LifeCLEF 2026 : <https://www.imageclef.org/LifeCLEF2026>
-  234 taxons du Pantanal (oiseaux, amphibiens, insectes, reptiles, mammifères), ROC-AUC macro
-  sur fenêtres de 5 s, inférence CPU seul en 90 min, 4 094 équipes, fin le 27/05/2026 ;
-  working notes présentées à CLEF 2026 (Iéna, 21–24/09/2026, actes CEUR-WS).
-- Classement final (score privé) : 1. Nikita Babych 0,966 · 2. tennogh 0,960 · 3. kapenon 0,960
-  · 4. équipe « BirdCLEF+ 2026 » 0,959 · 5. Jiacheng Ma 0,958.
+  Cornell Lab of Ornithology, 11/03 → 03/06/2026, 4 094 équipes ; working notes à CLEF 2026
+  (Iéna, 21–24/09/2026, actes CEUR-WS). 234 classes : 162 oiseaux, 35 amphibiens, 8
+  mammifères, 1 reptile, 28 « sonotypes » d'insectes (types de sons sans espèce nommée).
+  Entraînement : 344 h d'enregistrements ciblés (Xeno-canto, iNaturalist) et 178 h de paysages
+  sonores de 23 sites, dont 1 h étiquetée ; test caché ≈ 600 enregistrements d'1 min. Soumission :
+  notebook Kaggle sur CPU seul (4 cœurs), sans GPU ni internet, 90 min pour prédire tout le test.
+  Métrique : ROC-AUC macro par fenêtre de 5 s ; classement final (« privé ») sur la partie
+  cachée du test.
+- Classement final : 1. Nikita Babych 0,966 · 2. tennogh 0,960 · 3. kapenon 0,960 · 4. Tony Li,
+  Yiheng Wang, Starry 0,959 · 5. Jiacheng Ma 0,958.
   <https://www.kaggle.com/competitions/birdclef-2026/leaderboard>
-- 1er : « Noisy Student Meets Distillation » — distillation des embeddings de Perch v2 et
-  d'AudioProtoPNet dans un EfficientNetV2, puis apprentissage supervisé et Noisy Student
-  itératif sur les soundscapes non étiquetés.
+- 1er, « Noisy Student Meets Distillation » : 9 CNN distillés de Perch v2 (un d'AudioProtoPNet),
+  puis affinés et entraînés en Noisy Student (0,935 → 0,950 en deux tours) ; spécialiste
+  amphibiens/insectes (1 903 espèces de Xeno-canto et iNaturalist), modèle au niveau du genre,
+  Perch v2 tel quel ; a priori de site, lissages temporel et taxonomique.
   <https://www.kaggle.com/competitions/birdclef-2026/writeups/1st-place-solution-noisy-student-meets-distillati>
-  (reproduction partielle : <https://github.com/GrayBloom/Reproduction-For-BirdCLEF2026>)
-- 2e : « Diverse Ensemble with Pseudo-Labeling and a Taxon Specialist » (lu par son titre
-  seulement, à relire). 3e et 4e : à relire sur Kaggle. 5e : code public.
+- 2e, « Diverse Ensemble with Pseudo-Labeling and a Taxon Specialist » : 5 tours de
+  pseudo-labels, CNN pré-entraînés sur Xeno-canto (2e place 2025), perte AUC + 0,25 BCE,
+  spécialiste insectes, chaînes publiques Perch et SED distillé ; pas de distillation dans ses
+  propres modèles, pour garder la diversité.
+  <https://www.kaggle.com/competitions/birdclef-2026/writeups/2nd-place-diverse-ensemble-with-pseudo-labeling-a>
+- 3e : 3 modèles (2 EfficientNetV2 repris de la 2e place 2025, 1 SEResNeXt distillé de Perch v2),
+  un tour de pseudo-labels, a priori site/heure, inférence OpenVINO.
+  <https://www.kaggle.com/competitions/birdclef-2026/writeups/3rd-place-solution>
+- 4e : Perch v2 tel quel (40 % de l'ensemble) + 2 SED + 2 SED distillés de Perch ; seuls les
+  pseudo-labels issus de Perch ont aidé ; **AnuraSet en données externes a fait baisser le score**
+  (écart de domaine). <https://www.kaggle.com/competitions/birdclef-2026/writeups/4-th-place-solution>
+- 5e, « Diversity and Bug — Both Are All You Need » : 4 CNN (HGNetV2, EfficientNetV2 5 s et 10 s,
+  B3) + ProtoSSM + SED distillé ; distillation Perch, auto-distillation, pseudo-labels,
+  FilterAugment. Code : <https://github.com/jak-ma/BirdCLEF2026-5th-solution>
 - 13e — Lu & Tsai, « What Moves, and What Misleads, the BirdCLEF+ 2026 Leaderboard ».
   <https://zenodo.org/records/21545329>
   La validation hors ligne ne prédit plus le classement au-dessus de 0,92 ; la qualité des
@@ -74,10 +91,24 @@ pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
 - DS@GT — Miyaguchi, Gustineli, Cheung, « Can Tokens Compete? ».
   <https://arxiv.org/abs/2607.14474>
   Amphibiens : 76,6 % des fenêtres de soundscapes étiquetés, 1,3 % des enregistrements
-  focaux ; une tête à prototypes sur Perch v2 atteint une AP macro de 0,895 sur les amphibiens
-  (0,074 pour leur SED seul). → conforte l'approche « Perch v2 gelé + tête » pour un anoure.
+  focaux. Tête à prototypes sur Perch v2 gelé, score = cos(e, μ₊) − cos(e, μ₋) (= notre
+  prototype différentiel) : AP macro 0,895 sur les non-oiseaux contre 0,074 pour leur SED seul,
+  mais mesurée sur les fichiers qui construisent les prototypes (optimiste). Annexe, validation
+  site par site : sans enregistrement ciblé de l'espèce, prototypes et ridge tombent au hasard.
+  Une tête à attention leur a coûté 0,013 à 0,035. → Perch v2 + prototypes marchent pour des
+  espèces absentes de ses classes, comme A. blanci.
 - Stratégie générale (non officielle) : E. Benhamou, « BirdCLEF+ 2026 Kaggle strategy
   playbook » (Dauphine). Validation groupée par site, pseudo-labels, distillation, CPU.
+
+## 2 bis. Anoures : transfert depuis les modèles de fondation
+
+- *Transfer learning outperforms other methods of detecting vocalizations of a critically
+  endangered tropical anuran*, Ecological Informatics, 2025.
+  <https://www.sciencedirect.com/science/article/pii/S1574954125004364>
+  Gabarits, CNN, recherche par similarité, transfert (embeddings d'un modèle de fondation + tête
+  simple) et zéro-shot comparés : le transfert trouve le plus de vocalisations.
+- Sims et al., *Cross-continental zero-shot anuran call classification with CLAP*, Methods in
+  Ecology and Evolution. <https://besjournals.onlinelibrary.wiley.com/doi/10.1111/2041-210x.70384>
 
 ## 3. Phénologie et écologie d'A. blanci
 

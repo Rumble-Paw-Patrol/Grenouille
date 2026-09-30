@@ -36,13 +36,14 @@ def main() -> None:
     OUT.mkdir(exist_ok=True)
     con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
 
-    rec = pd.read_sql(
-        "SELECT dataset, site, mic_id, duration_s, qc_flags FROM recordings", con
-    )
+    rec = pd.read_sql("SELECT dataset, site, mic_id, duration_s, qc_flags FROM recordings", con)
     inv = (
         rec.groupby(["dataset", "site"])
-        .agg(enregistrements=("mic_id", "size"), micros=("mic_id", "nunique"),
-             heures=("duration_s", lambda s: s.sum() / 3600))
+        .agg(
+            enregistrements=("mic_id", "size"),
+            micros=("mic_id", "nunique"),
+            heures=("duration_s", lambda s: s.sum() / 3600),
+        )
         .round(1)
         .reset_index()
     )
@@ -58,13 +59,20 @@ def main() -> None:
     lab = lab.sort_values("label_id").groupby("window_id").tail(1)  # dernier label
     lab["classe"] = lab["label"].isin(POSITIVE_LABELS).map({True: "positive", False: "négative"})
     par_micro = (
-        lab.pivot_table(index=["site", "mic_id"], columns="classe", values="window_id",
-                        aggfunc="count", fill_value=0)
+        lab.pivot_table(
+            index=["site", "mic_id"],
+            columns="classe",
+            values="window_id",
+            aggfunc="count",
+            fill_value=0,
+        )
         .reindex(columns=["positive", "négative"], fill_value=0)
         .reset_index()
     )
     rec_pos = (
-        lab[lab.classe == "positive"].groupby(["site", "mic_id"]).recording_id.nunique()
+        lab[lab.classe == "positive"]
+        .groupby(["site", "mic_id"])
+        .recording_id.nunique()
         .rename("enregistrements_positifs")
     )
     par_micro = par_micro.merge(rec_pos, on=["site", "mic_id"], how="left").fillna(0)
@@ -78,8 +86,15 @@ def main() -> None:
     labels = d["site"] + " · " + d["mic_id"].astype(str)
     fig, ax = plt.subplots(figsize=(8, max(3, 0.28 * len(d) + 1)))
     ax.barh(labels, d["positive"], color=POS, label="positives", edgecolor="white", linewidth=1)
-    ax.barh(labels, d["négative"], left=d["positive"], color=NEG, label="négatives",
-            edgecolor="white", linewidth=1)
+    ax.barh(
+        labels,
+        d["négative"],
+        left=d["positive"],
+        color=NEG,
+        label="négatives",
+        edgecolor="white",
+        linewidth=1,
+    )
     ax.invert_yaxis()
     ax.tick_params(colors=MUTED, labelsize=8)
     for sp in ax.spines.values():

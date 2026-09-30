@@ -17,7 +17,7 @@ def _code_cells(path: Path) -> list[dict]:
 
 
 def test_the_exploration_notebooks_exist():
-    assert [p.name[:2] for p in NOTEBOOKS] == ["01", "02", "03"]
+    assert [p.name[:2] for p in NOTEBOOKS] == ["01", "02", "03", "04"]
 
 
 @pytest.mark.parametrize("path", NOTEBOOKS, ids=lambda p: p.name)
