@@ -38,6 +38,11 @@ non libres ne servent plus que d'objectifs à battre.
 
 ## Procédure commune (au go)
 
+**Jamais de fusion d'une branche de données (`donnees-anuraset-*`, `resultats-anuraset-07`) dans
+`main`**, ni directement ni par une branche intermédiaire : on pousse sur la branche de données,
+puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sorties brutes).
+
+
 1. `git pull origin main`. Lire : `documentation/encodeurs-bacpipe.md` (section « Règle » et
    les fiches de ses encodeurs), `documentation/benchmarks/outils_anuraset/LISEZMOI.md`,
    DECISIONS n° 150 à 152. Outil `read_documentation` (session.resources) : disque et délai
