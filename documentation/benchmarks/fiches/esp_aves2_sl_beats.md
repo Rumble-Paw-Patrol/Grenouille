@@ -4,8 +4,7 @@
 jetons 31 temps × 8 fréquences × 768, moyennés sur la fréquence. Poids vérifiés : 248 tenseurs
 sur 252 du point de contrôle chargés et identiques (les 4 autres hors de l'encodeur). torch
 2.14.0+cpu, torchaudio 2.11.0+cpu, transformers 4.57.6, onnxruntime 1.30.0, librosa 0.11.0, sans
-TensorFlow. 19 166 fenêtres. **`naturelm_audio_v1_beats` non encodé** : sur 50 fenêtres, cosinus 1,0000 (écart max 2e-6) avec
-`naturebeats` de bacpipe : mêmes poids, voir `naturebeats.md`.
+TensorFlow. 19 166 fenêtres. **`naturelm_audio_v1_beats` non encodé** : sur 50 fenêtres, cosinus 1,0000 (écart max 2e-6) avec `naturebeats` (bacpipe) : mêmes poids.
 **Débit** (4 cœurs) : encodage 6,8 f/s seul ; jetons 2 543 s seuls (all), 5 212 s en parallèle de
 l'encodage (bio) ; benchmark `--curve --tokens` (2 proc.) 340 (PITAZU) à 1 020 s (PHYCUV). **Témoin BOAFAB** (logistique, AP moyenne par site, minute) : bio **0,989**, all **0,986**.
 **Transfert vers un site neuf, minute, AP moyenne par site / poolée** (jetons : proto_probe, attentive)
