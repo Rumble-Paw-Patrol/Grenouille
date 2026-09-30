@@ -194,6 +194,8 @@ def figure_cout(d: dict[str, pd.DataFrame]) -> None:
         if e not in enc.index:
             continue
         speed = enc.loc[e, "fenetres_par_s"] * enc.loc[e, "fenetre_s"]
+        if not np.isfinite(speed):  # débit pas encore relevé (fiche à venir)
+            continue
         free = enc.loc[e, "libre"] in ("oui", "sous réserve")
         top = r["ap_site_best"] >= 0.65 or free
         ax.scatter(

@@ -45,8 +45,8 @@ Mêmes enregistrements, espèces, sites et positifs que les benchmarks 01 à 07 
 - **22 encodeurs à cinq espèces complètes** : les six du benchmark 07, puis la vague 2
   (sessions 5, 6, 7, 10 à 14 ; fiches dans `../fiches/`).
 - **Manquent** : convnext_birdset et audioprotopnet (session 8), avesecho_passt et biolingual
-  (session 9), toutes deux arrêtées sans rien pousser ; MetaPerch, dont les poids ne sont pas
-  publiés.
+  (session 9), relancées le 30/09 : à ajouter quand elles auront fini (Annexe) ; MetaPerch,
+  seulement annoncé (article de juillet 2026 ; poids pas encore publiés au 30/09).
 - **naturelm-audio-v1-beats** d'esp-aves2 a les mêmes poids que naturebeats (cosinus 1,0000) :
   il n'est compté qu'une fois.
 
@@ -164,3 +164,17 @@ uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_enco
 
 `donnees/encodeurs.csv` : fenêtre, dimension, débit et licence de chaque encodeur, relevés
 dans les fiches et les n° 141 à 156.
+
+**Ajouter les sessions 8 et 9** (convnext_birdset, audioprotopnet, avesecho_passt, biolingual)
+quand leurs sorties seront sur `resultats-anuraset-07` : reporter leur débit (fiche) dans
+`donnees/encodeurs.csv`, puis
+
+```
+git fetch origin resultats-anuraset-07
+mkdir -p /tmp/g08 && git archive origin/resultats-anuraset-07 resultats/global | tar -x -C /tmp/g08
+uv run python documentation/benchmarks/outils_anuraset/rassembler_08.py /tmp/g08/resultats/global documentation/benchmarks/2026-09-30_anuraset_encodeurs
+uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
+```
+
+La branche porte déjà perch_v2 avec ses têtes sur jetons. Le rassemblement trouve seul les
+nouveaux encodeurs ; les chiffres du texte et le n° 161 sont à revoir ensuite.

@@ -1964,5 +1964,6 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
        non passé) derniers ; EfficientNet AudioSet seul (0,50) sous la version bioacoustique
        (0,59) ; bio ≈ all pour esp-aves2 ; Bird-MAE Base ≥ Large ≥ Huge.
      - Manquent avant la clôture de la vague 2 (09/10, n° 156) : convnext_birdset,
-       audioprotopnet (session 8), avesecho_passt, biolingual (session 9), toutes deux arrêtées
-       sans rien pousser ; MetaPerch (poids non publiés).
+       audioprotopnet (session 8), avesecho_passt, biolingual (session 9), relancées le 30/09
+       et à ajouter au benchmark 08 quand elles auront fini ; MetaPerch, seulement annoncé
+       (poids pas encore publiés au 30/09).

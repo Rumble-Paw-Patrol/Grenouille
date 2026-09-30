@@ -21,3 +21,7 @@ insect66,réseau non lu (insectes),5.5,1280,24.1,non relevée,non relevée,fiche
 insect459,réseau non lu (insectes),5.5,1280,26.7,non relevée,non relevée,fiche insect66
 rcl_fs_bsed,CNN contrastif (trames),0.2,2048,80.5,non relevée,non relevée,fiche rcl_fs_bsed
 esp_aves2_eat_bio,transformer auto-supervisé (EAT),5,768,2.75,CC BY-NC-SA 4.0,non,fiche esp_aves2_eat
+convnext_birdset,CNN supervisé (ConvNeXt),5,1024,,aucune déclarée,non,n° 156 (débit : fiche à venir)
+audioprotopnet,CNN + prototypes (ConvNeXt),5,1024,,CC BY-NC 4.0,non,n° 152 et 156 (débit : fiche à venir)
+avesecho_passt,transformer supervisé (PaSST),3,,,non relevée,non relevée,encodeurs-bacpipe.md (débit : fiche à venir)
+biolingual,transformer contrastif audio-texte (CLAP),10,,,aucune déclarée,non,n° 156 (débit : fiche à venir)

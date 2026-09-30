@@ -23,7 +23,7 @@ non libres ne servent plus que d'objectifs à battre.
 | 12 | esp_aves2_effnetb0_bio, _all, _audioset | `--curve` | oui |
 | 13 | esp_aves2_eat_bio, _eat_all, _sl_eat_bio_ssl_all, _sl_eat_all_ssl_all | `--curve --tokens` | oui |
 | 14 | esp_aves2_sl_beats_bio, _sl_beats_all, _naturelm_audio_v1_beats | `--curve --tokens` | oui |
-| 15 | MetaPerch | — | **non** : poids non publiés (README du dépôt Perch, 29/09) |
+| 15 | MetaPerch | — | **non** : seulement annoncé, poids pas encore publiés (README du dépôt Perch, 30/09) |
 
 ## Prérequis (faits, n° 152)
 

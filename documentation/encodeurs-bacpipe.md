@@ -23,7 +23,8 @@ continue à benchmarker, sur AnuraSet puis sur les données ONF, en plus des cin
 (perch_v2, perch_bird, birdnet, protoclr, Bird-MAE Base et Huge) :
 
 `naturebeats`, `beats`, `convnext_birdset`, `birdnet_v3`, `rcl_fs_bsed`, `audioprotopnet`,
-`avesecho_passt`, `biolingual`, `insect66`, `insect459`, `esp-aves2`, `MetaPerch`.
+`avesecho_passt`, `biolingual`, `insect66`, `insect459`, `esp-aves2`, `MetaPerch` (seulement
+annoncé : poids pas encore publiés au 30/09).
 
 Précisions de Léonard le 29/09 après-midi : **`birdmae_large` s'ajoute à la liste** ;
 `birdmae_large` et `esp-aves2` (variantes `-all` comprises) sont en **priorité 1 comme
@@ -261,7 +262,7 @@ Le même jour, la décision de benchmarker douze encodeurs (plus haut) le met à
 | audioprotopnet | DBD (Heinrich et al.), BirdSet | oui | oiseaux, 32 kHz, 5 s ; avec sa tête d'origine (5 prototypes par classe), ROC-AUC BirdSet 0,896, contre 0,908 pour Perch 2.0 et 0,886 pour Bird-MAE-L (tableaux de MetaPerch) ; même laboratoire que Bird-MAE et convnext_birdset | 2 |
 | convnext_birdset | DBD, BirdSet (2024) | oui (déjà dans `encoders.models`) | CNN appris sur BirdSet ; 85,75 AUROC sur BirdSet en sondage linéaire dans la revue (Bird-MAE : 86,54 en attentif) ; ne profite pas du sondage attentif : pas de jetons à stocker | 2 |
 | beats | Microsoft, audio général (2022) | oui | point de comparaison : la revue le classe 3e de BEANS (97,98 en attentif, 94,10 en linéaire) : un modèle général fait-il aussi bien ? | 2 |
-| MetaPerch | Google, Perch + métadonnées (arXiv 2607.14072, ICML 2026) | non | poids annoncés publics par le papier (dépôt non vérifié) ; gain modeste sur Perch 2.0, plus net en Amérique du Sud (voir « MetaPerch ») ; export ONNX à prévoir | 2 |
+| MetaPerch | Google, Perch + métadonnées (arXiv 2607.14072, ICML 2026) | non | **seulement annoncé** : poids pas encore publiés (dépôt vérifié le 30/09) ; gain modeste sur Perch 2.0, plus net en Amérique du Sud (voir « MetaPerch ») ; export ONNX à prévoir | 2 |
 | mix2 | Moummad et al., AnuraSet (2024) | oui | seul encodeur spécialisé anoures ; **pas sur AnuraSet** (vu à l'entraînement) : sur les données ONF | 2 (ONF) |
 | avesecho_passt | PaSST, oiseaux (bacpipe) | oui | « oiseaux d'Europe » : a priori non testé ; teste le critère de proximité de taxon | 3 |
 | biolingual | CLAP bioacoustique + texte | oui | 97,76 sur BEANS et 82,51 sur BirdSet dans la revue ; fenêtre de 10 s | 3 |
@@ -545,9 +546,12 @@ relevées). Nouveauté : la localisation, la date et d'autres métadonnées de l
 sources étudiées) servent de **pertes auxiliaires pendant l'entraînement seulement** : rien à
 fournir à l'inférence.
 
-- **Poids** : note 1 du papier, « Model released at github:google-research/perch/metaperch ».
-  Dépôt non vérifié (hors du périmètre de la session), licence des poids non lue, format non
-  relevé (Perch est en TensorFlow/JAX : un export ONNX est nécessaire pour le livrable).
+- **Poids : MetaPerch n'est pour l'instant qu'annoncé.** La note 1 du papier dit « Model
+  released at github:google-research/perch/metaperch », mais au 30/09 ce dossier ne contient
+  qu'un README (« Instructions on accessing the MetaPerch model checkpoint will be provided here
+  soon ») et Kaggle n'a rien. Licence et format inconnus (Perch est en TensorFlow/JAX : un
+  export ONNX sera nécessaire pour le livrable). À revérifier avant le choix de l'encodeur ONF
+  (20/11, n° 158).
 - **Face à Perch 2.0** (tableaux 2 et 3 du papier, MetaPerch en moyenne de 5 exécutions) :
   ROC-AUC BirdSet 0,906 contre 0,908 (cmAP 0,438 contre 0,431) ; sur PER (Amazonie péruvienne)
   0,801 contre 0,786 ; BEANS sans CBI, exactitude moyenne 0,870 contre 0,847 et cmAP moyen 0,512
@@ -562,7 +566,7 @@ fournir à l'inférence.
 
 - La grille de jetons de BEATs (8 × 31 × 768) : à mesurer au premier chargement (méthode du
   `notes.md`).
-- Les poids et la licence de MetaPerch : le dépôt `google-research/perch` n'a pas été ouvert.
+- La licence et le format de MetaPerch : seulement annoncé, poids pas encore publiés (30/09).
 - L'identité des poids `naturelm-audio-v1-beats` et `naturebeats` (à comparer sur quelques
   fenêtres) ; le caractère auto-supervisé ou non de `eat-*` (cartes contre page AVEX).
 - Les sources d'entraînement de BirdNET+ V3.0 (AnuraSet y est-il ?) et son architecture.

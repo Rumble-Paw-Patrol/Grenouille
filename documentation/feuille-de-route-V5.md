@@ -129,7 +129,7 @@ call with longer notes 0.157– 0.160 s in A. degranvillei
 | naturebeats | NatureLM-audio : CC BY-NC-SA 4.0 (fiche lue le 29/09) ; mêmes poids `[À VÉRIFIER]` | non libre |
 | audioprotopnet | CC BY-NC 4.0 (fiche lue le 29/09) | non libre |
 | Bird-MAE (Base, Large, Huge), convnext_birdset, biolingual | aucune licence sur la fiche Hugging Face (lue le 29/09) ; dépôt de code non lu | non libre tant qu'aucune licence n'est publiée ; demander aux auteurs si l'un d'eux gagne |
-| protoclr, rcl_fs_bsed, mix2, avesecho_passt, insect66, insect459, MetaPerch | non relevée | à relever avant le benchmark ONF |
+| protoclr, rcl_fs_bsed, mix2, avesecho_passt, insect66, insect459, MetaPerch (seulement annoncé, poids pas encore publiés) | non relevée | à relever avant le benchmark ONF |
 
 **Suite du §2 : texte de la v4, inchangé.**
 
