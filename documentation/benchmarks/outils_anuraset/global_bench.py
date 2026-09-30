@@ -139,8 +139,15 @@ def score(spec: str, train: np.ndarray, test: np.ndarray, C=None) -> np.ndarray:
     if C is None:
         method, inputs, reg = restricted(train)
         C = choose_C(
-            method, inputs, y[train], sites[train], np.arange(len(train)), C_grid,
-            max(2, n_groups), seed, reg,
+            method,
+            inputs,
+            y[train],
+            sites[train],
+            np.arange(len(train)),
+            C_grid,
+            max(2, n_groups),
+            seed,
+            reg,
         )
     values = np.empty(len(test), dtype=np.float32)
     for a in range(0, len(test), CHUNK):
