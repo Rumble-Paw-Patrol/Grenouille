@@ -10,6 +10,8 @@ Encodeurs : ceux dont les cinq espèces ont une sortie `<encodeur>_<ESPECE>_tran
 - `comparaisons.csv` : minute, AP moyenne par site contre la référence fixée d'avance (perch_v2
   + logistique) pour la logistique et la meilleure tête de chaque encodeur (et toutes les
   têtes de perch_v2) ; bootstrap apparié (enregistrements tirés dans chaque site) ; Holm.
+- `comparaisons_meilleur_libre.csv` : la meilleure tête de chaque encodeur contre celle du
+  meilleur encodeur libre (n° 156, `encodeurs.csv`), même bootstrap, Holm.
 - `courbe.csv` : les runs de la courbe d'amorçage.
 """
 
@@ -142,6 +144,39 @@ comp = pd.DataFrame(comps)
 comp["p_holm"] = holm(comp["p"].to_numpy())
 comp["significant_holm"] = comp["p_holm"] < 0.05
 comp.to_csv(dst / "comparaisons.csv", index=False)
+
+# Contre le meilleur libre (n° 156 : un non-libre ne passe au benchmark ONF que s'il le bat) :
+# la meilleure tête des encodeurs libres (`encodeurs.csv`, libre = oui), choisie après coup ;
+# chaque autre encodeur, sa meilleure tête, apparié ; Holm sur ces comparaisons.
+free = pd.read_csv(dst / "encodeurs.csv")
+free = set(free.loc[free["libre"] == "oui", "encoder"]) & set(ENCODEURS)
+top = best[best["encoder"].isin(free)].iloc[0]
+libre = (top["encoder"], top["best_head"])
+vs_free = []
+for sp in ESPECES:
+    ref = minute_frames[(libre[0], sp)].set_index("rec")
+    for enc, head in zip(best["encoder"], best["best_head"], strict=True):
+        if (enc, head) == libre:
+            continue
+        f = minute_frames[(enc, sp)]
+        f = f[~f["y"].isna()]
+        if head not in f or f[head].isna().all():
+            continue
+        r = ref.loc[f["rec"], libre[1]].to_numpy()
+        vs_free.append(
+            {
+                "encoder": enc,
+                "head": head,
+                "species": sp,
+                "reference": f"{libre[0]} · {libre[1]}",
+                **paired(f, f[head].to_numpy(), r, N_BOOT, SEED),
+            }
+        )
+vs = pd.DataFrame(vs_free)
+vs["p_holm"] = holm(vs["p"].to_numpy())
+vs["significant_holm"] = vs["p_holm"] < 0.05
+vs.to_csv(dst / "comparaisons_meilleur_libre.csv", index=False)
+print("meilleur libre :", libre, flush=True)
 
 curves = sorted(src.glob("*_courbe.csv"))
 pd.concat([pd.read_csv(p) for p in curves], ignore_index=True).to_csv(
