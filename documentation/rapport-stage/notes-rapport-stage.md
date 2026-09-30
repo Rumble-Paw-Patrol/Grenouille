@@ -1,4 +1,14 @@
+Insister sur l'AP et le rappel au début de la prez
 
+# D'un site à l'autre
+
+L'adaptation de domaine dans le projet. Puisque c'est le cœur du sujet, voici où en sont les méthodes de la liste :
+
+Sans aucun label sur le nouveau site :
+programmées : R19 (centrage par micro), R20 (AdaBN, centrage et réduction par micro), R21 (retrait des directions du micro) ;
+pas encore : R83 (entropie), R81 (pseudo-labels sur le nouveau site), R66 (DANN), R82 (cohérence).
+Avec quelques labels du nouveau site : prototype différentiel, voisins (R39), rétrécissements (R30, R47). heads-curve mesure déjà ce que rapportent k annotations.
+Pour les juger : il faut un site tenu à l'écart. D'où le chantier AnuraSet par site (R78), que je proposais en premier. R83 dans sa version légère (adapter le seul biais sur le nouveau site, avec une proportion de positifs imposée) pourrait s'y tester tout de suite.
 
 
 #Le stacking - Structure de la fusion
