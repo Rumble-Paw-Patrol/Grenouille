@@ -1,7 +1,788 @@
 # Décisions d'implémentation
 
-Écarts à la feuille de route (§13) ou précisions qu'elle ne tranche pas. Une entrée par
-décision, datée ; une décision remise en cause reçoit une nouvelle entrée, l'ancienne reste.
+Ce fichier tient lieu de feuille de route. Il se lit en deux temps :
+
+1. le **cadre du projet** (objectifs, protocole, plan d'annotation, livrable, planning, risques),
+   repris de la feuille de route V5 ;
+2. le **journal des décisions**, numérotées et datées : écarts au cadre, précisions qu'il ne
+   tranche pas, résultats qui changent la suite. Une entrée par décision ; une décision remise en
+   cause reçoit une nouvelle entrée, l'ancienne reste. Une entrée l'emporte sur le cadre.
+
+Les renvois « §n » désignent les sections du cadre. La table des matières du journal : les titres
+datés `## 2026-…` ci-dessous (`grep '^## ' DECISIONS.md`).
+
+## Cadre du projet (repris de la feuille de route V5)
+
+Stage ONF Guyane, 15/09/2026 → 14/03/2027 : détection acoustique automatique d'*Anomaloglossus
+blanci*. Cette section est ce qui reste utile de la feuille de route V5 (29/09/2026, après
+l'entretien de Léonard avec Élodie), reprise ici le 01/10/2026 quand le fichier a été supprimé.
+**Les numéros de section (§0 à §14) sont conservés** : les renvois « §5 », « §6 », « V5 §7 »… de
+ce journal, du code et de la configuration désignent les sections ci-dessous. En cas de
+désaccord, **une décision numérotée plus bas l'emporte sur le cadre**.
+
+Légende : `[HYPOTHÈSE Hn]` = information manquante (§12) ; `[À VÉRIFIER]` = à contrôler sur les
+données ou les sources ; « établi » = bibliographie (dont Courtois et al. 2025, voir
+`documentation/biblio/biblio.md`) ou source vérifiée ; « jugement » = arbitrage d'ingénieur ;
+« tuteur » = confirmé en réunion ; « Élodie » = décidé à l'entretien du 29/09.
+
+Archives : les feuilles de route V1 à V4 sont dans `documentation/old/` ; la V5 complète
+(≈ 83 Ko, avec le journal v2 → v5, la montée en compétence et les interfaces détaillées) reste
+dans l'historique git : `git show ad43369:documentation/feuille-de-route-V5.md`.
+
+### Positions des encadrants (établi, extraits reçus)
+
+- **Tuteur (B)** : idée initiale = embeddings BirdNET avec entraînement progressif *human in the
+  loop* pour ajouter des sites ; BirdNET et Perch + linear probing lui ont donné satisfaction ;
+  ouvert à d'autres modèles ; suggère bacpipe ; NatureLM « limité à 16 kHz, très limite pour les
+  paysages sonores ».
+- **Encadrant A (auteur de ProtoCLR)** : éviter BirdNET (TensorFlow, dépendance à la base de code
+  de Cornell, extraction d'embeddings peu pratique ; seule l'interface graphique vaut, pour les
+  non-codeurs) ; modèles Hugging Face ; d'après la revue d'*Ecological Informatics* (Schwinger et
+  al. 2026), BEATs_NLM et Bird-MAE au-dessus du lot ; ProtoCLR pas loin mais pas facile à
+  réutiliser, non recommandé ; Streamlit ou Gradio pour la réannotation.
+- **Arbitrage** : aucun TensorFlow à l'exécution dans le livrable ; benchmark bacpipe sur
+  `birdmae`, `beats`, `naturebeats`, `perch_v2`, `birdnet` (référence du tuteur, non déployable :
+  licence, TensorFlow) ; `protoclr` seulement s'il tourne sans effort ; 16 kHz tranché par le
+  contrôle passe-bas (§2).
+- **Élodie (entretien du 29/09/2026)** : encodeur libre impératif ; annotations reprises de zéro,
+  vérifiées par elle et Benoît (experts naturalistes) avant tout benchmark ONF ; moins de temps
+  sur les benchmarks, plus sur l'interface finale ; critères : performance d'abord, puis facilité
+  d'utilisation (et durée d'encodage) ; pas plus d'une ou deux lignes de code pour un
+  naturaliste. Elle propose, sans certitude et en demandant l'avis de Sylvain, d'écouter en
+  priorité février–mars (pic d'activité de son rapport de phénologie) et les pics journaliers,
+  avec aussi du milieu de journée pour trouver des chants manqués (avis en §5.8).
+
+### §0. Objectifs et critères
+
+**Objectif** : un détecteur d'*A. blanci* qui fonctionne sur les **points d'écoute des futures
+campagnes** (couples micro + site jamais vus), livré à l'ONF sous une forme qu'un naturaliste
+utilise sans écrire de code et que l'ONF réentraîne seul après le stage.
+
+| Rang | Critère | Mesure (§6) | Rôle |
+|---|---|---|---|
+| 0 | Encodeur libre d'accès | poids publics, licence qui permet l'usage par l'ONF | **filtre** : un encodeur non libre n'entre jamais dans le livrable |
+| 1 | Performance du modèle | AP et rappel par enregistrement sur des points tenus à l'écart | départage d'abord |
+| 2 | Facilité d'utilisation | installation et usage sans code ; tâches réussies seul | départage ensuite |
+| 3 | Durée d'encodage | heures pour une campagne d'une semaine sur l'i5 de l'ONF | seulement à performance égale |
+
+« Performance égale » : l'intervalle apparié contient zéro (§6). La licence n'est plus un critère
+de départage : c'est un filtre posé avant toute comparaison.
+
+**« Libre d'accès »** (jugement, à confirmer par Élodie, Q1 du §10) : poids téléchargeables sans
+demande **et** licence qui autorise l'usage par l'ONF sans accord particulier. L'ONF est un
+établissement public à caractère industriel et commercial : une clause « non commerciale » ne le
+couvre pas à coup sûr. Libres : Apache 2.0, MIT, BSD, CC BY, CC BY-SA (CC BY-SA oblige à
+redistribuer les dérivés sous la même licence ; une tête entraînée sur les embeddings n'est pas
+un dérivé des poids `[À VÉRIFIER]`). Non libres : clause NC ; **aucune licence déclarée** (par
+défaut « tous droits réservés ») ; accès sur demande.
+
+**Livrables, par priorité** : (1) jeu annoté v1, vérifié par Élodie et Benoît (§5) — sans lui,
+aucun chiffre ne vaut ; (2) détecteur (encodeur libre + tête) évalué sur des points tenus à
+l'écart (§6) ; (3) application Windows installable sans code et guide de réentraînement pour
+l'ONF (§7) ; (4) rapport de stage et soutenance (mars 2027) ; (5) si 1 à 4 sont finis en avance :
+article de phénologie et gabarit pour d'autres espèces (§14).
+
+### §1. Le problème
+
+**Cadre (tuteur)** : détecteur robuste d'*A. blanci* sur de nouveaux sites ; métriques AP et
+rappel ; six mois, MacBook M4 16 Go ; logiciel prenable en main par un naturaliste ; comparaison
+des approches par score, vitesse, prise en main.
+
+**Données**
+- Enregistreurs : Wildlife Acoustics Song Meter Mini 2 partout ; fréquence d'échantillonnage et
+  format lus dans les en-têtes (96 176 des 96 292 enregistrements sont en 48 kHz stéréo, WAV et
+  FLAC, n° 153).
+- **Jeu 2023** (établi, Courtois et al. 2025) : 6 enregistreurs, 2 par site (Kaw A/B, Molokoï
+  E/F, Trésor C/D), 25/11/2023 → 24/11/2024, 2 min toutes les 30 min de 5 h à 20 h, ≈ 2 200 h ;
+  capteurs de température et d'humidité associés.
+- **Jeu 2026** (inventaire du 29/09, n° 153) : 5 sites (CDR, Mataroni, Patawa Est, Patawa Ouest,
+  RNRT), **un relevé d'environ une semaine par site**, décembre 2025 → février 2026 (mois de
+  chaque relevé `[À VÉRIFIER]` par `blanci status`) ; 2 min toutes les 30 min de 5 h à 19 h 30 ;
+  29 513 enregistrements, 979 h. **En 2026, le mois est confondu avec le site.**
+- Total : 96 292 enregistrements, 3 204 h de 120 s, 2 216 Go ; 94 588 encodables après les
+  drapeaux ; 4,5 millions de fenêtres de 5 s au pas de 2,5 s.
+- **Annotations : reprises de zéro** (§5). Les 345 positifs et 150 négatifs Blancinet (51
+  enregistrements, 13 micros, tous à Mataroni, n° 34–35) restent dans la base (ajout seul) mais
+  sortent de l'entraînement et de l'évaluation : ils sont conditionnés par un détecteur, ne
+  couvrent qu'un site, et leurs négatifs sont des faux amis choisis, pas un échantillon du stock.
+  Un jeu étiqueté conditionné par un détecteur ne contient pas les chants que ce détecteur n'a
+  pas vus : le rappel mesuré dessus est relatif. D'où un premier lot tiré sans aucun détecteur.
+
+**Phénologie (établi, Courtois et al. 2025)**
+- Journalier : pics 7–9 h et 15–17 h à Kaw et Trésor ; à Molokoï, activité haute et constante de
+  7 h à 17 h en saison.
+- Annuel : activité forte de janvier à avril (jusqu'en juin à Trésor et Molokoï) ; quasi nulle de
+  juillet à octobre ; reprise en novembre–décembre avec les premières pluies. Septembre–novembre
+  est donc la saison basse du stage.
+- Détection : à Molokoï, probabilité journalière ≈ 1 de fin novembre à mars ; à Trésor, maximale
+  en décembre puis ≈ 0,5 jusqu'en juin ; Kaw_B ne dépasse jamais 0,5.
+- Chant continu (tuteur) : elle chante du début à la fin des 2 min ; l'indice horaire du rapport
+  atteint rarement 1, mais ce chiffre mélange silences réels et rappel du détecteur (0,69) : H20
+  reste ouverte.
+
+**Problème d'apprentissage** : espèce à note brève mais à chant continu, dans une bande saturée,
+avec ≈ 50 sources de fausses alarmes recensées (oiseaux, amphibiens, orthoptères, artefacts).
+Chant d'*A. blanci* : note simple de 0,090–0,103 s (moyenne 0,094 s), légère modulation
+ascendante (≈ 0,1 kHz), fréquence dominante 4,48–5,41 kHz (moyenne 4,75 kHz), intervalle entre
+notes 1,414 s en moyenne (1,200–1,906 s), structure harmonique développée ; mâles chantant au
+bord des cours d'eau le jour, pic à l'aube (6–7 h) et en fin d'après-midi (16–17 h) en saison des
+pluies, aussi les jours humides de saison sèche. Congénères : *A. surinamensis* (note 0,028–0,037
+s, intervalle 0,37–0,83 s, 4,55–5,35 kHz) ; *A. degranvillei* (3,60–3,62 kHz, notes plus longues
+de 0,157–0,160 s). Ces valeurs sont dans `config/default.yaml` (section `signal`).
+
+**Unité de décision (jugement)**
+
+| Niveau | Rôle | Règle |
+|---|---|---|
+| Fenêtre (3 s ou 5 s selon l'encodeur, pas ≤ moitié) | apprentissage, score, vérification | métriques de développement |
+| Enregistrement (2 min) | **unité principale** ; score = proportion de fenêtres où *A. blanci* est détectée | scores faibles à vérifier ; détection sur des fenêtres isolées → file « suspect » |
+| Point × période | décision gestionnaire `[H5]` | « à vérifier » dès qu'un enregistrement est positif ; points classés par force (fraction, nombre d'enregistrements, jours) ; « présence confirmée » après validation humaine ; sinon « non détecté », jamais « absent » |
+
+**Écart métrique / décision** : fausse absence irréversible, fausse présence réversible → rappel
+prioritaire ; chant continu → un créneau en saison suffit, la contrainte est la **saison**.
+
+**Échelle** (note de 0,09 s dans une fenêtre de 3–5 s) : fenêtres pleines par défaut. Contre le
+détecteur amont : bande saturée, rappel plafonné. Le seuillage spectral ne sert qu'aux onsets du
+module séquentiel. Variantes à comparer (plis par micro) : A grille standard ; B pas resserré ;
+C fenêtres centrées sur onsets ; E agrégation des jetons (moyenne / max / attention) ; C adopté
+seulement s'il dépasse A et B de plus que l'incertitude.
+
+### §2. Benchmark des encodeurs
+
+- **AnuraSet clôt le choix des candidats.** La vague 2 (`scripts/anuraset/VAGUE_ENCODAGE_2.md`)
+  se termine le **09/10/2026** ; les sessions non finies ce jour-là sont abandonnées. Pas de
+  nouvelle tête ni de nouvelle régularisation sur AnuraSet, fiches courtes (≤ 30 lignes).
+- **Filtre de licence (§0) avant le benchmark ONF.** Tous les encodeurs libres qui passent le
+  témoin BOAFAB (n° 151) y vont, plus **au plus deux non libres**, choisis parmi ceux qui font
+  mieux que le meilleur libre sur AnuraSet : objectifs à battre, jamais livrés. BirdNET 2.4
+  resterait le seul non libre comme repère connu des naturalistes (à valider avec Élodie).
+- **Pas de benchmark sur les données ONF avant le go d'Élodie et Benoît** (§5.7). Ensuite : les
+  encodeurs retenus × logistique (plus une tête sur jetons pour un transformer libre, n° 151),
+  courbe d'amorçage par point ; **choix de l'encodeur le 20/11/2026**, puis plus aucun
+  benchmark d'encodeur.
+
+**Licences relevées (29/09/2026 ; fiches Hugging Face, dépôts, `documentation/encodeurs-bacpipe.md`)**
+
+| Encodeur | Licence des poids | Statut |
+|---|---|---|
+| perch_v2 (Perch 2.0) | Apache 2.0 | **libre** |
+| perch_bird (Perch 1) | Apache 2.0 `[À VÉRIFIER]` (page Kaggle) | libre sous réserve |
+| birdnet_v3 (BirdNET+ 3.0, préversion) | CC BY-SA 4.0 ; mention « Powered by BirdNET », braconnage et usage militaire interdits (n° 151) | **libre** ; ONNX officiel |
+| beats | dépôt `microsoft/unilm` sous MIT | libre sous réserve |
+| birdnet (2.4) | CC BY-NC-SA 4.0 | non libre : repère des naturalistes |
+| esp-aves2 (dix points de contrôle) | CC BY-NC-SA 4.0 (n° 151) | non libre |
+| naturebeats | NatureLM-audio : CC BY-NC-SA 4.0 ; mêmes poids `[À VÉRIFIER]` | non libre |
+| audioprotopnet | CC BY-NC 4.0 | non libre |
+| Bird-MAE (Base, Large, Huge), convnext_birdset, biolingual | aucune licence sur la fiche Hugging Face ; dépôt de code non lu | non libre tant qu'aucune licence n'est publiée ; demander aux auteurs si l'un gagne |
+| protoclr, rcl_fs_bsed, mix2, avesecho_passt, insect66, insect459, MetaPerch (poids pas publiés) | non relevée | à relever avant le benchmark ONF |
+
+**Méthode**
+- Colonnes : licence ; exécution sur M4 ; vitesse sur M4 et projection sur i5-1145G7 ; prise en
+  main ; jetons accessibles ; AP ; rappel à précision 0,5 et 0,1 ; kNN top-1.
+- Pré-benchmark AnuraSet (Cañas et al. 2023) : deux ou trois anoures à note brève en 3–6 kHz,
+  plis par site, milliers de positifs. Indicateur, pas garantie.
+- Sondes : kNN cosinus ; prototype différentiel ; régression logistique L2. Validation **groupée
+  par micro**. Comparaisons appariées sur les mêmes plis, bootstrap.
+- Générateur de candidats : Perch 2.0 contient *A. baeobatrachus*, *A. stepheni*,
+  *A. surinamensis* ; leurs logits (non calibrés) donnent une première liste de candidats et des
+  descripteurs optionnels.
+- Mesures trompeuses : exactitude, AUROC, F1 au seuil 0,5, AMI/ARI.
+- `perch_v2` (TensorFlow, GPU) : wrapper CPU `[À VÉRIFIER]` ; `perch_v2_no_dft.onnx` repéré dans
+  un notebook BirdCLEF+ 2026, à valider contre des embeddings de référence ; sinon extraction
+  déportée pour le benchmark seul.
+- Désaccords → mesures : AP(birdnet) contre les autres ; BEATs/NatureBEATs à 16 kHz contre
+  Bird-MAE à 32 kHz **avec contrôle** (Bird-MAE sur audio filtré à 8 kHz : si le contrôle égale
+  l'encodeur natif, l'objection du tuteur ne s'applique pas à ce signal).
+
+### §3. Cartographie des approches
+
+| Approche | Principe | Annotations | Verdict |
+|---|---|---|---|
+| Template matching | corrélation croisée de spectrogrammes | 1–10 | baseline obligatoire, indépendante de l'encodeur |
+| Seuillage spectral | passe-bande 4,4–5,5 kHz, enveloppe, seuil, durée 0,08–0,11 s | 0 | onsets du module séquentiel ; pas de filtre amont |
+| Indices acoustiques | statistiques par enregistrement | 0 | contrôle qualité : pluie, saturation, « micro dans sac » |
+| Prototype simple | cosinus au centroïde des positifs | 5–30 | baseline de similarité, sensible au fond partagé |
+| Prototype différentiel | ⟨x, μ₊ − μ₋⟩ + b, négatifs appariés | 10–50 | baseline permanente ; retire le fond partagé |
+| Linear probing | régression logistique L2 sur embeddings gelés | dizaines → centaines | **tête principale** |
+| Attentive probing | tête d'attention sur jetons pris avant agrégation | ≥ 150–200 | si jetons accessibles (nécessaire pour les transformers) |
+| Logits de congénères (Perch 2.0) | scores des 3 *Anomaloglossus* connus | 0 | générateur de candidats ; descripteur optionnel |
+| Clustering | HDBSCAN sur ACP ; UMAP pour voir | 0 | §5 bis |
+| LoRA / fine-tuning | adaptation partielle ou totale (`blanci/finetune.py`, réservé) | centaines à milliers | conditionné ; hors chemin critique |
+| Distillation / modèle maison (`blanci/detectors/`, réservés) | petit CNN bande 3–7 kHz imitant la chaîne gelée | 0 | livrable léger pour l'i5 ; après le choix de l'encodeur |
+
+**Prototype différentiel** : x ≈ c_site + c_espèce + ε ; w = μ₊ − μ₋ ≈ c_espèce avec des négatifs
+**appariés** (mêmes micros, heures, jours) ; centroïde le plus proche sous variance commune =
+analyse discriminante linéaire à covariance identité = solution fermée de la régression
+logistique ; première instance de l'arithmétique d'embedding (tuteur).
+
+**Module séquentiel** (descripteurs calculés depuis l'audio, hors encodeur) : rythme intra-fenêtre
+(débuts de notes dans la bande) ; persistance (fraction de fenêtres positives dans
+l'enregistrement, continuité entre fenêtres voisines, créneaux voisins du même micro : sépare
+chant continu et chant ponctuel, isole les détections uniques) ; solo contre chœur `[H21]`
+(densité d'onsets, chevauchements, étalement spectral). **Heure et saison restent hors du
+classifieur par défaut** (risque d'apprendre la phénologie de Mataroni) : elles servent à
+l'échantillonnage, au classement des points et à un drapeau de plausibilité issu des courbes de
+Courtois et al. ; entrée du classifieur seulement si validée sur Trésor et Kaw.
+
+**Tête de fusion (stacking à deux niveaux)** : `head` et `sequential` au niveau 1 ; régression
+logistique au niveau 2 sur (score de `head` **hors-pli**, 2–4 descripteurs, logits de congénères
+en option). Hors-pli = score produit par une version de `head` entraînée sans l'exemple.
+≈ 10 enregistrements positifs indépendants par coefficient. Le score séquentiel module, jamais
+de veto.
+
+### §4. Architecture
+
+```
+audio brut (Song Meter Mini 2)
+  └─ ingest      inventaire, métadonnées (jeu, site, micro, horodatage), drapeaux QC → SQLite
+  └─ decode      forme d'onde float32 mono, f_e native (soundfile)
+  └─ grid        fenêtres (recording_id, offset_s, dur_s), indépendantes de l'encodeur
+  └─ encoder[k]  rééchantillonnage vers f_e(k) ; spectrogramme interne ; E_k ∈ R^{N×d_k}
+  └─ store       Parquet partitionné encodeur / jeu / site / mois, float16 (audio intact)
+  └─ index       cosinus exhaustif par fragments ; requêtes positives et négatives empilées
+  └─ head[v]     régression logistique → score par fenêtre
+  └─ sequential  rythme, persistance, solo/chœur → fusion
+  └─ aggregate   fenêtre → enregistrement (fraction) → point (classement)
+  └─ queue       file de vérification → labels en ajout seul → réentraînement de head
+```
+
+- `decode` s'arrête à la forme d'onde ; le log-mel est calculé dans chaque encodeur.
+- Labels attachés à (enregistrement, décalage) ; encodeur derrière un `Protocol` ; GUI → couche
+  de service (`blanci/service.py`).
+- Volume : ≈ 4 millions de fenêtres → 6 Go en 768-d float16, 12 Go en 1 536-d.
+- Changement d'encodeur : ré-encodage en tâche de fond ; tête réentraînée sur les mêmes labels ;
+  rapport de migration sur le jeu gelé ; décisions estampillées (`encoder_id`, `head_version`,
+  `threshold_id`).
+- Croissance : encodeur figé ; index en ajout ; tête réentraînée de zéro sur tous les labels
+  (réentraînement périodique) ; seuils recalibrés.
+
+### §5. Annotation et apprentissage actif (reprise de zéro)
+
+**Décision (Élodie)** : on repart de zéro. Léonard tire et annote seul, envoie un sous-échantillon
+à Élodie et Benoît qui le vérifient. Aucun benchmark sur ces données avant leur go. But : un jeu
+aussi équilibré que possible pour **généraliser à de nouveaux points**.
+
+#### 5.1 Principes (jugement)
+
+1. **Le point d'écoute (site + micro, n° 38) est l'unité qui compte**, ni la fenêtre ni
+   l'enregistrement : 40 fenêtres d'un enregistrement valent à peine plus qu'une. Beaucoup de
+   points, peu d'enregistrements par point. Benchmark 07 : sur un site neuf, 5 à 10
+   enregistrements positifs annotés relèvent l'AP de 0,81 à 0,89 ; au-delà, c'est de la
+   diversité qu'il faut.
+2. **Deux jeux, deux règles.** L'**entraînement** peut être enrichi là où l'espèce chante (un
+   tirage biaisé ne fausse pas une tête si les négatifs couvrent tous les fonds). L'**évaluation**
+   est tirée au hasard dans des strates, sur des **points tenus à l'écart**, avec la probabilité
+   de tirage de chaque enregistrement : sans elle, aucune métrique ne se ramène au stock réel.
+3. **Aucun détecteur dans le tirage du premier lot** (ni Blancinet, ni nos têtes). Les modèles
+   reviennent après le go, pour les lots d'entraînement seulement (§5.9).
+4. **Chaque strate qui donne des positifs donne aussi des négatifs**, des mêmes points aux mêmes
+   heures. Sinon la tête apprend l'heure, la saison ou le site à la place du chant.
+5. **Tout tirage est fait par un script à graine fixée, avant écoute**, et sa liste est
+   versionnée.
+
+#### 5.2 Partition des points, avant toute écoute
+
+| Jeu | Points | Pourquoi |
+|---|---|---|
+| Évaluation, niveau 2 | **un site 2026 entier**, choisi avec Élodie : présence connue, ≥ 10 points | mesure « nouveau site » (futures campagnes) |
+| Évaluation, niveau 1 | **20 % des points** de chacun des autres sites 2026, au hasard | mesure « nouveau point d'un site connu » |
+| Évaluation, niveau 3 | 2023 : **une station sur deux** par site (A ou B, au hasard) | toutes les saisons, sur un enregistreur jamais vu |
+| Entraînement | tout le reste | — |
+
+Un point tenu à l'écart ne donne jamais rien à l'entraînement, à la validation croisée ni au
+réglage du seuil. Les enregistrements qui portent un label Blancinet sont exclus du tirage
+d'évaluation. Pour 2023, le point est la station (Kaw_A, Kaw_B…) `[À VÉRIFIER]`.
+
+#### 5.3 Strates
+
+- **Tranche horaire** (heure locale) : aube 5–7 h ; pic du matin 7–9 h ; journée 9–15 h ; pic du
+  soir 15–17 h ; soir 17–20 h.
+- **Période** (2023 seulement) : haute (décembre–avril, dont **février–mars** en sous-strate) ;
+  transition (mai–juin, novembre) ; basse (juillet–octobre). En 2026, la période est fixée par le
+  site : on stratifie par point et par tranche horaire.
+- Dans une strate : jour tiré au hasard, puis enregistrement tiré au hasard ; au plus un
+  enregistrement par point, jour et tranche. Les enregistrements écartés par un drapeau (n° 79,
+  153, 154) sont exclus ; pluie et saturation restent (conditions réelles).
+
+#### 5.4 Lot d'entraînement 1 : environ 450 extraits de 30 s
+
+| Jeu | Part | Répartition |
+|---|---|---|
+| 2026, points d'entraînement | ≈ 300 extraits | **3 par point** : un au pic du matin, un au pic du soir, un dans une autre tranche tirée au hasard |
+| 2023, stations d'entraînement (3) | ≈ 150 extraits (50 par station) | période haute 50 % (dont deux tiers en février–mars), transition 20 %, basse 30 % ; pics 60 %, autres tranches 40 % |
+
+Au total ≈ 60 % des extraits aux heures de pic, 40 % hors pic. Le quota par point se cale sur le
+décompte réel (`blanci status`). Ce lot mesure aussi la **prévalence** par strate
+(`decision.prevalence`, R73, n° 128). Temps : ≈ 1 min par extrait, soit 8 à 10 h (à chronométrer
+sur les 50 premiers).
+
+#### 5.5 Jeu d'évaluation v1 : environ 250 enregistrements entiers
+
+- Points tenus à l'écart (§5.2) ; enregistrements de 2 min **écoutés en entier** (l'unité de
+  décision est l'enregistrement ; l'écoute entière teste H20).
+- Tirage stratifié (tranche horaire, et période en 2023). Les strates de pic, et la période haute
+  en 2023, sont **surreprésentées deux fois** ; la probabilité de tirage est notée et les
+  métriques repondérées (§6).
+- Cible : **au moins 60 enregistrements positifs** (rappel 0,9 → Wilson [0,80 ; 0,95]) et au
+  moins 150 négatifs ; sinon on complète dans les strates de pic, probabilités notées.
+- Après le go (§5.7), c'est le **jeu gelé v1** (`blanci freeze`), jamais entraîné. Il remplace le
+  jeu gelé de 60 enregistrements et l'audit aléatoire de 300 enregistrements de Mataroni.
+  Temps : ≈ 3 min par enregistrement, ≈ 12 h.
+
+#### 5.6 Que noter, et combien de fenêtres par enregistrement
+
+- **Unité d'écoute** : un extrait de **30 s** (position tirée au hasard) à l'entraînement ;
+  l'enregistrement entier à l'évaluation.
+- **On note les intervalles** où *A. blanci* chante (début, fin, à 0,5 s près, sûr ou incertain)
+  et, pour l'extrait : familles présentes (schéma ci-dessous), qualité A/B/C, pluie, chœur ou
+  solo si on l'entend, canal écouté.
+- **Les labels de fenêtres se déduisent des intervalles, pour n'importe quelle grille** (3, 5 ou
+  6 s) : positive si dans un intervalle, négative si aucun n'est touché, « bord » sinon (exclue de
+  l'entraînement). Les labels ne dépendent plus de l'encodeur.
+- À l'entraînement, **chaque enregistrement pèse autant** (poids 1 / nombre de fenêtres).
+- Pourquoi 30 s : ≈ 20 notes, de quoi reconnaître le rythme ; 1 min par extrait contre 3 min par
+  enregistrement entier : trois fois plus de points et de jours pour le même temps. À vérifier sur
+  le jeu d'évaluation : un chant absent des 30 s tirés mais présent ailleurs. Au-delà de 10 %,
+  passer à 60 s (risque 5, §9).
+
+#### 5.7 Vérification par Élodie et Benoît, et règle du go
+
+Paquet **à l'aveugle** (label de Léonard caché, ordre mélangé), envoyé fin S6 :
+
+| Contenu | Part vérifiée | Nombre attendu |
+|---|---|---|
+| Tout ce que Léonard a noté « incertain » | 100 % | ≈ 40 |
+| Positifs du jeu d'évaluation | 100 % | 60–80 enregistrements |
+| Négatifs du jeu d'évaluation | 20 %, au hasard | ≈ 35–40 enregistrements |
+| Extraits d'entraînement | au hasard, stratifiés par site | 60 positifs + 100 négatifs |
+| Recouvrement (deux experts) | 30 éléments pris dans ce qui précède | accord entre experts (`blanci agreement`) |
+
+≈ 15 à 20 % de ce que Léonard a annoté ; ≈ 2 h 30 d'écoute par expert. Format sans installation :
+dossier d'extraits WAV nommés par identifiant et feuille Excel (identifiant, *A. blanci* oui / non
+/ incertain, commentaire) ; outil au choix (Raven, Audacity, Kaleidoscope, poste d'annotation).
+
+**Règle du go** (jugement ; bornes unilatérales à 95 %) : 0 erreur sur 60 positifs de Léonard
+(taux d'erreur ≤ 5 %) ; au plus 1 chant manqué sur 100 négatifs (≤ 4,7 %) ; au-delà, la strate
+fautive (site, tranche, type de fond) est réécoutée puis contrôlée par un nouveau tirage. Toute
+réponse d'expert s'ajoute comme label (annotateur = l'expert) et prime ; la base reste en ajout
+seul. Le go s'écrit dans ce journal, avec ses chiffres ; avant, aucune tête n'est jugée sur ces
+données.
+
+#### 5.8 Avis sur les propositions d'Élodie (à discuter avec Sylvain)
+
+**Écouter en priorité février–mars ? Oui pour récolter des positifs, non comme seule période.**
+En 2026 chaque site n'a été enregistré qu'une semaine et le mois y est confondu avec le site :
+« février–mars » reviendrait à choisir des sites, donc moins de points. Une tête qui n'a vu que
+des fonds de saison des pluies rencontrera en saison sèche d'autres insectes et oiseaux, source de
+fausses alarmes qui dessineraient une fausse activité de juillet à octobre. Les chants de début
+et de fin de saison, plus rares et peut-être plus faibles `[À VÉRIFIER]`, datent la saison : la
+tête doit en avoir vu. Un jeu d'évaluation tiré en février–mars ne dit rien des autres mois.
+Proposition : en 2023, période haute 50 % du tirage dont deux tiers en février–mars (facteur 1,7
+par rapport au calendrier), transition 20 %, basse 30 %.
+
+**Pics journaliers en priorité, et milieu de journée pour les faux négatifs ? D'accord**, en
+tirant aussi des négatifs aux mêmes points aux heures de pic (sinon la tête apprend
+« matin = *A. blanci* »). Les heures creuses servent autant aux négatifs qu'aux chants manqués ;
+le chœur d'oiseaux de l'aube (5–7 h) et les amphibiens du soir (17–20 h) sont des sources
+probables de faux amis. Proposition : 60 % aux heures de pic, 40 % ailleurs.
+
+**Questions pour Sylvain** : (1) enrichir l'évaluation (×2 aux pics) et repondérer, ou tirer
+proportionnellement ? (2) 30 s à l'entraînement et enregistrement entier à l'évaluation ?
+(3) la partition des points est-elle trop ou pas assez ? (4) poids 1 / nombre de fenêtres par
+enregistrement, ou sous-échantillonnage ? (5) après le go, mélanger des lots d'apprentissage actif
+à l'entraînement si l'évaluation reste purement probabiliste ?
+
+#### 5.9 Après le go : lots suivants (entraînement seulement)
+
+- Apprentissage actif : file de 60 % d'incertains, 20 % de scores maximaux, 20 % tirés au hasard
+  et stratifiés. Récolte par similarité sur les points peu servis ; negative mining parmi les
+  mieux classés. Ces lots ne vont **jamais** dans l'évaluation ; leur source est notée
+  (`active`, `similarity`).
+- Vérification experte : 10 % tirés au hasard par lot, plus les incertains.
+- Seuil d'un site : 5 à 10 enregistrements positifs vérifiés sur place (le seuil ne voyage pas
+  d'un site à l'autre, benchmark 07) ; c'est aussi la procédure de l'ONF pour chaque nouvelle
+  campagne (§7).
+- Arrêt : gain d'AP sur le jeu gelé v1 inférieur à 0,02 sur deux tours.
+
+#### 5.10 Poste d'annotation
+
+Poste Streamlit existant (`blanci annotate`, écoute des deux canaux) avec un nouveau mode
+**« extrait + intervalles »** : curseur double sous le spectrogramme de 2 à 8 kHz, raccourcis
+clavier, labels du schéma. Export du paquet d'experts (WAV + Excel, à l'aveugle) et réimport de
+leurs réponses comme labels. YAPAT et Whombat restent possibles : outils de travail, pas
+livrable.
+
+#### 5.11 Classification : à trancher avant la première écoute
+
+Ce qu'on note à l'écoute fixe ce que la tête pourra apprendre : la décision précède le lot 1
+(n° 160).
+
+| Option | Classes | Pour | Contre |
+|---|---|---|---|
+| A. Une seule classe | *A. blanci* / non | décision gestionnaire binaire ; toutes les données servent une frontière | ne sait pas qu'un chœur proche et un mâle lointain sont le même animal |
+| B. Trois niveaux | clair / chevauchement / lointain (qualité A/B/C) | rappel par niveau ; C est celui qu'on rate | un **degré** de la même classe, pas une classe |
+| C. Chœur contre solo | blanci chœur / solo / non | pèse sur la phénologie et le module séquentiel (H21) | H21 non levée ; peu de solos |
+| D. Hiérarchie | niveau 1 : blanci / non ; niveau 2 : solo / chœur ; attribut : qualité | A pour décider, B et C pour apprendre et mesurer | annotation plus longue ; sous-classes rares |
+
+Classification hiérarchique et apprentissage multitâche existent (BirdNET, Perch rangent leurs
+espèces par genre et famille) ; la tête R67 (blanci / congénères / faux amis / bruit, n° 124) en
+est une version à un niveau côté négatifs. **C'est une régularisation** au sens large : une tâche
+auxiliaire contraint la représentation sans changer la décision ; effet non garanti avec peu
+d'exemples par sous-classe.
+
+**Recommandation (jugement) : annoter fin, décider gros (option D).** (1) À l'écoute, chaque
+intervalle positif reçoit sa sous-classe (solo, chœur, indécis) et sa qualité (A, B, C) ;
+« incertain » est un doute de l'annotateur, exclu de l'entraînement (n° 3). (2) Décision et
+livrable : une seule sortie, *A. blanci* présente ou non. (3) Qualité A/B/C : attribut (rappel par
+qualité, éventuellement poids d'entraînement). (4) Sous-classes en tâches auxiliaires seulement si
+chacune compte ≥ 30 enregistrements indépendants après le lot 1, adoptées si l'AP binaire sur les
+points tenus à l'écart progresse (intervalle apparié qui exclut zéro). (5) Toute sous-classe se
+replie sur *A. blanci*.
+
+**Schéma de labels** : positifs {blanci-solo, blanci-chœur, blanci-incertain} ; négatifs par
+famille {oiseau:<espèce>, amphibien:<espèce>, orthoptère, cri-de-contact-amphibien, pluie,
+artefact:micro-dans-sac, fond, autre} ; espèces recensées : fourmilier tacheté (le plus
+fréquent), moucherolle, manakin, tangara mordoré, pigeon plombé, évêque de Rothschild, sclérures,
+myrmidon, psittacidés, pic à cou rouge, martinet ; *Adenomera andreae*, *Allobates femoralis*,
+*A. hahneli* (n° 10), *Hyalinobatrachium cappellei / mondolfii / iaspidiense*, *Amazophrynella
+teko*, *Otophryne* ; grillons. Noms scientifiques des oiseaux `[À VÉRIFIER]` avant publication.
+
+**Budget** : Léonard ≈ 25 h avec la manipulation (lot 1 : 8–10 h ; évaluation ≈ 12 h), de S4 à
+S7 ; experts ≈ 2 h 30 chacun. L'annotation est le chemin critique. **Après le stage**
+(H13) : l'ONF réentraîne sur ses portables à chaque nouvelle campagne, sur plusieurs années :
+procédure documentée, tête réentraînable sans GPU (une nuit de calcul acceptable), ré-encodage
+par lots reprenable, comparaison automatique au jeu gelé avant bascule.
+
+### §5 bis. Voie non supervisée : clustering
+
+Après le go seulement, sur le jeu v1 ; C1 se refait sur les points d'entraînement. Fonctions :
+négatifs en volume, exploration, détecteur seulement si C1 réussit. HDBSCAN sur ACP (≈ 50
+composantes), UMAP pour visualiser. C0 : clustering global d'un échantillon, AMI entre groupes et
+micros, anomalies. C1 : positifs connus + 5 000 fenêtres aux mêmes heures, fenêtres pleines contre
+recadrées ; seuils (jugement) : rappel du meilleur groupe ≥ 0,5, enrichissement ≥ 20, AMI micro
+faible. C2 : étiquetage en bloc des groupes homogènes après dix écoutes. C3 : sub-clustering par
+micro sur les heures de pic. Limite : 2–3 % de fenêtre pour la note → groupes = paysages
+sonores.
+
+### §6. Évaluation
+
+Rien n'est jugé sur les données ONF avant le go (§5.7).
+
+- **Niveau 2, nouveau site** : le site 2026 tenu entier à l'écart. **La** mesure principale.
+- **Niveau 1, nouveau point d'un site connu** : les 20 % de points tenus à l'écart.
+- **Niveau 3, temporel** : les stations 2023 tenues à l'écart, précision et rappel **par période**
+  (haute, transition, basse) ; et **reproduction des patrons publiés** : le détecteur appliqué aux
+  2 225 h de 2023 doit retrouver les courbes de Courtois et al. (pics 7–9 h et 15–17 h, creux de
+  juillet à octobre, Kaw_B faible). Un désaccord signale un problème de généralisation ou un
+  artefact.
+- **Développement** (tête, C, pooling) : plis par point sur les seuls points d'entraînement.
+- **Repondération** (Horvitz–Thompson) : sur le jeu d'évaluation chaque enregistrement pèse
+  1 / sa probabilité de tirage ; l'AP, la précision, les fausses alarmes par heure et la
+  prévalence sont celles du stock réel. Le rappel est rapporté aussi strate par strate.
+- **Jeu gelé** : le jeu d'évaluation v1 après le go, versionné, jamais entraîné ; qualité A/B/C,
+  solo ou chœur, SNR et probabilité de tirage renseignés.
+- **Métriques** : AP et rappel par enregistrement et par fenêtre ; rappel à précision ≥ 0,1 et
+  ≥ 0,5 ; fausses alarmes par heure ; rappel par qualité, SNR, période, tranche horaire ; accord
+  du classement des points avec l'expert. Rejetées : exactitude, AUROC, F1 au seuil 0,5, kappa
+  (pour les modèles).
+- **Baseline = écoute humaine** : protocole homme–machine sur 60 enregistrements communs (30
+  positifs, 30 négatifs difficiles) : rappel, précision et temps d'un naturaliste à l'oreille
+  contre l'outil suivi d'une vérification des seuls candidats. Comparaison principale du rapport,
+  exécutée en P4 avec deux naturalistes.
+- **Repères** : au plus deux encodeurs non libres comme objectifs à battre ; détections Blancinet
+  v0.1.0 (`import-detections`, score ≥ 0,10, jeu 2026) jugées au niveau de l'enregistrement sur
+  les mêmes enregistrements (réserve : on ignore sur quoi il a été entraîné) ; détecteur
+  Biophonia 2024 (Courtois et al. : ≈ 1 000 extraits annotés, test sur 450 : 0 faux positif, 24
+  faux négatifs, 53 vrais positifs, rappel ≈ 0,69 à précision 1) : indicatif seulement.
+- **Cibles** : rappel ≥ 0,9 au seuil le plus élevé qui garde une précision ≥ 0,1 sur le site tenu
+  à l'écart ; file hebdomadaire ≤ 1 h à 10 s par candidat. Intervalles : Wilson en
+  enregistrements ; bootstrap par point pour l'AP (n° 139) ; comparaisons appariées, Holm ;
+  « A meilleur que B » seulement si l'intervalle apparié exclut zéro.
+- **Calibration** : seuils sur scores hors-pli ; **seuil propre à chaque site** (§5.9).
+- Combinaisons : concaténation d'embeddings et fusion séquentielle d'abord ; le reste si le jeu
+  gelé compte ≥ 200 positifs indépendants (chaque encodeur ajouté double l'inférence sur l'i5).
+
+| Rang | Critère | Mesure | Comment |
+|---|---|---|---|
+| 1 | Performance | AP repondérée et rappel par enregistrement : niveau 2, puis 1 et 3 | bootstrap par point, comparaisons appariées, Holm |
+| 2 | Facilité d'utilisation | installation (clics, minutes) ; lignes de code (cible 0, plafond 2) ; tâches réussies seul (analyser un dossier, vérifier une file, régler le seuil d'un site, exporter) ; grille à 5 points | Élodie et Benoît en P4, sur une machine ONF |
+| 3 | Durée d'encodage | heures pour une campagne d'une semaine (575 h) sur l'i5 | même fichier ; encodage + tête ; CPU seul |
+
+### §7. Outil livrable
+
+**Cible** : portables Windows 10/11 x64, Intel Core i5-1145G7 (4 cœurs, GPU intégré Iris Xe),
+16 Go, pas de CUDA ; l'ONF réentraîne après le stage.
+
+**Retenu (jugement)** : une **application de bureau Windows** installée par un `.exe`
+(double-clic), sans aucune ligne de code, sur le modèle de BirdNET-Analyzer (interface Gradio
+dans une fenêtre pywebview).
+
+| Brique | Choix |
+|---|---|
+| Moteur | `blanci/service.py` réduit au livrable : ONNX Runtime, NumPy, scikit-learn ; ni PyTorch ni TensorFlow |
+| Interface | pages locales dans une fenêtre (pywebview) ou le navigateur ; l'écran « Vérifier » reprend le poste Streamlit ; Gradio si l'empaquetage de Streamlit résiste |
+| Empaquetage | PyInstaller puis Inno Setup (installateur, raccourci, désinstallation) |
+| Construction | GitHub Actions sur une machine Windows, à chaque version |
+
+Étape intermédiaire et repli : avec `uv`, une ligne PowerShell installe l'outil, une autre le
+lance. Écartés : serveur web hébergé, PAMGuard comme hôte (pas de réentraînement sur place),
+notebooks ou ligne de commande seule, application Qt. **Essai d'empaquetage en S4** : le poste
+d'annotation actuel en `.exe` sur une machine Windows propre (lève le risque 6).
+
+**Écrans** : Analyser (dossier de campagne, avancement, reprise après coupure) ; Vérifier (file,
+spectrogramme 2–8 kHz, boutons du schéma, raccourcis) ; Seuil du site (5 à 10 positifs vérifiés) ;
+Résultats (points classés, export CSV et Excel) ; Modèle (versions, réentraînement, comparaison au
+jeu gelé avant bascule).
+
+**Budget de calcul sur la cible** (bruit synthétique, i5-1145G7, n° 72) : perch_v2, fenêtres de
+5 s au pas de 2,5 s : 7 fenêtres/s, **33 h pour une campagne d'une semaine** (575 h), 9 h pour les
+seules heures de pic ; BirdNET 2.4 : 9 h ; Bird-MAE-Base et ConvNeXt : 62 h ; BEATs : 81 h.
+Leviers : fenêtres jointives (÷ 2) ; quantification int8 (× 2 environ `[À MESURER]`) ; heures de
+pic d'abord (÷ 3,6) ; sous-échantillonnage sous H20 (÷ 5) ; OpenVINO pour le GPU intégré
+`[À VÉRIFIER]`. Réentraînement de la tête : secondes ; ré-encodage complet : plusieurs nuits, par
+lots reprenables.
+
+Options : A application installable (3–4 semaines réparties de S4 à S16) **retenue** ;
+B `uv`, deux lignes PowerShell (étape intermédiaire et repli) ; C PAMGuard (écartée) ; D dossier
+Python portable + scripts (repli ultime).
+
+Mise à jour : tête dans l'application ; encodeur par paquet (`manifest.json` : nom, version,
+SHA-256, **licence**, f_e, fenêtre) ; un paquet dont la licence n'est pas libre est refusé.
+Documentation : README ; « Interpréter un score » ; « Vérifier une file » ; « Régler le seuil
+d'un nouveau site » ; guide de réentraînement pour l'ONF (pas à pas, une nuit) ; `LICENSES.md`.
+Licence d'AnuraSet : CC BY (n° 78 ; la V5 disait CC0 à tort). Confirmation ONF des licences
+avant S12.
+
+### §8. Planning (S1 = 14–18/09/2026, aucune semaine réduite)
+
+| Phase | Semaines | Contenu | Go / no-go |
+|---|---|---|---|
+| P0 Cadrage (fait) | S1–S3 | lecture ; inventaire complet ; chaîne CLI (M0–M5 écrits) ; benchmarks AnuraSet 01–07 | — |
+| P0 bis Clôture et plan | S3–S4 (29/09–09/10) | vague 2 AnuraSet close le 09/10 ; classification tranchée (§5.11) ; licences relevées ; partition des points et plan de tirage figés et versionnés ; mode « extrait + intervalles » ; essai chronométré sur 50 extraits ; avis de Sylvain ; essai d'empaquetage `.exe` | plan validé par Sylvain et Élodie ; au plus deux non libres retenus |
+| P1 Annotation v1 | S4–S7 (05/10–30/10) | lot d'entraînement 1 (≈ 450 extraits) ; jeu d'évaluation (≈ 250 enregistrements entiers) ; paquet de vérification fin S6 ; **en parallèle** : application v0 | ≥ 60 enregistrements positifs à l'évaluation, sinon tirage complémentaire |
+| Go des experts | S7–S8 (≈ 06/11) | retour d'Élodie et Benoît ; corrections ; règle du go (§5.7) | sans go : pas de benchmark ONF, l'application continue |
+| P2 Benchmark ONF borné | S8–S10 (02/11–20/11) | encodeurs libres + au plus deux non libres × logistique ; courbe d'amorçage par point ; seuil par site ; lot 2 par apprentissage actif | **choix de l'encodeur le 20/11** ; rappel ≥ 0,85 à précision ≥ 0,1 sur le site tenu à l'écart, sinon pivot (limite de pivot : fin S12) |
+| P3 Outil v1 | S5–S16 (effort S11–S16) | export ONNX + int8 de l'encodeur retenu ; écrans ; seuil par site ; installateur ; test sur une machine ONF ; guide de réentraînement v0 | 1 h d'audio en < 10 min sur l'i5 ; installation et analyse sans code par Élodie ; sinon option B |
+| P4 Transfert | S17–S21 (04/01–05/02) | test homme–machine ; test d'usage par Élodie et Benoît ; répétition du réentraînement par un agent ONF ; documentation | gel fin S21 |
+| P5 Rapport | S22–S26 (08/02–12/03) | rédaction, soutenance en mars 2027, transfert | — |
+| Pour aller plus loin (§14) | dès S17, si P1–P3 tiennent | 2 225 h de 2023, courbes de phénologie, gabarit multi-espèces | seulement si go et application v1 acquis |
+
+Rédaction continue dès S12 (½ j/sem.). Réunion hebdomadaire : avancement, chiffre clé (extraits
+annotés, positifs, points couverts ; puis AP repondérée sur le jeu gelé), décision demandée.
+**Chemin critique** : plan de tirage (S4) → annotation v1 (S7) → go des experts (S8) → choix de
+l'encodeur (S10) → ONNX + application v1 (S16) → tests d'usage (S19–S20) → gel (S21). Après le
+20/11 : plus de benchmark d'encodeur ; après S16 : plus de changement d'encodeur. Ce qui n'attend
+pas le go : l'application, l'export ONNX de perch_v2 et sa validation sur l'i5, le guide, la
+lecture.
+
+### §9. Risques
+
+| Risque | Seuil | Repli |
+|---|---|---|
+| 1. Go des experts tardif | paquet non rendu > 2 semaines après l'envoi | l'application avance ; benchmark décalé ; paquet réduit aux positifs et incertains |
+| 2. Trop peu de positifs | < 40 à l'entraînement ; < 60 à l'évaluation | tirage complémentaire dans les strates de pic, probabilités notées ; récolte par similarité (entraînement seulement) |
+| 3. Erreurs d'annotation de Léonard | au-delà de la règle du go | réécoute de la strate ; séance des faux amis avec Élodie ; nouveau contrôle |
+| 4. Le meilleur encodeur n'est pas libre | écart apparié significatif avec le meilleur libre | le libre est livré, l'écart rapporté ; distillation seulement si la licence de l'enseignant le permet |
+| 5. Chant ponctuel avéré (H20 fausse) | > 10 % des positifs chantent < 50 % du temps, ou > 10 % absents des 30 s tirés | extraits de 60 s ; score par enregistrement = max ou top-k ; file « suspect » réintégrée |
+| 6. Empaquetage Windows | `.exe` qui ne tourne pas sur une machine propre | Gradio à la place de Streamlit ; sinon option B |
+| 7. Cible trop lente | > 15 h par campagne d'une semaine après leviers | fenêtres jointives, int8, heures de pic ; BirdNET 3 si ses performances suivent |
+| 8. Pas de Perch 2.0 en ONNX valide | cosinus < 0,99 à la fin de S10 | BirdNET 3 (ONNX officiel, libre) ; sinon l'encodeur libre suivant |
+| 9. Confusion avec les faux amis | > 30 % des 100 meilleurs candidats après le tour 3 ; précision < 0,1 à rappel 0,85 fin S11 | poids accru de persistance et rythme ; négatifs par espèce ; sortie hiérarchique |
+| 10. Décalage 2023 (capteurs, saison) | corrélation des courbes journalières < 0,5 | recalibration par jeu ; négatifs 2023 appariés ; résultat rapporté tel quel |
+| 11. Les benchmarks débordent | une semaine sans extrait annoté ni écran écrit | dates fermes : AnuraSet le 09/10, ONF le 20/11 |
+| 12. Bande saturée | > 500 candidats/h aux heures de pic | fenêtres pleines ; seuillage limité aux onsets |
+| 13. Perte machine ou données | machine unique | SSD externe quotidien, copie ONF hebdomadaire, labels sous git |
+
+### §10. Questions restantes
+
+1. **Élodie** : « libre d'accès » = licence qui permet l'usage par l'ONF sans clause non
+   commerciale (définition du §0), ou seulement « téléchargeable gratuitement » ? Dans le second
+   cas, BirdNET 2.4 et esp-aves2 redeviennent candidats.
+2. **Élodie, Benoît** : temps et délai pour la vérification (≈ 2 h 30 chacun) ; outil d'écoute
+   habituel (Raven, Audacity, Kaleidoscope, notre poste) ?
+3. **Sylvain** : les cinq questions du §5.8.
+4. **Élodie** : quel site 2026 tenir entier à l'écart ? Existe-t-il une carte des points
+   (distance à la crique, type de crique) ?
+5. **Élodie** : à quels mois poseront les futures campagnes (poids de la saison basse dans le
+   tirage) ?
+6. **Élodie** : qui, à l'ONF, lancera l'application et réentraînera la tête, sur quelle machine ?
+7. *A. blanci* chante-t-elle parfois de façon ponctuelle ? Chœur et mâle seul sont-ils
+   distinguables à l'oreille ? (H20, H21)
+8. Les sorties du détecteur Biophonia sur 2023 et ses ≈ 1 000 extraits annotés sont-ils
+   récupérables auprès d'ENIA ou de Trésor ?
+9. Quand un point est remonté « à vérifier », que se passe-t-il (visite de terrain, contrainte
+   d'exploitation) et quel volume l'ONF peut-il vérifier par semaine ? (H5)
+10. Taux d'émission et intervalles entre notes d'*A. blanci* (H9) ; réponse et réglages des
+    enregistreurs 2023 et 2026 (H23).
+11. Qui tranche les licences à l'ONF, et à quelle échéance (avant S12) ? Une machine ONF est-elle
+    disponible pour mesurer le débit et tester l'installateur ? Date du prochain rapatriement de
+    terrain (H13) ?
+
+### §12. Hypothèses restantes
+
+| Id | Hypothèse | Levée par |
+|---|---|---|
+| H5 | Décision gestionnaire = intégration dans la planification forestière, à l'échelle du point ou du bassin de crique | Q9 |
+| H9 | IOI de l'ordre de la seconde ; plusieurs notes par fenêtre | Q10 |
+| H13 | Un rapatriement de terrain avant la fin du stage | Q11 |
+| H16 | Relevés 2026 de décembre 2025 à février 2026, un par site | `blanci status` |
+| H20 | *A. blanci* chante rarement de façon ponctuelle ; détection isolée = suspicion de faux positif | Q7 ; jeu d'évaluation |
+| H21 | Solo et chœur séparables par densité d'onsets et chevauchements | Q7 |
+| H23 | Les enregistreurs 2023 et 2026 ont une réponse comparable | Q10 |
+| H24 | « Libre d'accès » = licence qui permet l'usage par l'ONF (§0) | Q1 |
+| H25 | L'annotation de Léonard seul atteint la règle du go (≤ 5 % d'erreur par classe) | vérification (§5.7) |
+| H26 | 30 s suffisent à dire si un enregistrement contient le chant | jeu d'évaluation |
+| H27 | Les futures campagnes se posent en saison d'activité, comme en 2026 | Q5 |
+
+### §13. Règles d'implémentation
+
+**13.1 Contraintes.** Développement : MacBook Air M4, 16 Go, PyTorch avec backend MPS, pas de
+CUDA. Cible : Windows x64, i5-1145G7, 16 Go, CPU seul. **Interdit à l'exécution du livrable** :
+TensorFlow, TFLite, PyTorch ; autorisé : ONNX Runtime, NumPy, scikit-learn. En recherche :
+bacpipe, torch. Python 3.11, `uv`, `pyproject.toml`, `pytest`, `ruff`.
+
+**13.2 Arborescence.** Celle de la V5 (`blanci/` : `ingest`, `audio`, `grid`, `qc`, `encoders/`,
+`store`, `index`, `head`, `sequential`, `fusion`, `aggregate`, `evaluate`, `active`, `labels`, `db`,
+`cli` ; `app/streamlit_app.py` ; `data/` hors git) a été dépassée par le code (n° 11 et suivants) :
+la structure réelle est décrite dans le README. `data/` : `raw/{2023,2026}/<site>/<micro>/*.wav`
+(jamais écrit), `db/blanci.sqlite`, `embeddings/<encoder_id>/<dataset>/<site>/<yyyymm>.parquet`,
+`labels/imports/` (fichiers reçus, jamais modifiés), `models/<kind>/<name>-<version>/`
+(`manifest.json` + poids), `frozen_test/` (jeu gelé, lecture seule).
+
+**13.3 Schéma SQLite** (implémenté dans `blanci/db.py`, qui fait foi ; labels en ajout seul).
+
+```
+recordings(recording_id TEXT PK, path TEXT UNIQUE, dataset TEXT, site TEXT, mic_id TEXT,
+           start_utc TEXT, duration_s REAL, sample_rate INT, channels INT, sha256 TEXT,
+           qc_flags TEXT)                       -- JSON : rain, saturation, in_bag, silent
+windows(window_id TEXT PK, recording_id TEXT FK, offset_s REAL, dur_s REAL)
+labels(label_id INTEGER PK, window_id TEXT FK, label TEXT, quality TEXT, species TEXT,
+       conditions TEXT, annotator TEXT, source TEXT, created_at TEXT)
+       -- label ∈ {blanci (n° 3), blanci_solo, blanci_chorus, blanci_uncertain, bird, amphibian,
+       --          orthoptera,
+       --          amphibian_contact_call, rain, artefact_in_bag, background, other, uncertain}
+       -- quality ∈ {A, B, C, NULL} ; source ∈ {import, similarity, active, random, audit, flag}
+models(model_id TEXT PK, kind TEXT, name TEXT, version TEXT, sha256 TEXT, params_json TEXT,
+       created_at TEXT)                        -- kind ∈ {encoder, head, fusion, threshold}
+scores(window_id TEXT, model_id TEXT, score REAL, PRIMARY KEY(window_id, model_id))
+decisions(recording_id TEXT, encoder_id TEXT, head_version TEXT, threshold_id TEXT,
+          fraction REAL, status TEXT, created_at TEXT)
+          -- status ∈ {positive, suspect, negative, verified_positive, verified_negative}
+```
+
+`window_id = f"{recording_id}:{offset_s:.2f}"` ; `recording_id` : sha256 du chemin relatif (n° 2).
+Parquet : colonnes `window_id, recording_id, offset_s, emb` (`emb` en liste de taille fixe
+`float16[dim]`), un fichier par (encodeur, jeu, site, mois).
+
+**13.4 Interfaces** (signatures d'origine ; le code fait foi).
+
+```
+class Encoder(Protocol):
+    name: str; version: str; sample_rate: int; window_s: float; dim: int; has_tokens: bool
+    def embed(self, wav: np.ndarray, sr: int) -> np.ndarray            # (n_windows, dim)
+    def embed_tokens(self, wav: np.ndarray, sr: int) -> np.ndarray | None  # (n_windows, n_tokens, dim)
+
+def window_grid(duration_s: float, window_s: float, hop_s: float) -> list[tuple[float, float]]
+def differential_prototype(E_pos, E_neg_paired) -> tuple[np.ndarray, float]
+def oof_scores(X, y, groups, n_splits: int = 5) -> np.ndarray
+def detect_onsets(wav, sr, band: tuple[int, int] = (4400, 5500)) -> np.ndarray
+def aggregate_recording(window_scores, threshold) -> tuple[float, str]
+def build_queue(scores, labels, n, mix: tuple[float, float, float] = (0.6, 0.2, 0.2))
+def evaluate(scores, labels, groups, level: Literal["window", "recording"]) -> dict
+```
+
+**13.5 Commandes.** `ingest`, `import-labels`, `embed`, `benchmark`, `search`, `train`, `score`,
+`queue`, `evaluate`, `export-onnx` à l'origine ; la liste réelle (une cinquantaine de commandes)
+est dans `documentation/commandes.md`.
+
+**13.6 Jalons et critères d'acceptation.** M0 dépôt, `ingest`, `import-labels` (accepté, n° 49) ;
+M1 `embed`, `store`, `benchmark` en plis par micro ; M2 `head`, `search`, `queue`, prototype
+Streamlit ; M3 `sequential`, `fusion`, `aggregate`, audit aléatoire ; M4 jeu gelé,
+`evaluate --holdout`, reproduction des patrons 2023 ; M5 `export-onnx`, quantification, test
+d'équivalence (cosinus > 0,99 avec torch), bundle Windows : 1 h d'audio en < 10 min sur l'i5,
+réentraînement de la tête sans intervention ; M6 guide de réentraînement, test homme–machine,
+transfert : un agent ONF réentraîne seul sur une nouvelle campagne. M0 à M5 sont écrits (état :
+README).
+
+**À coder (liste v5, dans l'ordre).** (1) Plan de tirage : partition des points versionnée,
+`candidates --plan` (strates, quotas, graine), probabilité de tirage enregistrée. (2) Annotation
+par intervalles : mode « extrait + intervalles », labels de fenêtres déduits pour chaque grille,
+poids 1 / nombre de fenêtres. (3) Sources exclues par défaut : `import` (Blancinet) hors
+entraînement et évaluation ; `active` et `similarity` hors évaluation. (4) Vérification à l'aveugle :
+export WAV + Excel sans le label de Léonard, réimport des réponses comme labels, `agreement` par
+classe avec bornes. (5) Métriques repondérées (AP, précision, fausses alarmes par heure, rappel
+par strate). (6) Licence dans le manifeste : paquet refusé si la licence n'est pas libre. (7)
+Application installable : essai PyInstaller + Inno Setup, construction Windows par GitHub Actions.
+
+**13.7 Règles pour l'agent de code.**
+- Ne jamais écrire dans `data/raw` ni `data/frozen_test`. Les labels ne se modifient pas, ils
+  s'ajoutent.
+- Toute évaluation passe par `evaluate.py` avec groupes explicites ; un découpage aléatoire est
+  une erreur. Aucun score n'entre dans `fusion` s'il n'est pas hors-pli.
+- Un encodeur n'est jamais appelé sans passer par `Encoder` ; le rééchantillonnage se fait dans le
+  wrapper.
+- Tout résultat chiffré vient d'une commande reproductible avec graine, jamais d'un notebook non
+  versionné.
+- Aucun résultat sur les données ONF avant le go d'Élodie et Benoît, écrit dans ce journal (§5.7).
+- Un encodeur non libre (§0) n'entre jamais dans le livrable ; au benchmark ONF, au plus deux,
+  comme objectifs à battre.
+- Aucun label choisi par un modèle (sources `active`, `similarity`, `import`) dans le jeu
+  d'évaluation.
+- L'application avance en parallèle de l'annotation ; PAMGuard est écarté ; la distillation reste
+  après le choix de l'encodeur.
+- En cas de doute sur une décision de conception, se référer au numéro de section du cadre et ne
+  pas rediscuter les choix « jugement » : les remettre en question par une entrée datée de ce
+  journal.
+
+### §14. Pour aller plus loin (si le cœur du stage est fini en avance)
+
+**Article de phénologie d'*A. blanci*** : le détecteur validé appliqué aux 2 225 h de 2023 (trois
+sites, une année entière) plus les points 2026. Questions possibles (à choisir avec Élodie) :
+courbes journalières et saisonnières par site ; lien avec la pluie, la température et l'humidité ;
+différences entre criques rocheuses (Kaw, Molokoï) et lit évasé et marécageux (Mataroni) ;
+probabilité de détection et occupation. Prérequis : un rappel et une précision **connus par
+période**, y compris en saison basse (une fausse alarme constante dessine une fausse activité hors
+saison). Auteurs, revue, calendrier : à décider avec Élodie, Benoît et Sylvain ; rien n'est écrit
+avant l'application v1 (S16).
+
+**Gabarit du projet pour d'autres espèces** : propre à *A. blanci* : bande de fréquence
+(4,4–5,5 kHz), durée de note et intervalle, heures et mois d'activité, faux amis et schéma de
+labels, congénères dans les classes de Perch et de BirdNET 3. Le reste est générique (inventaire,
+drapeaux, plan de tirage, poste d'annotation, encodeur, tête, évaluation, application). Travail :
+regrouper ce qui est propre à l'espèce dans une section `species` de la configuration, rien de
+codé en dur ; un guide « adapter à une nouvelle espèce » ; un essai sur une deuxième espèce. À
+faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en dur.
+
+### Angles morts
+
+- **Un seul annotateur** : la vérification à l'aveugle mesure son erreur sur un échantillon, pas
+  sur tout ; une confusion systématique peut passer entre les mailles si la strate n'est pas
+  tirée.
+- **Le go des experts est au chemin critique** : paquet court, clair, sans installation, envoyé
+  tôt (fin S6).
+- **Sans probabilités de tirage, pas de métrique honnête** : un enregistrement ajouté « à la
+  main » au jeu d'évaluation le casse.
+- **En 2026, mois et site sont confondus** : l'effet saison ne se mesure que sur les six stations
+  de 2023.
+- **Le modèle précédent reste mal comparable** (Blancinet) : on ignore sur quoi il a été entraîné.
+- **H20 porte trois économies** (règle d'agrégation, sous-échantillonnage des fenêtres, extraits
+  de 30 s) : si elle est fausse, elles disparaissent ensemble.
+- **Phénologie comme piège** : très prédictive d'un site à l'autre ; hors classifieur par défaut,
+  mais la tentation reviendra.
+- **La machine cible est lente** (33 h par campagne sans levier, n° 72) ; export ONNX et int8 non
+  encore validés sur l'i5.
+- **« Libre » est une question juridique** : la définition du §0 est un jugement d'ingénieur ;
+  l'ONF tranche (Q11).
+- **Transfert à l'ONF** : réentraînement par des non-développeurs sur plusieurs années : le guide
+  et le réglage du seuil d'un nouveau site sont des livrables à part entière.
+- **Sur-ingénierie** : chaque heure passée sur un benchmark est retirée à l'annotation et à
+  l'application, désormais au chemin critique.
+- **Occupation** : la non-détection devrait passer par un modèle d'occupation `[À VÉRIFIER]` ;
+  hors périmètre du stage, dans celui de l'article (§14).
+
+---
+
+# Journal des décisions
 
 ## 2026-09-21 — Jalon M0
 
@@ -943,7 +1724,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
 ## 2026-09-25 (après-midi) — Régularisations des têtes
 
 108. **Régularisations programmées, coupées par défaut** (tri de Léonard du 25/09 sur la liste
-     R1–R84, `documentation/regularisation.md`). `blanci/regularization.py`, numéros conservés
+     R1–R84, `documentation/regularizations/regularizations.md`). `blanci/regularization.py`, numéros conservés
      partout dans le code et la config. Une tête du benchmark les active dans son nom :
      `blanci heads --methods logistic,logistic+R18=16,logistic+R19` (« =v » remplace le réglage
      principal) ; le nom canonique (R triées) est celui des rapports et des scores hors-pli,
@@ -1690,7 +2471,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      site, une espèce par processus (1 thread BLAS), Holm sur toutes les espèces. Rapports :
      `documentation/benchmarks/2026-09-29_anuraset_{protoclr,perch_bird,birdnet}/` ; outils
      communs (encodage, une espèce par processus, rassemblement, modèle de `generer.py`) :
-     `documentation/benchmarks/outils_anuraset/`.
+     `scripts/anuraset/`.
      - Logistique, AP poolée (DENMIN / PITAZU / PHYCUV / LEPLAT / BOAFAB) : perch_v2 0,91 /
        0,74 / 0,89 / 0,79 / 0,97 (n° 141) ; perch_bird 0,93 / 0,76 / 0,84 / 0,75 / 0,98 ;
        birdnet 0,92 / 0,68 / 0,58 / 0,34 / 0,96 ; protoclr 0,57 / 0,24 / 0,14 / 0,33 / 0,85.
@@ -1747,7 +2528,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      positif). Unité commune : la minute (max des fenêtres), seule identique pour des grilles de
      3, 5 et 6 s ; référence fixée d'avance, perch_v2 + logistique ; Holm. Rapport :
      `documentation/benchmarks/2026-09-29_anuraset_global/RAPPORT.md` ; outils :
-     `outils_anuraset/global_bench.py`, `rassembler_global.py` ; sorties brutes : branche
+     `scripts/anuraset/global_bench.py`, `rassembler_global.py` ; sorties brutes : branche
      `resultats-anuraset-07`.
      - AP moyenne par site (minute, moyenne des 5 espèces) : perch_v2 0,79, perch_bird 0,78
        (aucun écart significatif, Holm), birdnet 0,68 (égal sur DENMIN, PITAZU, BOAFAB ; −0,15
@@ -1813,7 +2594,7 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
 
 152. **Prérequis de la vague d'encodage 2 : jetons, têtes sur jetons, classifieur de BirdNET 3,
      esp-aves2.** Codés et testés sur de vrais enregistrements d'AnuraSet (plan des sessions :
-     `documentation/benchmarks/outils_anuraset/VAGUE_ENCODAGE_2.md`).
+     `scripts/anuraset/VAGUE_ENCODAGE_2.md`).
      - Jetons (`BacpipeEncoder.embed_tokens`) : Bird-MAE (dernière couche cachée, jeton de
        classe retiré, 32 temps × 8 fréquences), BEATs et NatureBEATs (jetons avant la moyenne de
        bacpipe, 31 × 8), AudioProtoPNet (carte de la dernière couche, 19 × 8, celle que lit sa
@@ -1880,7 +2661,8 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
 ## 2026-09-29 (soir) — Entretien avec Élodie : objectifs révisés, feuille de route V5
 
 155. **Feuille de route V5** (entretien de Léonard avec Élodie, 29/09/2026).
-     `documentation/feuille-de-route-V5.md` remplace la V4, archivée dans `documentation/old/`.
+     `documentation/feuille-de-route-V5.md` remplace la V4, archivée dans `documentation/old/`
+     (la V5 a été fusionnée dans le cadre en tête de ce fichier le 01/10/2026, n° 162).
      Numéros de section conservés : les renvois des entrées précédentes restent valables.
      Nouveaux : §0 (objectifs, ordre des critères, définition de « libre ») et §14 (pour aller
      plus loin : article de phénologie, gabarit multi-espèces). Ordre des critères (Élodie) :
@@ -1972,3 +2754,57 @@ décision, datée ; une décision remise en cause reçoit une nouvelle entrée, 
      - Le 30/09, une fusion (branche `tmp-merge`) avait versé dans `main` les 340 sorties brutes
        de `resultats-anuraset-07` (≈ 89 Mo) : retirées de l'arbre (6f2ff13), mais encore dans
        l'historique ; règle ajoutée à `VAGUE_ENCODAGE_2.md`.
+
+## 2026-10-01 — Rangement du dépôt pour les tuteurs
+
+Le dépôt est public (`Rumble-Paw-Patrol/Grenouille`) et ses lecteurs sont les tuteurs : décisions
+de Léonard, 01/10/2026.
+
+162. **Feuille de route V5 fusionnée ici et supprimée.** Léonard ne s'en sert plus : elle servait
+     à amorcer le projet avant le début du stage. Ce qui reste utile (objectifs et critères,
+     données, protocole d'annotation et d'évaluation, livrable, planning, risques, questions et
+     hypothèses ouvertes, règles d'implémentation) forme le **cadre** en tête de ce fichier, avec
+     les numéros de section conservés. Abandonnés : journaux v2 → v5, montée en compétence,
+     hypothèses déjà levées, texte des anciennes versions de §2 ; la bibliographie citée est dans
+     `documentation/biblio/biblio.md` (§6). Version complète : `git show
+     ad43369:documentation/feuille-de-route-V5.md`. Les feuilles V1 à V4 restent dans
+     `documentation/old/`.
+
+163. **Échantillon versionné retiré** (n° 113). Les 66 clips d'`echantillon/` (60 Mo de FLAC tirés
+     des enregistrements de l'ONF et de Biophonia) sortent de l'arbre de travail, avec
+     `blanci/echantillon.py`, la commande `blanci echantillon` et `tests/test_echantillon.py` :
+     les enregistrements ne sont pas à publier, et Léonard dispose maintenant du jeu complet. Ils
+     restent dans l'historique git (dernier commit qui les contient : `ad43369`) ; les
+     3 extraits WAV de `documentation/prez/presentation-suivi-2/audio/` en viennent
+     (`generer_figures.py` explique comment les restaurer). Les mesures du n° 113 et suivants qui
+     s'appuyaient sur l'échantillon restent écrites ici comme résultats passés, sans commande
+     pour les reproduire. `pheno-blanci.pdf` (rapport de Courtois et al., 2025) sort aussi du
+     dépôt : la référence complète, avec lien, est dans `documentation/biblio/biblio.md` ainsi que
+     celles de l'UICN et du plan national d'actions.
+
+164. **Réorganisation des dossiers.**
+
+     | Avant | Après |
+     |---|---|
+     | `documentation/feuille-de-route-V5.md` | fusionnée dans le cadre de ce fichier (n° 162) |
+     | `documentation/regularizations/tableaux/` | `documentation/tableaux/` (tableaux de tous les benchmarks) |
+     | `documentation/regularizations/regularisation.md` | `documentation/regularizations/regularizations.md` |
+     | `documentation/benchmarks/outils_anuraset/` | `scripts/anuraset/` (du code, pas de la documentation) |
+     | `LISEZMOI.md` (racine) | supprimé : reste d'une branche de résultats, chemins disparus |
+     | `documentation/Offre de stage_VF.pdf` | supprimé : doublon de `documentation/biblio/` |
+     | `documentation/prez/Presentation_suivi_2.key` | supprimé : le `.pptx` fait foi |
+     | `documentation/notes.md` | sorti du dépôt : brouillon personnel, reste en local |
+     | README (commandes) | `documentation/commandes.md` ; README refait pour un lecteur extérieur |
+
+     Branches distantes `claude/benchmark-regularisations-pertes-jt41ye`, `corrections-audit` et
+     `resultats-anuraset-07` supprimées (déjà fusionnées dans `main`). Les chemins cités dans les
+     entrées plus haut qui ont changé sont ceux du tableau ci-dessus.
+
+165. **Branches `donnees-anuraset-*`** : conservées hors de `main`. Elles portent les embeddings et
+     la base AnuraSet (6 branches, 15 à 70 Mo chacune, ≈ 280 Mo non compressés en tout) que
+     `scripts/anuraset/importer_stock.py` lit ; ce sont des données publiques (AnuraSet, CC BY).
+     Hébergement à trancher (Git LFS, Zenodo ou pièce jointe de version) ; en attendant elles
+     n'encombrent pas l'arbre de `main`. Le pack git local pèse 580 Mo parce que l'historique
+     contient aussi les anciennes sorties brutes (n° 161), l'échantillon audio, les
+     présentations et les PDF.
+

@@ -5,8 +5,8 @@ site (DECISIONS n° 35, 49). Ce script produit le détail, à glisser dans la di
 annotations » : tableaux CSV et deux figures (enregistrements par site ; fenêtres annotées
 positives/négatives par micro).
 
-    uv run --group notebook python documentation/presentation-suivi-2/inventaire_annotations.py \
-        [data/db/blanci.sqlite]
+    uv run --group notebook python \
+        documentation/prez/presentation-suivi-2/inventaire_annotations.py [data/db/blanci.sqlite]
 
 Base ouverte en lecture seule. Le dernier label d'une fenêtre fait foi (labels en ajout seul).
 """
@@ -25,7 +25,7 @@ import pandas as pd
 
 from blanci.labels import POSITIVE_LABELS
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 OUT = Path(__file__).resolve().parent / "inventaire"
 DB = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "data" / "db" / "blanci.sqlite"
 

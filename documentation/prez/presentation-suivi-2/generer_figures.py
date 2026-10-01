@@ -1,8 +1,13 @@
 """Figures et extraits audio de la présentation de suivi n° 2.
 
-Tout part de l'échantillon versionné (`echantillon/`) : aucun disque externe n'est lu.
+Tout part de trois clips de l'ancien échantillon versionné (`echantillon/`, 66 clips de
+l'ONF, retiré du dépôt le 01/10/2026 : les enregistrements ne sont pas publics). Pour relancer
+le script, restaurer le dossier depuis l'historique git :
 
-    uv run --group notebook python documentation/presentation-suivi-2/generer_figures.py
+    git checkout ad43369 -- echantillon
+    uv run --group notebook python documentation/prez/presentation-suivi-2/generer_figures.py
+
+Les figures et les extraits audio déjà produits restent dans `figures/` et `audio/`.
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ from scipy.signal import resample_poly, stft
 
 from blanci.sequential import band_envelope_db, detect_onsets, rhythm_features
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 ECH = ROOT / "echantillon"
 OUT = Path(__file__).resolve().parent / "figures"
 AUDIO = Path(__file__).resolve().parent / "audio"

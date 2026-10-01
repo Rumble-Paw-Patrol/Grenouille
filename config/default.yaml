@@ -169,7 +169,7 @@ head:
               exemplar:k=3, knn, knn:k=3]
 
 # Régularisations des têtes (DECISIONS n° 108, `blanci/regularization/`), numérotées comme la
-# liste du 25/09/2026 (documentation/regularisation.md). Toutes coupées : on les active tête par
+# liste du 25/09/2026 (documentation/regularizations/regularizations.md). Toutes coupées : on les active tête par
 # tête dans le nom, `blanci heads --methods logistic,logistic+R18,logistic+R19+R18=16` (« =v »
 # remplace le réglage principal, noté ◆). Le nom canonique (R triées) est celui des rapports et
 # des scores hors-pli : on sait toujours lesquelles ont servi. Ordre : R19/R20 → R17 → R18 →

@@ -1,254 +1,154 @@
-# blanci — détection acoustique d'*Anomaloglossus blanci*
+# Grenouille — détecter *Anomaloglossus blanci* dans les enregistrements acoustiques de Guyane
 
-Stage ONF Guyane, 15/09/2026 → 14/03/2027. Feuille de route :
-`documentation/feuille-de-route-V5.md` (objectifs révisés le 29/09/2026 : §0 ;
-§13 = spécification d'implémentation).
-Écarts et précisions : `DECISIONS.md`. Tableaux de tous les benchmarks, en images lisibles
-partout (Xcode compris) : `documentation/tableaux/`.
+Stage à l'ONF Guyane (15/09/2026 → 14/03/2027). *Anomaloglossus blanci* est une petite grenouille
+endémique et menacée, qui chante une note de 0,09 s toutes les 1,4 s dans une bande de fréquences
+saturée par d'autres espèces. L'ONF et ses partenaires posent des enregistreurs en forêt (96 292
+enregistrements de 2 min, 3 204 h, huit sites) ; le projet cherche un **détecteur qui fonctionne
+sur de nouveaux points d'écoute**, qu'un naturaliste utilise **sans écrire de code** et que l'ONF
+peut réentraîner seul.
+
+Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
+
+## Où en est le projet (01/10/2026)
+
+| | État |
+|---|---|
+| Chaîne de traitement | écrite et testée : inventaire des enregistrements, embeddings, têtes de classification, module séquentiel (rythme des notes), fusion, évaluation, files de vérification, poste d'annotation, réentraînement |
+| Choix de l'encodeur | pré-benchmark sur **AnuraSet** (jeu public d'anoures néotropicaux) : 23 encodeurs comparés, chacun avec la tête adaptée à sa sortie. Indicateur, pas verdict : le choix final se fera sur les données de l'ONF le 20/11/2026 |
+| Contrainte d'accès | l'encodeur livré doit être **libre d'accès** (poids publics, licence compatible avec l'usage par l'ONF). Meilleur libre à ce jour : `perch_v2` + sonde à prototypes (AP moyenne par site 0,81) |
+| Annotations | reprises de zéro, par plan de tirage stratifié (point d'écoute, heure, période), vérifiées à l'aveugle par des experts. **Aucun benchmark sur les données de l'ONF avant leur accord** |
+| Livrable | application Windows installable sans code : à venir (essai d'empaquetage prévu) |
+
+Prochaines étapes : partition des points d'écoute et plan de tirage, mode d'annotation « extrait
++ intervalles », première série d'annotations, essai d'empaquetage `.exe`.
+
+## Pour les encadrants : par où commencer
+
+1. **[DECISIONS.md](DECISIONS.md)** : le *cadre du projet* en tête (objectifs et critères §0,
+   protocole d'annotation §5, évaluation §6, livrable §7, planning §8, risques §9), puis le
+   journal des décisions numérotées (n° 1 à 165) qui dit pourquoi le code est comme il est.
+2. **[documentation/benchmarks/](documentation/benchmarks/LISEZMOI.md)** : les huit rapports de
+   benchmark AnuraSet (têtes, régularisations, encodeurs), chacun avec ses données, ses figures et
+   le script qui les produit. Le plus récent, `2026-09-30_anuraset_encodeurs`, compare 23 encodeurs.
+3. **[documentation/tableaux/](documentation/tableaux/LISEZMOI.md)** : un tableau par benchmark, en
+   image (protocole, encodeurs, têtes, régularisations…).
+4. **[documentation/biblio/biblio.md](documentation/biblio/biblio.md)** : bibliographie commentée.
+5. **[notebooks/](notebooks/)** : quatre notebooks pour voir la chaîne fonctionner sur un
+   enregistrement (voir plus bas).
+
+## Structure du dépôt
+
+```
+Grenouille/
+├── blanci/               le paquet Python (≈ 20 000 lignes)
+├── tests/                suite pytest
+├── config/               default.yaml, anuraset.yaml, local.example.yaml
+├── notebooks/            4 notebooks d'exploration, committés sans sorties
+├── scripts/anuraset/     outils des benchmarks AnuraSet (encodage, têtes, rassemblement)
+├── documentation/
+│   ├── benchmarks/       rapports 01 à 08, fiches des encodeurs, modèle de rapport
+│   ├── tableaux/         un tableau PNG par benchmark et le script qui les dessine
+│   ├── regularizations/  catalogue des régularisations des têtes (R1 à R84)
+│   ├── biblio/           bibliographie, offre de stage
+│   ├── prez/             présentations de suivi (.pptx) et leurs sources
+│   ├── rapport-stage/    notes pour le rapport
+│   ├── old/              anciennes feuilles de route (V1 à V4)
+│   └── commandes.md, encodeurs-bacpipe.md, glossaire-bioacoustique.md, audit-28-septembre.md
+├── DECISIONS.md          cadre du projet et journal des décisions
+└── pyproject.toml, uv.lock, .python-version
+```
+
+### Le paquet `blanci/`
+
+| Rôle | Modules |
+|---|---|
+| Données | `ingest` (inventaire des enregistrements), `labels` (import des annotations), `db` (SQLite, labels en ajout seul), `store` et `index` (embeddings en Parquet, recherche par similarité), `audio`, `grid` (fenêtres), `qc` et `qc_calibration` (drapeaux : pluie, saturation, micro dans un sac…) |
+| Encodeurs | `encoders/` (bacpipe, esp-aves2, ONNX du livrable, contrôle passe-bas, export), `embed`, `throughput` |
+| Têtes | `head` (prototypes, logistique…), `attentive`, `proto_probe`, `gated`, `dann`, `pooling`, `losses`, `regularization/` (R1 à R84) |
+| Combinaison | `sequential` (rythme des notes), `fusion` et `stacking` (fusion à deux niveaux), `ensemble`, `aggregate` (fenêtre → enregistrement → point) |
+| Évaluation | `evaluate` (plis par micro, AP, rappel, bootstrap, Wilson), `oof` (scores hors-pli), `benchmark`, `head_benchmark`, `full_benchmark`, `frozen` (jeu gelé), `baselines`, `activity`, `anuraset` |
+| Annotation | `active`, `selection`, `cluster`, `workbench` et `app` (poste d'annotation Streamlit) |
+| Exploration | `explore`, `explore_plots`, `attention_map` (pour les notebooks) |
+| Interfaces | `cli` (≈ 50 commandes Typer), `service` (couche appelée par la CLI et par la future application), `config` |
+| Réservés | `finetune`, `detectors/distilled`, `detectors/homemade` : emplacements documentés, à programmer plus tard (fine-tuning, distillation, modèle maison) |
+
+`service.py` regroupe les opérations de la chaîne de décision (entraîner et enregistrer une
+tête, scorer, file de vérification, labels, jeu gelé, réentraînement, courbes d'activité) : c'est
+la couche que la future application appellera comme la CLI. Les commandes d'inventaire,
+d'encodage et de benchmark de `cli.py` appellent directement leurs modules.
 
 ## Installation
 
+Python 3.11 et [uv](https://docs.astral.sh/uv/).
+
 ```sh
-uv sync          # Python 3.11, dépendances de base + outils de dev
-uv run pytest
+uv sync                       # dépendances de base et outils de développement
+uv sync --group research      # + bacpipe, torch, onnx : encodeurs, têtes apprises, export
+uv sync --group app           # + streamlit : poste d'annotation
+uv sync --inexact --group notebook   # + matplotlib, ipykernel : notebooks (--inexact garde le reste)
+uv run pytest                 # ≈ 850 tests, ~2 min (torch et onnx sautés sans le groupe research)
 uv run blanci --help
 ```
 
+Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`,
+ignorée par git) : racine du disque externe, jamais modifié.
+
 ## Données
 
-L'audio reste sur le disque externe, jamais modifié. Sa racine se déclare dans
-`config/local.yaml` (copie de `config/local.example.yaml`, ignorée par git) ; les chemins sont
-stockés relatifs à cette racine, ils survivent à un changement de lettre ou de machine.
+**Le dépôt ne contient aucun enregistrement.** L'audio de l'ONF et de Biophonia, la base SQLite,
+les embeddings et les modèles vivent sous `data/`, ignoré par git. Les exports d'annotations du
+prestataire (`documentation/*.xlsx`) restent eux aussi en local.
 
-```
-<disque>/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04530_MGM06/Data/
-    2LA04530_20260106_103000.wav      # micro 2LA04530, 6 janvier 2026, 10 h 30 locales
-```
+Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), dont les
+embeddings et la base servent aux benchmarks. Elles sont rangées dans les branches
+`donnees-anuraset-*`, hors de `main` ; `scripts/anuraset/importer_stock.py` les importe.
 
-Enregistrements de 2 min, 48 kHz stéréo. Le micro est le numéro de série (GUANO, sinon
-préfixe du nom), l'heure vient du GUANO avec le fuseau de l'enregistreur. WAV et FLAC sont
-inventoriés ; l'appariement avec les annotations se fait sur le nom sans extension.
+Inventaire (base au 29/09/2026) : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an,
+66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé
+d'une semaine chacun, 29 513 enregistrements. Détail dans
+[documentation/commandes.md](documentation/commandes.md#inventaire-base-au-29092026).
 
-### Inventaire (base au 29/09/2026)
+## Utilisation
 
-| Jeu | Site | Enregistrements | dont 120 s | Heures (120 s) | Go |
-|---|---|---:|---:|---:|---:|
-| 2023 (phénologie, déc. 2023 → nov. 2024, 6 relevés) | Kaw | 22 659 | 22 650 | 755,0 | 521,9 |
-| | Molokoi | 21 007 | 20 999 | 700,0 | 483,9 |
-| | Trésor | 23 113 | 23 105 | 770,2 | 532,7 |
-| | **total 2023** | **66 779** | **66 754** | **2 225,2** | **1 538,5** |
-| 2026 (Projet blanci 2025) | CDR | 5 438 | 5 391 | 179,7 | 124,3 |
-| | Mataroni | 13 059 | 12 974 | 432,5 | 299,4 |
-| | Patawa Est | 2 624 | 2 621 | 87,4 | 60,4 |
-| | Patawa Ouest | 1 107 | 1 099 | 36,6 | 25,4 |
-| | RNRT | 7 285 | 7 280 | 242,7 | 167,8 |
-| | **total 2026** | **29 513** | **29 365** | **978,9** | **677,3** |
-| **Total** | | **96 292** | **96 119** | **3 204** | **2 216** |
-
-Go : taille réelle des fichiers sur les disques (10⁹ octets), aucun fichier inventorié
-manquant. 96 176 enregistrements sont en 48 kHz stéréo, les autres (116) en 24 ou 32 kHz.
-Fenêtres potentielles, chevauchement de 50 % (`encoders.overlap`), sur les 96 119
-enregistrements de 120 s :
-
-| Fenêtre | Pas | Par enregistrement | Au total |
-|---|---|---:|---:|
-| 3 s | 1,5 s | 79 | 7 593 401 |
-| 5 s | 2,5 s | 47 | 4 517 593 |
-| 6 s | 3 s | 39 | 3 748 641 |
-
-Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 8 micros
-dans le sac, 1 521 à l'horloge douteuse (Molokoi SMA14636, avril 2024, en file d'écoute) ;
-94 588 enregistrements de 120 s restent encodables. Détail et anomalies : DECISIONS n° 153
-et 154.
-
-Annotations : l'export Excel de Blancinet v0.1.0 (une ligne par détection de 3 s, clé S3,
-score, vérification `True` / `False`, commentaires). Seules les lignes vérifiées deviennent des
-labels.
-
-Hors git, sous `data/` : `db/blanci.sqlite` (inventaire, fenêtres, labels en ajout seul),
-`embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet`, `models/`, `reports/`.
-
-## Commandes
-
-Toutes passent par `blanci/service.py`, que la future GUI appellera de la même façon (§4).
+La référence complète des commandes (inventaire, annotation, encodage, benchmarks, détection,
+évaluation) est dans **[documentation/commandes.md](documentation/commandes.md)**. Aperçu :
 
 ```sh
 B="uv run blanci --config config/local.yaml"
-
-# --- Données -------------------------------------------------------------
-# Inventaire, relevé par relevé, DANS L'ORDRE CHRONOLOGIQUE : les cartes SD d'un relevé
-# contiennent encore les fichiers du précédent ; le premier inventorié garde le fichier.
-# --no-qc --no-hash : en-têtes seuls, le disque entier en quelques minutes.
-$B ingest --dataset 2026 --site CDR --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025"
-$B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026"
-
-# Import des annotations ; --dry-run d'abord pour relire verdicts, espèces et lignes signalées
-$B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx --dry-run
-$B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
-# Toutes les détections Blancinet, comme scores (pas comme labels) : comparables aux nôtres
-$B import-detections documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
-$B export-labels     # fenêtres annotées : label, qualité, espèce, commentaire
-
-# Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
-$B check-grid
-# Drapeaux (remarques sur un enregistrement, DECISIONS n° 79) : écartent du corpus
-# silencieux, micro dans sac, durée anormale, hors relevé ; pluie et saturation restent.
-# Recalcule inventaire, audio (seuils actuels, sans relire l'audio) et drapeaux d'écoute.
-$B flag
-$B status
-
-# --- Baselines sans encodeur (§3) : lit l'audio, n'encode rien -------------
-$B baselines --channels 0,1                          # → data/reports/baselines.md
-
-# --- Annotation (§5) : uv sync --group app -------------------------------
-$B candidates --from documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx    --per-site 30 --random 12 --name lot1             # → data/reports/candidats_lot1.csv
-$B annotate                                          # poste d'écoute dans le navigateur
-
-# Enregistrements entiers (audit aléatoire, jeu gelé) ; accord entre deux annotateurs
-$B candidates --entiers 300 --sites Mataroni --reason audit_aleatoire --random 0 --name audit
-# Écartés par un drapeau, à écouter en entier pour juger ce qu'ils valent (source « flag »)
-$B candidates --drapeau clock_off --random 0 --name horloge_SMA14636
-$B agreement --annotators léonard,tuteur
-
-# --- Relevé des encodeurs (§2, §7) : bruit synthétique, rien n'est lu -----
-$B throughput --encoders birdnet,beats,perch_v2,birdmae_base   # → debit.md
-
-# --- Embeddings et choix d'encodeur (§2) : uv sync --group research -------
-uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatifs appariés
-# (contrôle audio au passage : silencieux et micro dans sac écartés ; --no-qc pour s'en passer)
-uv run blanci embed --encoder birdmae --peak-hours    # reprenable
-$B cluster --encoder birdmae-bacpipe1.3.5 --mode c1   # clustering C0/C1 (§5 bis)
-$B candidates --congeners perch_v2-bacpipe1.3.5       # logits des congénères de Perch
-uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md
-
-# --- Pré-benchmark AnuraSet (§2) : base et stocks à part -----------------
-A="uv run blanci --config config/anuraset.yaml"
-$A anuraset-prepare && $A anuraset-profile            # extraction, inventaire, espèces
-$A embed --encoder perch_v2 && $A anuraset-benchmark --encoders perch_v2-bacpipe1.3.5
-$A anuraset-campaign --encoders perch_v2             # tout d'un coup : espèces, encodage, têtes (n° 136)
-
-# --- Détection (§1, §5) --------------------------------------------------
-uv run blanci train --encoder birdmae-1               # tête + seuil à précision ≥ 0,1
-uv run blanci score --encoder birdmae-1               # tête adoptée ; décisions, points
-uv run blanci queue --encoder birdmae-1 --n 40        # file de vérification 60/20/20
-uv run blanci search --encoder birdmae-1 --site tresor --k 300   # récolte de positifs
-uv run blanci label <window_id> --label blanci_solo --source active
-$B fusion --encoder birdmae_base-bacpipe1.3.5        # tête + rythme + persistance (§3)
-$B score --encoder birdmae_base-bacpipe1.3.5 --fusion
-$B tokens --encoder perch_v2                         # jetons pour la sonde attentive
-$B qc-calibrate                                      # seuils QC mesurés, config inchangée
-# Réentraînement (ONF, M5) : nouvelle tête jugée sur le jeu gelé, adoptée si pas moins bonne
-$B retrain --encoder birdmae_base-bacpipe1.3.5
-
-# --- Variantes de la chaîne (DECISIONS n° 88–90, 101–103) -----------------
-# Négatifs appariés : benchmark.pairing = nearest (défaut) | other_day | same_day | mixed
-$B embed --encoder birdmae --subset benchmark --overlap 0.75   # stock birdmae-…@o75
-$B embed --encoder birdmae --subset benchmark --upstream bandpass      # stock birdmae+bp3-7k-…
-$B upstream-bench                                    # portes : arrêtées / positifs perdus
-$B upstream-bench --encoder birdmae-bacpipe1.3.5 --upstream notes,rhythm
-
-# --- Benchmarks (DECISIONS n° 91–98) : plis communs, scores hors-pli rangés -
-$B heads --encoder perch_v2-bacpipe1.3.5             # toutes les têtes, poolings, cascade
-$B heads-curve --encoder perch_v2-bacpipe1.3.5       # différentiel ou linear probe, selon k
-$B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R19,logistic+R18=32  # régularisations (n° 108)
-$B heads --encoder perch_v2-bacpipe1.3.5 --methods losses   # benchmark des pertes (n° 112)
-$B echantillon --encoder perch_v2 --methods losses,prototype   # 66 clips versionnés, sans disque (n° 113)
-$B heads --encoder perch_v2-bacpipe1.3.5 --methods neighbors  # k voisins, par similarité (R39, n° 115)
-$B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R36,logistic+R37  # n° 116
-$B heads --encoder perch_v2-bacpipe1.3.5 --methods attentive,attentive+R41+R42  # n° 117
-$B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R79,logistic+R81,multiclass,dann  # n° 122–124
-$A anuraset-heads --encoder perch_v2-bacpipe1.3.5     # têtes jugées un site à la fois (R78, n° 125)
-$B prevalence                                        # part de positifs au hasard → decision.prevalence (n° 128)
-$B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic+R37,logistic+R37=glmm  # σ du biais estimé (GLMM, n° 131)
-$B pca --encoder perch_v2-bacpipe1.3.5               # variance perdue selon les dimensions gardées (n° 132)
-# Rapports : AP poolée et AP moyenne par pli ; benchmark.fold_calibration: platt recalibre chaque pli (n° 135)
-$B fusion-bench --encoder birdmae-bacpipe1.3.5 --sources head:perch_v2-bacpipe1.3.5
-$B fusion-bench --encoder birdmae-bacpipe1.3.5         # dont logistic+R50+R54, +R50+R55 (n° 130)
-$B ensemble --sources birdmae-bacpipe1.3.5/logistic,perch_v2-bacpipe1.3.5/logistic
-$B detector-bench --detector band_contrast           # distilled, homemade : réservés
-$B sources                                           # ce que le stock hors-pli contient
-$B benchmark-all --external blancinet                # tout, mêmes enregistrements
-
-# --- Sélection des candidats (DECISIONS n° 99–100) -------------------------
-$B select --method active --encoder birdmae-bacpipe1.3.5 --n 40 --mix 0.4,0.2,0.4
-$B select --method negative_mining --encoder birdmae-bacpipe1.3.5 --mode false_friends
-$B select --method cluster --encoder birdmae-bacpipe1.3.5 --n 10   # puis cluster-status
-$B select --method gaps --encoder birdmae-bacpipe1.3.5   # trous : faux négatifs suspects
-$B select --method gaps --mode labels                     # négatifs annotés à réécouter
-$B cluster-label --encoder birdmae-bacpipe1.3.5 --cluster 7        # groupe homogène
-$B yapat-export data/reports/candidats_active.csv    # extraits + manifeste pour YAPAT
-$B annotate                                          # mode de sélection, carte, « Envoyer »
-
-# --- Évaluation (§6) -----------------------------------------------------
-uv run blanci evaluate --encoder birdmae-1                       # plis par micro
-uv run blanci evaluate --encoder birdmae-1 --holdout tresor,kaw  # sites tenus à l'écart
-$B freeze data/reports/candidats_gele.csv --version v1   # jeu gelé : jamais entraîné
-$B evaluate --encoder birdmae-1 --frozen last            # la tête jugée sur le jeu gelé
-# Courbes d'activité (M4) contre les patrons de Courtois et al. 2025 ; courbes numérisées
-# en option (CSV [site,] hour, value / [site,] month, value)
-$B activity --encoder birdmae-1 --dataset 2023 --reference-hours ref_heures.csv
+$B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "<dossier du relevé>"   # inventaire
+$B status                                                  # ce que contient la base
+uv run blanci embed --encoder birdmae --subset benchmark   # embeddings des fenêtres annotées
+uv run blanci heads --encoder perch_v2-bacpipe1.3.5        # toutes les têtes, mêmes plis
+$B annotate                                                # poste d'annotation (navigateur)
 ```
 
-Les colonnes du fichier d'annotations sont reconnues automatiquement, y compris sous forme
-de libellé composé (« Nom de l'enregistrement ») : fichier, timecode, vérification manuelle,
-score, commentaire, qualité, site, micro. Si une colonne n'est pas trouvée, ajouter son nom
-dans `labels.import.columns` de la config.
+Les benchmarks AnuraSet utilisent leur propre configuration (`config/anuraset.yaml`) et leur
+propre base, séparées des données de l'ONF :
 
-La colonne de vérification tranche positif/négatif : `True` / `False`, oui/non et leurs
-variantes, réponses rédigées mentionnant *blanci*, ou nom d'un faux ami connu (qui donne
-aussi l'espèce). Une cellule vide est une détection jamais écoutée : ignorée, ce n'est pas un
-label. « à vérif » / « à conf » sont mises de côté et listées. Toute autre valeur non reconnue
-**bloque l'import** au lieu d'être rangée en négatif ; `--dry-run` les liste toutes. Chaque
-ligne doit désigner un enregistrement déjà inventorié.
+```sh
+A="uv run blanci --config config/anuraset.yaml"
+$A anuraset-prepare && $A anuraset-profile
+```
 
 ## Notebooks d'exploration
 
-`uv sync --inexact --group notebook` (`--inexact` garde les groupes research et app déjà
-installés), puis ouvrir dans VS Code avec le noyau du dépôt (`.venv`). La base est ouverte en
-lecture seule, l'audio des disques est lu, jamais écrit ; tout se règle dans la cellule
-« Réglages » (`config/local.yaml` pour le disque externe).
-
 | Notebook | Pour |
 |---|---|
-| `notebooks/01_explorer_une_fenetre.ipynb` | un enregistrement et une fenêtre à travers la chaîne : écoute, grille, portes, module séquentiel (amont, parallèle, aval), négatif apparié, embeddings, prototype différentiel |
-| `notebooks/02_negatifs_apparies.ipynb` | ce que contiennent les négatifs appariés de chaque stratégie ; feuille d'écoute et taux de contamination |
-| `notebooks/03_module_sequentiel.ipynb` | régler la détection des notes et les seuils des portes (banc d'essai amont sans encodeur) |
-| `notebooks/04_attention_jetons.ipynb` | voir sur le spectrogramme les jetons que pèse la tête d'attention (hors pli) ; part d'attention dans la bande de la note ; contrôle de la géométrie des jetons par un son pur |
+| `01_explorer_une_fenetre` | un enregistrement et une fenêtre à travers la chaîne : écoute, grille, portes, module séquentiel, négatif apparié, embeddings, prototype différentiel |
+| `02_negatifs_apparies` | ce que contiennent les négatifs appariés de chaque stratégie ; feuille d'écoute, taux de contamination |
+| `03_module_sequentiel` | régler la détection des notes et les seuils des portes, sans encodeur |
+| `04_attention_jetons` | voir sur le spectrogramme les jetons que pèse la tête d'attention |
 
-**Ne jamais committer les sorties** : les lecteurs audio embarquent le son des
-enregistrements (*Clear All Outputs* avant un commit ; `tests/test_notebooks.py` le vérifie).
+Ils lisent la base et l'audio en local : il faut les données de l'ONF pour les exécuter. **Ne
+jamais committer leurs sorties** (les lecteurs audio embarquent le son) : *Clear All Outputs*
+avant un commit ; `tests/test_notebooks.py` le vérifie.
 
-## Avancement
+## Conventions
 
-| Jalon | État |
-|---|---|
-| M0 dépôt, config, `ingest`, `import-labels` | **accepté sur données réelles** le 22/09 (DECISIONS n° 49) |
-| M1 `embed`, `benchmark` en plis par micro | écrits, testés, branchés sur la CLI ; baselines sans encodeur mesurées (DECISIONS n° 62) ; **aucun encodage lancé** |
-| M2 `head`, `search`, `queue`, prototype Streamlit | `train`, `score`, `queue`, `search` en service et en CLI ; poste d'annotation Streamlit (`annotate`, `candidates`) |
-| M3 `sequential`, `fusion`, `aggregate`, audit aléatoire | branchés : `onsets`, `fusion`, `score --fusion` ; audit par `candidates --entiers` |
-| M4 jeu gelé, `evaluate --holdout`, patrons 2023 | `freeze`, `evaluate --frozen`, `activity` écrits ; en attente du jeu gelé et de l'inventaire 2023 |
-| M5 export ONNX, réentraînement sans intervention | `retrain` (adoption jugée sur le jeu gelé) écrit ; export ONNX après le choix d'encodeur |
-| Ajouts du 24/09 (DECISIONS n° 88–100) | négatifs appariés à trois stratégies, chevauchement réglable, seuillage en amont activable, plis communs et scores hors-pli rangés, toutes les têtes et courbe selon les annotations, fusion à N entrées, emplacement du module séquentiel, ensembles, benchmark complet, outil de sélection, poste d'annotation refondu ; emplacements réservés : distillation, modèle maison, LoRA |
-
-Acceptation M0 : 29 513 enregistrements (980 h, 5 relevés) inventoriés, 345 positifs et
-150 négatifs importés, aucune annotation coupée par les grilles 3 s et 5 s. Les 345 positifs
-viennent de 51 enregistrements et 13 micros, tous à Mataroni (DECISIONS n° 35).
-
-643 tests passent sur Python 3.11 (`uv run pytest`). Tous les modules sont couverts sauf
-`encoders/onnx_encoder.py` et `encoders/export.py`, qui demandent un modèle exporté ;
-les neuf encodeurs bacpipe du §2 sont installés et mesurés (DECISIONS n° 64, 72).
-
-Enregistrements de test et hors relevé signalés (149, jamais encodés, DECISIONS n° 51) ;
-drapeaux posés à l'écoute sur les 131 enregistrements annotés (8 micro dans sac, 5 pluie,
-DECISIONS n° 79) ;
-encodage sur le premier micro (gain 6 dB), les deux micros à l'écoute (DECISIONS n° 50, 58).
-
-Négatifs appariés changés (DECISIONS n° 88, 101 : les plus proches, même enregistrement
-compris) : **relancer les baselines** avant de comparer quoi que ce soit.
-
-**Depuis le 29/09 (feuille de route V5, DECISIONS n° 155–159)** : encodeur libre d'accès
-impératif ; annotations reprises de zéro par plan de tirage (les labels Blancinet sortent de
-l'entraînement et de l'évaluation) ; **aucun benchmark sur les données ONF avant le go
-d'Élodie et Benoît** ; AnuraSet clos le 09/10, choix de l'encodeur le 20/11 ; application
-Windows installable, sans code. Prochaines étapes : partition des points et plan de tirage,
-mode « extrait + intervalles » du poste d'annotation, essai d'empaquetage `.exe`.
+- **Labels en ajout seul** : une correction est un nouveau label, jamais une mise à jour
+  (la base refuse `UPDATE` et `DELETE`).
+- **Toute évaluation passe par `evaluate.py` avec des groupes explicites** (plis par micro) :
+  un découpage aléatoire des fenêtres serait une erreur, les fenêtres d'un même micro partageant
+  le fond sonore.
+- **Aucun score n'entre dans la fusion s'il n'est pas hors-pli.**
+- Code : `ruff` (lignes de 100 caractères), tests `pytest` (`-m "not slow"` pour la suite rapide).

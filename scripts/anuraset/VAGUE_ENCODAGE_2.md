@@ -44,7 +44,7 @@ puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sor
 
 
 1. `git pull origin main`. Lire : `documentation/encodeurs-bacpipe.md` (section « Règle » et
-   les fiches de ses encodeurs), `documentation/benchmarks/outils_anuraset/LISEZMOI.md`,
+   les fiches de ses encodeurs), `scripts/anuraset/LISEZMOI.md`,
    DECISIONS n° 150 à 152. Outil `read_documentation` (session.resources) : disque et délai
    d'inactivité de la machine.
 2. Environnement : `uv sync`, puis torch, torchvision, torchaudio en roues **CPU** (`uv pip
@@ -56,25 +56,25 @@ puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sor
    - esp-aves2 : `uv pip install avex "transformers<5"`.
    Noter les versions (torch, transformers, onnxruntime, tensorflow, avex, librosa) dans la
    fiche.
-3. Données : `bash documentation/benchmarks/outils_anuraset/telecharger_anuraset.sh` (7,2 Go,
+3. Données : `bash scripts/anuraset/telecharger_anuraset.sh` (7,2 Go,
    ~6 min), `git fetch origin resultats-anuraset-07 && git archive
    origin/resultats-anuraset-07 data | tar -x` (étiquettes), `uv run blanci --config
    config/anuraset.yaml anuraset-prepare`, puis supprimer `data/external/anuraset/raw_data.zip`.
 4. Essai de 5 min d'abord, avec le script de la fin de ce fichier : f_e, fenêtre, dimension,
    forme des jetons, embeddings ni constants ni NaN. Un écart avec ce fichier ou
    `encodeurs-bacpipe.md` : s'arrêter et le dire.
-5. Encodage : `uv run python documentation/benchmarks/outils_anuraset/encoder.py <encodeurs…>`
+5. Encodage : `uv run python scripts/anuraset/encoder.py <encodeurs…>`
    en arrière-plan (sélection du n° 141, fenêtres jointives), `OMP_NUM_THREADS=4`. Vérifier
    toutes les 10 à 15 min, jamais de boucle serrée. Après un redémarrage du conteneur,
    relancer : l'encodage reprend où il en était.
 6. Pousser chaque stock fini sur la branche `donnees-anuraset-<encodeur>` (branche orpheline,
    dans un worktree) : `data/embeddings_anuraset/<stock>/` et `data/db/anuraset.sqlite`,
    `git add -f`. Jamais de données sur `main`.
-7. Si la ligne dit `--tokens` : `uv run python documentation/benchmarks/outils_anuraset/jetons.py
+7. Si la ligne dit `--tokens` : `uv run python scripts/anuraset/jetons.py
    <encodeur>` (second passage dans l'encodeur ; reprise par paquets de 50 enregistrements).
    Les jetons restent sur la machine (≈ 1 Go par encodeur de 768 dimensions).
 8. Benchmark : pour chaque encodeur et chaque espèce (DENMIN, PITAZU, PHYCUV, LEPLAT, BOAFAB),
-   `uv run python documentation/benchmarks/outils_anuraset/global_bench.py <encodeur> <ESPECE>
+   `uv run python scripts/anuraset/global_bench.py <encodeur> <ESPECE>
    sorties <options de la ligne>`, `OMP_NUM_THREADS=1` ; 4 processus en parallèle, **2 avec
    `--tokens`** (mémoire). **Témoin** (n° 151) : si la logistique donne sur BOAFAB une AP
    moyenne par site (minute) nettement sous 0,85, chercher d'abord un tuyau cassé.
@@ -95,7 +95,7 @@ puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sor
   PHYCUV et BOAFAB (PITAZU n'est pas dans ses 11 560 classes). AnuraSet est peut-être dans ses
   données d'entraînement (sources non publiées) : un score spectaculaire est à dire comme tel.
 - **6 (Bird-MAE)** : Large d'abord (encodage, jetons, benchmark). Puis Base :
-  `uv run python documentation/benchmarks/outils_anuraset/importer_stock.py birdmae_base`,
+  `uv run python scripts/anuraset/importer_stock.py birdmae_base`,
   `jetons.py birdmae_base`, `global_bench.py birdmae_base <ESPECE> sorties --tokens` (sa courbe
   existe déjà, benchmark 07). But : trancher le verdict suspendu des n° 147 et 149. Huge :
   seulement si les jetons de Large changent la donne.

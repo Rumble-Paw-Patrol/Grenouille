@@ -2,7 +2,7 @@
 
 Tenue à jour au fil du stage. Chaque référence : lien, et une ligne « ce qu'on en retient pour
 A. blanci ». Mise à jour du 29/09/2026 pour la présentation de suivi n° 2
-(`documentation/presentation-suivi-2/`). Le détail des encodeurs (chiffres, licences, ce qui n'a
+(`documentation/prez/presentation-suivi-2/`). Le détail des encodeurs (chiffres, licences, ce qui n'a
 pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
 
 > Ce fichier a été recréé dans le dépôt : la version locale (quasi vide) n'avait pas été poussée.
@@ -112,9 +112,11 @@ pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
 
 ## 3. Phénologie et écologie d'A. blanci
 
-- **Courtois E.A., Villette B., Decalf G. 2025.** *Anomaloglossus blanci : connaissances sur
-  une espèce endémique en danger.* Association Trésor, ENIA, DGTM, 21 p.
-  (`documentation/pheno-blanci.pdf`)
+- **Courtois E.A., Villette B., Decalf G. 2025.** *Phénologie de l'activité de chant
+  d'Anomaloglossus blanci (amphibien) par l'utilisation de la bioacoustique pour l'amélioration
+  des connaissances sur une espèce endémique en danger.* Association Trésor, ENIA, DGTM, 21 p.
+  <https://www.reserve-tresor.fr/wp-content/uploads/2025/05/20250324_Rapport_etude_Pheno_Blanci.pdf>
+  (le PDF n'est plus versionné dans le dépôt ; il est cité dans l'offre de stage)
   6 Song Meter mini (Kaw A/B, Trésor C/D, Molokoï E/F), 25/11/2023 → 24/11/2024, 2 min / 30 min
   de 5 h à 20 h ; détecteur Biophonia. Pics 7–9 h et 15–17 h ; saison haute janvier–avril ;
   ≈ 0 de juillet à octobre ; probabilité de détection journalière ≈ 1 à Molokoï de fin
@@ -122,6 +124,15 @@ pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
   → jeu de test temporel (niveau 3), échantillonnage de l'annotation, heure et saison hors du
   classifieur.
 - **Fouquet et al. 2018** : description d'A. blanci (citée par Courtois et al. 2025).
+- **IUCN SSC Amphibian Specialist Group. 2019.** *Anomaloglossus blanci.* The IUCN Red List of
+  Threatened Species 2019 : e.T125200267A125200500.
+  <https://dx.doi.org/10.2305/IUCN.UK.2019-1.RLTS.T125200267A125200500.en>
+  Statut de conservation de l'espèce (référence de l'offre de stage).
+- **Plan National d'Actions des Harttiella et des Anomaloglossus de Guyane.** Coordination :
+  Société Herpétologique de France, Fondation Biotope, 98 p. (plan 2022-2031 ; version mise en
+  consultation publique).
+  <https://www.consultations-publiques.developpement-durable.gouv.fr/IMG/pdf/pna_anomalo_et_harttiela_de_guyane_light.pdf>
+  Cadre réglementaire et actions de connaissance de l'espèce (référence de l'offre de stage).
 
 ## 4. Jeux de données et bancs d'essai
 
@@ -143,3 +154,18 @@ pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
 - **L2-SP** — Li, Grandvalet, Davoine, ICML 2018. <https://arxiv.org/abs/1802.01483>
 - **Ledoit-Wolf** (covariance rétrécie, LDA R31) — Ledoit & Wolf, 2004, J. Multivariate Analysis.
 - **GeM pooling** — Radenović, Tolias, Chum, TPAMI 2019. <https://arxiv.org/abs/1711.02512>
+
+## 6. Annotation, détection et outils
+
+- **YAPAT** — Kath, Serafini, Campos, Gouvêa & Sonntag, 2024, *Ecological Informatics* 82, 102710 ;
+  <https://yapat.readthedocs.io>. Apprentissage actif pour l'annotation (export `yapat-export`).
+- **Agile Modeling for Bioacoustic Monitoring** — Hamer, Laber & Denton, 2023, Climate Change AI ;
+  Zenodo 10.5281/zenodo.11585179. Recherche par similarité puis tête légère : la boucle du projet.
+- **Whombat** — Martínez Balvanera et al., 2025, *Methods in Ecology and Evolution*. Outil
+  d'annotation, une possibilité parmi d'autres pour le poste d'annotation.
+- **PAMGuard** — <https://www.pamguard.org>. Écarté comme hôte du livrable (pas de réentraînement
+  sur place, ergonomie d'acousticien, post-traitement séquentiel hors ONNX).
+- **BirdNET-Analyzer** — <https://github.com/birdnet-team/BirdNET-Analyzer>. Modèle de
+  distribution pour non-codeurs : interface Gradio dans une fenêtre pywebview, version Windows
+  prête à l'emploi (vérifié le 29/09/2026). → modèle du livrable (DECISIONS n° 159).
+- Rauch et al., 2024, arXiv:2406.18621 (cité par la feuille de route V5, sans résumé).

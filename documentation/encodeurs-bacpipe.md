@@ -374,7 +374,7 @@ encodeur) : des jetons n'y tiennent pas.
   scikit-learn ; ni PyTorch ni TensorFlow à l'exécution (V4 §7) ; l'ONF réentraîne la tête et
   ré-encode par lots. Un encodeur qui ne s'exporte pas en ONNX, ou trop lent (débits :
   DECISIONS n° 72), reste une référence de benchmark ou un enseignant de la distillation
-  (`feuille-de-route-V4.md`, option « Distillation (modèle maison) »).
+  (`old/feuille-de-route-V4.md`, option « Distillation (modèle maison) »).
 - **Licences** (règle du projet : non commerciale = « non déployable », appliquée à BirdNET
   v2.4) :
   - **esp-aves2** : CC-BY-NC-SA-4.0 sur les **dix** points de contrôle publiés, variantes `-all`

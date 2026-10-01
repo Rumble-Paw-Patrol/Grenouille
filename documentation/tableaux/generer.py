@@ -714,9 +714,9 @@ VOISINS = Tableau(
 REGULARISATIONS = Tableau(
     "regularisations",
     "Régularisations",
-    "Numéros de documentation/regularisation.md. Coupées par défaut ; une tête les active dans"
-    " son nom : blanci heads --methods logistic,logistic+R19,logistic+R18=16 (« =v » remplace"
-    " le réglage ◆).",
+    "Numéros de documentation/regularizations/regularizations.md. Coupées par défaut ; une tête"
+    " les active dans son nom : blanci heads --methods logistic,logistic+R19,logistic+R18=16"
+    " (« =v » remplace le réglage ◆).",
     [
         Section(
             [
@@ -1523,7 +1523,11 @@ PROTOCOLE = Tableau(
                     "appariée (mêmes enregistrements) contre la référence :"
                     " « meilleur » seulement si l'intervalle exclut zéro",
                 ],
-                ["Égalité", "écart d'AP < 0,1 : licence, vitesse et prise en main départagent"],
+                [
+                    "Égalité",
+                    "intervalle apparié qui contient zéro : facilité d'utilisation, puis durée "
+                    "d'encodage départagent (la licence libre est un filtre, §0)",
+                ],
                 ["Jeu gelé", "exclu de l'entraînement, consulté une seule fois (R80)"],
             ],
             titre="Règles",
@@ -1550,7 +1554,6 @@ PROTOCOLE = Tableau(
                 ["Tout : toutes les sources, mêmes enregistrements", "blanci benchmark-all", "—"],
                 ["Détecteurs audio (distillé, maison)", "blanci detector-bench", "—"],
                 ["AnuraSet (pré-benchmark, autres anoures)", "blanci anuraset-benchmark", "—"],
-                ["Échantillon : 66 clips, sans le disque", "blanci echantillon", "—"],
             ],
             titre="Les benchmarks",
         ),

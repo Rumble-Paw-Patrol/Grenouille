@@ -145,15 +145,15 @@ Seuil choisi sur les autres sites (perch_v2, logistique, fenêtre, précision vi
 
 ## Annexe — Reproduire
 
-Outils : `documentation/benchmarks/outils_anuraset/` (`global_bench.py`, `rassembler_global.py`).
+Outils : `scripts/anuraset/` (`global_bench.py`, `rassembler_global.py`).
 Stocks sur les branches `donnees-anuraset` (perch_v2) et `donnees-anuraset-<encodeur>`. Leurs
 modèles (table `models`) et leurs fenêtres (table `windows`) sont réunis dans une même
 `data/db/anuraset.sqlite`. Sorties brutes (scores hors-pli, courbes) : branche
 `resultats-anuraset-07`, dossier `resultats/global/`.
 
 ```
-uv run python documentation/benchmarks/outils_anuraset/global_bench.py <encodeur> <ESPECE> <sorties> --curve
-uv run python documentation/benchmarks/outils_anuraset/rassembler_global.py <sorties> documentation/benchmarks/2026-09-29_anuraset_global
+uv run python scripts/anuraset/global_bench.py <encodeur> <ESPECE> <sorties> --curve
+uv run python scripts/anuraset/rassembler_global.py <sorties> documentation/benchmarks/2026-09-29_anuraset_global
 uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_global/generer.py
 ```
 

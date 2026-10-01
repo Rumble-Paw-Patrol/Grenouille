@@ -1,5 +1,5 @@
 """Régularisations des têtes (DECISIONS n° 108), numérotées comme la liste du 25/09/2026
-(R1–R84, `documentation/regularisation.md`).
+(R1–R84, `documentation/regularizations/regularizations.md`).
 
 Toutes coupées par défaut. Une tête du benchmark les active dans son nom :
 `logistic+R18=16+R19` = régression logistique, ACP à 16 composantes (R18), centrage par micro
