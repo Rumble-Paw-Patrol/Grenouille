@@ -34,8 +34,41 @@ identifier des régularisations : L1, L2, Elastic Net (L1 + L2), autres
 
 # Trucs à faire
 
+envoyer le git, avec les rapports pour sylvain
+
+Notes réu Sylvain du jour :
+
+creuser les 5 espèces anuraset
+
+Check l'anura bench de Perch seul pour voir si chaque site est tenu à l'écart chacun son tour et si le score AP est moyenné par la suite.
+hasard stratifié pour trouver du blanci
+
+licence de YAPAT
+
+software d'annotation audio + bandeau spectrogramme au dessus. Car on voit mieux blanci sur un spectro qu'on ne l'entend à l'oreille.
+
+software d'annotation audio préexistant : Audacity, Raven, Raven lite (gratos), kaléidoscope, kaléidoscope lite
+
+Machines virtuelles de l'IMT "cluster" ??? Voir pour celles de la sorbonne avec l'accès de Sylvain
+
+explorer la distillation
+
+estimer le temps d'encodage de mes données pour voir si c'est bloquant
+
+dm Nicolas
+
+Comparer BirdCLEF 2025 et 2026, qu'est-ce qui a changé ?
+
+Voir le meilleur candidat qui n'a ni distillé ni ensemblé (peut-être qu'il est 50eme mais s'il a 0,9 c'est déjà énorme)
+
+Caractère exploitation commerciale de l'ONF. Important pour les licences
+
+cos de la diff ou diff des cos
+
+Perch fait sa classif ce qui peut ralentir le calcul, nous on veut que l'embedding et faire notre propre classif. Les autres modèles on peut recuperer l'embedding et arrêter le calcul mais pas avec perch v2
 lire le rapport Biophonia
 
+-------------
 check les audios suspects de mon notebook 1 (`notebooks/01_explorer_une_fenetre.ipynb`)
 
 entretien avec Élodie du 29/09 : objectifs révisés → `feuille-de-route-V5.md` (§0, §5, §7, §14),
@@ -96,6 +129,10 @@ Nouvelle : R85 = R21 bis, sonde non linéaire (pondération des dimensions selon
 
 
 # Questions en suspens
+
+frontend backend docker
+
+Noisy Student ?
 
 revoir le principe du standard scaler, et l'intérêt d'un standard scaler par site ou par micro
 
