@@ -157,14 +157,14 @@ Stock et base : branche `donnees-anuraset-birdmae_base` (`data/LISEZMOI_donnees_
 ```
 uv pip install --no-deps bacpipe==1.3.5   # + tqdm librosa huggingface_hub panel matplotlib
 # seaborn plotly torchaudio, torch CPU, "transformers>=4.45,<5"
-OMP_NUM_THREADS=1 uv run blanci --config <config par espèce> anuraset-campaign \
+OMP_NUM_THREADS=1 uv run blanci --config <config par espèce> anuraset campaign \
     --encoders birdmae_base --species DENMIN      # puis PITAZU, PHYCUV, LEPLAT, BOAFAB
 OMP_NUM_THREADS=1 uv run python documentation/benchmarks/2026-09-29_anuraset_birdmae_base/amorcage.py birdmae_base
 OMP_NUM_THREADS=1 uv run python documentation/benchmarks/2026-09-29_anuraset_birdmae_base/amorcage.py perch_v2
 uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_birdmae_base/generer.py
 ```
 
-Config par espèce : `config/anuraset.yaml` avec `paths.reports` propre à l'espèce et
+Config par espèce : `anuraset/anuraset.yaml` avec `paths.reports` propre à l'espèce et
 `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` (comme le benchmark 01). Une espèce par
 processus, 1 thread BLAS : à 5 processus sans cette limite, la charge montait à 32 sur 4 cœurs
 et les têtes n'avançaient plus.

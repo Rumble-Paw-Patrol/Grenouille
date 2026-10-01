@@ -1,7 +1,7 @@
 # Encodeurs de bacpipe : ce qu'on peut récupérer
 
 Relevé le 25/09/2026 dans le code de bacpipe 1.3.5 (`bacpipe/model_pipelines/feature_extractors/`)
-et dans notre adaptateur (`blanci/encoders/bacpipe_encoder.py`). Aucun modèle n'a été exécuté
+et dans notre adaptateur (`blanci/embedding/encoders/bacpipe_encoder.py`). Aucun modèle n'a été exécuté
 pour ce relevé : les tailles de grille marquées « à mesurer » se vérifient au premier chargement
 (méthode dans `notes.md` : comparer l'embedding à la moyenne, au maximum et au jeton de classe).
 
@@ -109,7 +109,7 @@ pousse que les résultats.
 - **Sondage linéaire / attentif** : une tête entraînée sur un encodeur gelé. Linéaire : une
   couche sur l'embedding (C·d paramètres). Attentif : une attention multi-têtes sur les jetons,
   puis une couche linéaire (2d² + (C+1)d + C paramètres selon la revue de Schwinger et al. ;
-  notre `blanci/attentive.py` : une requête, 2d + 1). Le coût du sondage attentif est le
+  notre `blanci/heads/attentive.py` : une requête, 2d + 1). Le coût du sondage attentif est le
   stockage des jetons, pas la tête (« Jetons et mémoire »).
 - **SSL / SL** : apprentissage auto-supervisé (sans étiquettes d'espèces : reconstruire des
   morceaux masqués, par exemple) / supervisé (avec étiquettes). « Deux étages » : SSL puis SL.
@@ -335,7 +335,7 @@ tranchera pour les anoures**, pas BEANS.
 ## Jetons et mémoire : ce que coûte le sondage attentif (29/09/2026)
 
 La tête attentive est petite : 2d² + (C+1)d + C paramètres selon la revue, soit environ 1,2 M
-pour d = 768 ; notre `blanci/attentive.py` : 2d + 1. Le coût est le **stockage des jetons de
+pour d = 768 ; notre `blanci/heads/attentive.py` : 2d + 1. Le coût est le **stockage des jetons de
 chaque fenêtre**. La revue le dit elle-même : les modèles qui marchent avec un embedding moyenné
 sont plus faciles à stocker et à traiter que ceux qui demandent les jetons.
 
@@ -503,13 +503,13 @@ phase 2 : perte = CE(linéaire, étiquettes) + λ · CE(linéaire, probabilités
   « 4 par classe » : quatre motifs typiques par espèce (variantes de chant, par exemple) ; la
   perte d'orthogonalité les empêche de se recopier. Le maximum sur les cases de la carte est la
   définition classique de ProtoPNet (non relu dans le papier de Perch).
-- **Ce n'est pas notre « prototype »** (`blanci/head.py`, `differential_prototype`) : le nôtre est
+- **Ce n'est pas notre « prototype »** (`blanci/heads/head.py`, `differential_prototype`) : le nôtre est
   **un seul** vecteur par espèce, w = moyenne des positifs − moyenne des négatifs, calculé en
   forme fermée (pas de gradient), sur l'embedding **moyenné** de la fenêtre ; le score est
   linéaire (w·x + b). Celui de Perch 2.0 est appris, multiple, **local** (une note brève dans une
   seule case n'est pas diluée par la moyenne) et non linéaire (maximum). Même idée de
   ressemblance à un exemple type, mécanisme différent. Il se rapproche plutôt de notre sonde
-  attentive (`blanci/attentive.py`), qui vise elle aussi la dilution d'une note dans la fenêtre.
+  attentive (`blanci/heads/attentive.py`), qui vise elle aussi la dilution d'une note dans la fenêtre.
 - **Classifieur linéaire de Perch 2.0 ≠ notre linear probe** : même forme (une couche linéaire
   sur l'embedding moyen), mais il est appris **pendant le préentraînement**, avec tout le
   réseau, sur 14 795 classes, et façonne l'embedding. Notre linear probe est une logistique

@@ -161,14 +161,14 @@ Jamais meilleure : les plis internes sont d'autres sites, la calibration ne s'y 
 ## Annexe C — Reproduire
 
 ```
-uv run blanci --config config/anuraset.yaml anuraset-campaign --encoders perch_v2 \
+uv run blanci --config anuraset/anuraset.yaml anuraset campaign --encoders perch_v2 \
     --species DENMIN,PITAZU,PHYCUV,LEPLAT,BOAFAB
 uv run --group notebook python documentation/benchmarks/2026-09-28_anuraset_perch_v2/generer.py
 ```
 
 Réglages non par défaut : `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` ; annexe B :
 `benchmark.fold_calibration: platt` sur 5 têtes. Les espèces ont tourné en parallèle, une par
-processus : chaque espèce repart de la graine, alors que `anuraset-campaign` enchaîne les
+processus : chaque espèce repart de la graine, alors que `anuraset campaign` enchaîne les
 espèces sur un même tirage ; les négatifs, donc les chiffres, peuvent différer de quelques
 centièmes.
 

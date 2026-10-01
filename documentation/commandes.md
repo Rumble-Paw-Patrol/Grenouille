@@ -114,10 +114,10 @@ $B candidates --congeners perch_v2-bacpipe1.3.5       # logits des congénères 
 uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md
 
 # --- Pré-benchmark AnuraSet (§2) : base et stocks à part -----------------
-A="uv run blanci --config config/anuraset.yaml"
-$A anuraset-prepare && $A anuraset-profile            # extraction, inventaire, espèces
-$A embed --encoder perch_v2 && $A anuraset-benchmark --encoders perch_v2-bacpipe1.3.5
-$A anuraset-campaign --encoders perch_v2             # tout d'un coup : espèces, encodage, têtes (n° 136)
+A="uv run blanci --config anuraset/anuraset.yaml"
+$A anuraset prepare && $A anuraset profile            # extraction, inventaire, espèces
+$A embed --encoder perch_v2 && $A anuraset benchmark --encoders perch_v2-bacpipe1.3.5
+$A anuraset campaign --encoders perch_v2             # tout d'un coup : espèces, encodage, têtes (n° 136)
 
 # --- Détection (§1, §5) --------------------------------------------------
 uv run blanci train --encoder birdmae-1               # tête + seuil à précision ≥ 0,1
@@ -148,7 +148,7 @@ $B heads --encoder perch_v2-bacpipe1.3.5 --methods neighbors  # k voisins, par s
 $B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R36,logistic+R37  # n° 116
 $B heads --encoder perch_v2-bacpipe1.3.5 --methods attentive,attentive+R41+R42  # n° 117
 $B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic,logistic+R79,logistic+R81,multiclass,dann  # n° 122–124
-$A anuraset-heads --encoder perch_v2-bacpipe1.3.5     # têtes jugées un site à la fois (R78, n° 125)
+$A anuraset heads --encoder perch_v2-bacpipe1.3.5     # têtes jugées un site à la fois (R78, n° 125)
 $B prevalence                                        # part de positifs au hasard → decision.prevalence (n° 128)
 $B heads --encoder perch_v2-bacpipe1.3.5 --methods logistic+R37,logistic+R37=glmm  # σ du biais estimé (GLMM, n° 131)
 $B pca --encoder perch_v2-bacpipe1.3.5               # variance perdue selon les dimensions gardées (n° 132)

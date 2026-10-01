@@ -40,11 +40,11 @@ Prochaines étapes : partition des points d'écoute et plan de tirage, mode d'an
 
 ```
 Grenouille/
-├── blanci/               le paquet Python (≈ 20 000 lignes)
-├── tests/                suite pytest
-├── config/               default.yaml, anuraset.yaml, local.example.yaml
+├── blanci/               le paquet Python, un dossier par étape de la chaîne (voir ci-dessous)
+├── tests/                suite pytest, rangée comme blanci/ (tests/heads/ teste blanci/heads/…)
+├── config/               default.yaml, local.example.yaml
 ├── notebooks/            4 notebooks d'exploration, committés sans sorties
-├── scripts/anuraset/     outils des benchmarks AnuraSet (encodage, têtes, rassemblement)
+├── anuraset/             pré-benchmark AnuraSet, terminé : config, scripts, notes (reproductibilité)
 ├── documentation/
 │   ├── benchmarks/       rapports 01 à 08, fiches des encodeurs, modèle de rapport
 │   ├── tableaux/         un tableau PNG par benchmark et le script qui les dessine
@@ -60,17 +60,30 @@ Grenouille/
 
 ### Le paquet `blanci/`
 
-| Rôle | Modules |
-|---|---|
-| Données | `ingest` (inventaire des enregistrements), `labels` (import des annotations), `db` (SQLite, labels en ajout seul), `store` et `index` (embeddings en Parquet, recherche par similarité), `audio`, `grid` (fenêtres), `qc` et `qc_calibration` (drapeaux : pluie, saturation, micro dans un sac…) |
-| Encodeurs | `encoders/` (bacpipe, esp-aves2, ONNX du livrable, contrôle passe-bas, export), `embed`, `throughput` |
-| Têtes | `head` (prototypes, logistique…), `attentive`, `proto_probe`, `gated`, `dann`, `pooling`, `losses`, `regularization/` (R1 à R84) |
-| Combinaison | `sequential` (rythme des notes), `fusion` et `stacking` (fusion à deux niveaux), `ensemble`, `aggregate` (fenêtre → enregistrement → point) |
-| Évaluation | `evaluate` (plis par micro, AP, rappel, bootstrap, Wilson), `oof` (scores hors-pli), `benchmark`, `head_benchmark`, `full_benchmark`, `frozen` (jeu gelé), `baselines`, `activity`, `anuraset` |
-| Annotation | `active`, `selection`, `cluster`, `workbench` et `app` (poste d'annotation Streamlit) |
-| Exploration | `explore`, `explore_plots`, `attention_map` (pour les notebooks) |
-| Interfaces | `cli` (≈ 50 commandes Typer), `service` (couche appelée par la CLI et par la future application), `config` |
-| Réservés | `finetune`, `detectors/distilled`, `detectors/homemade` : emplacements documentés, à programmer plus tard (fine-tuning, distillation, modèle maison) |
+Chaque dossier est une étape de la chaîne, dans l'ordre où les données la traversent. Le
+`__init__.py` de chaque dossier donne en une ligne le rôle de chacun de ses modules.
+
+```
+inputs ─► embedding ─► heads ─► combination ─► results
+                         └──────────┴─► evaluation       mesure les têtes et leurs combinaisons
+annotation ─► inputs                                      les labels écoutés repartent en entrée
+```
+
+| Dossier | Étape | Modules |
+|---|---|---|
+| `core/` | socle | `config`, `db` (SQLite, labels en ajout seul), `audio` |
+| `inputs/` | 1. enregistrements et annotations | `ingest` (inventaire), `qc` (drapeaux : pluie, saturation, micro dans un sac…), `labels` (import des annotations), `dataset`, `frozen` (jeu gelé) |
+| `embedding/` | 2. fenêtres → embeddings | `grid` (fenêtres), `encoders/` (bacpipe, esp-aves2, ONNX du livrable, passe-bas, export), `embed`, `store` et `index` (Parquet, similarité) |
+| `heads/` | 3. têtes de détection | `head` (prototypes, logistique…), `attentive`, `proto_probe`, `gated`, `dann`, `pooling`, `losses`, `regularization/` (R1 à R84), `cluster` ; sans encodeur : `sequential` (rythme des notes), `baselines`, `detectors/` |
+| `combination/` | 4. combiner les modèles | `stacking`, `fusion` (fusion à deux niveaux), `ensemble` |
+| `evaluation/` | 5. mesurer | `evaluate` (plis par micro, AP, rappel, bootstrap, Wilson), `oof` (scores hors-pli), `benchmark`, `head_benchmark`, `full_benchmark`, `throughput`, `qc_calibration`, `anuraset` (archivé) |
+| `annotation/` | 6. boucle d'écoute | `selection`, `active`, `workbench` et `app` (poste d'annotation Streamlit) |
+| `results/` | 7. sorties écologiques | `aggregate` (fenêtre → enregistrement → point), `activity` (courbes d'activité) |
+| `exploration/` | notebooks | `explore`, `explore_plots`, `attention_map` |
+| racine | interfaces | `cli` (commandes Typer ; AnuraSet regroupé sous `blanci anuraset …`), `service` (couche appelée par la CLI et par la future application) |
+
+Réservés : `heads/finetune`, `heads/detectors/distilled`, `heads/detectors/homemade` sont des
+emplacements documentés, à programmer plus tard (fine-tuning, distillation, modèle maison).
 
 `service.py` regroupe les opérations de la chaîne de décision (entraîner et enregistrer une
 tête, scorer, file de vérification, labels, jeu gelé, réentraînement, courbes d'activité) : c'est
@@ -101,7 +114,7 @@ prestataire (`documentation/*.xlsx`) restent eux aussi en local.
 
 Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), dont les
 embeddings et la base servent aux benchmarks. Elles sont rangées dans les branches
-`donnees-anuraset-*`, hors de `main` ; `scripts/anuraset/importer_stock.py` les importe.
+`donnees-anuraset-*`, hors de `main` ; `anuraset/importer_stock.py` les importe.
 
 Inventaire (base au 29/09/2026) : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an,
 66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé
@@ -122,12 +135,12 @@ uv run blanci heads --encoder perch_v2-bacpipe1.3.5        # toutes les têtes, 
 $B annotate                                                # poste d'annotation (navigateur)
 ```
 
-Les benchmarks AnuraSet utilisent leur propre configuration (`config/anuraset.yaml`) et leur
+Les benchmarks AnuraSet utilisent leur propre configuration (`anuraset/anuraset.yaml`) et leur
 propre base, séparées des données de l'ONF :
 
 ```sh
-A="uv run blanci --config config/anuraset.yaml"
-$A anuraset-prepare && $A anuraset-profile
+A="uv run blanci --config anuraset/anuraset.yaml"
+$A anuraset prepare && $A anuraset profile
 ```
 
 ## Notebooks d'exploration
@@ -141,7 +154,7 @@ $A anuraset-prepare && $A anuraset-profile
 
 Ils lisent la base et l'audio en local : il faut les données de l'ONF pour les exécuter. **Ne
 jamais committer leurs sorties** (les lecteurs audio embarquent le son) : *Clear All Outputs*
-avant un commit ; `tests/test_notebooks.py` le vérifie.
+avant un commit ; `tests/exploration/test_notebooks.py` le vérifie.
 
 ## Conventions
 

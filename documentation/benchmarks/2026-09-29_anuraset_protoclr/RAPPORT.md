@@ -117,15 +117,15 @@ DENMIN 0,13 (0,51), PITAZU 0,00 (0,00), PHYCUV 0,12 (0,04), LEPLAT 0,00 (0,00), 
 
 ## Annexe — Reproduire
 
-Scripts dans `scripts/anuraset/` (encodage, une espèce par processus,
+Scripts dans `anuraset/` (encodage, une espèce par processus,
 rassemblement) :
 
 ```
 uv pip install --no-deps bacpipe==1.3.5   # puis les modules manquants, torch CPU
-python scripts/anuraset/encoder.py protoclr
+python anuraset/encoder.py protoclr
 for sp in DENMIN PITAZU PHYCUV LEPLAT BOAFAB; do OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
-  python scripts/anuraset/bench.py protoclr-bacpipe1.3.5@o0 $sp sorties/ & done
-python scripts/anuraset/rassembler.py sorties/ \
+  python anuraset/bench.py protoclr-bacpipe1.3.5@o0 $sp sorties/ & done
+python anuraset/rassembler.py sorties/ \
   documentation/benchmarks/2026-09-29_anuraset_protoclr
 uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_protoclr/generer.py
 ```

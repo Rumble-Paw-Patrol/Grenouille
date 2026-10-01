@@ -1,0 +1,283 @@
+import json
+
+import numpy as np
+import pytest
+
+from blanci.evaluation.evaluate import average_precision
+from blanci.heads.head import (
+    Head,
+    OOFScores,
+    differential_prototype,
+    exemplar_scores,
+    fit_logistic,
+    knn_scores,
+    neighbor_options,
+    oof_scores,
+    prototype_scores,
+    select_C,
+    simple_prototype_scores,
+    train_head,
+)
+from blanci.heads.regularization import nearest_similarity
+
+DIM = 32
+
+
+def two_clusters(n=120, sep=1.5, seed=0):
+    """Deux amas gaussiens séparés par une direction unique : le cas que le prototype doit voir."""
+    rng = np.random.default_rng(seed)
+    direction = np.zeros(DIM)
+    direction[0] = sep
+    neg = rng.normal(0, 0.3, (n, DIM))
+    pos = rng.normal(0, 0.3, (n, DIM)) + direction
+    X = np.vstack([pos, neg]).astype(np.float32)
+    y = np.concatenate([np.ones(n, dtype=int), np.zeros(n, dtype=int)])
+    return X, y
+
+
+def mics(n_per_class, n_mics=6):
+    """Micros répartis sur les deux classes : chaque groupe a des positifs et des négatifs."""
+    one = np.array([f"mic{i % n_mics}" for i in range(n_per_class)])
+    return np.concatenate([one, one])
+
+
+# --- Prototype différentiel ------------------------------------------------------------------
+
+
+def test_prototype_separates_two_clusters():
+    X, y = two_clusters()
+    w, b = differential_prototype(X[y == 1], X[y == 0])
+    scores = prototype_scores(X, w, b)
+    assert scores[y == 1].mean() > 0 > scores[y == 0].mean()
+    assert (scores[y == 1] > 0).mean() > 0.95
+    assert (scores[y == 0] < 0).mean() > 0.95
+
+
+def test_prototype_direction_points_at_the_species_axis():
+    """w ≈ μ+ − μ− : avec un fond partagé, seule la direction discriminante subsiste (§3)."""
+    X, y = two_clusters()
+    w, _ = differential_prototype(X[y == 1], X[y == 0])
+    assert np.argmax(np.abs(w)) == 0
+
+
+def test_prototype_threshold_sits_between_the_centroids():
+    """b place le zéro au milieu : les deux classes s'écartent symétriquement de 0."""
+    X, y = two_clusters()
+    w, b = differential_prototype(X[y == 1], X[y == 0])
+    scores = prototype_scores(X, w, b)
+    assert float(scores[y == 1].mean()) == pytest.approx(-float(scores[y == 0].mean()), rel=0.05)
+
+
+def test_prototype_is_blind_to_a_shared_background():
+    """Un décalage commun aux deux classes ne doit pas changer la direction retenue."""
+    X, y = two_clusters()
+    background = np.full(DIM, 3.0, dtype=np.float32)
+    w_plain, _ = differential_prototype(X[y == 1], X[y == 0])
+    w_shifted, _ = differential_prototype(X[y == 1] + background, X[y == 0] + background)
+    cosine = w_plain @ w_shifted / (np.linalg.norm(w_plain) * np.linalg.norm(w_shifted))
+    assert cosine > 0.9
+
+
+# --- Prototype simple ------------------------------------------------------------------------
+
+
+def test_simple_prototype_ranks_positives_first():
+    X, y = two_clusters()
+    scores = simple_prototype_scores(X[y == 1], X)
+    assert average_precision(y, scores) > 0.95
+
+
+def test_simple_prototype_suffers_from_a_shared_background_where_the_differential_does_not():
+    """Fond commun fort et variable : le cosinus au centroïde des positifs le suit, la
+    différence des centroïdes l'annule. C'est l'écart que le benchmark mesure (§3)."""
+    rng = np.random.default_rng(1)
+    X, y = two_clusters(sep=0.6)
+    X = X + rng.normal(0, 1.0, (len(X), 1)) * np.r_[0, np.ones(DIM - 1)].astype(np.float32) * 2
+    X = X + np.r_[0, np.full(DIM - 1, 3.0)].astype(np.float32)
+    simple = average_precision(y, simple_prototype_scores(X[y == 1], X))
+    w, b = differential_prototype(X[y == 1], X[y == 0])
+    differential = average_precision(y, prototype_scores(X, w, b))
+    assert differential > simple + 0.1
+
+
+# --- kNN ------------------------------------------------------------------------------------
+
+
+def test_knn_margin_separates_held_out_windows():
+    """X = 60 positifs puis 60 négatifs ; on entraîne sur la moitié de chaque classe."""
+    X, y = two_clusters(n=60)
+    train = np.r_[0:30, 60:90]
+    test = np.r_[30:60, 90:120]
+    scores = knn_scores(X[train], y[train], X[test])
+    assert (scores[y[test] == 1] > 0).mean() > 0.9
+    # L'amas négatif est diffus : sa marge est bruitée. C'est le classement qui compte.
+    assert average_precision(y[test], scores) > 0.9
+
+
+def test_knn_refuses_a_single_class_training_set():
+    X, y = two_clusters(n=30)
+    with pytest.raises(ValueError, match="positifs et des négatifs"):
+        knn_scores(X[y == 1], y[y == 1], X)
+
+
+def test_nearest_similarity_goes_from_the_nearest_to_the_mean_of_k():
+    sims = np.array([[0.9, 0.5, 0.7, 0.1]])
+    assert nearest_similarity(sims, 1)[0] == pytest.approx(0.9)
+    assert nearest_similarity(sims, 3)[0] == pytest.approx((0.9 + 0.7 + 0.5) / 3)
+    assert nearest_similarity(sims, 10)[0] == pytest.approx(sims.mean())  # k plafonné
+    weighted = nearest_similarity(sims, 3, weighted=True)[0]
+    assert (0.9 + 0.7 + 0.5) / 3 < weighted < 0.9  # les plus proches pèsent davantage
+
+
+def test_a_larger_k_resists_a_mislabelled_positive():
+    """Un « positif » faux au milieu des négatifs : à k = 1, les négatifs voisins héritent de
+    son score ; à k = 5, il est noyé par les vrais positifs (R39)."""
+    X, y = two_clusters(n=60, sep=1.0)
+    train = np.r_[0:30, 60:90]
+    test = np.r_[30:60, 90:120]
+    y_noisy = y.copy()
+    y_noisy[60:66] = 1  # six négatifs d'entraînement étiquetés positifs
+    one = knn_scores(X[train], y_noisy[train], X[test])
+    five = knn_scores(X[train], y_noisy[train], X[test], k=5)
+    assert average_precision(y[test], five) > average_precision(y[test], one)
+    positives = X[train][y_noisy[train] == 1]
+    assert average_precision(y[test], exemplar_scores(positives, X[test], 5)) > 0.9
+
+
+def test_neighbor_variants_are_parsed():
+    assert neighbor_options("knn:k=5") == ("knn", 5, False)
+    assert neighbor_options("exemplar:k=3:w") == ("exemplar", 3, True)
+    assert neighbor_options("knn") is None and neighbor_options("logistic:max") is None
+    X, y = two_clusters(n=30)
+    with pytest.raises(ValueError, match="au moins 1"):
+        oof_scores(X, y, mics(30), n_splits=2, method="knn:k=0")
+
+
+# --- Régression logistique et sauvegarde ------------------------------------------------------
+
+
+def test_head_save_load_round_trip(tmp_path):
+    X, y = two_clusters()
+    head = fit_logistic(X, y, C=1.0)
+    head.save(tmp_path / "head-v1")
+    reloaded = Head.load(tmp_path / "head-v1")
+    assert np.allclose(head.decision(X), reloaded.decision(X))
+    assert reloaded.meta["C"] == 1.0
+
+
+def test_saved_head_contains_no_pickle(tmp_path):
+    """La tête doit se recharger sans scikit-learn : JSON + npz, jamais de pickle (§7)."""
+    X, y = two_clusters()
+    fit_logistic(X, y, C=1.0).save(tmp_path / "head-v1")
+    assert sorted(p.name for p in (tmp_path / "head-v1").iterdir()) == [
+        "manifest.json",
+        "weights.npz",
+    ]
+    json.loads((tmp_path / "head-v1" / "manifest.json").read_text(encoding="utf-8"))
+
+
+def test_predict_proba_is_a_probability():
+    X, y = two_clusters()
+    proba = fit_logistic(X, y, C=1.0).predict_proba(X)
+    assert proba.min() >= 0.0 and proba.max() <= 1.0
+    assert proba[y == 1].mean() > proba[y == 0].mean()
+
+
+def test_select_C_reports_every_candidate():
+    X, y = two_clusters(n=60)
+    best, results = select_C(X, y, mics(60), [0.01, 1.0, 100.0], n_splits=3)
+    assert set(results) == {0.01, 1.0, 100.0}
+    assert results[best] == max(results.values())
+
+
+def test_train_head_records_provenance():
+    X, y = two_clusters(n=60)
+    head = train_head(X, y, mics(60), [0.1, 1.0], seed=3)
+    assert head.meta["n_pos"] == 60 and head.meta["n_neg"] == 60
+    assert head.meta["seed"] == 3 and "cv_ap" in head.meta
+
+
+# --- Scores hors-pli -------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["logistic", "prototype", "simple_prototype", "knn", "knn:k=3", "knn:k=5:w", "exemplar:k=3"],
+)
+def test_oof_scores_cover_every_window_without_nan(method):
+    X, y = two_clusters(n=60)
+    out = oof_scores(X, y, mics(60), n_splits=3, method=method)
+    assert isinstance(out, OOFScores)
+    assert out.values.shape == (len(y),)
+    assert not np.isnan(out.values).any()
+    assert out.method == method
+
+
+@pytest.mark.parametrize("method", ["logistic", "prototype", "simple_prototype", "knn"])
+def test_oof_scores_rank_positives_above_negatives(method):
+    X, y = two_clusters(n=60)
+    out = oof_scores(X, y, mics(60), n_splits=3, method=method)
+    assert out.values[y == 1].mean() > out.values[y == 0].mean()
+
+
+def test_oof_folds_never_share_a_mic():
+    X, y = two_clusters(n=60)
+    groups = mics(60)
+    out = oof_scores(X, y, groups, n_splits=3)
+    for train, test in out.folds:
+        assert not set(groups[train]) & set(groups[test])
+
+
+def test_oof_rejects_an_unknown_method():
+    X, y = two_clusters(n=30)
+    with pytest.raises(ValueError, match="méthode inconnue"):
+        oof_scores(X, y, mics(30), n_splits=2, method="magie")
+
+
+def test_oof_logistic_picks_C_inside_each_fold():
+    """Le C se choisit sur les seules données d'entraînement du pli : pas de fuite."""
+    X, y = two_clusters(n=60)
+    out = oof_scores(X, y, mics(60), n_splits=3, method="logistic", C_grid=[0.01, 1.0])
+    assert not np.isnan(out.values).any()
+
+
+# --- Recalibration par pli (DECISIONS n° 135) -----------------------------------------------------
+
+
+def test_fold_platt_gives_a_rising_prevalence_free_scale():
+    from blanci.heads.regularization import fold_platt
+
+    rng = np.random.default_rng(0)
+    y = (rng.random(400) < 0.1).astype(int)
+    scores = 0.05 * (y * 2.0 + rng.normal(0, 1, len(y)))  # des scores très resserrés
+    a, b = fold_platt(scores, y)
+    assert a > 1.0  # l'échelle est rouverte
+    logit = a * scores + b
+    assert abs(np.median(logit[y == 1]) + np.median(logit[y == 0])) < 1.0  # classes équilibrées
+    separable = np.r_[np.zeros(20), np.ones(5)] * 10.0
+    a, b = fold_platt(separable, np.r_[np.zeros(20), np.ones(5)].astype(int))
+    assert np.isfinite([a, b]).all() and a > 0
+    assert fold_platt(scores, np.zeros(len(y), dtype=int))[0] == pytest.approx(1 / scores.std())
+
+
+def test_fold_calibration_keeps_each_fold_ranking_and_the_raw_scores():
+    from blanci.heads.head import calibration_options
+
+    X, y = two_clusters(n=60, sep=0.8)
+    groups = mics(60)
+    oof = oof_scores(
+        X, y, groups, n_splits=3, method="logistic", C_grid=[0.01, 1.0], calibration="platt"
+    )
+    assert oof.raw is not None and not np.allclose(oof.raw, oof.values)
+    for _, test in oof.folds:  # dans un pli : même classement
+        order_raw = np.argsort(oof.raw[test], kind="stable")
+        assert np.array_equal(order_raw, np.argsort(oof.values[test], kind="stable"))
+    plain = oof_scores(X, y, groups, n_splits=3, method="logistic", C_grid=[0.01, 1.0])
+    assert plain.raw is None and np.allclose(plain.values, oof.raw)
+    with pytest.raises(ValueError, match="recalibration"):
+        oof_scores(X, y, groups, n_splits=3, method="prototype", calibration="isotonic")
+    assert calibration_options({"benchmark": {"fold_calibration": "none"}}) == {}
+    assert calibration_options({"benchmark": {"fold_calibration": "platt"}}) == {
+        "calibration": "platt",
+        "calibration_splits": 3,
+    }

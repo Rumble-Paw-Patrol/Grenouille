@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from blanci.anuraset import (
+from blanci.evaluation.anuraset import (
     _encoder_windows,
     read_strong_labels,
     read_weak_labels,
@@ -27,12 +27,12 @@ from blanci.anuraset import (
     weak_only_files,
     window_labels,
 )
-from blanci.config import config_path, load_config, project_path
-from blanci.db import connect
-from blanci.evaluate import average_precision, recall_at_precision
-from blanci.head import calibration_options, oof_scores
-from blanci.head_benchmark import _inputs
-from blanci.regularization import (
+from blanci.core.config import config_path, load_config, project_path
+from blanci.core.db import connect
+from blanci.evaluation.evaluate import average_precision, recall_at_precision
+from blanci.heads.head import calibration_options, oof_scores
+from blanci.evaluation.head_benchmark import _inputs
+from blanci.heads.regularization import (
     Context,
     domain_statistics,
     needs_domain,
@@ -62,7 +62,7 @@ def seuil(y: np.ndarray, s: np.ndarray) -> float:
 
 def une_espece(nom: str, sp: str) -> list[dict]:
     encodeur, db, stock = ENCODEURS[nom]
-    cfg = load_config(Path("config/anuraset.yaml"))
+    cfg = load_config(Path("anuraset/anuraset.yaml"))
     if db:
         cfg["paths"]["db"], cfg["paths"]["embeddings"] = db, stock
     cfg["regularization"]["R37"]["glmm_grid"] = [0.3, 1.0, 3.0]

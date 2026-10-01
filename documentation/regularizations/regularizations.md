@@ -153,7 +153,7 @@ sur données simulées ou sur l'échantillon vérifient le code, elles ne classe
 
 # Tri de Léonard du 26/09, section F (R59–R67, réseaux entraînés)
 
-Toute la mécanique des régularisations est dans `blanci/regularization/`, qui sert d'index
+Toute la mécanique des régularisations est dans `blanci/heads/regularization/`, qui sert d'index
 (DECISIONS n° 121).
 
 - R59 : warm-up et écrêtage du gradient programmés (`attentive+R59`, `gated+R59`) ; dropout,
@@ -170,7 +170,7 @@ Toute la mécanique des régularisations est dans `blanci/regularization/`, qui 
 
 Règle posée par Léonard : ne pas supposer 51 positifs pour toujours ; d'autres annotations
 viendront, des sites resteront peu ou pas annotés. Toute la mécanique est dans
-`blanci/regularization/` (index en tête du paquet, `__init__.py`) ; les régularisations qui sont une tête à
+`blanci/heads/regularization/` (index en tête du paquet, `__init__.py`) ; les régularisations qui sont une tête à
 part entière vivent dans leur module.
 
 - R59 : écrêtage du gradient et warm-up programmés. R60 : LoRA sur les couches hautes,
@@ -181,7 +181,7 @@ part entière vivent dans leur module.
 - R68, R69 : écartées (contraires au « positive mining » sur les faux négatifs suspects).
   R70 : le maximum, déjà en place. R71, R72 : écartées. R73 : en discussion. DECISIONS n° 125.
 - R74, R75 (par défaut), R76, R77, R79 : programmées, DECISIONS n° 122. R78 : AnuraSet, un
-  pli par site (`blanci anuraset-heads`), DECISIONS n° 125. R80 : présélection.
+  pli par site (`blanci anuraset heads`), DECISIONS n° 125. R80 : présélection.
 - R81 : programmée (`+R81`). R82 : écartée. R83 : plus tard. R84 : en place.
 - Section E : voir plus bas (27/09).
 
@@ -222,5 +222,5 @@ part entière vivent dans leur module.
 - AP moyenne par pli dans tous les rapports ; recalibration par pli en option
   (`benchmark.fold_calibration: platt`), question ouverte (réglages fixes pour tous les
   plis possibles). DECISIONS n° 135.
-- `blanci/regularization/` : le module découpé en sous-modules, index dans `__init__.py`.
+- `blanci/heads/regularization/` : le module découpé en sous-modules, index dans `__init__.py`.
   DECISIONS n° 134.

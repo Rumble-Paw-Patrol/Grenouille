@@ -105,7 +105,7 @@ Rappel à précision 0,5, seuil choisi sur les autres sites (seuil sur place) :
 
 ## Annexe — Reproduire
 
-Comme le benchmark 02 (`scripts/anuraset/`), avec `birdnet` et
+Comme le benchmark 02 (`anuraset/`), avec `birdnet` et
 `birdnet-bacpipe1.3.5@o0` (TensorFlow CPU requis). Stock sur la branche
 `donnees-anuraset-birdnet`. Durées (CPU, 4 cœurs) : encodage 23 min (24 fenêtres/s), têtes 6
 à 18 min par espèce (`donnees/durees_s.csv`).

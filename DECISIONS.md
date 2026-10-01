@@ -149,7 +149,7 @@ seulement s'il dépasse A et B de plus que l'incertitude.
 
 ### §2. Benchmark des encodeurs
 
-- **AnuraSet clôt le choix des candidats.** La vague 2 (`scripts/anuraset/VAGUE_ENCODAGE_2.md`)
+- **AnuraSet clôt le choix des candidats.** La vague 2 (`anuraset/VAGUE_ENCODAGE_2.md`)
   se termine le **09/10/2026** ; les sessions non finies ce jour-là sont abandonnées. Pas de
   nouvelle tête ni de nouvelle régularisation sur AnuraSet, fiches courtes (≤ 30 lignes).
 - **Filtre de licence (§0) avant le benchmark ONF.** Tous les encodeurs libres qui passent le
@@ -207,8 +207,8 @@ seulement s'il dépasse A et B de plus que l'incertitude.
 | Attentive probing | tête d'attention sur jetons pris avant agrégation | ≥ 150–200 | si jetons accessibles (nécessaire pour les transformers) |
 | Logits de congénères (Perch 2.0) | scores des 3 *Anomaloglossus* connus | 0 | générateur de candidats ; descripteur optionnel |
 | Clustering | HDBSCAN sur ACP ; UMAP pour voir | 0 | §5 bis |
-| LoRA / fine-tuning | adaptation partielle ou totale (`blanci/finetune.py`, réservé) | centaines à milliers | conditionné ; hors chemin critique |
-| Distillation / modèle maison (`blanci/detectors/`, réservés) | petit CNN bande 3–7 kHz imitant la chaîne gelée | 0 | livrable léger pour l'i5 ; après le choix de l'encodeur |
+| LoRA / fine-tuning | adaptation partielle ou totale (`blanci/heads/finetune.py`, réservé) | centaines à milliers | conditionné ; hors chemin critique |
+| Distillation / modèle maison (`blanci/heads/detectors/`, réservés) | petit CNN bande 3–7 kHz imitant la chaîne gelée | 0 | livrable léger pour l'i5 ; après le choix de l'encodeur |
 
 **Prototype différentiel** : x ≈ c_site + c_espèce + ε ; w = μ₊ − μ₋ ≈ c_espèce avec des négatifs
 **appariés** (mêmes micros, heures, jours) ; centroïde le plus proche sous variance commune =
@@ -649,7 +649,7 @@ la structure réelle est décrite dans le README. `data/` : `raw/{2023,2026}/<si
 `labels/imports/` (fichiers reçus, jamais modifiés), `models/<kind>/<name>-<version>/`
 (`manifest.json` + poids), `frozen_test/` (jeu gelé, lecture seule).
 
-**13.3 Schéma SQLite** (implémenté dans `blanci/db.py`, qui fait foi ; labels en ajout seul).
+**13.3 Schéma SQLite** (implémenté dans `blanci/core/db.py`, qui fait foi ; labels en ajout seul).
 
 ```
 recordings(recording_id TEXT PK, path TEXT UNIQUE, dataset TEXT, site TEXT, mic_id TEXT,
@@ -1170,7 +1170,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     similarité ; §6/§13 l'avaient omis). L'écart prototype simple / différentiel mesure le fond
     sonore capté par l'embedding (note de Léonard).
 
-62. **Baselines sans encodeur** (`blanci/baselines.py`, `blanci baselines`) : énergie en bande,
+62. **Baselines sans encodeur** (`blanci/heads/baselines.py`, `blanci baselines`) : énergie en bande,
     contraste bande / bandes voisines, onsets, rythme, template matching (gabarit moyen et
     meilleur de 30 exemplaires, appris dans chaque pli sans le micro testé). Même jeu que le
     benchmark : 345 positifs, 150 négatifs vérifiés, 1 020 négatifs appariés présumés (20 par
@@ -1191,7 +1191,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
       23 % de positifs, tout accepter donne déjà une précision de 0,23. Il ne départage qu'au
       niveau enregistrement (8 % de positifs). À trancher avec le protocole figé (S3).
 
-63. **Poste d'annotation** (`blanci/workbench.py`, `blanci/app.py` Streamlit, `blanci annotate`,
+63. **Poste d'annotation** (`blanci/annotation/workbench.py`, `blanci/annotation/app.py` Streamlit, `blanci annotate`,
     `blanci candidates`). Files CSV dans `data/reports/candidats_*.csv` (aussi `queue_*` et
     `search_*`). `candidates --from <export Blancinet>` tire les détections jamais écoutées,
     `per_site` par site, à parts égales entre tranches de score (0–0,3 ; 0,3–0,7 ; 0,7–1) puis
@@ -1331,7 +1331,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     score d'un chant vrai, et le benchmark compte une fausse alarme là où l'encodeur avait
     raison. Le bruit touche les encodeurs à fenêtre longue, pas birdnet (3 s).
 
-74. **Jeu gelé programmé** (`blanci/frozen.py`, `blanci freeze`, `blanci evaluate --frozen`).
+74. **Jeu gelé programmé** (`blanci/inputs/frozen.py`, `blanci freeze`, `blanci evaluate --frozen`).
     Une version = liste d'enregistrements figée (`paths.frozen_test/jeu_gele_<v>.csv`, en
     lecture seule, jamais réécrite). Ses enregistrements sont exclus de tout ce qui apprend
     ou règle : tête, seuil, benchmark, baselines, recherche de similarité, clustering C1,
@@ -1361,7 +1361,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     fenêtre étiquetée. Rappel : l'inventaire a été fait sans contrôle audio (`--no-qc`),
     ces drapeaux ne sont donc calculés sur aucun enregistrement réel aujourd'hui.
 
-77. **Attentive probing** (`blanci/attentive.py`) : une requête apprise pondère les jetons
+77. **Attentive probing** (`blanci/heads/attentive.py`) : une requête apprise pondère les jetons
     d'une fenêtre avant le classement (2d + 1 paramètres). Entraîné avec torch, appliqué en
     numpy, sauvegardé sans pickle. Seul perch_v2 expose des jetons (16 temps × 4 fréquences
     × 1 536, moyennés sur la fréquence). `blanci tokens --encoder perch_v2` calcule les
@@ -1369,15 +1369,15 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     sonde « attentive ». Sur données synthétiques (note dans 1 jeton sur 16), AP hors-pli
     ~0,67–0,8 contre ~0,53 pour la moyenne des jetons.
 
-78. **Pré-benchmark AnuraSet préparé** (`blanci/anuraset.py`, `config/anuraset.yaml`,
-    commandes `anuraset-prepare`, `anuraset-profile`, `anuraset-benchmark`). Licence
+78. **Pré-benchmark AnuraSet préparé** (`blanci/evaluation/anuraset.py`, `anuraset/anuraset.yaml`,
+    commandes `anuraset prepare`, `anuraset profile`, `anuraset benchmark`). Licence
     **CC BY** (la feuille de route disait CC0). Téléchargé : `raw_data.zip` (7,2 Go,
     enregistrements bruts d'une minute) + `strong_labels.zip` (chants datés), pas
     `anuraset.zip` (extraits de 3 s, trop courts pour les encodeurs à 5–6 s). Base, stocks et
     rapports séparés des données ONF. Fenêtre positive = contient un chant entier de l'espèce
     (ou tient dans un chœur annoté d'un seul tenant) ; négative = aucun chant de l'espèce ;
     chant coupé = écartée ; négatifs tirés par site (1:20) ; plis par site (4 sites).
-    Espèces à choisir avec `anuraset-profile` (note brève, dominante 3–6 kHz, ≥ 300 chants,
+    Espèces à choisir avec `anuraset profile` (note brève, dominante 3–6 kHz, ≥ 300 chants,
     ≥ 2 sites). Encodage d'AnuraSet (~27 h d'audio) : avec celui des données ONF, ce week-end.
 
 79. **Drapeaux : trois origines, une règle d'exclusion** (23/09/2026, avec Léonard). Un
@@ -1531,7 +1531,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     avec un encodeur, AP après la porte, et la combinaison configurée jugée fidèlement (tête
     réentraînée sans les fenêtres arrêtées) contre l'absence de porte.
 
-91. **Plis communs et stock de scores hors-pli** (`dataset.folds_for`, `blanci/oof.py`,
+91. **Plis communs et stock de scores hors-pli** (`dataset.folds_for`, `blanci/evaluation/oof.py`,
     `blanci sources`). Les plis étaient recalculés sur chaque jeu (StratifiedGroupKFold sur
     les fenêtres) : deux encodeurs, avec leurs grilles et leurs négatifs présumés, n'avaient
     pas exactement les mêmes micros tenus à l'écart. Désormais le pli de chaque micro est
@@ -1596,7 +1596,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     que contre sa meilleure source seule.
 
 97. **Emplacements : distillation, modèle fait maison, fine-tuning / LoRA**
-    (`blanci/detectors/`, `blanci/finetune.py`, `blanci detector-bench`). Contrat
+    (`blanci/heads/detectors/`, `blanci/heads/finetune.py`, `blanci detector-bench`). Contrat
     « détecteur » (audio → score, `fit` s'il apprend) et banc d'essai déjà branchés : hors-pli
     sur les plis communs, scores rangés dans le stock commun, donc repris par le benchmark
     complet et les ensembles. `band_contrast` montre que la chaîne marche ; `distilled` et
@@ -1671,7 +1671,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
 
 104. **`app/streamlit_app.py` supprimé** (décision de Léonard : désuet). Il écrivait les labels
      sans passer par la couche de service (ni validation, ni drapeaux d'écoute) ; le poste
-     d'annotation est `blanci/app.py` (`blanci annotate`). La feuille de route (§13.2) le cite
+     d'annotation est `blanci/annotation/app.py` (`blanci annotate`). La feuille de route (§13.2) le cite
      encore dans l'arborescence : document de référence, non modifié.
 
 ## 2026-09-25 — Notebooks d'exploration ; ce que contiennent les négatifs présumés
@@ -1682,14 +1682,14 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      calculés à la volée, prototype différentiel dans le son, sur la paire et sur le stock),
      `02_negatifs_apparies` (ce que tire chaque stratégie, feuille d'écoute et taux de
      contamination avec IC de Wilson), `03_module_sequentiel` (réglage de la détection des
-     notes, valeurs et balayage des portes). Calculs dans `blanci/explore.py` (base ouverte en
-     `mode=ro`, audio lu), graphiques dans `blanci/explore_plots.py` ; groupe `notebook`
+     notes, valeurs et balayage des portes). Calculs dans `blanci/exploration/explore.py` (base ouverte en
+     `mode=ro`, audio lu), graphiques dans `blanci/exploration/explore_plots.py` ; groupe `notebook`
      (ipykernel, matplotlib), installé avec `uv sync --inexact` pour garder research et app.
      Les négatifs d'une fenêtre sont tirés par `paired_negatives` (partie « même
      enregistrement » identique au benchmark, tirages au hasard possiblement différents).
      `detect_onsets` prend le lissage de l'enveloppe en paramètre (`smooth_s`, défaut 0,01 s
      inchangé). Sorties jamais committées : les lecteurs audio embarquent le son des
-     enregistrements (`tests/test_notebooks.py`). Les trois notebooks tournent sur les
+     enregistrements (`tests/exploration/test_notebooks.py`). Les trois notebooks tournent sur les
      données réelles (48 s, 3 min, 2 min).
 
 106. **Mesure : « non annotée » ne veut pas dire « négative »** (25/09/2026, lecture seule,
@@ -1724,7 +1724,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
 ## 2026-09-25 (après-midi) — Régularisations des têtes
 
 108. **Régularisations programmées, coupées par défaut** (tri de Léonard du 25/09 sur la liste
-     R1–R84, `documentation/regularizations/regularizations.md`). `blanci/regularization.py`, numéros conservés
+     R1–R84, `documentation/regularizations/regularizations.md`). `blanci/heads/regularization.py`, numéros conservés
      partout dans le code et la config. Une tête du benchmark les active dans son nom :
      `blanci heads --methods logistic,logistic+R18=16,logistic+R19` (« =v » remplace le réglage
      principal) ; le nom canonique (R triées) est celui des rapports et des scores hors-pli,
@@ -1766,7 +1766,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      `--inexact` et tous les groupes voulus.
 
 109. **Mesure sur données simulées : la validation croisée sur un seul site récompense les
-     raccourcis de micro** (`tests/test_regularization.py`). Corpus : micros « riches » (50 %
+     raccourcis de micro** (`tests/heads/test_regularization.py`). Corpus : micros « riches » (50 %
      de positifs) et « pauvres » (5 %) séparés par un axe de fond commun ; 4 micros d'un
      « nouveau site » inversent la relation. AP sur le nouveau site, 4 tirages : sans
      régularisation 0,25–0,50 ; R21 0,50–0,79 ; R19 0,55–0,73 ; R20 0,51–0,69. En validation
@@ -1781,7 +1781,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      micro en contient) : à surveiller sur les micros à chœur.
 
 110. **R85, sonde à portes** (« attentive sur l'embedding », idée de Léonard ; tête `gated`,
-     `blanci/gated.py`). Score = w · (x̃ ⊙ g(x̃)) + b, porte g = σ(B·A·x̃ + c) de rang 8 : le
+     `blanci/heads/gated.py`). Score = w · (x̃ ⊙ g(x̃)) + b, porte g = σ(B·A·x̃ + c) de rang 8 : le
      poids de chaque dimension dépend de la fenêtre. Départ B = 0 → portes à ½, la tête part
      d'une logistique. AdamW (weight decay 1e-2, lr 0,05, 300 époques, lot entier), classes
      équilibrées ; torch (groupe research), écartée de la liste par défaut sans torch. Sur
@@ -1806,7 +1806,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
 
 ## 2026-09-25 (fin d'après-midi) — Pertes, échantillon versionné, poste d'annotation
 
-112. **Benchmark des pertes** (R34, R35 ; `blanci/losses.py`, têtes `loss:<nom>`,
+112. **Benchmark des pertes** (R34, R35 ; `blanci/heads/losses.py`, têtes `loss:<nom>`,
      `blanci heads --methods losses`). Même tête linéaire (standardisation, classes
      équilibrées, L2, C par validation groupée), sept pertes contre la logistique : hinge et
      squared_hinge (`LinearSVC`), least_squares (`RidgeClassifier`, α = 1/2C), focal (γ = 2),
@@ -1846,8 +1846,8 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      régularisations, pertes) tourne sur le vrai son.
 
 114. **Poste d'annotation et R19 + R21** (demandes de Léonard). Streamlit reste : c'est le
-     poste d'annotation (`blanci annotate`, `blanci/app.py`), pas l'ancien
-     `app/streamlit_app.py` supprimé au n° 104. Les 4 échecs de `tests/test_app.py` venaient
+     poste d'annotation (`blanci annotate`, `blanci/annotation/app.py`), pas l'ancien
+     `app/streamlit_app.py` supprimé au n° 104. Les 4 échecs de `tests/annotation/test_app.py` venaient
      de Streamlit 1.64, qui résout un chemin relatif depuis le fichier de test : chemin absolu.
      Le refus de R19/R20 + R21 (n° 108–109) est levé : la combinaison se mesure au lieu d'être
      interdite ; le mécanisme du n° 109 (b) reste l'hypothèse à vérifier.
@@ -1937,7 +1937,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      développement ; le C retenu est enregistré avec le modèle. `logistic` garde son C fixé
      (`fusion.C`, 1) : `fusion-bench` compare les deux (`benchmark_methods`), la production
      reste `fusion.method: logistic` tant que rien n'est tranché (n° 119). Organisation
-     (question de Léonard) : `blanci/regularization.py` est l'index de toutes les
+     (question de Léonard) : `blanci/heads/regularization.py` est l'index de toutes les
      régularisations programmées (tableau « où, comment l'activer ») et contient celles qui
      transforment les entrées, les poids ou la pénalité (R13–R21, R27, R28, R36, R37) ainsi
      que R40/R42, qui entourent l'entraînement des têtes torch (`fit_with_options`, déplacé
@@ -1947,7 +1947,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      la fusion (R50 `fusion.py`, R57 `stacking.py`). R51–R56 et R58 : expliquées à Léonard,
      en discussion.
 
-121. **La mécanique des régularisations regroupée dans `blanci/regularization.py` ; R59, R62,
+121. **La mécanique des régularisations regroupée dans `blanci/heads/regularization.py` ; R59, R62,
      R63 ; tri de la section F** (demande de Léonard : ne pas se perdre dans un projet qui
      grandit). Le module contient désormais la mécanique de toutes les régularisations qui en
      ont une, et les autres modules l'appellent là où elle prend effet :
@@ -2008,7 +2008,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      l'écrêtage du gradient était déjà dans `optimise`, avec le warm-up.
 
 124. **Nouvelles têtes : R66 (`dann`), R67 (`multiclass`), R81 (`+R81`).**
-     - R66, `blanci/dann.py` : h = tanh(A·x̃ + a), score = w·h + b ; un classifieur de micro
+     - R66, `blanci/heads/dann.py` : h = tanh(A·x̃ + a), score = w·h + b ; un classifieur de micro
        branché sur h à travers une inversion du gradient (`grad_reverse`), dont la force monte
        de 0 à `strength` (`dann_strength`). Le micro n'est appris que sur les négatifs par
        défaut (`domain_on`), comme R21. R40, R42, R46, R59, R64 par suffixe. Données simulées du
@@ -2036,7 +2036,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      variantes plutôt que tout tester (et R74 pour mesurer la part de chance). R83 : à faire
      plus tard. R84 : en place (20 % aléatoire stratifié par micro et heure). R73 : en
      discussion (origine du plancher 0,1 et correction de la prévalence, voir la réponse du
-     26/09). R78 : `blanci anuraset-heads` (config `config/anuraset.yaml`) — toutes les têtes
+     26/09). R78 : `blanci anuraset heads` (config `anuraset/anuraset.yaml`) — toutes les têtes
      sans jetons, un pli par site, réglages choisis par des plis internes eux aussi par site,
      régularisations groupées par site ; AP de chaque tête sur chaque site tenu à l'écart.
      Section E (R51–R56, R58) : en attente de Léonard.
@@ -2178,21 +2178,21 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      le même effet.
 
 134. **`regularization.py` devient un paquet.** À ~2 100 lignes, découpé comme Léonard
-     l'avait demandé (« si c'est trop long, des sous-modules ») : `blanci/regularization/`
+     l'avait demandé (« si c'est trop long, des sous-modules ») : `blanci/heads/regularization/`
      avec `names` (noms des têtes, validation), `windows` (R13, R15, R17–R21, R36,
      indicatrices R37), `assembly` (`Context`, `Regularizer`, `regularizer_for`), `selection`
      (R26, R40, R74–R76, R79, R81), `torch_training` (R40–R47, R59, R61–R64, R66), `glmm`
      (R37), `fusion_logistic` (R50, R52–R56), `decision` (R73), `classes` (R67), `neighbors`
      (R39). Le code est déplacé tel quel (découpage par sections, imports entre sous-modules
      calculés, aucun cycle) ; `__init__.py` garde l'index et réexporte tout :
-     `from blanci.regularization import …` ne change nulle part. Suite de tests identique
+     `from blanci.heads.regularization import …` ne change nulle part. Suite de tests identique
      avant et après (793 réussis).
 
 135. **AP moyenne par pli et recalibration par pli (remèdes du n° 133).** Accord de Léonard
      (28/09), sans conclusion avant les grands jeux (base complète, AnuraSet).
      (a) Toujours là : `ap_fold_mean`, l'AP de chaque pli (ses scores entre eux) moyennée
      sur les plis à deux classes (`evaluate.fold_mean_ap`, option `folds` de `evaluate`),
-     dans `heads`, `fusion-bench`, `anuraset-heads`, le benchmark des encodeurs et
+     dans `heads`, `fusion-bench`, `anuraset heads`, le benchmark des encodeurs et
      AnuraSet. Elle ne met jamais bout à bout deux modèles : elle ne voit que le classement.
      Plus bruitée (peu de positifs par pli) : elle se lit à côté de l'AP poolée. Un grand
      écart entre les deux signale des plis sur des échelles différentes.
@@ -2217,7 +2217,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      train` n'est pas touché (seuil sur les scores hors-pli bruts) : à reprendre si l'option
      est retenue.
 
-136. **Campagne AnuraSet d'un seul tenant : `blanci anuraset-campaign`.** Demande de Léonard
+136. **Campagne AnuraSet d'un seul tenant : `blanci anuraset campaign`.** Demande de Léonard
      (28/09) : choisir les espèces, encoder, benchmarker, essayer les régularisations. Dans
      cet environnement cloud, l'accès réseau est restreint : zenodo.org (les données
      AnuraSet), huggingface.co et kaggle.com (les poids des encodeurs) sont refusés par le
@@ -2225,7 +2225,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      téléchargée ici, et aucun résultat réel n'existe encore. Tout est prêt pour qu'une seule
      commande fasse la campagne dès que les données sont là (cloud avec zenodo.org et
      huggingface.co autorisés, ou un poste bien connecté) :
-         uv run blanci --config config/anuraset.yaml anuraset-campaign --encoders perch_v2
+         uv run blanci --config anuraset/anuraset.yaml anuraset campaign --encoders perch_v2
      Étapes, reprenables : extraction et inventaire (`prepare`) ; profil des espèces et
      fréquence dominante ; choix des espèces (`choose_species`, sauf `anuraset.species` ou
      `--species`) par niveaux : d'abord note ≤ 0,3 s en 3–6 kHz avec ≥ 300 chants (proche
@@ -2258,7 +2258,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      Encodés : les 1 206 aux chants datés et les 393 sans aucune espèce (vrais négatifs,
      labels faibles) ; 13 écartés (espèce signalée sans chant daté). perch_v2 via bacpipe
      installé sans ses dépendances lourdes (ONNX, ni TensorFlow ni CUDA) ; fenêtres de 5 s
-     jointives (`encoders.overlap: 0` dans `config/anuraset.yaml`) : 19 080 fenêtres en 37 min
+     jointives (`encoders.overlap: 0` dans `anuraset/anuraset.yaml`) : 19 080 fenêtres en 37 min
      (15,5 fenêtres/s, 4 cœurs).
      Espèces : les 5 présentes sur au moins 2 sites sont DENMIN, LEPLAT, PITAZU, BOAFAB,
      PHYCUV. Retenues : DENMIN (5,3 kHz, 3 sites, l'analogue le plus proche d'A. blanci),
@@ -2315,7 +2315,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
        (`weak_only_files`, `window_labels(unsure_files=…)`) ; la docstring de
        `campaign_recordings` le promettait sans le faire.
      `anuraset.weak_labels` donné mais absent : erreur explicite (avant : aucun vrai négatif,
-     sans un mot). En-tête de `config/anuraset.yaml` : le stock s'appelle
+     sans un mot). En-tête de `anuraset/anuraset.yaml` : le stock s'appelle
      `perch_v2-bacpipe1.3.5@o0`. Pas de réencodage : seuls les labels et l'évaluation
      changent. Les chiffres du n° 137 sont à refaire.
 
@@ -2428,7 +2428,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
        `torch_training`, l'export) et `onnx` (< 1.18 : les suivantes veulent ml-dtypes ≥ 0.5,
        TensorFlow 2.15 le fige en 0.3). Sans `onnx`, `torch.onnx.export` échouait : l'export
        du livrable ne pouvait pas tourner.
-     - `tests/test_onnx_export.py` : export d'un petit réseau, équivalence torch/ONNX
+     - `tests/embedding/test_onnx_export.py` : export d'un petit réseau, équivalence torch/ONNX
        (cosinus > 0,999), axe de lot dynamique, rééchantillonnage, paquet corrompu ou
        manifeste incomplet refusés, quantification int8 (cosinus moyen > 0,99).
      - `regularization.torch_training` : `import_torch`, `feature_scaling`, `balanced_bce`,
@@ -2471,7 +2471,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      site, une espèce par processus (1 thread BLAS), Holm sur toutes les espèces. Rapports :
      `documentation/benchmarks/2026-09-29_anuraset_{protoclr,perch_bird,birdnet}/` ; outils
      communs (encodage, une espèce par processus, rassemblement, modèle de `generer.py`) :
-     `scripts/anuraset/`.
+     `anuraset/`.
      - Logistique, AP poolée (DENMIN / PITAZU / PHYCUV / LEPLAT / BOAFAB) : perch_v2 0,91 /
        0,74 / 0,89 / 0,79 / 0,97 (n° 141) ; perch_bird 0,93 / 0,76 / 0,84 / 0,75 / 0,98 ;
        birdnet 0,92 / 0,68 / 0,58 / 0,34 / 0,96 ; protoclr 0,57 / 0,24 / 0,14 / 0,33 / 0,85.
@@ -2528,7 +2528,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      positif). Unité commune : la minute (max des fenêtres), seule identique pour des grilles de
      3, 5 et 6 s ; référence fixée d'avance, perch_v2 + logistique ; Holm. Rapport :
      `documentation/benchmarks/2026-09-29_anuraset_global/RAPPORT.md` ; outils :
-     `scripts/anuraset/global_bench.py`, `rassembler_global.py` ; sorties brutes : branche
+     `anuraset/global_bench.py`, `rassembler_global.py` ; sorties brutes : branche
      `resultats-anuraset-07`.
      - AP moyenne par site (minute, moyenne des 5 espèces) : perch_v2 0,79, perch_bird 0,78
        (aucun écart significatif, Holm), birdnet 0,68 (égal sur DENMIN, PITAZU, BOAFAB ; −0,15
@@ -2594,7 +2594,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
 
 152. **Prérequis de la vague d'encodage 2 : jetons, têtes sur jetons, classifieur de BirdNET 3,
      esp-aves2.** Codés et testés sur de vrais enregistrements d'AnuraSet (plan des sessions :
-     `scripts/anuraset/VAGUE_ENCODAGE_2.md`).
+     `anuraset/VAGUE_ENCODAGE_2.md`).
      - Jetons (`BacpipeEncoder.embed_tokens`) : Bird-MAE (dernière couche cachée, jeton de
        classe retiré, 32 temps × 8 fréquences), BEATs et NatureBEATs (jetons avant la moyenne de
        bacpipe, 31 × 8), AudioProtoPNet (carte de la dernière couche, 19 × 8, celle que lit sa
@@ -2603,7 +2603,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
        extrait tout un stock (Bird-MAE-Base : ~2,5 s par enregistrement, ≈ 1 Go en float16,
        moyenne sur la fréquence).
      - Têtes sur jetons (`global_bench.py --tokens`, transfert seul) : `attentive`,
-       `logistic:max`, et `proto_probe`, nouvelle sonde à prototypes (`blanci/proto_probe.py` :
+       `logistic:max`, et `proto_probe`, nouvelle sonde à prototypes (`blanci/heads/proto_probe.py` :
        K = 8 prototypes appris, cosinus avec chaque jeton, maximum sur la fenêtre, couche
        linéaire ; version simplifiée du sondage par prototypes des auteurs de Bird-MAE).
        `simple_prototype` rejoint les têtes du transfert (tête d'origine de protoclr et de
@@ -2612,7 +2612,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
        l'encodage comme les logits de perch_v2 (`logit_classes` : DENMIN, LEPLAT, PHYCUV,
        BOAFAB sous « Hypsiboas faber », *A. baeobatrachus*) ; `global_bench.py --native` les
        juge sans entraînement. 32 kHz, fenêtres de 3 s, 1 280 dimensions (vérifié).
-     - esp-aves2 : `blanci/encoders/avex_encoder.py` (`backend: avex`, dix entrées dans
+     - esp-aves2 : `blanci/embedding/encoders/avex_encoder.py` (`backend: avex`, dix entrées dans
        `encoders.models`), fenêtres de 5 s (grille de perch_v2). Embedding : l'agrégation d'AVEX
        (jeton de classe pour EAT, moyenne pour BEATs et EfficientNet) ; jetons en grille, sans
        les lignes de temps du complément à 10 s d'EAT (vérifié : elles ne varient plus d'une
@@ -2789,7 +2789,7 @@ de Léonard, 01/10/2026.
      | `documentation/feuille-de-route-V5.md` | fusionnée dans le cadre de ce fichier (n° 162) |
      | `documentation/regularizations/tableaux/` | `documentation/tableaux/` (tableaux de tous les benchmarks) |
      | `documentation/regularizations/regularisation.md` | `documentation/regularizations/regularizations.md` |
-     | `documentation/benchmarks/outils_anuraset/` | `scripts/anuraset/` (du code, pas de la documentation) |
+     | `documentation/benchmarks/outils_anuraset/` | `scripts/anuraset/` (du code, pas de la documentation), puis `anuraset/` (n° 166) |
      | `LISEZMOI.md` (racine) | supprimé : reste d'une branche de résultats, chemins disparus |
      | `documentation/Offre de stage_VF.pdf` | supprimé : doublon de `documentation/biblio/` |
      | `documentation/prez/Presentation_suivi_2.key` | supprimé : le `.pptx` fait foi |
@@ -2802,9 +2802,28 @@ de Léonard, 01/10/2026.
 
 165. **Branches `donnees-anuraset-*`** : conservées hors de `main`. Elles portent les embeddings et
      la base AnuraSet (6 branches, 15 à 70 Mo chacune, ≈ 280 Mo non compressés en tout) que
-     `scripts/anuraset/importer_stock.py` lit ; ce sont des données publiques (AnuraSet, CC BY).
+     `anuraset/importer_stock.py` lit ; ce sont des données publiques (AnuraSet, CC BY).
      Hébergement à trancher (Git LFS, Zenodo ou pièce jointe de version) ; en attendant elles
      n'encombrent pas l'arbre de `main`. Le pack git local pèse 580 Mo parce que l'historique
      contient aussi les anciennes sorties brutes (n° 161), l'échantillon audio, les
      présentations et les PDF.
 
+166. **`blanci/` et `tests/` rangés par étape de la chaîne** (question de Léonard : 69 modules par
+     ordre alphabétique, illisibles pour un encadrant). Un sous-paquet par étape, dans l'ordre où
+     les données la traversent : `core` (config, db, audio), `inputs` (ingest, qc, labels,
+     dataset, frozen), `embedding` (grid, encoders/, embed, store, index), `heads` (têtes,
+     pooling, losses, dann, sequential, baselines, cluster, finetune, detectors/,
+     regularization/), `combination` (stacking, fusion, ensemble), `evaluation` (evaluate, oof,
+     benchmarks, throughput, qc_calibration, anuraset), `annotation` (selection, active,
+     workbench, app), `results` (aggregate, activity), `exploration` (modules des notebooks) ;
+     `cli` et `service` restent à la racine. Le `__init__.py` de chaque sous-paquet donne le rôle
+     de chacun de ses modules ; `tests/` suit la même arborescence. Noms anglais comme le code et
+     les sous-paquets existants ; `inputs` plutôt que `data` (ignoré par `.gitignore`, confondu
+     avec `data/`), `combination` et `exploration` plutôt que `fusion` et `explore` (noms de
+     modules qu'ils contiennent). Les imports `blanci.<module>` deviennent
+     `blanci.<étape>.<module>`, partout (code, tests, notebooks, documentation, journal).
+     AnuraSet, terminé, est isolé : `scripts/anuraset/` et `config/anuraset.yaml` réunis dans
+     `anuraset/` à la racine (gardés pour reproduire les rapports 02 à 08), commandes regroupées
+     sous `blanci anuraset prepare|profile|benchmark|heads|campaign` (hors de l'aide principale).
+     Au passage : les `generer.py` des rapports cherchaient `documentation/benchmarks/tableaux/`,
+     déplacé en `documentation/tableaux/` (n° 164).

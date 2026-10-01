@@ -23,7 +23,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from blanci.labels import POSITIVE_LABELS
+from blanci.inputs.labels import POSITIVE_LABELS
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = Path(__file__).resolve().parent / "inventaire"

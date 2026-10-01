@@ -168,7 +168,7 @@ head:
     methods: [prototype, logistic, simple_prototype, exemplar, logistic_to_prototype, lda_shrunk,
               exemplar:k=3, knn, knn:k=3]
 
-# Régularisations des têtes (DECISIONS n° 108, `blanci/regularization/`), numérotées comme la
+# Régularisations des têtes (DECISIONS n° 108, `blanci/heads/regularization/`), numérotées comme la
 # liste du 25/09/2026 (documentation/regularizations/regularizations.md). Toutes coupées : on les active tête par
 # tête dans le nom, `blanci heads --methods logistic,logistic+R18,logistic+R19+R18=16` (« =v »
 # remplace le réglage principal, noté ◆). Le nom canonique (R triées) est celui des rapports et
@@ -380,13 +380,13 @@ sequential:
       notes: {enabled: false, min_count: 1}        # débuts de notes de durée compatible
       rhythm: {enabled: false, min_count: 1}       # intervalles entre notes d'A. blanci
 
-# Détecteurs audio → score, sans encodeur de fondation (DECISIONS n° 97, `blanci/detectors/`).
+# Détecteurs audio → score, sans encodeur de fondation (DECISIONS n° 97, `blanci/heads/detectors/`).
 # Emplacements réservés, `blanci detector-bench --detector <nom>` les jugera sur les mêmes plis.
 detectors:
   distilled: {band_hz: [3000, 7000]}   # distillation de la chaîne gelée (§3, après M4)
   homemade: {band_hz: [3000, 7000]}    # modèle fait maison, entraîné sur les labels
 
-# Fine-tuning / LoRA de l'encodeur (DECISIONS n° 97, `blanci/finetune.py`) : emplacement réservé,
+# Fine-tuning / LoRA de l'encodeur (DECISIONS n° 97, `blanci/heads/finetune.py`) : emplacement réservé,
 # conditionné (§3). Un encodeur adapté sort en paquet ONNX et se branche comme les autres.
 finetune:
   method: lora                      # lora | full

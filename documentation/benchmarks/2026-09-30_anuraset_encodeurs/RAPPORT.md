@@ -170,7 +170,7 @@ jetons : refait ici, `global_bench.py perch_v2 <ESPECE> sorties --tokens`, jeton
 `jetons.py perch_v2`, 45 min).
 
 ```
-uv run python scripts/anuraset/rassembler_08.py <sorties> documentation/benchmarks/2026-09-30_anuraset_encodeurs
+uv run python anuraset/rassembler_08.py <sorties> documentation/benchmarks/2026-09-30_anuraset_encodeurs
 uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
 ```
 
@@ -184,7 +184,7 @@ quand leurs sorties seront sur `resultats-anuraset-07` : reporter leur débit (f
 ```
 git fetch origin resultats-anuraset-07
 mkdir -p /tmp/g08 && git archive origin/resultats-anuraset-07 resultats/global | tar -x -C /tmp/g08
-uv run python scripts/anuraset/rassembler_08.py /tmp/g08/resultats/global documentation/benchmarks/2026-09-30_anuraset_encodeurs
+uv run python anuraset/rassembler_08.py /tmp/g08/resultats/global documentation/benchmarks/2026-09-30_anuraset_encodeurs
 uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
 ```
 

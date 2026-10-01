@@ -14,7 +14,7 @@ ruff propre.
 | Fenêtres jointives : un chant à cheval sur la jonction rendait les deux fenêtres NaN | Chants perdus, biais vers les chants centrés | La fenêtre qui porte la plus grande part du chant devient positive. Positives : DENMIN 1 813 → 2 001, PHYCUV 905 → 984, PITAZU 1 415 → 1 475, BOAFAB 1 814 → 1 857 (n° 138) |
 | Fichier gardé pour une espèce, qui en signale une autre sans chant daté : compté négatif pour l'autre | Positifs cachés parmi les négatifs : PITAZU 25 fichiers, PHYCUV 20, LEPLAT 12, DENMIN 9, BOAFAB 6 | Fenêtres écartées pour cette espèce (`weak_only_files`) |
 | `weak_labels.csv` absent : aucun vrai négatif, sans avertissement | Campagne faussée en silence | Erreur explicite |
-| En-tête de `config/anuraset.yaml` : nom de stock sans `@o0` | « Aucun embedding » | Corrigé |
+| En-tête de `anuraset/anuraset.yaml` : nom de stock sans `@o0` | « Aucun embedding » | Corrigé |
 
 ### Méthode d'évaluation (métriques trop optimistes)
 

@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from blanci.config import load_config
-from blanci.encoders.base import BaseEncoder
+from blanci.core.config import load_config
+from blanci.embedding.encoders.base import BaseEncoder
 
 
 def write_wav(

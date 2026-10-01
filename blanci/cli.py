@@ -15,16 +15,19 @@ from typing import Annotated, Any
 import pandas as pd
 import typer
 
-from blanci.activity import write_activity_report
-from blanci.baselines import run_baselines, write_baseline_report
-from blanci.benchmark import run_benchmark, write_report
-from blanci.config import config_path, load_config, project_path
-from blanci.dataset import benchmark_subset, current_labels, recordings_table
-from blanci.db import connect
-from blanci.embed import embed_recordings, select_recordings
-from blanci.encoders import get_encoder
-from blanci.frozen import freeze as freeze_recordings
-from blanci.grid import (
+from blanci.annotation.workbench import agreement as annotator_agreement
+from blanci.annotation.workbench import (
+    blancinet_candidates,
+    congener_candidates,
+    flagged_candidates,
+    random_candidates,
+    recording_candidates,
+)
+from blanci.core.config import config_path, load_config, project_path
+from blanci.core.db import connect
+from blanci.embedding.embed import embed_recordings, select_recordings
+from blanci.embedding.encoders import get_encoder
+from blanci.embedding.grid import (
     containing_windows,
     hop_for_overlap,
     max_hop_without_cut,
@@ -32,16 +35,26 @@ from blanci.grid import (
     overlap_of,
     window_grid,
 )
-from blanci.ingest import ingest as run_ingest
-from blanci.labels import POSITIVE_LABELS, import_detections, import_label_file
-from blanci.qc import (
+from blanci.evaluation.benchmark import run_benchmark, write_report
+from blanci.evaluation.throughput import (
+    machine_description,
+    measure_in_subprocess,
+    write_throughput_report,
+)
+from blanci.heads.baselines import run_baselines, write_baseline_report
+from blanci.heads.sequential import Upstream, compute_onsets, upstream_from_cfg
+from blanci.inputs.dataset import benchmark_subset, current_labels, recordings_table
+from blanci.inputs.frozen import freeze as freeze_recordings
+from blanci.inputs.ingest import ingest as run_ingest
+from blanci.inputs.labels import POSITIVE_LABELS, import_detections, import_label_file
+from blanci.inputs.qc import (
     AUDIO_FLAGS,
     apply_annotation_flags,
     apply_audio_flags,
     apply_metadata_flags,
     parse_flags,
 )
-from blanci.sequential import Upstream, compute_onsets, upstream_from_cfg
+from blanci.results.activity import write_activity_report
 from blanci.service import (
     activity_curves,
     append_label,
@@ -58,19 +71,6 @@ from blanci.service import (
     upstream_bench,
 )
 from blanci.service import retrain as retrain_head
-from blanci.throughput import (
-    machine_description,
-    measure_in_subprocess,
-    write_throughput_report,
-)
-from blanci.workbench import agreement as annotator_agreement
-from blanci.workbench import (
-    blancinet_candidates,
-    congener_candidates,
-    flagged_candidates,
-    random_candidates,
-    recording_candidates,
-)
 
 # Console Windows en cp1252 : « ≥ », « → » ou « é » y feraient planter l'affichage (aide
 # comprise, écrite avant tout callback) quand la sortie est redirigée. La CLI écrit en UTF-8.
@@ -79,6 +79,12 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 app = typer.Typer(help="Détection acoustique d'Anomaloglossus blanci.", no_args_is_help=True)
+# Pré-benchmark AnuraSet (§2), terminé : rangé à part pour ne pas encombrer l'aide (`anuraset/`).
+anuraset_app = typer.Typer(
+    help="Pré-benchmark AnuraSet (terminé, archivé) : lancer avec --config anuraset/anuraset.yaml.",
+    no_args_is_help=True,
+)
+app.add_typer(anuraset_app, name="anuraset")
 
 
 def _cfg(ctx: typer.Context) -> dict[str, Any]:
@@ -104,7 +110,7 @@ def main(
     ] = None,
 ) -> None:
     ctx.obj = load_config(config)
-    from blanci.regularization import configure
+    from blanci.heads.regularization import configure
 
     configure(ctx.obj)  # R75 : règle de choix des réglages (head.selection_rule)
 
@@ -421,8 +427,8 @@ def heads(
 ) -> None:
     """Benchmark des têtes (DECISIONS n° 92) : recherche par l'exemple, prototypes, kNN, linear
     probe (et ses poolings), attentive, cascade ; mêmes fenêtres, mêmes plis."""
-    from blanci.benchmark import to_markdown
-    from blanci.head_benchmark import run_head_benchmark
+    from blanci.evaluation.benchmark import to_markdown
+    from blanci.evaluation.head_benchmark import run_head_benchmark
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -495,8 +501,8 @@ def heads_curve(
 ) -> None:
     """Courbe selon le nombre d'annotations du site cible (DECISIONS n° 93) : le prototype
     différentiel fait-il mieux que le linear probe sur un site peu annoté ?"""
-    from blanci.benchmark import to_markdown
-    from blanci.head_benchmark import annotation_curve, plot_curve
+    from blanci.evaluation.benchmark import to_markdown
+    from blanci.evaluation.head_benchmark import annotation_curve, plot_curve
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -561,7 +567,7 @@ def upstream_bench_command(
     """Banc d'essai des portes du module séquentiel en amont (DECISIONS n° 90, 103) : fenêtres
     arrêtées contre positifs perdus, porte par porte et seuil par seuil. Lit l'audio (lecture
     seule)."""
-    from blanci.benchmark import to_markdown
+    from blanci.evaluation.benchmark import to_markdown
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -1029,8 +1035,8 @@ def fusion_bench(
     """Benchmark de la fusion (DECISIONS n° 94–95) : emplacement du module séquentiel ×
     méthode de fusion (pondération apprise, fixée, cherchée, moyenne, rangs, OU, ET), contre la
     tête seule, avec la part de chaque entrée."""
-    from blanci.benchmark import to_markdown
-    from blanci.stacking import fusion_benchmark, positions_from
+    from blanci.combination.stacking import fusion_benchmark, positions_from
+    from blanci.evaluation.benchmark import to_markdown
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -1083,8 +1089,8 @@ def ensemble(
 ) -> None:
     """Ensemble de modèles (DECISIONS n° 96) : combinaison par enregistrement de sources du
     stock hors-pli (`blanci sources` les liste), ou concaténation d'embeddings."""
-    from blanci.benchmark import to_markdown
-    from blanci.ensemble import concat_benchmark, run_ensemble
+    from blanci.combination.ensemble import concat_benchmark, run_ensemble
+    from blanci.evaluation.benchmark import to_markdown
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -1122,7 +1128,7 @@ def ensemble(
 def sources(ctx: typer.Context) -> None:
     """Sources du stock de scores hors-pli : ce que le benchmark complet et les ensembles
     peuvent comparer ou combiner."""
-    from blanci.oof import list_sources
+    from blanci.evaluation.oof import list_sources
 
     table = list_sources(_cfg(ctx))
     if table.empty:
@@ -1144,7 +1150,7 @@ def detector_bench(
 ) -> None:
     """Banc d'essai d'un détecteur audio → score (DECISIONS n° 97) : hors-pli sur les plis
     communs s'il apprend, scores rangés dans le stock commun. Lit l'audio (lecture seule)."""
-    from blanci.detectors import evaluate_detector, get_detector
+    from blanci.heads.detectors import evaluate_detector, get_detector
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -1177,8 +1183,8 @@ def benchmark_all(
 ) -> None:
     """Benchmark complet des modèles (DECISIONS n° 98) : encodeurs × têtes, baselines,
     fusions, ensembles, détecteurs, Blancinet, sur les mêmes enregistrements."""
-    from blanci.benchmark import to_markdown
-    from blanci.full_benchmark import external_source, run_full_benchmark
+    from blanci.evaluation.benchmark import to_markdown
+    from blanci.evaluation.full_benchmark import external_source, run_full_benchmark
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -1265,7 +1271,7 @@ def select(
 ) -> None:
     """Outil de sélection (DECISIONS n° 99) : une méthode, une file candidats_<nom>.csv pour le
     poste d'annotation."""
-    from blanci.selection import select_candidates, write_queue
+    from blanci.annotation.selection import select_candidates, write_queue
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -1298,7 +1304,7 @@ def cluster_status_command(
     encoder: Annotated[str, typer.Option(help="Stock d'encodeur des groupes.")],
 ) -> None:
     """Groupes de `select --method cluster` : écoutes faites, labels entendus, homogénéité."""
-    from blanci.selection import cluster_status
+    from blanci.annotation.selection import cluster_status
 
     cfg = _cfg(ctx)
     table = cluster_status(
@@ -1325,7 +1331,7 @@ def cluster_label_command(
 ) -> None:
     """Étiquetage en bloc d'un groupe homogène (§5 bis, C2) : toutes ses fenêtres non écoutées
     reçoivent le label entendu (source « bulk »)."""
-    from blanci.selection import label_cluster
+    from blanci.annotation.selection import label_cluster
 
     cfg = _cfg(ctx)
     written = label_cluster(
@@ -1352,8 +1358,8 @@ def yapat_export(
 ) -> None:
     """Extraits WAV d'une file + manifest.csv, pour YAPAT ou tout outil externe. Lecture seule
     de l'audio d'origine ; l'export est écrit sous paths.exports."""
-    from blanci.selection import export_clips
-    from blanci.workbench import load_candidates
+    from blanci.annotation.selection import export_clips
+    from blanci.annotation.workbench import load_candidates
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -1375,7 +1381,7 @@ def yapat_import(
     annotator: Annotated[str | None, typer.Option(help="Qui a annoté.")] = None,
 ) -> None:
     """Relit les réponses d'un outil externe sur des extraits exportés (source « yapat »)."""
-    from blanci.selection import import_clip_labels
+    from blanci.annotation.selection import import_clip_labels
 
     cfg = _cfg(ctx)
     written = import_clip_labels(
@@ -1392,7 +1398,7 @@ def yapat_import(
 def qc_calibrate(ctx: typer.Context) -> None:
     """Seuils du contrôle qualité mesurés sur les fenêtres étiquetées (lit l'audio, n'écrit
     rien dans la config) : effet des seuils actuels et seuils proposés."""
-    from blanci.qc_calibration import (
+    from blanci.evaluation.qc_calibration import (
         calibration_indices,
         current_flags,
         labelled_windows,
@@ -1442,14 +1448,14 @@ def tokens(
     )
 
 
-@app.command("anuraset-prepare")
+@anuraset_app.command("prepare")
 def anuraset_prepare(ctx: typer.Context) -> None:
-    """AnuraSet (§2) : extrait raw_data.zip et l'inventorie (--config config/anuraset.yaml)."""
-    from blanci.anuraset import prepare
+    """AnuraSet (§2) : extrait raw_data.zip et l'inventorie (--config anuraset/anuraset.yaml)."""
+    from blanci.evaluation.anuraset import prepare
 
     cfg = _cfg(ctx)
     if "anuraset" not in cfg:
-        raise typer.BadParameter("lancer avec --config config/anuraset.yaml")
+        raise typer.BadParameter("lancer avec --config anuraset/anuraset.yaml")
     report = prepare(connect(config_path(cfg, "db")), cfg)
     typer.echo(
         f"{report['extracted']} fichiers extraits, {report['added']} inventoriés, "
@@ -1477,7 +1483,7 @@ def prevalence(ctx: typer.Context) -> None:
         typer.echo("moins de 20 positives : intervalle large, à consolider avant de s'en servir")
 
 
-@app.command("anuraset-heads")
+@anuraset_app.command("heads")
 def anuraset_heads(
     ctx: typer.Context,
     encoder: Annotated[str, typer.Option(help="Stock d'encodeur AnuraSet (identifiant).")],
@@ -1490,11 +1496,15 @@ def anuraset_heads(
     ] = None,
 ) -> None:
     """R78 : benchmark des têtes sur AnuraSet, un pli par site (généralisation entre sites)."""
-    from blanci.anuraset import read_strong_labels, run_anuraset_heads, write_anuraset_heads_report
+    from blanci.evaluation.anuraset import (
+        read_strong_labels,
+        run_anuraset_heads,
+        write_anuraset_heads_report,
+    )
 
     cfg = _cfg(ctx)
     if "anuraset" not in cfg:
-        raise typer.BadParameter("lancer avec --config config/anuraset.yaml")
+        raise typer.BadParameter("lancer avec --config anuraset/anuraset.yaml")
     chosen = _split(species) or list(cfg["anuraset"]["species"])
     if not chosen:
         raise typer.BadParameter("aucune espèce : --species ou anuraset.species (voir profile)")
@@ -1508,7 +1518,7 @@ def anuraset_heads(
     typer.echo(f"rapport : {path}")
 
 
-@app.command("anuraset-profile")
+@anuraset_app.command("profile")
 def anuraset_profile(
     ctx: typer.Context,
     audio: Annotated[
@@ -1516,7 +1526,7 @@ def anuraset_profile(
     ] = True,
 ) -> None:
     """Profil des espèces d'AnuraSet et suggestion d'espèces proches d'A. blanci (§2)."""
-    from blanci.anuraset import (
+    from blanci.evaluation.anuraset import (
         dominant_frequencies,
         read_strong_labels,
         species_profile,
@@ -1544,7 +1554,7 @@ def anuraset_profile(
     _write_csv(profile, config_path(cfg, "reports") / "anuraset_especes.csv", "profil")
 
 
-@app.command("anuraset-campaign")
+@anuraset_app.command("campaign")
 def anuraset_campaign(
     ctx: typer.Context,
     encoders: Annotated[
@@ -1561,7 +1571,7 @@ def anuraset_campaign(
     """Campagne AnuraSet d'un seul tenant (DECISIONS n° 136) : extraction et inventaire,
     profil des espèces et choix (note brève en 3–6 kHz d'abord), embeddings, encodeurs puis
     têtes et régularisations, un pli par site. Reprenable : ce qui est fait est sauté."""
-    from blanci.anuraset import (
+    from blanci.evaluation.anuraset import (
         choose_species,
         dominant_frequencies,
         prepare,
@@ -1573,7 +1583,7 @@ def anuraset_campaign(
 
     cfg = _cfg(ctx)
     if "anuraset" not in cfg:
-        raise typer.BadParameter("lancer avec --config config/anuraset.yaml")
+        raise typer.BadParameter("lancer avec --config anuraset/anuraset.yaml")
     acfg = cfg["anuraset"]
     con = connect(config_path(cfg, "db"))
     report = prepare(con, cfg)
@@ -1594,7 +1604,7 @@ def anuraset_campaign(
     if chosen.empty:
         raise typer.BadParameter("aucune espèce sur deux sites avec assez de chants")
     typer.echo("2. espèces : " + ", ".join(chosen["species"]))
-    from blanci.anuraset import campaign_recordings
+    from blanci.evaluation.anuraset import campaign_recordings
 
     weak = acfg.get("weak_labels")
     # Aucun drapeau QC n'écarte un enregistrement AnuraSet : jeu déjà trié par ses auteurs, et
@@ -1629,7 +1639,7 @@ def anuraset_campaign(
     typer.echo(f"rapport : {path}")
 
 
-@app.command("anuraset-benchmark")
+@anuraset_app.command("benchmark")
 def anuraset_benchmark(
     ctx: typer.Context,
     encoders: Annotated[str, typer.Option(help="Identifiants séparés par des virgules.")],
@@ -1638,7 +1648,7 @@ def anuraset_benchmark(
     ] = None,
 ) -> None:
     """Pré-benchmark AnuraSet (§2) : sondes par encodeur et par espèce, plis par site."""
-    from blanci.anuraset import (
+    from blanci.evaluation.anuraset import (
         read_strong_labels,
         run_anuraset_benchmark,
         write_anuraset_report,
@@ -1852,7 +1862,7 @@ def annotate(ctx: typer.Context) -> None:
     """Ouvre le poste d'annotation dans le navigateur (groupe `app` : uv sync --group app)."""
     import subprocess
 
-    app_file = Path(__file__).with_name("app.py")
+    app_file = Path(__file__).parent / "annotation" / "app.py"
     command = [sys.executable, "-m", "streamlit", "run", str(app_file), "--"]
     config = ctx.parent.params.get("config") if ctx.parent else None
     if config:

@@ -101,7 +101,7 @@ sur LEPLAT à INCT4.*
    apprend à reconstruire des patchs, pas à séparer des classes. Une fois moyennés sur toute
    la fenêtre, ses jetons séparent mal une note brève. Les auteurs de Bird-MAE proposent de
    le lire par une sonde sur les jetons (prototypes) plutôt que par la moyenne. Test : sonde
-   attentive sur les jetons (`blanci.attentive`, déjà prête pour perch_v2).
+   attentive sur les jetons (`blanci.heads.attentive`, déjà prête pour perch_v2).
 3. **Le seuil voyage encore moins.** Sur DENMIN, le rappel à précision 0,5 tombe à 0,12 avec
    un seuil choisi ailleurs (0,63 sur place). Des scores moins séparés rendent le seuil plus
    sensible au décalage entre sites (hypothèse 5 du benchmark 01).
@@ -144,10 +144,10 @@ sur LEPLAT à INCT4.*
 
 ```
 # encodage (1 599 enregistrements, sélection du n° 141) : data/runs/encode_birdmae.py,
-# équivalent à l'étape 3 de anuraset-campaign avec --encoders birdmae_huge
-uv run blanci --config config/anuraset.yaml anuraset-heads \
+# équivalent à l'étape 3 de anuraset campaign avec --encoders birdmae_huge
+uv run blanci --config anuraset/anuraset.yaml anuraset heads \
     --encoder birdmae_huge-bacpipe1.3.5@o0 --species DENMIN \
-    --methods "$(python -c 'from blanci.anuraset import CAMPAIGN_HEADS as H; print(",".join(H))')"
+    --methods "$(python -c 'from blanci.evaluation.anuraset import CAMPAIGN_HEADS as H; print(",".join(H))')"
 uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_birdmae_huge/generer.py
 ```
 

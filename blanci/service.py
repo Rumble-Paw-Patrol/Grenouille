@@ -18,17 +18,39 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from blanci.active import build_queue
-from blanci.activity import (
-    curve_correlation,
-    daily_probability,
-    detections_table,
-    diel_index,
-    reference_checks,
+from blanci.annotation.active import build_queue
+from blanci.combination.fusion import FusionWeights
+from blanci.core.config import config_path
+from blanci.core.db import encoder_params, model_params, next_version, register_model, utc_now
+from blanci.embedding.index import search
+from blanci.embedding.store import EmbeddingStore, gated_mask
+from blanci.evaluation.evaluate import (
+    evaluate,
+    false_alarms_per_hour,
+    paired_bootstrap,
+    recall_at_precision,
+    recall_by_group,
+    to_recordings,
+    wilson_interval,
 )
-from blanci.aggregate import aggregate_recording, rank_points
-from blanci.config import config_path
-from blanci.dataset import (
+from blanci.heads.head import Head, oof_scores, train_head
+from blanci.heads.regularization import (
+    cross_fitted_threshold,
+    fold_ids,
+    operating_curve,
+    platt,
+    precision_at_prevalence,
+    threshold_at_prevalence,
+)
+from blanci.heads.sequential import (
+    GATED_SCORE,
+    apply_gate,
+    load_onsets,
+    onset_counts,
+    onset_gates,
+    recording_persistence,
+)
+from blanci.inputs.dataset import (
     EXCLUDED_LABELS,
     current_labels,
     embedded_training_set,
@@ -38,39 +60,17 @@ from blanci.dataset import (
     recordings_table,
     training_set,
 )
-from blanci.db import encoder_params, model_params, next_version, register_model, utc_now
-from blanci.evaluate import (
-    evaluate,
-    false_alarms_per_hour,
-    paired_bootstrap,
-    recall_at_precision,
-    recall_by_group,
-    to_recordings,
-    wilson_interval,
+from blanci.inputs.frozen import frozen_recordings, frozen_versions
+from blanci.inputs.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
+from blanci.inputs.qc import apply_annotation_flags, is_excluded
+from blanci.results.activity import (
+    curve_correlation,
+    daily_probability,
+    detections_table,
+    diel_index,
+    reference_checks,
 )
-from blanci.frozen import frozen_recordings, frozen_versions
-from blanci.fusion import FusionWeights
-from blanci.head import Head, oof_scores, train_head
-from blanci.index import search
-from blanci.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
-from blanci.qc import apply_annotation_flags, is_excluded
-from blanci.regularization import (
-    cross_fitted_threshold,
-    fold_ids,
-    operating_curve,
-    platt,
-    precision_at_prevalence,
-    threshold_at_prevalence,
-)
-from blanci.sequential import (
-    GATED_SCORE,
-    apply_gate,
-    load_onsets,
-    onset_counts,
-    onset_gates,
-    recording_persistence,
-)
-from blanci.store import EmbeddingStore, gated_mask
+from blanci.results.aggregate import aggregate_recording, rank_points
 
 SCORE_CHUNK = 200_000
 
@@ -302,7 +302,7 @@ def estimate_prevalence(con: sqlite3.Connection, sources=("random", "audit")) ->
     choisies** (strate aléatoire de la file, audit d'enregistrements entiers), avec
     l'intervalle de Wilson. Jamais sur les autres sources : elles sont choisies parce qu'elles
     ont l'air positives."""
-    from blanci.labels import POSITIVE_LABELS
+    from blanci.inputs.labels import POSITIVE_LABELS
 
     labels = current_labels(con)
     labels = labels[labels["source"].isin(sources) & ~labels["label"].isin(EXCLUDED_LABELS)]
@@ -820,7 +820,7 @@ def run_clustering(
 
     Renvoie (résumé, tableau par groupe, groupe de chaque fenêtre).
     """
-    from blanci.cluster import (
+    from blanci.heads.cluster import (
         c0_summary,
         c1_verdict,
         cluster_embeddings,
@@ -899,7 +899,7 @@ def run_pca_curve(
     """Courbe « variance perdue selon le nombre de dimensions » (`cluster.pca_information_curve`)
     sur un échantillon du stock de l'encodeur (`cluster.c0_sample` fenêtres par défaut, les
     fenêtres arrêtées par le seuillage en amont exclues). Renvoie (résumé, courbe)."""
-    from blanci.cluster import components_for, pca_information_curve
+    from blanci.heads.cluster import components_for, pca_information_curve
 
     ccfg = cfg["cluster"]
     store = store_for(cfg, encoder_id)
@@ -1074,7 +1074,7 @@ def train_fusion(
     """Évalue puis enregistre la fusion (stacking, §3) au-dessus d'une tête enregistrée.
 
     Méthode (`fusion.method`), emplacement du module séquentiel (`sequential.position`) et
-    autres sources (`fusion.sources`) viennent de la config (`blanci/stacking.py`) :
+    autres sources (`fusion.sources`) viennent de la config (`blanci/combination/stacking.py`) :
 
     1. plis communs par micro : dans chaque pli, une tête entraînée sans le micro donne le
        score hors-pli des fenêtres étiquetées **et** de toutes les fenêtres de leurs
@@ -1083,7 +1083,7 @@ def train_fusion(
        par enregistrement) ; seuil de la fusion pris sur ses scores hors-pli ;
     3. fusion finale ajustée sur tout le jeu de développement, enregistrée en JSON.
     """
-    from blanci.stacking import build_level1, final_model, fused_oof, positions_from
+    from blanci.combination.stacking import build_level1, final_model, fused_oof, positions_from
 
     _, params = load_head(con, encoder_id, version)
     version = params["version"]
@@ -1189,9 +1189,9 @@ def fused_scores(
 
     Une fusion enregistrée avant la fusion à N entrées (clé `weights`) est relue telle quelle.
     """
-    from blanci.fusion import FusionModel, project_scores
-    from blanci.sequential import gate_mask
-    from blanci.stacking import congener_scores, sequential_features, store_rows
+    from blanci.combination.fusion import FusionModel, project_scores
+    from blanci.combination.stacking import congener_scores, sequential_features, store_rows
+    from blanci.heads.sequential import gate_mask
 
     persistence = recording_persistence(scored, fusion_params["persistence_threshold"])
     onsets = load_onsets(con, set(scored["recording_id"]))
@@ -1244,9 +1244,9 @@ def compute_tokens(
     Relit l'audio des enregistrements concernés (lecture seule) et repasse ces fenêtres dans
     l'encodeur : c'est un encodage, limité à ~1 500 fenêtres.
     """
-    from blanci.attentive import TokenStore
-    from blanci.audio import cut_windows, load_audio
-    from blanci.encoders import stock_id
+    from blanci.core.audio import cut_windows, load_audio
+    from blanci.embedding.encoders import stock_id
+    from blanci.heads.attentive import TokenStore
 
     if not encoder.has_tokens:
         raise ValueError(f"{encoder.name} n'expose pas de jetons (seul perch_v2 aujourd'hui)")
@@ -1463,8 +1463,8 @@ def window_gate_values(con: sqlite3.Connection, cfg: dict, windows: pd.DataFrame
     cache dans `paths.reports/upstream/gate_values.parquet` ; notes et rythme recomptés sur les
     débuts de notes rangés de l'enregistrement quand ils existent (les mêmes qu'à l'encodage et
     dans la fusion), sinon détectés dans la fenêtre."""
-    from blanci.baselines import read_windows
-    from blanci.sequential import GATES, ONSET_GATES, gate_values
+    from blanci.heads.baselines import read_windows
+    from blanci.heads.sequential import GATES, ONSET_GATES, gate_values
 
     cache_path = config_path(cfg, "reports") / "upstream" / "gate_values.parquet"
     cache = pd.read_parquet(cache_path) if cache_path.exists() else pd.DataFrame()
@@ -1513,8 +1513,8 @@ def upstream_bench(
       configurée, cette fois fidèle (tête réentraînée sans les fenêtres arrêtées, pli par
       pli), contre l'absence de porte, par bootstrap apparié.
     """
-    from blanci.baselines import evaluation_windows
-    from blanci.sequential import gate_mask, gate_sweep
+    from blanci.heads.baselines import evaluation_windows
+    from blanci.heads.sequential import gate_mask, gate_sweep
 
     bench, head_cfg = cfg["benchmark"], cfg["head"]
     X = None
