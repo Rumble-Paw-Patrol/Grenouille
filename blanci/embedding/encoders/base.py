@@ -68,7 +68,7 @@ class BaseEncoder:
     def _prepare(self, wav: np.ndarray, sr: int) -> np.ndarray:
         wav = np.atleast_2d(np.asarray(wav, dtype=np.float32))
         if sr != self.sample_rate:
-            wav = np.stack([resample(w, sr, self.sample_rate) for w in wav])
+            wav = resample(wav, sr, self.sample_rate)
         n = round(self.window_s * self.sample_rate)
         if wav.shape[1] != n:  # écart d'arrondi du rééchantillonnage ou fenêtre plus courte
             fixed = np.zeros((len(wav), n), dtype=np.float32)

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from blanci.core.db import connect, recording_id_for
-from blanci.embedding.embed import embed_recordings, month_of, select_recordings
+from blanci.embedding.embed import _ahead, embed_recordings, month_of, select_recordings
 from blanci.embedding.encoders.base import BaseEncoder
 from blanci.embedding.store import EmbeddingStore
 from tests.conftest import write_wav
@@ -218,6 +218,62 @@ def test_flush_does_not_lose_earlier_batches(workspace):
     meta, emb = EmbeddingStore(store_root, "fake-1").load()
     assert meta["recording_id"].nunique() == 5
     assert len(meta) == len(emb) == report.windows
+
+
+def test_interrupted_run_keeps_what_was_flushed_and_resumes(workspace):
+    """Un passage interrompu laisse des morceaux lisibles ; la reprise les fond et continue."""
+    con, raw, store_root = workspace
+    for i in range(5):
+        add_recording(con, raw, f"r{i}.wav", start="2026-02-10T13:00:00Z")
+
+    class Failing(FakeEncoder):
+        def _forward(self, batch):
+            if self.calls == 3:
+                raise RuntimeError("coupure")
+            return super()._forward(batch)
+
+    with pytest.raises(RuntimeError, match="coupure"):
+        embed_recordings(con, Failing(), recordings_of(con), raw, store_root, flush_every=1)
+    store = EmbeddingStore(store_root, "fake-1")
+    assert store.load()[0]["recording_id"].nunique() == 3
+    assert len(store.part_paths("2026", "mataroni", "202602")) == 3
+
+    report = embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root)
+    assert (report.skipped, report.recordings) == (3, 2)
+    assert [p.name for p in store.fragments()] == ["202602.parquet"]
+    meta, _ = store.load()
+    assert meta["recording_id"].nunique() == 5 and meta["window_id"].is_unique
+
+
+@pytest.mark.parametrize("ahead", [0, 1, 4])
+def test_reading_ahead_does_not_change_the_stock(workspace, ahead):
+    con, raw, store_root = workspace
+    for i in range(4):
+        add_recording(con, raw, f"r{i}.wav", start="2026-02-10T13:00:00Z")
+    (raw / "r2.wav").write_bytes(b"pas un WAV")
+    report = embed_recordings(
+        con, FakeEncoder(), recordings_of(con), raw, store_root / "a", ahead=ahead
+    )
+    assert (report.recordings, report.errors) == (3, 1)
+    meta, emb = EmbeddingStore(store_root / "a", "fake-1").load()
+    embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root / "b")
+    expected = EmbeddingStore(store_root / "b", "fake-1").load()
+    pd.testing.assert_frame_equal(meta, expected[0])
+    np.testing.assert_array_equal(emb, expected[1])
+
+
+def test_ahead_keeps_the_order_and_raises_in_turn():
+    def prepare(i):
+        if i == 3:
+            raise ValueError("trois")
+        return i * i
+
+    seen = []
+    with pytest.raises(ValueError, match="trois"):
+        for item, value in _ahead(range(6), prepare, ahead=2):
+            seen.append((item, value))
+    assert seen == [(0, 0), (1, 1), (2, 4)]
+    assert list(_ahead(range(3), prepare, ahead=0)) == [(0, 0), (1, 1), (2, 4)]
 
 
 def test_unreadable_file_is_counted_not_fatal(workspace):

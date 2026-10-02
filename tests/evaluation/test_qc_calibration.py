@@ -6,6 +6,20 @@ import soundfile as sf
 
 from blanci.core.config import load_config
 from blanci.evaluation.qc_calibration import calibration_indices, suggest_thresholds
+from blanci.inputs.qc import _welch, qc_indices
+
+
+def test_welch_by_chunks_matches_scipy():
+    from scipy.signal import welch
+
+    rng = np.random.default_rng(0)
+    for n in (48000 * 7 + 13, 4096, 3000, 500):  # long, deux segments, court, plus court qu'un
+        x = rng.normal(0, 0.1, n).astype(np.float32)
+        freqs, psd = _welch(x, 48000)
+        ref_freqs, ref = welch(x, fs=48000, nperseg=min(2048, n))
+        np.testing.assert_allclose(freqs, ref_freqs)
+        np.testing.assert_allclose(psd, ref, rtol=1e-5)
+    assert 0 < qc_indices(x, 48000)["hf_ratio"] < 1
 
 
 def _indices(rows):

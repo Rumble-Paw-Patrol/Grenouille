@@ -3,6 +3,9 @@
 Colonnes : window_id, recording_id, offset_s, emb (liste de taille fixe float16[dim]) ; `gated`
 (booléen) dans un stock encodé avec des portes : une fenêtre arrêtée a un embedding nul, jamais
 appris, et le score le plus bas (module séquentiel en amont, `blanci/heads/sequential.py`).
+
+Pendant un encodage, les fenêtres arrivent par morceaux `<aaaamm>.part-<n>.parquet` (`append`),
+lus comme leur partition et fondus dans son fichier en fin de partition (`consolidate`).
 """
 
 from __future__ import annotations
@@ -19,6 +22,10 @@ import pyarrow.parquet as pq
 META_COLUMNS = ["window_id", "recording_id", "offset_s"]
 GATED = "gated"  # colonne optionnelle : fenêtre arrêtée par une porte (seuillage en amont)
 PARTITION_KEYS = ("dataset", "site", "month")
+PART_MARK = ".part-"  # <aaaamm>.part-<n>.parquet : morceau en attente de `consolidate`
+# Dictionnaire pour les identifiants seulement : sur les embeddings (presque tous distincts),
+# il ralentit l'écriture d'un tiers et la lecture d'un facteur 4 sans rien gagner en taille.
+WRITE_OPTIONS = {"use_dictionary": ["window_id", "recording_id"]}
 
 
 def gated_mask(meta: pd.DataFrame) -> np.ndarray:
@@ -32,6 +39,33 @@ def _as_set(value: str | list[str] | None) -> set[str] | None:
     if value is None:
         return None
     return {value} if isinstance(value, str) else set(value)
+
+
+def _table(meta: pd.DataFrame, emb: np.ndarray) -> pa.Table:
+    values = pa.array(emb.reshape(-1), type=pa.float16())
+    return pa.Table.from_pandas(meta, preserve_index=False).append_column(
+        "emb", pa.FixedSizeListArray.from_arrays(values, emb.shape[1])
+    )
+
+
+def _write_atomic(table: pa.Table, path: Path) -> None:
+    """Écriture atomique : pas de fichier à moitié écrit."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".parquet.tmp")
+    pq.write_table(table, tmp, **WRITE_OPTIONS)
+    tmp.replace(path)
+
+
+def _merged(
+    old: tuple[pd.DataFrame, np.ndarray], new: tuple[pd.DataFrame, np.ndarray]
+) -> tuple[pd.DataFrame, np.ndarray]:
+    """`old` suivi de `new` ; une fenêtre de `old` reprise dans `new` est remplacée."""
+    (old_meta, old_emb), (meta, emb) = old, new
+    keep = ~old_meta["window_id"].isin(meta["window_id"]).to_numpy()
+    meta = pd.concat([old_meta[keep], meta], ignore_index=True)
+    if GATED in meta:
+        meta[GATED] = meta[GATED].astype("boolean").fillna(False).astype(bool)
+    return meta, np.concatenate([old_emb[keep], emb]).astype(np.float16, copy=False)
 
 
 @dataclass
@@ -57,21 +91,70 @@ class EmbeddingStore:
         meta = meta[columns].reset_index(drop=True)
         emb = np.asarray(emb, dtype=np.float16)
         if path.exists():
-            old_meta, old_emb = self.read(path)
-            keep = ~old_meta["window_id"].isin(meta["window_id"]).to_numpy()
-            meta = pd.concat([old_meta[keep], meta], ignore_index=True)
-            if GATED in meta:
-                meta[GATED] = meta[GATED].astype("boolean").fillna(False).astype(bool)
-            emb = np.concatenate([old_emb[keep].astype(np.float16), emb])
-        dim = emb.shape[1]
-        values = pa.array(emb.reshape(-1), type=pa.float16())
-        table = pa.Table.from_pandas(meta, preserve_index=False).append_column(
-            "emb", pa.FixedSizeListArray.from_arrays(values, dim)
+            meta, emb = _merged(self.read(path), (meta, emb))
+        _write_atomic(_table(meta, emb), path)
+        return path
+
+    def part_paths(self, dataset: str, site: str, month: str) -> list[Path]:
+        """Morceaux d'une partition pas encore fondus dans son fichier, dans l'ordre d'écriture."""
+        directory = self.partition_path(dataset, site, month).parent
+        return sorted(directory.glob(f"{month}{PART_MARK}*.parquet"))
+
+    def append(
+        self, meta: pd.DataFrame, emb: np.ndarray, dataset: str, site: str, month: str
+    ) -> Path:
+        """Ajoute des fenêtres à une partition sans la relire : elles vont dans un morceau
+        `<aaaamm>.part-<n>.parquet`, à côté de son fichier.
+
+        `write` relit et réécrit toute la partition : 42 s et 8 Go de mémoire pour ajouter 50
+        enregistrements à une partition de 0,9 Go (Mataroni, janvier 2026, à mi-encodage), contre
+        0,2 s ici. Un morceau se lit comme la partition (`fragments`) ; `consolidate` les fond
+        dans son fichier.
+        """
+        if len(meta) != len(emb):
+            raise ValueError("meta et emb n'ont pas le même nombre de lignes")
+        columns = META_COLUMNS + ([GATED] if GATED in meta else [])
+        parts = self.part_paths(dataset, site, month)
+        number = int(parts[-1].stem.split(PART_MARK)[1]) + 1 if parts else 1
+        path = self.partition_path(dataset, site, month).with_name(
+            f"{month}{PART_MARK}{number:06d}.parquet"
         )
-        path.parent.mkdir(parents=True, exist_ok=True)
+        table = _table(meta[columns].reset_index(drop=True), np.asarray(emb, dtype=np.float16))
+        _write_atomic(table, path)
+        return path
+
+    def consolidate(self, dataset: str, site: str, month: str) -> Path:
+        """Fond les morceaux d'une partition dans son fichier, puis les supprime.
+
+        Sans doublon de `window_id` (cas normal : la reprise saute ce qui est fait), les fichiers
+        sont recopiés groupe de lignes par groupe de lignes, sans charger la partition. Sinon,
+        comme `write` : la dernière écriture d'une fenêtre l'emporte. Interrompue, la fonte se
+        refait à l'identique : le fichier est remplacé d'un coup, les morceaux supprimés après.
+        """
+        path = self.partition_path(dataset, site, month)
+        parts = self.part_paths(dataset, site, month)
+        if not parts:
+            return path
+        files = ([path] if path.exists() else []) + parts
+        ids = pd.concat(
+            [pq.read_table(f, columns=["window_id"]).to_pandas() for f in files], ignore_index=True
+        )["window_id"]
+        schemas = [pq.read_schema(f) for f in files]
         tmp = path.with_suffix(".parquet.tmp")
-        pq.write_table(table, tmp)
-        tmp.replace(path)  # écriture atomique : pas de partition à moitié écrite
+        if ids.is_unique and all(s.equals(schemas[0]) for s in schemas[1:]):
+            with pq.ParquetWriter(tmp, schemas[0], **WRITE_OPTIONS) as writer:
+                for f in files:
+                    with pq.ParquetFile(f) as source:
+                        for group in range(source.num_row_groups):
+                            writer.write_table(source.read_row_group(group))
+            tmp.replace(path)
+        else:
+            meta, emb = self.read(files[0])
+            for f in files[1:]:
+                meta, emb = _merged((meta, emb), self.read(f))
+            _write_atomic(_table(meta, emb), path)
+        for part in parts:
+            part.unlink()
         return path
 
     def read_meta(self, path: Path) -> pd.DataFrame:
@@ -93,7 +176,8 @@ class EmbeddingStore:
             raise ValueError(f"filtres inconnus : {sorted(unknown)} (attendus : {PARTITION_KEYS})")
         wanted = {key: _as_set(filters.get(key)) for key in PARTITION_KEYS}
         for path in sorted(self.directory.glob("*/*/*.parquet")):
-            parts = (path.parent.parent.name, path.parent.name, path.stem)
+            month = path.stem.split(PART_MARK)[0]  # un morceau est lu comme sa partition
+            parts = (path.parent.parent.name, path.parent.name, month)
             values = dict(zip(PARTITION_KEYS, parts, strict=True))
             if all(wanted[k] is None or values[k] in wanted[k] for k in PARTITION_KEYS):
                 yield path

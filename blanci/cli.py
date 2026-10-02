@@ -326,7 +326,10 @@ def embed(
     peak_hours: Annotated[
         bool, typer.Option(help="Ne traiter que les heures de pic locales (§5).")
     ] = False,
-    batch: Annotated[int | None, typer.Option(help="Défaut : encoders.batch_size.")] = None,
+    batch: Annotated[
+        int | None,
+        typer.Option(help="Défaut : batch_size du modèle, sinon encoders.batch_size."),
+    ] = None,
     subset: Annotated[
         str | None,
         typer.Option(help="« benchmark » : annotés + candidats aux négatifs appariés seulement."),
@@ -361,8 +364,9 @@ def embed(
     lu ; silencieux ou micro dans sac, il n'est pas encodé (sauf s'il contient un positif).
     """
     cfg = _cfg(ctx)
-    if batch:
+    if batch:  # l'option l'emporte sur le lot de la config, global ou propre au modèle
         cfg["encoders"]["batch_size"] = batch
+        (cfg["encoders"]["models"].get(encoder) or {}).pop("batch_size", None)
     overlap = overlap_from_cfg(cfg) if overlap is None else overlap
     con = connect(config_path(cfg, "db"))
     recordings = select_recordings(

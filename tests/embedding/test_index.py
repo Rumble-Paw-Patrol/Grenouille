@@ -47,6 +47,39 @@ def test_rewriting_a_window_replaces_it(tmp_path):
     assert emb[meta["window_id"] == "r:0.00"].sum() == DIM
 
 
+def test_parts_read_like_their_partition_then_melt_into_it(tmp_path):
+    """`append` ne relit pas la partition : ses morceaux se lisent déjà, `consolidate` les fond."""
+    store = EmbeddingStore(tmp_path, "fake")
+    rng = np.random.default_rng(2)
+    embs = [rng.normal(size=(4, DIM)).astype(np.float16) for _ in range(3)]
+    store.write(meta_for("a", 4), embs[0], "2026", "kaw", "202601")
+    store.append(meta_for("b", 4), embs[1], "2026", "kaw", "202601")
+    store.append(meta_for("c", 4), embs[2], "2026", "kaw", "202601")
+    store.append(meta_for("d", 4), embs[0], "2026", "kaw", "202602")  # autre mois, sans fichier
+    names = [p.name for p in store.fragments({"month": "202601"})]
+    assert names == ["202601.parquet", "202601.part-000001.parquet", "202601.part-000002.parquet"]
+    before = store.load({"month": "202601"})
+
+    path = store.consolidate("2026", "kaw", "202601")
+    assert [p.name for p in store.fragments({"month": "202601"})] == ["202601.parquet"]
+    meta, emb = store.read(path)
+    pd.testing.assert_frame_equal(meta, before[0])
+    np.testing.assert_array_equal(emb, before[1])
+    np.testing.assert_array_equal(emb, np.concatenate(embs))
+    assert store.consolidate("2026", "kaw", "202601") == path  # rien à fondre : sans effet
+    assert store.read(store.consolidate("2026", "kaw", "202602"))[0]["recording_id"].eq("d").all()
+
+
+def test_consolidate_keeps_the_last_write_of_a_window(tmp_path):
+    store = EmbeddingStore(tmp_path, "fake")
+    store.write(meta_for("r", 6), np.zeros((6, DIM)), "2026", "kaw", "202601")
+    store.append(meta_for("r", 2), np.ones((2, DIM)), "2026", "kaw", "202601")
+    meta, emb = store.read(store.consolidate("2026", "kaw", "202601"))
+    assert len(meta) == 6 and meta["window_id"].is_unique
+    assert emb.sum() == 2 * DIM
+    assert not store.part_paths("2026", "kaw", "202601")
+
+
 def test_search_finds_planted_neighbours(store):
     _, emb = store.load({"site": "tresor"})
     queries = emb[[3, 17]].astype(np.float32) + 0.01

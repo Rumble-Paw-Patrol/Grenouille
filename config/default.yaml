@@ -90,7 +90,7 @@ encoders:
   # au centième de seconde. 0,5 = demi-fenêtre (§1). Hors 0,5, `embed` écrit un stock séparé
   # (<encodeur>@o<%>) ; volume × 0,5 / (1 − chevauchement) : 50 fois plus de fenêtres à 0,99.
   overlap: 0.5
-  batch_size: 64
+  batch_size: 64                   # fenêtres par appel ; un modèle peut fixer le sien
   models:
     birdmae: {backend: bacpipe, model: birdmae}
     # Même calcul que birdmae (bacpipe : extracteur Base, réseau Huge), nommé face à birdmae_base.
@@ -100,7 +100,9 @@ encoders:
     beats: {backend: bacpipe, model: beats}
     naturebeats: {backend: bacpipe, model: naturebeats}
     # Embedding seul : les logits des congénères ne sont plus gardés (DECISIONS n° 168).
-    perch_v2: {backend: bacpipe, model: perch_v2}
+    # Une fenêtre par appel (DECISIONS n° 172) : sur l'i5, ONNX Runtime traite 10 fenêtres/s
+    # au lot de 1, 9 au lot de 2, 8 au lot de 4, 6 à 7 au lot de 47 (un enregistrement).
+    perch_v2: {backend: bacpipe, model: perch_v2, batch_size: 1}
     birdnet: {backend: bacpipe, model: birdnet}     # référence du tuteur, non déployable
     # Contrôle passe-bas (§2) : birdmae n'entendant que < 8 kHz, comme un modèle à 16 kHz.
     birdmae_lp8k: {backend: bacpipe, model: birdmae, lowpass_hz: 8000}

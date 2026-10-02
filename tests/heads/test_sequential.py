@@ -53,6 +53,19 @@ def test_envelope_ignores_energy_outside_the_band():
     )
 
 
+@pytest.mark.parametrize("smooth_s", [0.01, 0.0101, 13.0])  # paire, impaire, trop longue
+def test_envelope_smoothing_is_a_centred_moving_average(smooth_s):
+    from scipy.signal import butter, hilbert, sosfiltfilt
+
+    wav, _ = blanci_song()
+    sos = butter(4, [4400, 5500], btype="bandpass", fs=SR, output="sos")
+    n = round(smooth_s * SR)
+    raw = np.abs(hilbert(sosfiltfilt(sos, wav)))
+    expected = 20 * np.log10(np.convolve(raw, np.ones(n) / n, mode="same") + 1e-10)
+    env = band_envelope_db(wav, SR, (4400, 5500), smooth_s)
+    np.testing.assert_allclose(env, expected[: len(env)], rtol=0, atol=1e-9)
+
+
 def test_onsets_recover_the_song_rhythm():
     """Le test de référence : des notes toutes les 1,414 s doivent redonner cet IOI."""
     wav, starts = blanci_song()

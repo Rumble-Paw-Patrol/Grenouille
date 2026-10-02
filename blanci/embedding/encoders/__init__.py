@@ -40,7 +40,8 @@ def _with_transforms(encoder: Encoder, name: str, cfg: dict[str, Any], upstream:
 
 def _get_encoder(name: str, cfg: dict[str, Any]) -> Encoder:
     spec = cfg["encoders"]["models"].get(name)
-    batch = cfg["encoders"]["batch_size"]
+    # Lot propre au modèle s'il en a un : le meilleur lot dépend du moteur (perch_v2, n° 172).
+    batch = (spec or {}).get("batch_size") or cfg["encoders"]["batch_size"]
     if spec is not None and spec["backend"] == "bacpipe":
         from blanci.embedding.encoders.bacpipe_encoder import BacpipeEncoder
 

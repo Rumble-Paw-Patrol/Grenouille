@@ -32,11 +32,12 @@ def load_audio(source: Path | BinaryIO, channel: int | str = "mean") -> tuple[np
 
 
 def resample(wav: np.ndarray, sr: int, target_sr: int) -> np.ndarray:
-    """Rééchantillonnage polyphase avec filtre anti-repliement (scipy)."""
+    """Rééchantillonnage polyphase avec filtre anti-repliement (scipy), le long du dernier
+    axe : un signal, ou un lot de fenêtres (chacune comme si elle était seule)."""
     if sr == target_sr:
         return np.asarray(wav, dtype=np.float32)
     g = gcd(sr, target_sr)
-    return resample_poly(wav, target_sr // g, sr // g).astype(np.float32)
+    return resample_poly(wav, target_sr // g, sr // g, axis=-1).astype(np.float32)
 
 
 def cut_windows(wav: np.ndarray, sr: int, windows: list[tuple[float, float]]) -> np.ndarray:

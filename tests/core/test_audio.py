@@ -37,6 +37,13 @@ def test_anti_aliasing_removes_content_above_new_nyquist():
     assert np.sqrt(np.mean(y**2)) < 0.01
 
 
+def test_a_batch_is_resampled_like_each_window_alone():
+    batch = np.random.default_rng(0).normal(0, 0.1, (5, 4800)).astype(np.float32)
+    together = resample(batch, 48000, 32000)
+    assert together.shape == (5, 3200) and together.dtype == np.float32
+    np.testing.assert_array_equal(together, np.stack([resample(w, 48000, 32000) for w in batch]))
+
+
 def test_load_audio_downmixes_to_mono_float32(tmp_path):
     path = write_wav(tmp_path / "stereo.wav", sr=16000, duration_s=0.5, channels=2)
     wav, sr = load_audio(path)

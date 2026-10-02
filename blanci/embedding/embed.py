@@ -6,12 +6,19 @@ audio) des enregistrements qui ne l'ont pas encore eu : un enregistrement silenc
 micro dans sac est alors écarté avant d'être encodé. Le débit mesuré (fenêtres/s, facteur
 temps réel) est enregistré dans la table models : c'est la colonne « vitesse » du benchmark
 (§2).
+
+La lecture, le contrôle audio et les débuts de notes de l'enregistrement suivant se font dans
+un fil à part pendant que l'encodeur traite le courant (`_ahead`) : faits à leur tour, ils
+prenaient un quart du temps d'un passage, encodeur à l'arrêt.
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
+from collections import deque
+from collections.abc import Callable, Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import perf_counter
@@ -99,6 +106,38 @@ def month_of(start_utc: str | None) -> str:
     return start_utc[:7].replace("-", "") if start_utc else "unknown"
 
 
+@dataclass
+class _Audio:
+    """Ce qu'un enregistrement donne avant l'encodeur, calculé dans le fil de lecture."""
+
+    wav: np.ndarray | None = None
+    sr: int = 0
+    failed: bool = False  # fichier illisible
+    flags: dict[str, Any] | None = None  # drapeaux audio, si le contrôle restait à faire
+    onsets: np.ndarray | None = None  # débuts de notes, s'ils restaient à calculer
+
+
+def _ahead(
+    items: Iterable[Any], prepare: Callable[[Any], Any], ahead: int = 2
+) -> Iterator[tuple[Any, Any]]:
+    """(élément, prepare(élément)), dans l'ordre ; `prepare` tourne dans un fil à part, avec
+    `ahead` éléments d'avance sur celui qui est rendu (0 : chacun à son tour). Une exception
+    de `prepare` remonte ici, à son tour."""
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="blanci-lecture")
+    pending: deque = deque()
+    try:
+        for item in items:
+            pending.append((item, pool.submit(prepare, item)))
+            if len(pending) > ahead:
+                first, future = pending.popleft()
+                yield first, future.result()
+        while pending:
+            first, future = pending.popleft()
+            yield first, future.result()
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+
+
 def _flush(
     store: EmbeddingStore,
     con: sqlite3.Connection,
@@ -111,7 +150,7 @@ def _flush(
     """Écrit le tampon dans sa partition puis le vide. Sans effet si le tampon est vide."""
     if not metas:
         return
-    store.write(pd.concat(metas, ignore_index=True), np.concatenate(embs), dataset, site, month)
+    store.append(pd.concat(metas, ignore_index=True), np.concatenate(embs), dataset, site, month)
     con.commit()
     metas.clear()
     embs.clear()
@@ -150,6 +189,7 @@ def embed_recordings(
     signal_cfg: dict | None = None,
     qc_thresholds: dict | None = None,
     gates: Upstream | None = None,
+    ahead: int = 2,
 ) -> EmbedReport:
     """Encode les enregistrements. L'audio est déjà en mémoire, une seule lecture sert aussi :
     - avec `signal_cfg`, aux débuts de notes de chaque enregistrement qui n'en a pas encore
@@ -167,7 +207,9 @@ def embed_recordings(
 
     Un stock déjà encodé avec un autre canal, un autre checkpoint ou d'autres transformations
     en amont est refusé (`check_stock_identity`) : la reprise y ajouterait des embeddings qui
-    ne se comparent pas aux siens (DECISIONS n° 143)."""
+    ne se comparent pas aux siens (DECISIONS n° 143).
+
+    `ahead` : enregistrements lus et contrôlés d'avance par le fil de lecture (0 : aucun)."""
     eid = stock_id(encoder, overlap)
     if gates is not None and gates.gates:
         eid = f"{eid}+{gates.gate_tag()}"
@@ -182,31 +224,46 @@ def embed_recordings(
     report = EmbedReport(eid)
     recordings = recordings.assign(month=recordings["start_utc"].map(month_of))
 
+    def prepare(rec: Any) -> _Audio:
+        """Fil de lecture : ce qui se calcule sur le signal sans la base ni l'encodeur."""
+        try:
+            wav, sr = load_audio(Path(raw_root) / rec.path, channel)
+        except Exception:  # fichier illisible : déjà signalé à l'inventaire
+            return _Audio(failed=True)
+        audio = _Audio(wav, sr)
+        known = parse_flags(rec.qc_flags)
+        if qc_thresholds is not None and "indices" not in known:
+            audio.flags = qc_flags(qc_indices(wav, sr), qc_thresholds)
+            if is_excluded(known | audio.flags) and rec.recording_id not in protected:
+                return audio  # sera écarté : pas de débuts de notes
+        if signal_cfg is not None and rec.recording_id not in with_onsets:
+            audio.onsets = recording_onsets(wav, sr, signal_cfg)
+        return audio
+
     for (dataset, site, month), group in recordings.groupby(["dataset", "site", "month"]):
-        path = store.partition_path(dataset, site, month)
+        path = store.consolidate(dataset, site, month)  # morceaux d'un passage interrompu
         done = set(store.read_meta(path)["recording_id"]) if path.exists() else set()
         metas: list[pd.DataFrame] = []
         embs: list[np.ndarray] = []
+        todo = [rec for rec in group.itertuples() if rec.recording_id not in done]
+        report.skipped += len(group) - len(todo)
 
-        for rec in group.itertuples():
-            if rec.recording_id in done:
-                report.skipped += 1
-                continue
-            try:
-                wav, sr = load_audio(Path(raw_root) / rec.path, channel)
-            except Exception:  # fichier illisible : déjà signalé à l'inventaire
+        for rec, audio in _ahead(todo, prepare, ahead):
+            if audio.failed:
                 report.errors += 1
                 continue
-            if qc_thresholds is not None and "indices" not in parse_flags(rec.qc_flags):
-                audio = qc_flags(qc_indices(wav, sr), qc_thresholds)
-                merged = merge_audio_flags(con, rec.recording_id, audio)
+            wav, sr = audio.wav, audio.sr
+            if audio.flags is not None:
+                merged = merge_audio_flags(con, rec.recording_id, audio.flags)
                 report.qc_checked += 1
                 if is_excluded(merged) and rec.recording_id not in protected:
                     report.qc_excluded += 1
                     continue
             found = None  # débuts de notes de l'enregistrement, s'ils viennent d'être calculés
             if signal_cfg is not None and rec.recording_id not in with_onsets:
-                found = recording_onsets(wav, sr, signal_cfg)
+                found = audio.onsets
+                if found is None:
+                    found = recording_onsets(wav, sr, signal_cfg)
                 store_onsets(con, rec.recording_id, found, channel)
                 with_onsets.add(rec.recording_id)
             windows = window_grid(len(wav) / sr, window_s, hop_s)
@@ -266,6 +323,7 @@ def embed_recordings(
                     flush=True,
                 )
         _flush(store, con, metas, embs, dataset, site, month)
+        store.consolidate(dataset, site, month)
 
     register_encoder(con, encoder, hop_s, report, channel, gates)
     return report

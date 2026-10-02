@@ -2886,3 +2886,49 @@ de Léonard, 01/10/2026.
      (`workbench.wav_bytes`, filtre `sequential.bandpass`).
      - Pas de bouton « réentraîner et rescorer » dans le poste (Léonard) : la boucle reste par
        lots et à la main (écouter, `train`, `score`, nouvelle file), pour l'instant.
+
+## 2026-10-02 — Débit de l'encodage : lot de 1, lecture en avance, stock par morceaux
+
+172. **Encodage de bout en bout : 8,0 → 5,7 s par enregistrement** (perch_v2, i5-1145G7 sur
+     secteur, 14 enregistrements de RNRT de 120 s à 48 kHz, 47 fenêtres chacun, contrôle
+     audio et débuts de notes compris). Projeté sur les 96 292 enregistrements : 214 h → 152 h,
+     plus 7 h de sauvegardes évitées. Le débit rangé dans `models` (« encodeur seul ») ne
+     comptait ni la lecture ni le contrôle audio ni les débuts de notes : un quart du temps.
+     Profil de départ par enregistrement : modèle 6,0 s, débuts de notes 1,05 s, contrôle
+     audio 0,40 s, lecture 0,30 s, rééchantillonnage 0,21 s.
+     - **Lot de 1 pour perch_v2** (`encoders.models.perch_v2.batch_size`, nouveau réglage par
+       modèle ; `--batch` l'emporte). ONNX Runtime, 4 fils, débit soutenu sur 40 à 60 s :
+       10,4 fenêtres/s au lot de 1, 9,2 au lot de 2, 7,9 au lot de 4, 6,3 à 7,1 au lot de 47
+       (un enregistrement entier, ancien réglage : lot de 64). 8 fils, 2 × 2, 4 × 1 ou 8 × 1
+       processus : 9,4 à 10,3, rien de mieux que 1 × 4. Lot figé dans le graphe, sorties
+       restreintes, dénormaux à zéro : sans effet (confirme le n° 167 pour les sorties ;
+       pour le lot, l'i5 diffère du MacBook, où il ne change rien). Embeddings stockés (float16) : 0,04 % des
+       valeurs changent d'un pas, cosinus ≥ 0,9999999 avec le lot de 64.
+     - **Lecture en avance** (`embed._ahead`, deux enregistrements) : lecture, contrôle audio
+       et débuts de notes du suivant dans un fil à part ; la base reste au fil principal. Seul :
+       −6 % au lot de 64, −15 % au lot de 1. Le gain est plafonné par les 4 cœurs : ce fil
+       ralentit le modèle presque autant qu'il travaille (10,3 → 7,9 fenêtres/s ; 8,4 après
+       les deux points suivants).
+     - **Débuts de notes** : lissage de l'enveloppe par `uniform_filter1d` au lieu de
+       `np.convolve` (257 → 34 ms, écart relatif 7e-14) ; onsets identiques sur 88
+       enregistrements des 8 couples jeu × site.
+     - **Contrôle audio** : Welch par paquets de segments (`qc._welch`, 384 → 104 ms), somme
+       en double précision ; les indices bougent d'au plus 1,1e-6 (36 enregistrements sur 88
+       à la 6e décimale), aucun drapeau ne change. Aucun indice n'était encore en base.
+     - **Rééchantillonnage** du lot de fenêtres en un appel (résultat identique, −15 ms).
+     - **Stock par morceaux** (`store.append`, `consolidate`) : `write` relisait et
+       réécrivait la partition à chaque sauvegarde (tous les 50 enregistrements) ; mesuré sur
+       une partition de 0,9 Go (Mataroni 2026-01 à mi-encodage) : 42 s et 8,5 Go de mémoire
+       par sauvegarde, soit ≈ 3 h pour cette seule partition et ≈ 7 h pour tout le corpus
+       (extrapolé : coût proportionnel à la taille), avec un risque de mémoire pleine à la fin
+       de Mataroni (1,9 Go). Un morceau s'écrit en 0,2 s,
+       se lit comme sa partition (`fragments`) et est fondu dans son fichier en fin de
+       partition, ou au début de la reprise après une interruption (25 s pour 0,9 Go, groupe
+       de lignes par groupe de lignes). Parquet sans dictionnaire sur les embeddings :
+       écriture −29 %, lecture 4,6 fois plus rapide, taille +3 % (valeurs simulées).
+     - Écarté : lecture en int16 (20 ms à chaud dans les deux cas, le reste est le disque),
+       transformée de Hilbert par `rfft` (sans gain). Non fait, change les embeddings :
+       rééchantillonner l'enregistrement entier avant la découpe (−90 ms, −1,5 %). Restent le
+       mode d'alimentation de Windows (fréquence soutenue : 2,9 GHz en « Utilisation
+       normale ») et un moteur sur le processeur graphique intégré (OpenVINO, DirectML), à
+       mesurer. Tests : 802 réussis (suite rapide, hors notebooks non vidés).
