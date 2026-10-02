@@ -3028,3 +3028,31 @@ de Léonard, 01/10/2026.
        1) → 6,2 (lecture en avance) → 5,7 (calculs du signal allégés) → 4,9 (rééchantillonnage
        par enregistrement, débuts de notes sortis) → 3,25 (Iris Xe). Pour les 94 588
        enregistrements encodables : 210 h → 85 h, plus ≈ 7 h de sauvegardes évitées (n° 172).
+
+## 2026-10-03 — Graphe de perch_v2 réduit aux sorties utiles
+
+180. **perch_v2 : 2,05 s par enregistrement au lieu de 3,25, sur le CPU, embeddings inchangés.**
+     Le graphe ONNX calcule à chaque fenêtre les logits de ses 14 795 classes (tête à
+     prototypes : 364 Mo sur les 413 du fichier) et rend son spectrogramme ; le projet ne s'en
+     sert pas (n° 168). ONNX Runtime exécute tout le graphe quelles que soient les sorties
+     demandées : les mesures « les sorties ne coûtent rien » des n° 167 et 172 ne retiraient
+     donc rien. `encoders/pruned.py` extrait une fois le sous-graphe embedding + jetons (49 Mo,
+     rangé dans `data/models/bacpipe/.cache/pruned`) et `BacpipeEncoder` y branche sa session ;
+     avec `logit_classes`, les logits sont gardés.
+     - Modèle seul, i5, débit soutenu 25 s : CPU 9,0 → 20,9 fenêtres/s (lot de 1 ; 18,8 au lot
+       de 2, 16,1 au lot de 4, 12,9 au lot de 47) ; Iris Xe 15,3 → 21,0 (lot de 4, float32 ;
+       float16 n'apporte plus rien : 21,3) ; CPU et Iris Xe ensemble : 22,6 à 23,5. La puce
+       plafonne vers 21 à 23 fenêtres/s quel que soit le partage : c'est son enveloppe
+       thermique qui limite.
+     - Bout en bout, 20 enregistrements de RNRT, contrôle audio déjà fait : CPU 2,02 et 2,10 s
+       par enregistrement ; Iris Xe 2,34 à 2,39 s. **Retenu : CPU, lot de 1** ; l'Iris Xe
+       (n° 179) devient une option, désactivée. Embeddings stockés : identiques à ceux du
+       graphe entier sur le CPU (0 valeur différente sur 940 fenêtres).
+     - Bilan par enregistrement de 2 min : 8,0 s (origine) → 2,05 s ; pour les 94 588
+       enregistrements encodables, 210 h → 54 h. Le MacBook (30 fenêtres/s avec le graphe
+       entier, n° 167) devrait en profiter autant : à mesurer.
+     - Écarté : une seule passe du réseau sur l'enregistrement entier, pour ne plus calculer
+       deux fois les fenêtres qui se chevauchent. Les blocs « squeeze-and-excitation » du
+       réseau moyennent sur toute la fenêtre de 5 s : les fenêtres ne partagent pas leurs
+       calculs intermédiaires, et le résultat serait un autre modèle.
+     - Mode débit d'OpenVINO et requêtes parallèles sur l'Iris Xe : sans effet (21,3 à 21,5).

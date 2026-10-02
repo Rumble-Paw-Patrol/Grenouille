@@ -155,8 +155,7 @@ class BacpipeEncoder(BaseEncoder):
             model_name, self.device, Path(model_base_path), checkpoint
         )
         self.model_name = model_name
-        if openvino:
-            self._use_openvino(openvino, Path(model_base_path))
+        self._light_session(openvino, Path(model_base_path), keep_logits=bool(logit_classes))
         self.sample_rate = int(module.SAMPLE_RATE)
         self.window_s = module.LENGTH_IN_SAMPLES / module.SAMPLE_RATE
         self._last_tokens: np.ndarray | None = None
@@ -170,20 +169,47 @@ class BacpipeEncoder(BaseEncoder):
         self.dim = int(probe.shape[-1])
         self._logits.clear()
 
-    def _use_openvino(self, settings: dict, model_base_path: Path) -> None:
-        """Remplace la session ONNX Runtime du modèle par OpenVINO (`openvino_session`), si
-        OpenVINO et le périphérique demandé sont là ; le lot devient celui du réglage."""
-        from blanci.embedding.encoders.openvino_session import openvino_session
+    def _light_session(
+        self, openvino: dict | None, model_base_path: Path, keep_logits: bool
+    ) -> None:
+        """Modèle ONNX (perch_v2) : remplace la session de bacpipe par celle d'un graphe réduit
+        aux sorties utiles (`pruned`, DECISIONS n° 180), calculé par OpenVINO si `openvino` le
+        demande et que le périphérique est là (le lot devient alors celui du réglage), sinon par
+        ONNX Runtime comme avant. Sans effet sur les autres modèles."""
+        from blanci.embedding.encoders.pruned import PrunedSession, pruned_model
 
         holder = getattr(self._model, "model", None)
-        path = getattr(getattr(holder, "session", None), "_model_path", None)
-        if path is None:
-            raise ValueError(f"{self.name} : le réglage openvino demande un modèle ONNX (perch_v2)")
-        session = openvino_session(Path(path), settings, model_base_path / ".cache" / "openvino")
+        source = getattr(getattr(holder, "session", None), "_model_path", None)
+        if source is None:
+            if openvino:
+                raise ValueError(f"{self.name} : le réglage openvino demande un modèle ONNX")
+            return
+        names = [out.name for out in holder.session.get_outputs()]
+        unused = {"spectrogram"} | (set() if keep_logits else {"label"})
+        kept = [name for name in names if name not in unused]
+        cache = model_base_path / ".cache"
+        small = pruned_model(Path(source), kept, cache / "pruned") if kept != names else source
+        session = None
+        if openvino:
+            from blanci.embedding.encoders.openvino_session import openvino_session
+
+            session = openvino_session(Path(small), openvino, cache / "openvino")
         if session is not None:
-            holder.session = session
             self.batch_size = session.batch
-            print(f"{self.name} calculé par {session.get_providers()[0]}", flush=True)
+            kept = session.output_names
+        elif Path(small) != Path(source):
+            import onnxruntime as ort
+
+            options = ort.SessionOptions()
+            options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            session = ort.InferenceSession(
+                str(small), options, providers=holder.session.get_providers()
+            )
+            kept = [out.name for out in session.get_outputs()]
+        else:
+            return
+        holder.session = PrunedSession(session, kept, names)
+        print(f"{self.name} : sorties {', '.join(kept)} ; {session.get_providers()[0]}", flush=True)
 
     def _resolve_classes(self, names: list[str]) -> list[int]:
         if not names:

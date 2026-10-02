@@ -45,6 +45,7 @@ class OpenVinoSession:
             properties["CACHE_DIR"] = str(cache_dir)
         self._compiled = core.compile_model(model, device, properties)
         self._request = self._compiled.create_infer_request()
+        self.output_names = [out.get_any_name() for out in self._compiled.outputs]
         self.device = core.get_property(device, "FULL_DEVICE_NAME")
 
     def get_providers(self) -> list[str]:
