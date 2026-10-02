@@ -140,6 +140,7 @@ class BacpipeEncoder(BaseEncoder):
         logit_classes: list[str] | None = None,
         checkpoint: str | None = None,
         name: str | None = None,
+        openvino: dict | None = None,
     ):
         from importlib.metadata import version
 
@@ -154,6 +155,8 @@ class BacpipeEncoder(BaseEncoder):
             model_name, self.device, Path(model_base_path), checkpoint
         )
         self.model_name = model_name
+        if openvino:
+            self._use_openvino(openvino, Path(model_base_path))
         self.sample_rate = int(module.SAMPLE_RATE)
         self.window_s = module.LENGTH_IN_SAMPLES / module.SAMPLE_RATE
         self._last_tokens: np.ndarray | None = None
@@ -166,6 +169,21 @@ class BacpipeEncoder(BaseEncoder):
         )
         self.dim = int(probe.shape[-1])
         self._logits.clear()
+
+    def _use_openvino(self, settings: dict, model_base_path: Path) -> None:
+        """Remplace la session ONNX Runtime du modèle par OpenVINO (`openvino_session`), si
+        OpenVINO et le périphérique demandé sont là ; le lot devient celui du réglage."""
+        from blanci.embedding.encoders.openvino_session import openvino_session
+
+        holder = getattr(self._model, "model", None)
+        path = getattr(getattr(holder, "session", None), "_model_path", None)
+        if path is None:
+            raise ValueError(f"{self.name} : le réglage openvino demande un modèle ONNX (perch_v2)")
+        session = openvino_session(Path(path), settings, model_base_path / ".cache" / "openvino")
+        if session is not None:
+            holder.session = session
+            self.batch_size = session.batch
+            print(f"{self.name} calculé par {session.get_providers()[0]}", flush=True)
 
     def _resolve_classes(self, names: list[str]) -> list[int]:
         if not names:

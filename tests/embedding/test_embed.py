@@ -373,11 +373,10 @@ def test_qc_pass_leaves_nothing_to_check_during_embed(workspace):
         selected,
         raw,
         store_root,
-        signal_cfg=cfg["signal"],
         qc_thresholds=cfg["qc"],
     )
     assert (report.recordings, report.qc_checked) == (3, 0)
-    assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 3
+    assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 0  # ni celui d'embed
 
 
 def test_qc_pass_counts_unreadable_files_but_stops_if_the_disk_is_gone(workspace):

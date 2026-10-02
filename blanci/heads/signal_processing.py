@@ -277,24 +277,30 @@ def compute_onsets(
     signal_cfg: dict,
     channel: int | str = 0,
     commit_every: int = 50,
+    workers: int = 1,
 ) -> dict[str, int]:
-    """Débuts de notes des enregistrements qui n'en ont pas encore (lecture seule de l'audio)."""
+    """Débuts de notes des enregistrements qui n'en ont pas encore (lecture seule de l'audio),
+    lus et calculés dans `workers` fils."""
     from pathlib import Path
 
+    from blanci.core.ahead import ahead
     from blanci.core.audio import load_audio
 
     done = {row[0] for row in con.execute("SELECT recording_id FROM onsets")}
-    report = {"computed": 0, "skipped": 0, "errors": 0, "onsets": 0}
-    for rec in recordings.itertuples():
-        if rec.recording_id in done:
-            report["skipped"] += 1
-            continue
+    todo = [rec for rec in recordings.itertuples() if rec.recording_id not in done]
+    report = {"computed": 0, "skipped": len(recordings) - len(todo), "errors": 0, "onsets": 0}
+
+    def prepare(rec) -> np.ndarray | None:
         try:
             wav, sr = load_audio(Path(raw_root) / rec.path, channel)
         except Exception:  # fichier illisible : déjà signalé à l'inventaire
+            return None
+        return recording_onsets(wav, sr, signal_cfg)
+
+    for rec, found in ahead(todo, prepare, 2 * workers, workers):
+        if found is None:
             report["errors"] += 1
             continue
-        found = recording_onsets(wav, sr, signal_cfg)
         store_onsets(con, rec.recording_id, found, channel)
         report["computed"] += 1
         report["onsets"] += len(found)

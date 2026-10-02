@@ -7,11 +7,11 @@ micro dans sac est alors écarté avant d'être encodé. Le débit mesuré (fen�
 temps réel) est enregistré dans la table models : c'est la colonne « vitesse » du benchmark
 (§2).
 
-La lecture, le contrôle audio et les débuts de notes de l'enregistrement suivant se font dans
-un fil à part pendant que l'encodeur traite le courant (`core.ahead`) : faits à leur tour, ils
-prenaient un quart du temps d'un passage, encodeur à l'arrêt. `blanci qc` fait ce contrôle et
-ces débuts de notes d'avance, pour tout le corpus (`inputs.qc.check_recordings`) : il ne reste
-alors ici que la lecture et l'encodeur.
+La lecture, le rééchantillonnage et la découpe de l'enregistrement suivant se font dans un fil
+à part pendant que l'encodeur traite le courant (`core.ahead`). `blanci qc` fait le contrôle
+audio d'avance, pour tout le corpus (`inputs.qc.check_recordings`) : il ne reste alors ici
+que la lecture et l'encodeur. Les débuts de notes ne se calculent pas ici : c'est du traitement
+du signal (`blanci onsets`, `heads/signal_processing.py`, DECISIONS n° 178).
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ from blanci.heads.signal_processing import (
     gate_values,
     load_onsets,
     recording_onsets,
-    store_onsets,
 )
 from blanci.inputs.qc import (
     EXCLUDING_FLAGS,
@@ -114,7 +113,6 @@ class _Audio:
     sr: int = 0
     failed: bool = False  # fichier illisible
     flags: dict[str, Any] | None = None  # drapeaux audio, si le contrôle restait à faire
-    onsets: np.ndarray | None = None  # débuts de notes, s'ils restaient à calculer
     windows: list | None = None  # grille de l'enregistrement
     cut: np.ndarray | None = None  # ses fenêtres, prêtes pour l'encodeur...
     rate: int = 0  # ...et leur fréquence d'échantillonnage
@@ -192,18 +190,15 @@ def embed_recordings(
     flush_every: int = 50,
     progress_every: int = 100,
     channel: int | str = "mean",
-    signal_cfg: dict | None = None,
     qc_thresholds: dict | None = None,
     gates: Upstream | None = None,
     ahead: int = 2,
     resample: str = "recording",
 ) -> EmbedReport:
-    """Encode les enregistrements. L'audio est déjà en mémoire, une seule lecture sert aussi :
-    - avec `signal_cfg`, aux débuts de notes de chaque enregistrement qui n'en a pas encore
-      (module de traitement du signal, §3) ;
-    - avec `qc_thresholds`, au contrôle audio de chaque enregistrement qui ne l'a pas encore
-      eu ; s'il lève un drapeau d'exclusion (silencieux, micro dans sac), l'enregistrement
-      n'est pas encodé, sauf si A. blanci y a été entendu.
+    """Encode les enregistrements. Avec `qc_thresholds`, l'audio lu sert aussi au contrôle
+    audio de chaque enregistrement qui ne l'a pas encore eu (`blanci qc` le fait d'avance) ;
+    s'il lève un drapeau d'exclusion (silencieux, micro dans sac), l'enregistrement n'est pas
+    encodé, sauf si A. blanci y a été entendu.
 
     `overlap` : chevauchement des fenêtres (0 à 0,99) ; hors 50 %, le stock porte le
     chevauchement dans son nom (`stock_id`).
@@ -226,7 +221,6 @@ def embed_recordings(
     mode = resample_mode(encoder, resample)
     check_stock_identity(con, eid, stock_identity(encoder, channel, mode))
     protected = positive_recordings(con) if qc_thresholds is not None else set()
-    with_onsets = {row[0] for row in con.execute("SELECT recording_id FROM onsets")}
     store = EmbeddingStore(store_root, eid)
     window_s = round(encoder.window_s, 2)
     hop_s = hop_for_overlap(window_s, overlap)
@@ -244,9 +238,7 @@ def embed_recordings(
         if qc_thresholds is not None and "indices" not in known:
             audio.flags = qc_flags(qc_indices(wav, sr), qc_thresholds)
             if is_excluded(known | audio.flags) and rec.recording_id not in protected:
-                return audio  # sera écarté : pas de débuts de notes
-        if signal_cfg is not None and rec.recording_id not in with_onsets:
-            audio.onsets = recording_onsets(wav, sr, signal_cfg)
+                return audio  # sera écarté : rien à découper
         audio.windows = window_grid(len(wav) / sr, window_s, hop_s)
         audio.cut, audio.rate = encoder_windows(encoder, wav, sr, audio.windows, mode)
         return audio
@@ -270,22 +262,14 @@ def embed_recordings(
                 if is_excluded(merged) and rec.recording_id not in protected:
                     report.qc_excluded += 1
                     continue
-            found = None  # débuts de notes de l'enregistrement, s'ils viennent d'être calculés
-            if signal_cfg is not None and rec.recording_id not in with_onsets:
-                found = audio.onsets
-                if found is None:
-                    found = recording_onsets(wav, sr, signal_cfg)
-                store_onsets(con, rec.recording_id, found, channel)
-                with_onsets.add(rec.recording_id)
             if audio.cut is None:  # contrôle audio prévu écartant, démenti par la base
                 audio.windows = window_grid(len(wav) / sr, window_s, hop_s)
                 audio.cut, audio.rate = encoder_windows(encoder, wav, sr, audio.windows, mode)
             windows, cut, rate = audio.windows, audio.cut, audio.rate
             passed = np.ones(len(windows), dtype=bool)
-            if gates is not None:  # notes et rythme : les débuts de notes de l'enregistrement
-                if found is None:
-                    found = load_onsets(con, {rec.recording_id}).get(rec.recording_id)
-                if found is None:
+            if gates is not None:  # notes et rythme : débuts de notes rangés (`blanci onsets`)
+                found = load_onsets(con, {rec.recording_id}).get(rec.recording_id)
+                if found is None:  # sinon calculés pour la porte, sans être rangés
                     found = recording_onsets(wav, sr, gates.signal_cfg)
                 values = gate_values(
                     cut if rate == sr else cut_windows(wav, sr, windows),  # f_e d'origine

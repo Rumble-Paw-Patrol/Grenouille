@@ -349,17 +349,19 @@ def test_pca_writes_the_lost_variance_curve(embedded):
 # --- Module de traitement du signal et fusion (§3) ------------------------------------------------
 
 
-def test_embed_computes_onsets_once(embedded):
+def test_onsets_come_from_their_own_command_not_from_embed(embedded):
     tmp_path, config = embedded
     con = connect(tmp_path / "db" / "blanci.sqlite")
+    assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 0
+    assert "20 enregistrements traités, 0 déjà faits" in run(config, "onsets")
     assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 20
-    output = run(config, "onsets")
-    assert "0 enregistrements traités, 20 déjà faits" in output
+    assert "0 enregistrements traités, 20 déjà faits" in run(config, "onsets")
 
 
 @pytest.mark.filterwarnings("ignore:.*fusion instable")  # jeu jouet : 35 positifs
 def test_fusion_is_evaluated_registered_and_used_to_decide(embedded):
     tmp_path, config = embedded
+    run(config, "onsets")
     run(config, "train", "--encoder", "toy-1")
     output = run(config, "fusion", "--encoder", "toy-1")
     assert "AP tête" in output and "fusion" in output and "coefficients" in output
@@ -379,9 +381,6 @@ def test_fusion_needs_onsets(workspace):
     run(config, "ingest", "--dataset", "2026", "--no-hash")
     run(config, "embed", "--encoder", "toy")
     label_positives(config, tmp_path)
-    con = connect(tmp_path / "db" / "blanci.sqlite")
-    con.execute("DELETE FROM onsets")
-    con.commit()
     run(config, "train", "--encoder", "toy-1")
     result = runner.invoke(app, ["--config", str(config), "fusion", "--encoder", "toy-1"])
     assert result.exit_code != 0 and "début de note" in str(result.exception)

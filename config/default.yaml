@@ -104,7 +104,13 @@ encoders:
     # Embedding seul : les logits des congénères ne sont plus gardés (DECISIONS n° 168).
     # Une fenêtre par appel (DECISIONS n° 172) : sur l'i5, ONNX Runtime traite 10 fenêtres/s
     # au lot de 1, 9 au lot de 2, 8 au lot de 4, 6 à 7 au lot de 47 (un enregistrement).
-    perch_v2: {backend: bacpipe, model: perch_v2, batch_size: 1}
+    # Avec OpenVINO installé et un processeur graphique Intel (Iris Xe de l'i5), le modèle y est
+    # calculé par lots de 4 (n° 179) : mêmes embeddings, 15 fenêtres/s. Sinon ONNX Runtime, CPU.
+    perch_v2:
+      backend: bacpipe
+      model: perch_v2
+      batch_size: 1
+      openvino: {device: GPU, batch_size: 4, precision: f32}
     birdnet: {backend: bacpipe, model: birdnet}     # référence du tuteur, non déployable
     # Contrôle passe-bas (§2) : birdmae n'entendant que < 8 kHz, comme un modèle à 16 kHz.
     birdmae_lp8k: {backend: bacpipe, model: birdmae, lowpass_hz: 8000}

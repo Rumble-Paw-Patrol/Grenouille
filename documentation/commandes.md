@@ -112,6 +112,8 @@ $B throughput --encoders birdnet,beats,perch_v2,birdmae_base   # → debit.md
 uv run blanci qc
 uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatifs appariés
 # (un enregistrement que `qc` n'a pas vu est contrôlé au passage ; --no-qc pour s'en passer)
+# Débuts de notes (traitement du signal) : jamais calculés par embed, à lancer avant `fusion`.
+uv run blanci onsets
 uv run blanci embed --encoder birdmae --peak-hours    # reprenable
 $B cluster --encoder birdmae-bacpipe1.3.5 --mode c1   # clustering C0/C1 (§5 bis)
 uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md

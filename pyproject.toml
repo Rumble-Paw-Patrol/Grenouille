@@ -38,6 +38,9 @@ research = [
     # Sous Windows, tensorflow 2.15 n'est qu'une coquille qui dépend de tensorflow-intel ;
     # uv lit les métadonnées d'une autre plateforme et l'oublie : on le déclare (DECISIONS n° 64).
     "tensorflow-intel==2.15.1; sys_platform == 'win32'",
+    # perch_v2 sur le processeur graphique intégré d'Intel (Iris Xe, DECISIONS n° 179) ; sans
+    # lui, ou sur un autre poste, l'encodeur reste sur ONNX Runtime.
+    "openvino>=2026.4",
 ]
 # Prototype de vérification (M2) : uv sync --group app ; outil de travail, pas livrable.
 app = [

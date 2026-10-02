@@ -404,7 +404,10 @@ def embed(
     cfg = _cfg(ctx)
     if batch:  # l'option l'emporte sur le lot de la config, global ou propre au modèle
         cfg["encoders"]["batch_size"] = batch
-        (cfg["encoders"]["models"].get(encoder) or {}).pop("batch_size", None)
+        spec = cfg["encoders"]["models"].get(encoder) or {}
+        spec.pop("batch_size", None)
+        if spec.get("openvino"):
+            spec["openvino"]["batch_size"] = batch
     overlap = overlap_from_cfg(cfg) if overlap is None else overlap
     con = connect(config_path(cfg, "db"))
     recordings = select_recordings(
@@ -438,7 +441,6 @@ def embed(
         config_path(cfg, "embeddings"),
         overlap=overlap,
         channel=cfg["audio"]["channel"],
-        signal_cfg=cfg["signal"],
         qc_thresholds=cfg["qc"] if check_qc else None,
         gates=chain,
         resample=cfg["encoders"].get("resample", "recording"),
@@ -995,11 +997,12 @@ def onsets(
         str | None, typer.Option(help="« benchmark » : annotés + négatifs appariés seulement.")
     ] = None,
     site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
+    workers: Annotated[int, typer.Option(help="Fils de lecture et de calcul.")] = 4,
 ) -> None:
     """Débuts de notes par enregistrement (traitement du signal, §3). Lit l'audio, n'encode rien.
 
-    `blanci embed` les calcule déjà au passage ; cette commande sert aux enregistrements
-    qu'on ne veut pas encoder. Reprenable : les enregistrements traités sont sautés.
+    Seule commande qui les calcule (`blanci embed` ne le fait pas) : à lancer avant `fusion`,
+    qui en a besoin. Reprenable : les enregistrements traités sont sautés.
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -1008,7 +1011,12 @@ def onsets(
         wanted = benchmark_subset(con, cfg)
         recordings = recordings[recordings["recording_id"].isin(wanted["recording_id"])]
     report = compute_onsets(
-        con, recordings, config_path(cfg, "raw"), cfg["signal"], cfg["audio"]["channel"]
+        con,
+        recordings,
+        config_path(cfg, "raw"),
+        cfg["signal"],
+        cfg["audio"]["channel"],
+        workers=workers,
     )
     typer.echo(
         f"{report['computed']} enregistrements traités, {report['skipped']} déjà faits, "
@@ -1669,7 +1677,6 @@ def anuraset_campaign(
             config_path(cfg, "embeddings"),
             overlap=overlap_from_cfg(cfg),
             channel=cfg["audio"]["channel"],
-            signal_cfg=cfg["signal"],
             resample=cfg["encoders"].get("resample", "recording"),
         )
         typer.echo(

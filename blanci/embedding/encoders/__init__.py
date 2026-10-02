@@ -53,6 +53,7 @@ def _get_encoder(name: str, cfg: dict[str, Any]) -> Encoder:
             logit_classes=spec.get("logit_classes"),
             checkpoint=spec.get("checkpoint"),
             name=name if spec.get("checkpoint") else None,
+            openvino=spec.get("openvino"),
         )
         if spec.get("lowpass_hz"):
             from blanci.embedding.encoders.lowpass import LowpassEncoder

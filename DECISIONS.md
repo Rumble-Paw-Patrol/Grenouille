@@ -3000,3 +3000,31 @@ de Léonard, 01/10/2026.
        15,3 au total, pas mieux que l'Iris Xe seul (même puce, même enveloppe thermique).
        Compilation du modèle pour l'Iris Xe : 23 s au premier lancement.
      - Le T7 Shield se lit toujours à 41 Mo/s à froid (n° 173).
+
+## 2026-10-02 (nuit) — Débuts de notes hors de l'encodage, Iris Xe branché
+
+178. **`embed` ne calcule plus les débuts de notes** (Léonard : c'est du traitement du signal,
+     pas de l'encodage). `embed_recordings` perd `signal_cfg` : seule `blanci onsets` les
+     calcule et les range (`signal_processing.compute_onsets`, maintenant dans 4 fils), à
+     lancer avant `fusion`, qui les exige. Une porte de rythme en amont (`--upstream notes`)
+     lit ceux de la base, ou les calcule pour elle seule sans les ranger. Économie : 0,68 s de
+     calcul par enregistrement au premier encodage.
+
+179. **perch_v2 sur le processeur graphique intégré (Iris Xe) par OpenVINO**
+     (`encoders.models.perch_v2.openvino`, `encoders/openvino_session.py`). La session ONNX
+     Runtime de bacpipe est remplacée par un graphe OpenVINO compilé pour un lot fixe ; sans
+     OpenVINO ou sans ce périphérique (Mac, autre poste), l'encodeur reste sur ONNX Runtime,
+     CPU, lot de 1. `openvino>=2026.4` entre dans le groupe `research`. Graphe compilé gardé
+     dans `data/models/bacpipe/.cache/openvino` (23 s la première fois).
+     - Bout en bout, 20 enregistrements de RNRT, contrôle audio déjà fait, secteur : CPU 4,45
+       et 5,38 s par enregistrement (deux passes, la machine chauffe) ; Iris Xe float32, lot
+       de 4 : 3,24 et 3,27 s ; lot de 2 : 3,21 ; lot de 8 : 3,41 ; float16, lot de 4 : 2,76.
+     - Embeddings stockés (float16), contre le CPU : float32, 0,8 % des valeurs changent d'un
+       pas, cosinus 1,000000 ; float16, cosinus ≥ 0,99989. **Retenu : float32, lot de 4**
+       (mêmes embeddings) ; `precision: f16` gagnerait encore 15 % en changeant un peu les
+       embeddings (à décider avec le benchmark).
+     - CPU et Iris Xe ensemble : pas mieux que l'Iris Xe seul (n° 177).
+     - Bilan du 02/10 par enregistrement de 2 min, perch_v2 : 8,0 s (origine) → 7,3 (lot de
+       1) → 6,2 (lecture en avance) → 5,7 (calculs du signal allégés) → 4,9 (rééchantillonnage
+       par enregistrement, débuts de notes sortis) → 3,25 (Iris Xe). Pour les 94 588
+       enregistrements encodables : 210 h → 85 h, plus ≈ 7 h de sauvegardes évitées (n° 172).
