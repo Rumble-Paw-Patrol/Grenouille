@@ -395,8 +395,18 @@ def clip_spectrogram(
     return freqs[keep], times, 10 * np.log10(power[keep] + 1e-12)
 
 
-def wav_bytes(wav: np.ndarray, sr: int, gain_db: float = 0.0) -> bytes:
-    """WAV 16 bits en mémoire pour le lecteur ; `gain_db` n'agit que sur l'écoute."""
+def wav_bytes(
+    wav: np.ndarray,
+    sr: int,
+    gain_db: float = 0.0,
+    band_hz: tuple[float, float] | None = None,
+) -> bytes:
+    """WAV 16 bits en mémoire pour le lecteur ; `gain_db` et `band_hz` (passe-bande : on
+    n'entend que cette bande) n'agissent que sur l'écoute."""
+    if band_hz is not None:
+        from blanci.heads.sequential import bandpass
+
+        wav = bandpass(wav, sr, band_hz)
     x = np.clip(wav * 10 ** (gain_db / 20), -1.0, 1.0)
     buffer = io.BytesIO()
     sf.write(buffer, x, sr, format="WAV", subtype="PCM_16")

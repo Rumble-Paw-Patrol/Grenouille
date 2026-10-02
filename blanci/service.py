@@ -18,7 +18,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from blanci.annotation.active import build_queue
 from blanci.combination.fusion import FusionWeights
 from blanci.core.config import config_path
 from blanci.core.db import encoder_params, model_params, next_version, register_model, utc_now
@@ -539,6 +538,8 @@ def make_queue(
 
     Unité : l'enregistrement. Son score est le maximum de ses fenêtres, comme pour l'AP.
     """
+    from blanci.annotation.selection import build_queue  # selection importe ce module
+
     head, params = load_head(con, encoder_id, version)
     model_id = head_id(encoder_id, params["version"])
     n = n or cfg["active"]["batch_recordings"]

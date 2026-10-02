@@ -166,7 +166,8 @@ $B select --method cluster --encoder birdmae-bacpipe1.3.5 --n 10   # puis cluste
 $B select --method gaps --encoder birdmae-bacpipe1.3.5   # trous : faux négatifs suspects
 $B select --method gaps --mode labels                     # négatifs annotés à réécouter
 $B cluster-label --encoder birdmae-bacpipe1.3.5 --cluster 7        # groupe homogène
-$B yapat-export data/reports/candidats_active.csv    # extraits + manifeste pour YAPAT
+$B clips-export data/reports/candidats_active.csv    # extraits WAV + manifeste, outil externe
+$B clips-import data/exports/extraits/manifest.csv reponses.xlsx   # réponses → labels
 $B annotate                                          # mode de sélection, carte, « Envoyer »
 
 # --- Évaluation (§6) -----------------------------------------------------

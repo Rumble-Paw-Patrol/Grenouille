@@ -2863,3 +2863,26 @@ de Léonard, 01/10/2026.
        fusion inconnue ») ; les scores `:logit:` déjà rangés dans une base y restent, sans
        lecteur. Les entrées plus haut du journal qui citent ces logits (n° 70, 94, 98, 151)
        décrivent l'état d'alors.
+
+169. **Passerelle vers un outil externe : le nom YAPAT retiré** (Léonard ; précise le n° 99). Les
+     deux commandes n'ont rien de propre à YAPAT : elles écrivent des extraits WAV et relisent un
+     tableau « extrait, label », quel que soit l'outil (Raven, Audacity, Kaleidoscope, YAPAT).
+     - `yapat-export` → `clips-export` ; `yapat-import` → `clips-import` ; dossier d'export par
+       défaut `extraits` au lieu de `yapat`.
+     - `selection.yapat_label_map` → `selection.clip_label_map`.
+     - Source de label `yapat` → `external`. Aucun label de source `yapat` n'avait été écrit (la
+       passerelle n'a jamais servi sur un fichier réel).
+     - Inchangé : les fonctions `export_clips` et `import_clip_labels`, et les libellés « YAPAT
+       maison » de la couverture et de la carte des embeddings, qui disent d'où vient l'idée.
+
+170. **`annotation/active.py` fondu dans `selection.py`** (Léonard). `build_queue` (file
+     60-20-20) est une méthode de sélection comme les autres : un seul module les porte toutes.
+     `service.make_queue` l'importe à l'appel (`selection` importe `workbench`, qui importe
+     `service`). Les tests restent dans `tests/annotation/test_active.py`.
+
+171. **Poste d'annotation : « N'écouter que la bande »** (Léonard ; idée reprise de YAPAT). Case
+     du panneau de gauche : passe-bande sur `signal.band_hz` (les pointillés du spectrogramme),
+     appliqué aux deux lecteurs, jamais à l'audio d'origine ni au spectrogramme
+     (`workbench.wav_bytes`, filtre `sequential.bandpass`).
+     - Pas de bouton « réentraîner et rescorer » dans le poste (Léonard) : la boucle reste par
+       lots et à la main (écouter, `train`, `score`, nouvelle file), pour l'instant.

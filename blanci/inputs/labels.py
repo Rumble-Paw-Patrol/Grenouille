@@ -45,6 +45,8 @@ QUALITIES = ("A", "B", "C")
 # « gap » : faux négatif suspect, fenêtre négative encadrée de positives (n° 102).
 # « flag » : enregistrement écarté par un drapeau (horloge douteuse…), écouté pour juger
 # ce qu'il vaut (n° 154) ; jamais mêlé à l'audit aléatoire, qui mesure le rappel.
+# « external » : réponse d'un outil externe (Raven, Audacity, YAPAT…) sur des extraits exportés
+# (`selection.import_clip_labels`).
 SOURCES = (
     "import",
     "similarity",
@@ -58,7 +60,7 @@ SOURCES = (
     "cluster",
     "bulk",
     "gap",
-    "yapat",
+    "external",
     "flag",
 )
 TARGET_SPECIES = "Anomaloglossus blanci"

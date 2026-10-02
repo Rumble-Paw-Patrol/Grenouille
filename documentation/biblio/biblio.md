@@ -158,7 +158,8 @@ pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
 ## 6. Annotation, détection et outils
 
 - **YAPAT** — Kath, Serafini, Campos, Gouvêa & Sonntag, 2024, *Ecological Informatics* 82, 102710 ;
-  <https://yapat.readthedocs.io>. Apprentissage actif pour l'annotation (export `yapat-export`).
+  <https://yapat.readthedocs.io>. Apprentissage actif pour l'annotation ; non embarqué (extraits
+  pour un outil externe : `clips-export`).
 - **Agile Modeling for Bioacoustic Monitoring** — Hamer, Laber & Denton, 2023, Climate Change AI ;
   Zenodo 10.5281/zenodo.11585179. Recherche par similarité puis tête légère : la boucle du projet.
 - **Whombat** — Martínez Balvanera et al., 2025, *Methods in Ecology and Evolution*. Outil

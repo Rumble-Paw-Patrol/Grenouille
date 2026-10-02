@@ -218,6 +218,19 @@ def test_spectrogram_and_player_bytes():
     assert rate == SR and np.abs(data).max() == pytest.approx(0.2, rel=0.01)
 
 
+def test_player_bytes_keep_only_the_band():
+    """« N'écouter que la bande » : un son hors bande disparaît, un son dans la bande reste."""
+    t = np.arange(2 * SR) / SR
+    inside = np.sin(2 * np.pi * 5000 * t).astype(np.float32) * 0.1
+    outside = np.sin(2 * np.pi * 1000 * t).astype(np.float32) * 0.1
+    band = (4400, 5500)
+    kept, _ = sf.read(io.BytesIO(wav_bytes(inside, SR, band_hz=band)))
+    removed, _ = sf.read(io.BytesIO(wav_bytes(outside, SR, band_hz=band)))
+    middle = slice(SR // 2, 3 * SR // 2)  # hors des bords du filtre
+    assert np.abs(kept[middle]).max() == pytest.approx(0.1, rel=0.05)
+    assert np.abs(removed[middle]).max() < 0.005
+
+
 def test_local_time_is_shown_in_guiana_time():
     assert local_time("2026-01-10T10:00:00Z", -3) == "2026-01-10 07:00"
     assert local_time(None, -3) == "?"

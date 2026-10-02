@@ -1346,17 +1346,17 @@ def cluster_label_command(
     typer.echo(f"{written} fenêtres étiquetées en bloc (source bulk)")
 
 
-@app.command("yapat-export")
-def yapat_export(
+@app.command("clips-export")
+def clips_export(
     ctx: typer.Context,
     queue: Annotated[Path, typer.Argument(help="File de candidats (CSV).")],
-    name: Annotated[str, typer.Option(help="Dossier d'export sous paths.exports.")] = "yapat",
+    name: Annotated[str, typer.Option(help="Dossier d'export sous paths.exports.")] = "extraits",
     context: Annotated[
         float, typer.Option(help="Secondes de contexte autour de la fenêtre.")
     ] = 2.0,
 ) -> None:
-    """Extraits WAV d'une file + manifest.csv, pour YAPAT ou tout outil externe. Lecture seule
-    de l'audio d'origine ; l'export est écrit sous paths.exports."""
+    """Extraits WAV d'une file + manifest.csv, pour un outil externe (Raven, Audacity…). Lecture
+    seule de l'audio d'origine ; l'export est écrit sous paths.exports."""
     from blanci.annotation.selection import export_clips
     from blanci.annotation.workbench import load_candidates
 
@@ -1372,14 +1372,14 @@ def yapat_export(
     typer.echo(f"extraits et manifeste : {manifest}")
 
 
-@app.command("yapat-import")
-def yapat_import(
+@app.command("clips-import")
+def clips_import(
     ctx: typer.Context,
     manifest: Annotated[Path, typer.Argument(help="manifest.csv de l'export.")],
     answers: Annotated[Path, typer.Argument(help="Réponses de l'outil externe (CSV, Excel).")],
     annotator: Annotated[str | None, typer.Option(help="Qui a annoté.")] = None,
 ) -> None:
-    """Relit les réponses d'un outil externe sur des extraits exportés (source « yapat »)."""
+    """Relit les réponses d'un outil externe sur des extraits exportés (source « external »)."""
     from blanci.annotation.selection import import_clip_labels
 
     cfg = _cfg(ctx)
@@ -1387,7 +1387,7 @@ def yapat_import(
         connect(config_path(cfg, "db")),
         manifest,
         answers,
-        cfg["selection"].get("yapat_label_map") or {},
+        cfg["selection"].get("clip_label_map") or {},
         annotator,
     )
     typer.echo(f"{written} labels ajoutés")

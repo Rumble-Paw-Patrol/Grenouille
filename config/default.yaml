@@ -10,7 +10,7 @@ paths:
   models: data/models
   frozen_test: data/frozen_test        # jeu gelé, lecture seule
   reports: data/reports
-  exports: data/exports             # extraits audio pour un outil externe (YAPAT…)
+  exports: data/exports             # extraits audio pour un outil externe (Raven, Audacity…)
 
 audio:
   # Formats inventoriés (lus par libsndfile). Les Song Meter écrivent en WAV ou en FLAC.
@@ -426,6 +426,6 @@ selection:
     secondary_months: [11, 12]
     site_hours: {Molokoi: [[7, 17]]}   # probabilité de détection ≈ 1 de 7 à 17 h (§5)
     shares: {priority: 0.6, secondary: 0.2, outside: 0.2}
-  # Passerelle YAPAT : traduction de ses étiquettes vers le schéma de labels (à compléter au
-  # premier export réel, son format n'est pas documenté).
-  yapat_label_map: {}
+  # Passerelle vers un outil externe (`clips-export`, `clips-import`) : traduction de ses
+  # étiquettes vers le schéma de labels (à compléter au premier fichier réel).
+  clip_label_map: {}

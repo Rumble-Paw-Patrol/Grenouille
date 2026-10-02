@@ -159,7 +159,7 @@ def test_embedding_map_and_selection_on_the_map(scored, cfg):  # noqa: F811
     assert len(queue) == 4 and (queue["reason"] == "map").all()
 
 
-def test_yapat_bridge_exports_clips_and_reads_answers_back(scored, cfg, tmp_path):  # noqa: F811
+def test_clip_bridge_exports_clips_and_reads_answers_back(scored, cfg, tmp_path):  # noqa: F811
     queue = select_candidates(scored, cfg, "random", n=3, peak_hours=False)
     raw = tmp_path / "raw"
     cfg["paths"]["raw"] = str(raw)

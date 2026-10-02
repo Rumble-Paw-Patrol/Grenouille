@@ -8,6 +8,8 @@
   60-20-20 à proportions réglables, similarité, couverture, groupes, audit, hasard, negative
   mining, phénologie, suspects, congénères), ou la **carte des embeddings** (YAPAT fait
   maison) : on entoure une zone de points, on l'écoute.
+- **Écoute** : deux canaux, volume, et « N'écouter que la bande » (passe-bande sur
+  `signal.band_hz`, les pointillés du spectrogramme) ; rien de cela ne touche l'audio d'origine.
 - **Réponse** : classe, qualité, espèce, commentaire, puis « Envoyer ▶ » (ou Entrée dans un
   champ) : le label est ajouté (jamais écrasé) et la fenêtre suivante s'affiche.
 - **Groupes** : une file tirée par groupes montre, groupe par groupe, ce qui a été entendu ; un
@@ -374,6 +376,12 @@ def main() -> None:
         )
         context_s = st.slider("Contexte autour de la fenêtre (s)", 0.0, 10.0, 3.0, 0.5)
         gain_db = st.slider("Volume d'écoute (dB, n'agit que sur l'écoute)", 0, 30, 0, 3)
+        band_hz = tuple(cfg["signal"]["band_hz"])
+        band_only = st.checkbox(
+            f"N'écouter que la bande ({band_hz[0] / 1000:g}–{band_hz[1] / 1000:g} kHz)",
+            value=False,
+            help="Passe-bande entre les pointillés du spectrogramme ; n'agit que sur l'écoute.",
+        )
 
     if mode == MAP:
         _map_page(cfg, con, encoder, config)
@@ -425,13 +433,13 @@ def main() -> None:
         st.error(f"Lecture impossible : {exc}")
         return
     wav, sr, start = clips[channel]
-    st.pyplot(
-        _figure(wav, sr, start, candidate["offset_s"], candidate["dur_s"], cfg["signal"]["band_hz"])
-    )
+    st.pyplot(_figure(wav, sr, start, candidate["offset_s"], candidate["dur_s"], band_hz))
     players = st.columns(2)
     for column, (c, (w, rate, _)) in zip(players, clips.items(), strict=True):
         column.markdown(f"**{CHANNELS[c]}**")
-        column.audio(wav_bytes(w, rate, gain_db), format="audio/wav")
+        column.audio(
+            wav_bytes(w, rate, gain_db, band_hz if band_only else None), format="audio/wav"
+        )
 
     _answer_form(con, candidate, chosen, pos, annotator, channel, skip_done, key)
 

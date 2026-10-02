@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from blanci.annotation.active import build_queue
+from blanci.annotation.selection import build_queue
 
 MICS = ["M1", "M2", "M3", "M4"]
 HOURS = [7, 8, 15, 16]  # heures de pic (§5)
