@@ -40,7 +40,7 @@ from blanci.core.db import window_id_for
 from blanci.embedding.grid import window_grid
 from blanci.evaluation.evaluate import evaluate, grouped_folds
 from blanci.evaluation.oof import labels_fingerprint, oof_frame, save_oof
-from blanci.heads.sequential import detect_onsets
+from blanci.heads.signal_processing import detect_onsets
 from blanci.inputs.dataset import (
     EXCLUDED_LABELS,
     benchmark_recordings,

@@ -197,7 +197,7 @@ def test_resume_refuses_another_channel_in_the_same_stock(workspace):
 
 
 def test_upstream_tag_names_non_default_filter_settings():
-    from blanci.heads.sequential import Upstream
+    from blanci.heads.signal_processing import Upstream
 
     plain = Upstream(transforms={"bandpass": {"band_hz": [3000, 7000], "order": 4}})
     assert plain.transform_tag() == "bp3-7k"  # défaut : nom inchangé, stocks existants gardés
@@ -296,11 +296,55 @@ def test_unreadable_file_is_counted_not_fatal(workspace):
     assert report.errors == 1 and report.recordings == 1
 
 
+# --- Rééchantillonnage ------------------------------------------------------------------------
+
+
+class HalfRateEncoder(FakeEncoder):
+    """Encodeur à 8 kHz devant des fichiers à 16 kHz : il faut rééchantillonner."""
+
+    name = "half"
+    sample_rate = SR // 2
+
+
+def test_recording_is_resampled_once_before_the_windows_are_cut(workspace):
+    con, raw, store_root = workspace
+    add_recording(con, raw, "r.wav")
+    whole = HalfRateEncoder()
+    seen = []
+    whole._prepare = lambda wav, sr: seen.append((wav.shape, sr)) or np.asarray(wav)
+    embed_recordings(con, whole, recordings_of(con), raw, store_root)
+    assert seen == [((7, int(WINDOW_S * SR // 2)), SR // 2)]  # déjà à la fréquence de l'encodeur
+    params = json.loads(con.execute("SELECT params_json FROM models").fetchone()[0])
+    assert params["resample"] == "recording"
+
+
+def test_resampling_mode_belongs_to_the_stock(workspace):
+    """Fenêtre par fenêtre ou enregistrement entier : presque le même embedding, jamais mêlés."""
+    con, raw, store_root = workspace
+    add_recording(con, raw, "r.wav")
+    embed_recordings(con, HalfRateEncoder(), recordings_of(con), raw, store_root / "a")
+    with pytest.raises(ValueError, match="resample"):
+        embed_recordings(
+            con, HalfRateEncoder(), recordings_of(con), raw, store_root / "a", resample="window"
+        )
+    whole = EmbeddingStore(store_root / "a", "half-1").load()[1].astype(np.float32)
+    con.execute("UPDATE models SET params_json = '{}'")  # stock d'avant ce réglage : « window »
+    with pytest.raises(ValueError, match="window"):
+        embed_recordings(con, HalfRateEncoder(), recordings_of(con), raw, store_root / "b")
+    embed_recordings(
+        con, HalfRateEncoder(), recordings_of(con), raw, store_root / "b", resample="window"
+    )
+    each = EmbeddingStore(store_root / "b", "half-1").load()[1].astype(np.float32)
+    # Moyenne et écart-type des fenêtres : les mêmes ; les extrêmes diffèrent aux bords, où le
+    # filtre d'une fenêtre rééchantillonnée seule ne voit que du silence autour d'elle.
+    np.testing.assert_allclose(whole[:, :2], each[:, :2], atol=1e-3)
+
+
 # --- Contrôle audio avant l'encodage ----------------------------------------------------------
 
 
 def test_qc_pass_leaves_nothing_to_check_during_embed(workspace):
-    """`blanci qc` : contrôle audio et débuts de notes une fois pour toutes, sans encodeur."""
+    """`blanci qc` : contrôle audio une fois pour toutes, sans encodeur."""
     import soundfile as sf
 
     con, raw, store_root = workspace
@@ -311,16 +355,15 @@ def test_qc_pass_leaves_nothing_to_check_during_embed(workspace):
     sf.write(raw / "muet.wav", np.zeros(int(SR * DURATION_S), np.float32), SR, subtype="PCM_16")
 
     def check():
-        return check_recordings(
-            con, recordings_of(con), raw, cfg["qc"], signal_cfg=cfg["signal"], workers=2
-        )
+        return check_recordings(con, recordings_of(con), raw, cfg["qc"], workers=2)
 
-    assert check() == {"checked": 4, "excluded": 1, "onsets": 3, "skipped": 0, "errors": 0}
+    assert check() == {"checked": 4, "excluded": 1, "skipped": 0, "errors": 0}
     row = con.execute("SELECT qc_flags FROM recordings WHERE recording_id = ?", (silent,))
     flags = parse_flags(row.fetchone()[0])
     assert flags["silent"] is True and "indices" in flags
-    assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 3
-    assert check() == {"checked": 0, "excluded": 0, "onsets": 0, "skipped": 4, "errors": 0}
+    assert set(flags) == {"silent", "in_bag", "indices"}
+    assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 0  # pas son rôle
+    assert check() == {"checked": 0, "excluded": 0, "skipped": 4, "errors": 0}
 
     selected = select_recordings(con)
     assert silent not in set(selected["recording_id"])
@@ -344,7 +387,7 @@ def test_qc_pass_counts_unreadable_files_but_stops_if_the_disk_is_gone(workspace
     add_recording(con, raw, "casse.wav")
     (raw / "casse.wav").write_bytes(b"pas un WAV")
     report = check_recordings(con, recordings_of(con), raw, cfg["qc"], workers=1)
-    assert (report["checked"], report["errors"], report["onsets"]) == (1, 1, 0)
+    assert (report["checked"], report["errors"]) == (1, 1)
     with pytest.raises(RuntimeError, match="plus accessible"):
         check_recordings(con, recordings_of(con), raw / "absent", cfg["qc"], workers=1)
 

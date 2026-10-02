@@ -1,5 +1,6 @@
-"""Module séquentiel et seuillage spectral, fusionnés (§3, DECISIONS n° 103) : descripteurs
-du signal calculés hors encodeur, placés là où `sequential.position` le dit.
+"""Module de traitement du signal (l'ancien « module séquentiel », DECISIONS n° 175) et
+seuillage spectral, fusionnés (§3, n° 103) : débuts de notes, rythme, persistance, descripteurs
+du signal calculés hors encodeur, placés là où `signal_processing.position` le dit.
 
 - Rythme : onsets de notes en bande (4,4–5,5 kHz), intervalles entre notes (IOI). A. blanci :
   note de 0,090–0,103 s, IOI 1,200–1,906 s (moyenne 1,414 s).
@@ -9,10 +10,10 @@ du signal calculés hors encodeur, placés là où `sequential.position` le dit.
   signalent plusieurs chanteurs.
 - Spectre : énergie et contraste en bande (comme les baselines).
 
-Emplacements (`sequential.position`, liste, vide = pas du tout) :
+Emplacements (`signal_processing.position`, liste, vide = pas du tout) :
 - `upstream` (amont, avant l'encodeur) : transformations du son et portes (seuillage
   spectral : énergie, contraste ; rythme : notes, intervalles), réglées dans
-  `sequential.upstream` ;
+  `signal_processing.upstream` ;
 - `parallel` : descripteurs de rythme fusionnés avec le score de la tête ;
 - `downstream` (aval) : descripteurs de persistance, qui n'existent qu'après la tête.
 En parallèle et en aval, le module module la décision (fusion), il ne met jamais de veto ; en
@@ -58,7 +59,7 @@ def detect_onsets(
     """Instants (s) de début des événements en bande dont la durée est celle d'une note.
 
     Seuil adaptatif : médiane + k × MAD de l'enveloppe en dB (robuste au fond de chaque
-    enregistrement), enveloppe lissée sur `smooth_s`. Sert au module séquentiel, jamais de
+    enregistrement), enveloppe lissée sur `smooth_s`. Sert au traitement du signal, jamais de
     filtre amont (bande saturée, §3).
     """
     env = band_envelope_db(np.asarray(wav, dtype=np.float64), sr, band, smooth_s)
@@ -143,7 +144,7 @@ def persistence_features(
     }
 
 
-def sequential_features(
+def signal_features(
     onsets: np.ndarray,
     window_scores: np.ndarray,
     threshold: float = 0.5,
@@ -305,9 +306,9 @@ def compute_onsets(
 
 # --- En amont : seuillage spectral, transformations et portes (DECISIONS n° 90, 103) --------------
 #
-# Le module séquentiel et le seuillage spectral ne font qu'un : les mêmes descripteurs du signal
+# Le traitement du signal et le seuillage spectral ne font qu'un : les mêmes descripteurs du signal
 # (énergie et contraste en bande, débuts de notes, rythme, persistance) servent là où
-# `sequential.position` les place. En amont (`upstream`), avant l'encodeur :
+# `signal_processing.position` les place. En amont (`upstream`), avant l'encodeur :
 # - transformations (le son donné à l'encodeur change → autre encodeur, stock `<nom>+<étiquette>`) :
 #   `bandpass` (passe-bande à phase nulle), `denoise` (soustraction spectrale du fond médian) ;
 # - portes (une fenêtre arrêtée n'est pas encodée ; score `GATED_SCORE`, jamais apprise ; un
@@ -430,13 +431,13 @@ def gate_mask(values: pd.DataFrame, gates: dict[str, float], combine: str = "all
 
 
 def _upstream_section(cfg: dict) -> dict:
-    """`sequential.upstream` ; une ancienne config à section `prefilter` reste lue."""
-    section = (cfg.get("sequential", {}) or {}).get("upstream")
+    """`signal_processing.upstream` ; une ancienne config à section `prefilter` reste lue."""
+    section = (cfg.get("signal_processing", {}) or {}).get("upstream")
     return (section if section is not None else cfg.get("prefilter", {})) or {}
 
 
 def upstream_from_cfg(cfg: dict, only: str | list[str] | None = None) -> Upstream:
-    """Fonctionnalités amont activées (`enabled`) dans `sequential.upstream`.
+    """Fonctionnalités amont activées (`enabled`) dans `signal_processing.upstream`.
 
     `only` (option `--upstream`) remplace les interrupteurs : liste de noms (« bandpass,notes »)
     ou « none » ; les réglages (bande, seuils) restent ceux de la config.

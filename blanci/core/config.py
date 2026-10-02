@@ -32,7 +32,10 @@ def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
 def load_config(path: Path | None = None) -> dict[str, Any]:
     cfg = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8"))
     if path is not None:
-        cfg = _merge(cfg, yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {})
+        user = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        if "sequential" in user:  # ancien nom de la section signal_processing (n° 175)
+            user.setdefault("signal_processing", user.pop("sequential"))
+        cfg = _merge(cfg, user)
     return cfg
 
 

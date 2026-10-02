@@ -428,7 +428,7 @@ def gap_candidates(
     con, cfg, encoder_id=None, n=50, mode="scores", version="default", **_
 ) -> pd.DataFrame:
     """Faux négatifs suspects : fenêtres négatives encadrées de positives à moins de
-    `sequential.gap_radius_s` (le miroir des détections isolées, DECISIONS n° 102).
+    `signal_processing.gap_radius_s` (le miroir des détections isolées, DECISIONS n° 102).
 
     - `scores` : fenêtres sous le seuil de la tête, encadrées de fenêtres au-dessus dans le même
       enregistrement ; les plus hautes d'abord, une par enregistrement. Si A. blanci y chante,
@@ -436,9 +436,9 @@ def gap_candidates(
     - `labels` : négatifs annotés entre deux positifs annotés, à réécouter (la réponse s'ajoute
       comme une correction, jamais par-dessus).
     """
-    from blanci.heads.sequential import GAP_RADIUS_S, surrounded_by_positives
+    from blanci.heads.signal_processing import GAP_RADIUS_S, surrounded_by_positives
 
-    radius = float(cfg.get("sequential", {}).get("gap_radius_s", GAP_RADIUS_S))
+    radius = float(cfg.get("signal_processing", {}).get("gap_radius_s", GAP_RADIUS_S))
     if mode == "labels":
         from blanci.inputs.dataset import positive_annotations
         from blanci.inputs.labels import POSITIVE_LABELS

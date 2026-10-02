@@ -41,7 +41,7 @@ from blanci.heads.regularization import (
     precision_at_prevalence,
     threshold_at_prevalence,
 )
-from blanci.heads.sequential import (
+from blanci.heads.signal_processing import (
     GATED_SCORE,
     apply_gate,
     load_onsets,
@@ -1058,7 +1058,7 @@ def evaluate_frozen(
     return out
 
 
-# --- Module séquentiel et fusion (§3, DECISIONS n° 94–95) -------------------------------------
+# --- Module de traitement du signal et fusion (§3, DECISIONS n° 94–95) ----------------------------
 
 # Frontière de décision de la tête logistique (classes équilibrées) : sert à compter les
 # fenêtres « positives » des descripteurs de persistance, à l'entraînement comme au score.
@@ -1074,7 +1074,7 @@ def train_fusion(
 ) -> dict[str, Any]:
     """Évalue puis enregistre la fusion (stacking, §3) au-dessus d'une tête enregistrée.
 
-    Méthode (`fusion.method`), emplacement du module séquentiel (`sequential.position`) et
+    Méthode (`fusion.method`), emplacement du traitement du signal (`signal_processing.position`) et
     autres sources (`fusion.sources`) viennent de la config (`blanci/combination/stacking.py`) :
 
     1. plis communs par micro : dans chaque pli, une tête entraînée sans le micro donne le
@@ -1090,7 +1090,9 @@ def train_fusion(
     version = params["version"]
     bench, head_cfg, fcfg = cfg["benchmark"], cfg["head"], cfg["fusion"]
     method = fcfg.get("method", "logistic")
-    position = positions_from(cfg.get("sequential", {}).get("position", ["parallel", "downstream"]))
+    position = positions_from(
+        cfg.get("signal_processing", {}).get("position", ["parallel", "downstream"])
+    )
     sources = list(fcfg.get("sources") or [])
     level1 = build_level1(
         con,
@@ -1102,7 +1104,7 @@ def train_fusion(
     fused, columns = fused_oof(level1, method, position, cfg, sources)
     if len(columns) == 1:
         raise ValueError(
-            "rien à fusionner : aucun descripteur séquentiel (sequential.position) ni autre "
+            "rien à fusionner : aucun descripteur du signal (signal_processing.position) ni autre "
             "source (fusion.sources) — la tête seule décide déjà"
         )
     y, recordings, head_oof = level1.y, level1.recordings, level1.head.values
@@ -1191,13 +1193,13 @@ def fused_scores(
     Une fusion enregistrée avant la fusion à N entrées (clé `weights`) est relue telle quelle.
     """
     from blanci.combination.fusion import FusionModel, project_scores
-    from blanci.combination.stacking import sequential_features, store_rows
-    from blanci.heads.sequential import gate_mask
+    from blanci.combination.stacking import signal_features, store_rows
+    from blanci.heads.signal_processing import gate_mask
 
     persistence = recording_persistence(scored, fusion_params["persistence_threshold"])
     onsets = load_onsets(con, set(scored["recording_id"]))
     windows = scored.assign(dur_s=window_s)
-    features = sequential_features(windows, persistence, onsets, cfg)
+    features = signal_features(windows, persistence, onsets, cfg)
     if "model" not in fusion_params:  # première version : FusionWeights
         weights = FusionWeights.from_dict(fusion_params["weights"])
         return weights.decision(scored["score"].to_numpy(), features)
@@ -1243,7 +1245,8 @@ def compute_tokens(
     Relit l'audio des enregistrements concernés (lecture seule) et repasse ces fenêtres dans
     l'encodeur : c'est un encodage, limité à ~1 500 fenêtres.
     """
-    from blanci.core.audio import cut_windows, load_audio
+    from blanci.core.audio import load_audio
+    from blanci.embedding.embed import encoder_windows
     from blanci.embedding.encoders import stock_id
     from blanci.heads.attentive import TokenStore
 
@@ -1265,10 +1268,11 @@ def compute_tokens(
     todo = data[~data["window_id"].isin(done)]
     paths = recordings_table(con).set_index("recording_id")["path"]
     report = {"windows": 0, "recordings": 0, "skipped": len(data) - len(todo)}
+    mode = model_params(con, eid).get("resample", "window")  # comme les embeddings du stock
     for rid, group in todo.groupby("recording_id"):
         wav, sr = load_audio(config_path(cfg, "raw") / paths[rid], cfg["audio"]["channel"])
         windows = [(o, encoder.window_s) for o in group["offset_s"]]
-        tokens = encoder.embed_tokens(cut_windows(wav, sr, windows), sr)
+        tokens = encoder.embed_tokens(*encoder_windows(encoder, wav, sr, windows, mode))
         store.write(group["window_id"].tolist(), tokens)
         report["windows"] += len(group)
         report["recordings"] += 1
@@ -1453,17 +1457,17 @@ def activity_curves(
     }
 
 
-# --- Module séquentiel en amont : banc d'essai des portes (DECISIONS n° 90, 103) ------------------
+# --- Module de traitement du signal en amont : banc d'essai des portes (DECISIONS n° 90, 103) -----
 
 
 def window_gate_values(con: sqlite3.Connection, cfg: dict, windows: pd.DataFrame) -> pd.DataFrame:
-    """Valeurs des portes (`sequential.GATES`) de chaque fenêtre (window_id, recording_id,
+    """Valeurs des portes (`signal_processing.GATES`) de chaque fenêtre (window_id, recording_id,
     offset_s, dur_s) : énergie et contraste calculés sur l'audio (lecture seule), gardés en
     cache dans `paths.reports/upstream/gate_values.parquet` ; notes et rythme recomptés sur les
     débuts de notes rangés de l'enregistrement quand ils existent (les mêmes qu'à l'encodage et
     dans la fusion), sinon détectés dans la fenêtre."""
     from blanci.heads.baselines import read_windows
-    from blanci.heads.sequential import GATES, ONSET_GATES, gate_values
+    from blanci.heads.signal_processing import GATES, ONSET_GATES, gate_values
 
     cache_path = config_path(cfg, "reports") / "upstream" / "gate_values.parquet"
     cache = pd.read_parquet(cache_path) if cache_path.exists() else pd.DataFrame()
@@ -1501,10 +1505,10 @@ def upstream_bench(
     encoder_id: str | None = None,
     upstream: Any = None,
 ) -> dict[str, pd.DataFrame]:
-    """Banc d'essai des portes du module séquentiel en amont (seuillage spectral et rythme).
+    """Banc d'essai des portes du traitement du signal en amont (seuillage spectral et rythme).
 
-    - `sweep` : pour chaque porte et chaque seuil de `sequential.GATE_GRIDS`, négatifs arrêtés
-      (calcul économisé) et positifs perdus (rappel plafond, en enregistrements). Sans
+    - `sweep` : pour chaque porte et chaque seuil de `signal_processing.GATE_GRIDS`, négatifs
+      arrêtés (calcul économisé) et positifs perdus (rappel plafond, en enregistrements). Sans
       encodeur, sur les fenêtres des baselines (3 s) ; avec `encoder_id`, sur celles de son
       stock, et l'AP (enregistrements) des scores logistiques hors-pli après la porte
       (approximation : la tête n'est pas réentraînée sans les fenêtres arrêtées) ;
@@ -1513,7 +1517,7 @@ def upstream_bench(
       pli), contre l'absence de porte, par bootstrap apparié.
     """
     from blanci.heads.baselines import evaluation_windows
-    from blanci.heads.sequential import gate_mask, gate_sweep
+    from blanci.heads.signal_processing import gate_mask, gate_sweep
 
     bench, head_cfg = cfg["benchmark"], cfg["head"]
     X = None

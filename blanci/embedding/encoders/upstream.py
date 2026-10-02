@@ -1,4 +1,5 @@
-"""Encodeur précédé des transformations du module séquentiel en amont (`sequential.Upstream`).
+"""Encodeur précédé des transformations du module de traitement du signal en amont
+(`signal_processing.Upstream`).
 
 Le son est transformé à la f_e d'origine, avant le rééchantillonnage de l'encodeur (comme le
 passe-bas du §2). Nom : `<encodeur>+<étiquette>` (« birdmae+bp3-7k ») : son stock
@@ -10,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from blanci.embedding.encoders.base import Encoder
-from blanci.heads.sequential import Upstream
+from blanci.heads.signal_processing import Upstream
 
 
 class UpstreamEncoder:

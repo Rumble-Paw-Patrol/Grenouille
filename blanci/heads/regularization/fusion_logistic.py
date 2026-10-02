@@ -179,7 +179,7 @@ def fit_constrained_logistic(
 
 
 def is_descriptor(column: str) -> bool:
-    """R54, R55 : les entrées courbées sont les descripteurs du module séquentiel. Le score de
+    """R54, R55 : les entrées courbées sont les descripteurs du traitement du signal. Le score de
     la tête (« head ») et les autres sources (« head:<encodeur> »), des scores déjà faits pour
     classer, restent linéaires."""
     return column != "head" and ":" not in column

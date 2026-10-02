@@ -88,7 +88,7 @@ MIGRATIONS = [
         imported_at TEXT NOT NULL
     );
     """,
-    # 2 — débuts de notes par enregistrement (module séquentiel, §3), calculés une fois.
+    # 2 — débuts de notes par enregistrement (traitement du signal, §3), calculés une fois.
     """
     CREATE TABLE onsets (
         recording_id TEXT PRIMARY KEY REFERENCES recordings(recording_id),

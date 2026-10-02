@@ -1,4 +1,4 @@
-"""Module séquentiel en amont : seuillage spectral et portes de rythme (DECISIONS n° 90, 103)."""
+"""Traitement du signal en amont : seuillage spectral et portes de rythme (DECISIONS n° 90, 103)."""
 
 import numpy as np
 import pandas as pd
@@ -12,7 +12,7 @@ from blanci.embedding.encoders.base import BaseEncoder
 from blanci.embedding.encoders.upstream import UpstreamEncoder
 from blanci.embedding.store import EmbeddingStore, gated_mask
 from blanci.heads.head import oof_scores
-from blanci.heads.sequential import (
+from blanci.heads.signal_processing import (
     GATED_SCORE,
     Upstream,
     apply_gate,
@@ -96,9 +96,9 @@ def test_command_line_choice_replaces_the_switches():
 
 def test_config_switches_and_thresholds_are_read():
     cfg = load_config()
-    cfg["sequential"]["upstream"]["denoise"]["enabled"] = True
-    cfg["sequential"]["upstream"]["gates"]["band_energy"] = {"enabled": True, "min_db": 9.0}
-    cfg["sequential"]["upstream"]["gates"]["combine"] = "any"
+    cfg["signal_processing"]["upstream"]["denoise"]["enabled"] = True
+    cfg["signal_processing"]["upstream"]["gates"]["band_energy"] = {"enabled": True, "min_db": 9.0}
+    cfg["signal_processing"]["upstream"]["gates"]["combine"] = "any"
     upstream = upstream_from_cfg(cfg)
     assert list(upstream.transforms) == ["denoise"]
     assert upstream.gates == {"band_energy": 9.0} and upstream.combine == "any"
@@ -259,16 +259,16 @@ def test_rhythm_gates_count_the_recording_onsets():
 
 def test_old_prefilter_section_is_still_read():
     cfg = load_config()
-    cfg.pop("sequential")
+    cfg.pop("signal_processing")
     cfg["prefilter"] = {"gates": {"notes": {"enabled": True, "min_count": 2}}}
     assert upstream_from_cfg(cfg).gates == {"notes": 2.0}
 
 
 def test_decision_chain_uses_the_rhythm_gates_or_notes_by_default():
-    from blanci.heads.sequential import onset_gates
+    from blanci.heads.signal_processing import onset_gates
 
     cfg = load_config()
     assert onset_gates(cfg) == ({"notes": 1.0}, "all")
-    cfg["sequential"]["upstream"]["gates"]["rhythm"] = {"enabled": True, "min_count": 2}
-    cfg["sequential"]["upstream"]["gates"]["band_energy"]["enabled"] = True
+    cfg["signal_processing"]["upstream"]["gates"]["rhythm"] = {"enabled": True, "min_count": 2}
+    cfg["signal_processing"]["upstream"]["gates"]["band_energy"]["enabled"] = True
     assert onset_gates(cfg) == ({"rhythm": 2.0}, "all")  # les portes spectrales : à l'encodage

@@ -27,12 +27,12 @@ import numpy as np
 import pandas as pd
 
 from blanci.core.ahead import ahead as read_ahead
-from blanci.core.audio import cut_windows, load_audio
+from blanci.core.audio import cut_windows, load_audio, resample
 from blanci.core.db import utc_now, window_id_for
 from blanci.embedding.encoders.base import Encoder, stock_id
 from blanci.embedding.grid import hop_for_overlap, overlap_of, window_grid
 from blanci.embedding.store import GATED, EmbeddingStore
-from blanci.heads.sequential import (
+from blanci.heads.signal_processing import (
     Upstream,
     gate_values,
     load_onsets,
@@ -115,6 +115,33 @@ class _Audio:
     failed: bool = False  # fichier illisible
     flags: dict[str, Any] | None = None  # drapeaux audio, si le contrôle restait à faire
     onsets: np.ndarray | None = None  # débuts de notes, s'ils restaient à calculer
+    windows: list | None = None  # grille de l'enregistrement
+    cut: np.ndarray | None = None  # ses fenêtres, prêtes pour l'encodeur...
+    rate: int = 0  # ...et leur fréquence d'échantillonnage
+
+
+RESAMPLE_MODES = ("recording", "window")
+
+
+def resample_mode(encoder: Encoder, mode: str = "recording") -> str:
+    """Où se fait le rééchantillonnage vers la fréquence de l'encodeur (`encoders.resample`) :
+    « recording », sur l'enregistrement entier avant la découpe (chaque seconde une seule fois,
+    et le filtre voit le vrai son de part et d'autre de chaque fenêtre) ; « window », fenêtre
+    par fenêtre dans l'encodeur (stocks d'avant le n° 176). Un encodeur enveloppé (passe-bas,
+    transformations en amont) transforme le son à sa fréquence d'origine : il reste à « window »."""
+    if mode not in RESAMPLE_MODES:
+        raise ValueError(f"encoders.resample : {mode!r} inconnu (attendu : {RESAMPLE_MODES})")
+    return "window" if hasattr(encoder, "inner") else mode
+
+
+def encoder_windows(
+    encoder: Encoder, wav: np.ndarray, sr: int, windows: list, mode: str
+) -> tuple[np.ndarray, int]:
+    """Fenêtres à donner à `encoder.embed`, et leur fréquence d'échantillonnage."""
+    target = int(encoder.sample_rate)
+    if mode == "recording" and sr != target:
+        return cut_windows(resample(wav, sr, target), target, windows), target
+    return cut_windows(wav, sr, windows), sr
 
 
 def _flush(
@@ -169,10 +196,11 @@ def embed_recordings(
     qc_thresholds: dict | None = None,
     gates: Upstream | None = None,
     ahead: int = 2,
+    resample: str = "recording",
 ) -> EmbedReport:
     """Encode les enregistrements. L'audio est déjà en mémoire, une seule lecture sert aussi :
     - avec `signal_cfg`, aux débuts de notes de chaque enregistrement qui n'en a pas encore
-      (module séquentiel, §3) ;
+      (module de traitement du signal, §3) ;
     - avec `qc_thresholds`, au contrôle audio de chaque enregistrement qui ne l'a pas encore
       eu ; s'il lève un drapeau d'exclusion (silencieux, micro dans sac), l'enregistrement
       n'est pas encodé, sauf si A. blanci y a été entendu.
@@ -180,7 +208,7 @@ def embed_recordings(
     `overlap` : chevauchement des fenêtres (0 à 0,99) ; hors 50 %, le stock porte le
     chevauchement dans son nom (`stock_id`).
 
-    `gates` (module séquentiel en amont, portes actives seulement) : une fenêtre arrêtée n'est
+    `gates` (traitement du signal en amont, portes actives seulement) : une fenêtre arrêtée n'est
     pas encodée ; elle est rangée avec un embedding nul et `gated` vrai, pour que l'agrégation
     la compte (score le plus bas) et que l'entraînement l'ignore. Stock `<id>+g-…`.
 
@@ -188,13 +216,15 @@ def embed_recordings(
     en amont est refusé (`check_stock_identity`) : la reprise y ajouterait des embeddings qui
     ne se comparent pas aux siens (DECISIONS n° 143).
 
-    `ahead` : enregistrements lus et contrôlés d'avance par le fil de lecture (0 : aucun)."""
+    `ahead` : enregistrements lus et contrôlés d'avance par le fil de lecture (0 : aucun).
+    `resample` : voir `resample_mode` ; rangé avec le stock, qui refuse d'en changer."""
     eid = stock_id(encoder, overlap)
     if gates is not None and gates.gates:
         eid = f"{eid}+{gates.gate_tag()}"
     else:
         gates = None
-    check_stock_identity(con, eid, stock_identity(encoder, channel))
+    mode = resample_mode(encoder, resample)
+    check_stock_identity(con, eid, stock_identity(encoder, channel, mode))
     protected = positive_recordings(con) if qc_thresholds is not None else set()
     with_onsets = {row[0] for row in con.execute("SELECT recording_id FROM onsets")}
     store = EmbeddingStore(store_root, eid)
@@ -217,6 +247,8 @@ def embed_recordings(
                 return audio  # sera écarté : pas de débuts de notes
         if signal_cfg is not None and rec.recording_id not in with_onsets:
             audio.onsets = recording_onsets(wav, sr, signal_cfg)
+        audio.windows = window_grid(len(wav) / sr, window_s, hop_s)
+        audio.cut, audio.rate = encoder_windows(encoder, wav, sr, audio.windows, mode)
         return audio
 
     for (dataset, site, month), group in recordings.groupby(["dataset", "site", "month"]):
@@ -245,8 +277,10 @@ def embed_recordings(
                     found = recording_onsets(wav, sr, signal_cfg)
                 store_onsets(con, rec.recording_id, found, channel)
                 with_onsets.add(rec.recording_id)
-            windows = window_grid(len(wav) / sr, window_s, hop_s)
-            cut = cut_windows(wav, sr, windows)
+            if audio.cut is None:  # contrôle audio prévu écartant, démenti par la base
+                audio.windows = window_grid(len(wav) / sr, window_s, hop_s)
+                audio.cut, audio.rate = encoder_windows(encoder, wav, sr, audio.windows, mode)
+            windows, cut, rate = audio.windows, audio.cut, audio.rate
             passed = np.ones(len(windows), dtype=bool)
             if gates is not None:  # notes et rythme : les débuts de notes de l'enregistrement
                 if found is None:
@@ -254,7 +288,7 @@ def embed_recordings(
                 if found is None:
                     found = recording_onsets(wav, sr, gates.signal_cfg)
                 values = gate_values(
-                    cut,
+                    cut if rate == sr else cut_windows(wav, sr, windows),  # f_e d'origine
                     sr,
                     gates.signal_cfg,
                     offsets_s=np.array([o for o, _ in windows]),
@@ -266,7 +300,7 @@ def embed_recordings(
             start = perf_counter()
             emb = np.zeros((len(windows), encoder.dim), dtype=np.float32)
             if passed.any():
-                emb[passed] = encoder.embed(cut[passed], sr)
+                emb[passed] = encoder.embed(cut[passed], rate)
             report.encode_s += perf_counter() - start
             ids = [window_id_for(rec.recording_id, offset, dur) for offset, dur in windows]
             con.executemany(
@@ -304,15 +338,22 @@ def embed_recordings(
         _flush(store, con, metas, embs, dataset, site, month)
         store.consolidate(dataset, site, month)
 
-    register_encoder(con, encoder, hop_s, report, channel, gates)
+    register_encoder(con, encoder, hop_s, report, channel, gates, mode)
     return report
 
 
-def stock_identity(encoder: Encoder, channel: int | str) -> dict[str, Any]:
+# Réglage d'un stock rangé avant que ce réglage n'existe.
+LEGACY_IDENTITY = {"resample": "window"}
+
+
+def stock_identity(
+    encoder: Encoder, channel: int | str, resample: str = "window"
+) -> dict[str, Any]:
     """Réglages qui font qu'un embedding se compare aux autres de son stock sans être dans son
     nom : le canal lu, le checkpoint (bacpipe `birdmae_base`), les transformations en amont
-    avec tous leurs réglages. Rangés avec l'encodeur (`register_encoder`)."""
-    identity: dict[str, Any] = {"channel": channel}
+    avec tous leurs réglages, le rééchantillonnage (`resample_mode`). Rangés avec l'encodeur
+    (`register_encoder`)."""
+    identity: dict[str, Any] = {"channel": channel, "resample": resample}
     inner = getattr(encoder, "inner", encoder)  # UpstreamEncoder, LowpassEncoder
     checkpoint = getattr(encoder, "checkpoint", None) or getattr(inner, "checkpoint", None)
     if checkpoint:
@@ -325,7 +366,8 @@ def stock_identity(encoder: Encoder, channel: int | str) -> dict[str, Any]:
 
 def check_stock_identity(con: sqlite3.Connection, eid: str, identity: dict[str, Any]) -> None:
     """ValueError si le stock `eid` a été encodé avec d'autres réglages (`stock_identity`). Un
-    réglage absent de la base (stock d'avant ce contrôle) n'est pas comparé."""
+    réglage absent de la base (stock d'avant ce contrôle) vaut `LEGACY_IDENTITY`, sinon n'est
+    pas comparé."""
     row = con.execute(
         "SELECT params_json FROM models WHERE model_id = ? AND kind = 'encoder'", (eid,)
     ).fetchone()
@@ -333,9 +375,10 @@ def check_stock_identity(con: sqlite3.Connection, eid: str, identity: dict[str, 
         return
     stored = json.loads(row[0] or "{}")
     for key, value in identity.items():
-        if key in stored and stored[key] != value:
+        known = stored.get(key, LEGACY_IDENTITY.get(key))
+        if known is not None and known != value:
             raise ValueError(
-                f"le stock {eid} a été encodé avec {key} = {stored[key]!r}, pas {value!r} : "
+                f"le stock {eid} a été encodé avec {key} = {known!r}, pas {value!r} : "
                 "les embeddings ne se comparent pas ; reprendre avec le même réglage, ou "
                 "encoder sous un autre nom (config encoders)"
             )
@@ -348,13 +391,14 @@ def register_encoder(
     report: EmbedReport,
     channel: int | str = "mean",
     gates: Upstream | None = None,
+    resample: str = "window",
 ) -> None:
     params: dict[str, Any] = {
         "sample_rate": encoder.sample_rate,
         "window_s": encoder.window_s,
         "hop_s": hop_s,
         "overlap": round(overlap_of(encoder.window_s, hop_s), 4),
-        **stock_identity(encoder, channel),  # canal, checkpoint, transformations (n° 143)
+        **stock_identity(encoder, channel, resample),  # canal, checkpoint… (n° 143)
         "dim": encoder.dim,
         "has_tokens": encoder.has_tokens,
         "gates": {"thresholds": gates.gates, "combine": gates.combine} if gates else None,

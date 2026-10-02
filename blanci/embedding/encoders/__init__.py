@@ -15,14 +15,15 @@ def get_encoder(name: str, cfg: dict[str, Any], upstream: Any = None) -> Encoder
 
     Une entrée de `encoders.models` avec `lowpass_hz` enveloppe l'encodeur d'un passe-bas
     (contrôle du §2, `blanci/embedding/encoders/lowpass.py`) ; avec `transforms` (ex. `{bandpass:
-    {band_hz: [3000, 7000]}}`), des transformations du module séquentiel en amont. `upstream`
-    (`blanci.heads.sequential.Upstream`, option `--upstream`) y ajoute ses transformations actives.
+    {band_hz: [3000, 7000]}}`), des transformations du traitement du signal en amont. `upstream`
+    (`blanci.heads.signal_processing.Upstream`, option `--upstream`) y ajoute ses transformations
+    actives.
     """
     return _with_transforms(_get_encoder(name, cfg), name, cfg, upstream)
 
 
 def _with_transforms(encoder: Encoder, name: str, cfg: dict[str, Any], upstream: Any) -> Encoder:
-    from blanci.heads.sequential import Upstream
+    from blanci.heads.signal_processing import Upstream
 
     spec = cfg["encoders"]["models"].get(name) or {}
     transforms = dict(spec.get("transforms") or {})
@@ -31,7 +32,7 @@ def _with_transforms(encoder: Encoder, name: str, cfg: dict[str, Any], upstream:
     if not transforms:
         return encoder
     from blanci.embedding.encoders.upstream import UpstreamEncoder
-    from blanci.heads.sequential import upstream_from_cfg
+    from blanci.heads.signal_processing import upstream_from_cfg
 
     defaults = upstream_from_cfg(cfg, only=list(transforms)).transforms  # réglages manquants
     merged = {k: defaults.get(k, {}) | (v or {}) for k, v in transforms.items()}

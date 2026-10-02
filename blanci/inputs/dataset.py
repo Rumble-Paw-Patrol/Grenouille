@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 
 from blanci.embedding.store import EmbeddingStore, gated_mask
-from blanci.heads.sequential import GAP_RADIUS_S, surrounded_by_positives
+from blanci.heads.signal_processing import GAP_RADIUS_S, surrounded_by_positives
 from blanci.inputs.labels import POSITIVE_LABELS
 from blanci.inputs.qc import EXCLUDING_FLAGS, is_excluded
 
@@ -49,7 +49,7 @@ def pairing_options(cfg: dict) -> dict:
         "utc_offset_h": cfg["recorder"]["filename_utc_offset_h"],
         "strategy": bench.get("pairing", "nearest"),
         "min_gap_min": bench.get("same_day_min_gap_min", 30),
-        "gap_radius_s": cfg.get("sequential", {}).get("gap_radius_s", GAP_RADIUS_S),
+        "gap_radius_s": cfg.get("signal_processing", {}).get("gap_radius_s", GAP_RADIUS_S),
     }
 
 

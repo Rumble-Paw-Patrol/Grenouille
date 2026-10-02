@@ -25,7 +25,7 @@ from blanci.embedding.grid import hop_for_overlap, window_grid
 from blanci.embedding.index import l2_normalize
 from blanci.embedding.store import EmbeddingStore
 from blanci.heads.head import differential_prototype
-from blanci.heads.sequential import (
+from blanci.heads.signal_processing import (
     GAP_RADIUS_S,
     GATES,
     Upstream,
@@ -213,7 +213,7 @@ def recording_windows(
         distance = gap.min(axis=1)
     else:
         overlaps, distance = np.zeros(len(out), dtype=bool), np.full(len(out), np.nan)
-    radius = (cfg.get("sequential") or {}).get("gap_radius_s", GAP_RADIUS_S)
+    radius = (cfg.get("signal_processing") or {}).get("gap_radius_s", GAP_RADIUS_S)
     out["overlaps_positive"] = overlaps
     out["distance_to_positive_s"] = distance
     out["suspect_fn"] = ~overlaps & surrounded_by_positives(out["center_s"], (p0 + p1) / 2, radius)
@@ -326,7 +326,7 @@ def window_indices(
     return values.set_axis(windows.index)
 
 
-# --- Module séquentiel en amont ------------------------------------------------------------------
+# --- Module de traitement du signal en amont ------------------------------------------------------
 
 
 def upstream_stages(wav: np.ndarray, sr: int, upstream: Upstream) -> list[tuple[str, np.ndarray]]:
@@ -391,7 +391,7 @@ def subtract_background(
     """Soustraction spectrale du fond d'un autre segment (le négatif apparié) : |X| −
     strength × médiane de |B| par fréquence, jamais sous `floor` × |X| ; la phase de X est
     gardée. L'analogue sonore du prototype différentiel, qui retranche aux positifs le
-    centroïde de leurs négatifs appariés (`sequential.denoise` prend le fond dans la fenêtre
+    centroïde de leurs négatifs appariés (`signal_processing.denoise` prend le fond dans la fenêtre
     elle-même)."""
     nperseg = int(2 ** round(np.log2(max(16, frame_s * sr))))
     noverlap = nperseg * 3 // 4

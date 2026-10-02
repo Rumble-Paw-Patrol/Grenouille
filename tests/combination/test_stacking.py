@@ -1,4 +1,4 @@
-"""Fusion à N entrées et emplacement du module séquentiel (DECISIONS n° 94–95)."""
+"""Fusion à N entrées et emplacement du module de traitement du signal (DECISIONS n° 94–95)."""
 
 import json
 
@@ -28,7 +28,7 @@ from blanci.core.db import connect, recording_id_for, utc_now, window_id_for
 from blanci.embedding.store import EmbeddingStore
 from blanci.evaluation.evaluate import average_precision
 from blanci.heads.regularization import choose_fusion_C
-from blanci.heads.sequential import store_onsets
+from blanci.heads.signal_processing import store_onsets
 from tests.conftest import quick_cfg
 
 # --- Modèles de fusion ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ def test_project_scores_takes_the_best_overlapping_window():
     assert out[0] == 0.9 and out[1] == 0.3 and np.isnan(out[2])
 
 
-# --- Emplacement du module séquentiel -----------------------------------------------------------
+# --- Emplacement du module de traitement du signal ------------------------------------------------
 
 
 def test_positions_are_parsed_and_ordered():
@@ -172,8 +172,8 @@ def test_onset_counts_and_upstream_gate():
     assert counts.loc[0].tolist() == [3.0, 1.0] and counts.loc[1].tolist() == [0.0, 0.0]
     assert np.isnan(counts.loc[2, "notes"])
     cfg = load_config()
-    cfg["sequential"]["upstream"]["gates"]["notes"]["enabled"] = True
-    cfg["sequential"]["upstream"]["gates"]["rhythm"]["enabled"] = True
+    cfg["signal_processing"]["upstream"]["gates"]["notes"]["enabled"] = True
+    cfg["signal_processing"]["upstream"]["gates"]["rhythm"]["enabled"] = True
     assert upstream_pass(counts, cfg).tolist() == [True, False, True]
 
 
@@ -302,10 +302,10 @@ def test_fusion_benchmark_compares_positions_and_methods(corpus, cfg):
 
 def test_upstream_gate_stops_windows_without_notes(corpus, cfg):
     from blanci.combination.stacking import fused_oof
-    from blanci.heads.sequential import GATED_SCORE
+    from blanci.heads.signal_processing import GATED_SCORE
 
     level1 = build_level1(corpus, cfg, "main-1")
-    gates = cfg["sequential"]["upstream"]["gates"]
+    gates = cfg["signal_processing"]["upstream"]["gates"]
     gates["notes"] = {"enabled": True, "min_count": 2}
     gates["rhythm"] = {"enabled": True, "min_count": 1}
     values, _ = fused_oof(level1, "logistic", ["upstream"], cfg)
@@ -319,7 +319,7 @@ def test_production_fusion_with_another_head_decides(corpus, cfg):
     from blanci.service import score_and_decide, train_and_register, train_fusion
 
     cfg["fusion"] |= {"method": "mean", "sources": ["head:other-1"]}
-    cfg["sequential"]["position"] = ["downstream"]
+    cfg["signal_processing"]["position"] = ["downstream"]
     train_and_register(corpus, "main-1", cfg)
     train_and_register(corpus, "other-1", cfg)
     out = train_fusion(corpus, "main-1", cfg)
@@ -332,7 +332,7 @@ def test_production_fusion_with_another_head_decides(corpus, cfg):
 def test_production_fusion_needs_something_to_fuse(corpus, cfg):
     from blanci.service import train_and_register, train_fusion
 
-    cfg["sequential"]["position"] = []
+    cfg["signal_processing"]["position"] = []
     train_and_register(corpus, "main-1", cfg)
     with pytest.raises(ValueError, match="rien à fusionner"):
         train_fusion(corpus, "main-1", cfg)
@@ -574,7 +574,7 @@ def test_R55_very_smooth_is_a_straight_line_and_flat_outside_the_training_range(
     assert np.allclose(far, far[0])  # pas d'extrapolation
 
 
-def test_R54_R55_curve_only_the_sequential_descriptors():
+def test_R54_R55_curve_only_the_signal_processing_descriptors():
     X, y, _ = two_experts(600)
     columns = ["head", "seq", "head:autre-1"]
     for method in ("logistic+R54", "logistic+R55"):

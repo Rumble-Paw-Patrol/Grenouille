@@ -346,7 +346,7 @@ def test_pca_writes_the_lost_variance_curve(embedded):
     assert curve["lost_raw"].is_monotonic_decreasing and curve["lost_raw"].iloc[-1] < 1e-6
 
 
-# --- Module séquentiel et fusion (§3) --------------------------------------------------------
+# --- Module de traitement du signal et fusion (§3) ------------------------------------------------
 
 
 def test_embed_computes_onsets_once(embedded):

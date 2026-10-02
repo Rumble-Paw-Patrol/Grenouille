@@ -78,7 +78,7 @@ def test_fusion_is_quiet_with_enough_positives():
 
 
 def test_fusion_improves_on_a_noisy_head():
-    """Le score séquentiel module la décision : il doit aider, jamais mettre un veto (§3)."""
+    """Le traitement du signal module la décision : il doit aider, jamais mettre un veto (§3)."""
     head, features, y, groups = make_case()
     fused = fusion_oof(as_oof(head), features, y, groups, COLUMNS)
     assert average_precision(y, fused.values) > average_precision(y, head)
@@ -95,7 +95,7 @@ def test_fusion_oof_returns_oof_scores_over_the_same_folds():
         assert not set(groups[train]) & set(groups[test])
 
 
-def test_fusion_handles_missing_sequential_features():
+def test_fusion_handles_missing_signal_features():
     """Un enregistrement sans onset donne des IOI NaN : la fusion ne doit pas s'effondrer."""
     head, features, y, _ = make_case()
     features = features.copy()

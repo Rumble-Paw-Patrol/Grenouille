@@ -13,7 +13,7 @@ Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
 
 | | État |
 |---|---|
-| Chaîne de traitement | écrite et testée : inventaire des enregistrements, embeddings, têtes de classification, module séquentiel (rythme des notes), fusion, évaluation, files de vérification, poste d'annotation, réentraînement |
+| Chaîne de traitement | écrite et testée : inventaire des enregistrements, embeddings, têtes de classification, module de traitement du signal (rythme des notes), fusion, évaluation, files de vérification, poste d'annotation, réentraînement |
 | Choix de l'encodeur | pré-benchmark sur **AnuraSet** (jeu public d'anoures néotropicaux) : 23 encodeurs comparés, chacun avec la tête adaptée à sa sortie. Indicateur, pas verdict : le choix final se fera sur les données de l'ONF le 20/11/2026 |
 | Contrainte d'accès | l'encodeur livré doit être **libre d'accès** (poids publics, licence compatible avec l'usage par l'ONF). Meilleur libre à ce jour : `perch_v2` + sonde à prototypes (AP moyenne par site 0,81) |
 | Annotations | reprises de zéro, par plan de tirage stratifié (point d'écoute, heure, période), vérifiées à l'aveugle par des experts. **Aucun benchmark sur les données de l'ONF avant leur accord** |
@@ -72,9 +72,9 @@ annotation ─► inputs                                      les labels écout�
 | Dossier | Étape | Modules |
 |---|---|---|
 | `core/` | socle | `config`, `db` (SQLite, labels en ajout seul), `audio` |
-| `inputs/` | 1. enregistrements et annotations | `ingest` (inventaire), `qc` (drapeaux : pluie, saturation, micro dans un sac…), `labels` (import des annotations), `dataset`, `frozen` (jeu gelé) |
+| `inputs/` | 1. enregistrements et annotations | `ingest` (inventaire), `qc` (drapeaux : fichiers cassés, silencieux, micro dans un sac…), `labels` (import des annotations), `dataset`, `frozen` (jeu gelé) |
 | `embedding/` | 2. fenêtres → embeddings | `grid` (fenêtres), `encoders/` (bacpipe, esp-aves2, ONNX du livrable, passe-bas, export), `embed`, `store` et `index` (Parquet, similarité) |
-| `heads/` | 3. têtes de détection | `head` (prototypes, logistique…), `attentive`, `proto_probe`, `gated`, `dann`, `pooling`, `losses`, `regularization/` (R1 à R84), `cluster` ; sans encodeur : `sequential` (rythme des notes), `baselines`, `detectors/` |
+| `heads/` | 3. têtes de détection | `head` (prototypes, logistique…), `attentive`, `proto_probe`, `gated`, `dann`, `pooling`, `losses`, `regularization/` (R1 à R84), `cluster` ; sans encodeur : `signal_processing` (rythme des notes), `baselines`, `detectors/` |
 | `combination/` | 4. combiner les modèles | `stacking`, `fusion` (fusion à deux niveaux), `ensemble` |
 | `evaluation/` | 5. mesurer | `evaluate` (plis par micro, AP, rappel, bootstrap, Wilson), `oof` (scores hors-pli), `benchmark`, `head_benchmark`, `full_benchmark`, `throughput`, `qc_calibration`, `anuraset` (archivé) |
 | `annotation/` | 6. boucle d'écoute | `selection`, `workbench` et `app` (poste d'annotation Streamlit) |
@@ -147,9 +147,9 @@ $A anuraset prepare && $A anuraset profile
 
 | Notebook | Pour |
 |---|---|
-| `01_explorer_une_fenetre` | un enregistrement et une fenêtre à travers la chaîne : écoute, grille, portes, module séquentiel, négatif apparié, embeddings, prototype différentiel |
+| `01_explorer_une_fenetre` | un enregistrement et une fenêtre à travers la chaîne : écoute, grille, portes, module de traitement du signal, négatif apparié, embeddings, prototype différentiel |
 | `02_negatifs_apparies` | ce que contiennent les négatifs appariés de chaque stratégie ; feuille d'écoute, taux de contamination |
-| `03_module_sequentiel` | régler la détection des notes et les seuils des portes, sans encodeur |
+| `03_traitement_du_signal` | régler la détection des notes et les seuils des portes, sans encodeur |
 | `04_attention_jetons` | voir sur le spectrogramme les jetons que pèse la tête d'attention |
 
 Ils lisent la base et l'audio en local : il faut les données de l'ONF pour les exécuter. **Ne

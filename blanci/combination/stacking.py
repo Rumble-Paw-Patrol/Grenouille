@@ -1,10 +1,10 @@
-"""Stacking : entrées de niveau 1, emplacement du module séquentiel, benchmark de la fusion
+"""Stacking : entrées de niveau 1, emplacement du traitement du signal, benchmark de la fusion
 (DECISIONS n° 94–95).
 
 Entrées de niveau 1 d'une fusion, toutes hors-pli, sur les plis communs (`dataset.folds_for`) :
 
 - `head` : score de la tête logistique de l'encodeur principal ;
-- descripteurs du module séquentiel (`fusion.columns`) : rythme dans la fenêtre (débuts de
+- descripteurs du traitement du signal (`fusion.columns`) : rythme dans la fenêtre (débuts de
   notes, calculés sur l'audio) et persistance dans l'enregistrement (calculée sur les scores de
   la tête, pli par pli) ;
 - autres sources (`fusion.sources`, ensemble de modèles) :
@@ -12,11 +12,11 @@ Entrées de niveau 1 d'une fusion, toutes hors-pli, sur les plis communs (`datas
     fenêtres, appliquée à toutes les fenêtres des enregistrements testés, ramenée sur la grille
     de l'encodeur principal (`fusion.project_scores`).
 
-Emplacement du module séquentiel (`sequential.position`, une liste, vide = pas du tout) :
+Emplacement du traitement du signal (`signal_processing.position`, une liste, vide = pas du tout) :
 
 - `upstream` (amont) : le rythme sert de porte — une fenêtre sans assez de débuts de notes, ou
   d'intervalles d'A. blanci, prend le score le plus bas (portes `notes`, `rhythm` de
-  `sequential.upstream`, les mêmes qu'à l'encodage ; module et seuillage ne font qu'un,
+  `signal_processing.upstream`, les mêmes qu'à l'encodage ; module et seuillage ne font qu'un,
   DECISIONS n° 103). Les portes spectrales agissent à l'encodage (stock `+g-…`) ;
 - `parallel` : les descripteurs de rythme (audio, indépendants de l'encodeur) entrent dans la
   fusion à côté du score de la tête ;
@@ -50,7 +50,7 @@ from blanci.embedding.store import EmbeddingStore, gated_mask
 from blanci.evaluation.evaluate import evaluate, grouped_folds, paired_bootstrap, to_recordings
 from blanci.evaluation.oof import labels_fingerprint, oof_frame, save_oof
 from blanci.heads.head import OOFScores, _choose_C, calibration_options, fit_logistic
-from blanci.heads.sequential import (
+from blanci.heads.signal_processing import (
     GATED_SCORE,
     PERSISTENCE_COLUMNS,
     RHYTHM_COLUMNS,
@@ -109,19 +109,19 @@ def store_rows(store: EmbeddingStore, recording_ids: set[str]) -> tuple[pd.DataF
 
 
 def upstream_pass(counts: pd.DataFrame, cfg: dict) -> np.ndarray:
-    """Fenêtres qui passent les portes de rythme du module en amont (`sequential.upstream`,
+    """Fenêtres qui passent les portes de rythme du module en amont (`signal_processing.upstream`,
     `onset_gates`) ; valeur manquante : passe."""
     gates, combine = onset_gates(cfg)
     return gate_mask(counts, gates, combine)
 
 
-def sequential_columns(cfg: dict) -> list[str]:
-    """Descripteurs du module : `sequential.columns` (ou l'ancien `fusion.columns`)."""
-    seq = cfg.get("sequential", {}) or {}
+def signal_columns(cfg: dict) -> list[str]:
+    """Descripteurs du module : `signal_processing.columns` (ou l'ancien `fusion.columns`)."""
+    seq = cfg.get("signal_processing", {}) or {}
     return list(seq.get("columns") or cfg.get("fusion", {}).get("columns") or [])
 
 
-def sequential_features(
+def signal_features(
     windows: pd.DataFrame, persistence: pd.DataFrame, onsets: dict, cfg: dict
 ) -> pd.DataFrame:
     """Rythme dans chaque fenêtre + persistance de son enregistrement."""
@@ -132,7 +132,7 @@ def sequential_features(
 
 def seq_columns(position: list[str], cfg: dict) -> list[str]:
     """Descripteurs de `fusion.columns` que l'emplacement fait entrer dans la fusion."""
-    columns = sequential_columns(cfg)
+    columns = signal_columns(cfg)
     out = []
     if "parallel" in position:
         out += [c for c in columns if c in RHYTHM_COLUMNS]
@@ -223,7 +223,7 @@ def build_level1(
         )
         persistence_parts.append(recording_persistence(scored, PERSISTENCE_THRESHOLD))
     persistence = pd.concat(persistence_parts) if persistence_parts else pd.DataFrame()
-    features = sequential_features(data, persistence, onsets, cfg)
+    features = signal_features(data, persistence, onsets, cfg)
     counts = onset_counts(data, onsets, tuple(cfg["signal"]["ioi_range_s"]))
     extra = pd.DataFrame(index=data.index)
     for source in sources:
@@ -398,7 +398,7 @@ def fusion_benchmark(
     positions: list[list[str]] | None = None,
     sources: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Chaque emplacement du module séquentiel × chaque méthode de fusion, contre la tête
+    """Chaque emplacement du traitement du signal × chaque méthode de fusion, contre la tête
     seule : AP (fenêtres, enregistrements), écart apparié, part de chaque entrée."""
     fcfg = cfg["fusion"]
     methods = methods or list(fcfg.get("benchmark_methods") or FUSION_METHODS)

@@ -19,7 +19,7 @@ Méthodes comparées (`FUSION_METHODS`), toutes sur entrées standardisées sur 
 
 Les suffixes se combinent : `logistic+R50+R52+R56`, `logistic+R50+R55=10` (« =v » : le
 réglage principal, `regularization.FUSION_PARAMETER`). R54 et R55 ne courbent que les
-descripteurs du module séquentiel ; la tête et les autres sources restent linéaires.
+descripteurs du module de traitement du signal ; la tête et les autres sources restent linéaires.
 | weighted | somme pondérée | fixée à la main (`fusion.weights`) |
 | weight_grid | somme pondérée | cherchée sur une grille (AP d'entraînement) |
 | mean | moyenne des entrées | égale |

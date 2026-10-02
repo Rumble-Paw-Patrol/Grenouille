@@ -1,5 +1,5 @@
 """Exploration en notebook (`blanci/exploration/explore.py`) : lecture seule, fenêtres d'un
-enregistrement, module séquentiel, négatifs appariés, embeddings et prototypes."""
+enregistrement, module de traitement du signal, négatifs appariés, embeddings et prototypes."""
 
 import sqlite3
 
@@ -8,11 +8,11 @@ import pandas as pd
 import pytest
 import soundfile as sf
 
-from blanci.exploration import explore as ex
 from blanci.core.db import connect, register_model, window_id_for
 from blanci.embedding.embed import month_of
 from blanci.embedding.store import EmbeddingStore
-from blanci.heads.sequential import GATES, upstream_from_cfg
+from blanci.exploration import explore as ex
+from blanci.heads.signal_processing import GATES, upstream_from_cfg
 from blanci.inputs.ingest import ingest
 from blanci.service import append_label
 

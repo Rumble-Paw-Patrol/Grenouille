@@ -1,12 +1,12 @@
 import numpy as np
 import pytest
 
-from blanci.heads.sequential import (
+from blanci.heads.signal_processing import (
     band_envelope_db,
     detect_onsets,
     persistence_features,
     rhythm_features,
-    sequential_features,
+    signal_features,
 )
 
 # Structure du chant d'A. blanci (§1, Fouquet et al.) : note de 0,090–0,103 s à 4,48–5,41 kHz,
@@ -174,10 +174,10 @@ def test_persistence_is_defined_on_an_empty_recording():
 # --- Assemblage -------------------------------------------------------------------------------
 
 
-def test_sequential_features_merge_rhythm_and_persistence():
+def test_signal_features_merge_rhythm_and_persistence():
     wav, _ = blanci_song()
     onsets = detect_onsets(wav, SR)
-    features = sequential_features(onsets, np.full(40, 0.9), threshold=0.5, duration_s=12.0)
+    features = signal_features(onsets, np.full(40, 0.9), threshold=0.5, duration_s=12.0)
     assert set(features) >= {"ioi_median_s", "frac_ioi_blanci", "frac_windows", "longest_run"}
     assert features["ioi_median_s"] == pytest.approx(IOI_S, abs=0.02)
     assert features["frac_windows"] == 1.0
@@ -185,7 +185,7 @@ def test_sequential_features_merge_rhythm_and_persistence():
 
 def test_note_snr_tracks_the_note_level():
     """Plus la note est forte par rapport au fond, plus le RSB estimé est élevé."""
-    from blanci.heads.sequential import note_snr_db
+    from blanci.heads.signal_processing import note_snr_db
 
     sr = 24_000
     rng = np.random.default_rng(0)
@@ -208,7 +208,7 @@ def test_note_snr_tracks_the_note_level():
 
 def test_onsets_round_trip_through_the_database(tmp_path):
     from blanci.core.db import connect
-    from blanci.heads.sequential import load_onsets, store_onsets
+    from blanci.heads.signal_processing import load_onsets, store_onsets
 
     con = connect(tmp_path / "db.sqlite")
     con.execute(
@@ -222,7 +222,7 @@ def test_onsets_round_trip_through_the_database(tmp_path):
 def test_window_rhythm_counts_only_notes_inside_the_window():
     import pandas as pd
 
-    from blanci.heads.sequential import window_rhythm
+    from blanci.heads.signal_processing import window_rhythm
 
     onsets = {"r1": np.array([0.5, 1.9, 3.3, 4.7, 10.0])}
     windows = pd.DataFrame(
@@ -238,7 +238,7 @@ def test_window_rhythm_counts_only_notes_inside_the_window():
 def test_recording_persistence_uses_every_window_of_the_recording():
     import pandas as pd
 
-    from blanci.heads.sequential import recording_persistence
+    from blanci.heads.signal_processing import recording_persistence
 
     scores = pd.DataFrame(
         {
@@ -257,7 +257,7 @@ def test_recording_persistence_uses_every_window_of_the_recording():
 
 
 def test_surrounded_needs_a_positive_on_both_sides_within_the_radius():
-    from blanci.heads.sequential import surrounded_by_positives
+    from blanci.heads.signal_processing import surrounded_by_positives
 
     positives = np.array([10.0, 20.0])
     centers = np.array([15.0, 5.0, 25.0, 15.0])

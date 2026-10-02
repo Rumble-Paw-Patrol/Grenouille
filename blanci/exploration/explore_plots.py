@@ -12,7 +12,7 @@ from IPython.display import Audio
 
 from blanci.core.audio import resample
 from blanci.exploration.explore import WINDOW_COLUMNS, mean_spectrum_db, spectrogram_db
-from blanci.heads.sequential import GATES, band_envelope_db, detect_onsets, gate_threshold
+from blanci.heads.signal_processing import GATES, band_envelope_db, detect_onsets, gate_threshold
 
 LISTEN_SR = 24_000  # A. blanci chante sous 6 kHz : 24 kHz suffisent et allègent le notebook
 FMAX_HZ = 12_000

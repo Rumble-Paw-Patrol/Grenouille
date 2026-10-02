@@ -2951,3 +2951,52 @@ de Léonard, 01/10/2026.
        ou concentrateur à vérifier. À 40 Mo/s : 1,5 enregistrement/s sans les débuts de notes,
        1,2 avec, soit ≈ 17 h et ≈ 22 h pour les 94 600 enregistrements encodables (≈ 5,5 h et
        ≈ 7 h pour 2026 seul). Avec une liaison USB 3 : ≈ 2 h sans, ≈ 15 h avec.
+
+## 2026-10-02 (soir) — Contrôle audio recentré, module de traitement du signal, rééchantillonnage
+
+174. **Le contrôle audio ne sert qu'à sortir les fichiers cassés ou sans rapport avec le projet**
+     (Léonard ; précise les n° 79 et 173). `blanci qc` ne calcule plus les débuts de notes : ce
+     n'est pas du contrôle, c'est du traitement du signal (`blanci onsets`, ou `embed` au
+     passage). Les drapeaux calculés `rain` et `saturation` sont retirés (`AUDIO_FLAGS` =
+     silencieux, micro dans sac), avec leurs seuils (`qc.clip_fraction`, `qc.rain_flatness`,
+     `qc.rain_min_dbfs`) et leur calibration ; les indices mesurés restent tous rangés
+     (saturation et platitude du spectre comprises), pour ne pas relire 2 To s'il fallait y
+     revenir. Inchangé : le label `rain` et la remarque « pluie » posée à l'écoute
+     (`annotated`), qui sont de l'annotation. Aucun drapeau audio n'était encore en base.
+
+175. **« Module séquentiel » → « module de traitement du signal »** (Léonard : plus clair).
+     `blanci/heads/sequential.py` → `signal_processing.py` (la détection des débuts de notes y
+     était déjà), section de config `sequential` → `signal_processing` (l'ancien nom reste lu
+     dans un fichier utilisateur), `sequential_features` / `sequential_columns` →
+     `signal_features` / `signal_columns`, notebook `03_traitement_du_signal`, tests, README,
+     commandes. Les entrées plus haut du journal, `documentation/old`, la présentation et les
+     images des tableaux gardent l'ancien nom. La section `signal` (bande et durée de la note)
+     ne change pas.
+
+176. **Rééchantillonnage de l'enregistrement entier, avant la découpe** (Léonard, sur
+     proposition du n° 172). Les fichiers sont échantillonnés à 48 kHz, perch_v2 attend
+     32 kHz : la conversion se faisait fenêtre par fenêtre, donc deux fois par seconde de son
+     (chevauchement de moitié), et le filtre ne voyait que du silence autour de chaque fenêtre.
+     Elle se fait maintenant une fois, dans le fil de lecture (`embed.encoder_windows`,
+     `encoders.resample: recording`) : 171 → 80 ms par enregistrement. Les embeddings changent
+     un peu aux bords des fenêtres : le réglage est rangé avec le stock (`resample`), qui
+     refuse d'en changer ; un stock d'avant vaut `window` (à mettre dans la config pour le
+     reprendre). Un encodeur enveloppé (passe-bas, transformations en amont) filtre à la
+     fréquence d'origine et reste à `window`. Les jetons (`blanci tokens`) suivent le réglage
+     de leur stock.
+
+177. **Débit après ces changements, et processeur graphique intégré** (i5-1145G7, secteur).
+     - Bout en bout, 14 enregistrements de RNRT, premier passage (contrôle audio et débuts de
+       notes au passage) : 4,75 s par enregistrement avec `recording`, 5,19 avec `window` ;
+       contrôle et débuts de notes déjà faits : 5,4 contre 5,6. D'un passage à l'autre, la
+       machine varie de ± 8 % (échauffement) : le gain du n° 176 est réel mais petit (≈ 2 %),
+       et le n° 172 annonçait 5,7 s. Référence d'origine : 8,0 s.
+     - **Iris Xe par OpenVINO 2026.4** (installé dans `.venv` par `uv pip install openvino`,
+       hors `pyproject.toml` ; pas branché sur `embed`, décision de Léonard à venir). Débit
+       soutenu sur 25 à 30 s, modèle seul : ONNX Runtime CPU 9,0 à 10,8 fenêtres/s ; OpenVINO
+       CPU 9,7 ; Iris Xe en float32 12,9 au lot de 1, 15,0 au lot de 2, 15,7 au lot de 4, 14,0
+       au lot de 8, embeddings égaux à ceux du CPU à 5e-7 près ; Iris Xe en float16 15,8 au
+       lot de 1, cosinus ≥ 0,99993 (écart max 9e-3). CPU et Iris Xe en même temps : 14,4 à
+       15,3 au total, pas mieux que l'Iris Xe seul (même puce, même enveloppe thermique).
+       Compilation du modèle pour l'Iris Xe : 23 s au premier lancement.
+     - Le T7 Shield se lit toujours à 41 Mo/s à froid (n° 173).

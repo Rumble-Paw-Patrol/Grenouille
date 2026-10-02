@@ -404,7 +404,7 @@ def wav_bytes(
     """WAV 16 bits en mémoire pour le lecteur ; `gain_db` et `band_hz` (passe-bande : on
     n'entend que cette bande) n'agissent que sur l'écoute."""
     if band_hz is not None:
-        from blanci.heads.sequential import bandpass
+        from blanci.heads.signal_processing import bandpass
 
         wav = bandpass(wav, sr, band_hz)
     x = np.clip(wav * 10 ** (gain_db / 20), -1.0, 1.0)

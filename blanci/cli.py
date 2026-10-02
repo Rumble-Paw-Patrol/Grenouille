@@ -41,7 +41,7 @@ from blanci.evaluation.throughput import (
     write_throughput_report,
 )
 from blanci.heads.baselines import run_baselines, write_baseline_report
-from blanci.heads.sequential import Upstream, compute_onsets, upstream_from_cfg
+from blanci.heads.signal_processing import Upstream, compute_onsets, upstream_from_cfg
 from blanci.inputs.dataset import benchmark_subset, current_labels, recordings_table
 from blanci.inputs.frozen import freeze as freeze_recordings
 from blanci.inputs.ingest import ingest as run_ingest
@@ -193,20 +193,13 @@ def qc_command(
     ctx: typer.Context,
     dataset: Annotated[str | None, typer.Option(help="Restreindre à un jeu (2023, 2026).")] = None,
     site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
-    onsets: Annotated[
-        bool,
-        typer.Option(
-            "--onsets/--no-onsets",
-            help="Calculer aussi les débuts de notes (module séquentiel) sur la même lecture.",
-        ),
-    ] = True,
     workers: Annotated[int, typer.Option(help="Fils de lecture et de calcul.")] = 4,
 ) -> None:
     """Contrôle audio de tous les enregistrements, avant tout encodage. Lit l'audio, n'encode rien.
 
-    Silencieux et micro dans sac écartent l'enregistrement (jamais encodé), pluie et saturation
-    sont des remarques. Fait une fois pour toutes : `blanci embed` ne contrôle que ce qui ne l'a
-    pas été. Reprenable : ce qui est fait est sauté.
+    Sort du corpus les fichiers cassés ou sans rapport avec le projet : silencieux, micro dans
+    sac (jamais encodés). Fait une fois pour toutes : `blanci embed` ne contrôle que ce qui ne
+    l'a pas été. Reprenable : ce qui est fait est sauté.
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -222,13 +215,11 @@ def qc_command(
         raw,
         cfg["qc"],
         channel=cfg["audio"]["channel"],
-        signal_cfg=cfg["signal"] if onsets else None,
         workers=workers,
     )
     typer.echo(
         f"{report['checked']} contrôlés, dont {report['excluded']} écartés (silencieux ou micro "
-        f"dans sac) ; débuts de notes pour {report['onsets']} ; {report['skipped']} déjà faits, "
-        f"{report['errors']} illisibles"
+        f"dans sac) ; {report['skipped']} déjà faits, {report['errors']} illisibles"
     )
     audio = apply_audio_flags(con, cfg["qc"])
     typer.echo("drapeaux audio : " + ", ".join(f"{k} {audio[k]}" for k in AUDIO_FLAGS))
@@ -239,8 +230,8 @@ def flag(ctx: typer.Context) -> None:
     """Recalcule tous les drapeaux, sans lire l'audio : inventaire (durée anormale, hors
     relevé), audio depuis les indices déjà calculés (seuils actuels de `qc`), écoute.
 
-    Écartent du corpus : silencieux, micro dans sac, durée anormale, hors relevé. Pluie et
-    saturation sont des remarques. Un enregistrement signalé reste dans la base et sur le
+    Écartent du corpus : silencieux, micro dans sac, durée anormale, hors relevé. Un
+    enregistrement signalé reste dans la base et sur le
     disque ; s'il est écarté, il n'est jamais encodé, donc jamais tiré comme négatif ni
     proposé à la vérification. Un enregistrement où A. blanci a été entendu n'est jamais
     écarté.
@@ -399,9 +390,9 @@ def embed(
     upstream: Annotated[
         str | None,
         typer.Option(
-            help="Module séquentiel en amont : fonctionnalités actives (bandpass, denoise, "
+            help="Traitement du signal en amont : fonctionnalités actives (bandpass, denoise, "
             "band_energy, band_contrast, notes, rhythm) ou « none ». Défaut : celles activées "
-            "dans sequential.upstream, si sequential.position contient upstream."
+            "dans signal_processing.upstream, si signal_processing.position contient upstream."
         ),
     ] = None,
 ) -> None:
@@ -437,7 +428,7 @@ def embed(
     _echo_grid(model.window_s, overlap)
     if chain.active:
         gates = [f"{g} ≥ {v:g}" for g, v in chain.gates.items()]
-        typer.echo("module séquentiel en amont : " + ", ".join([*chain.transforms, *gates]))
+        typer.echo("traitement du signal en amont : " + ", ".join([*chain.transforms, *gates]))
     check_qc = cfg["qc"].get("during_embed", True) if qc is None else qc
     report = embed_recordings(
         con,
@@ -450,6 +441,7 @@ def embed(
         signal_cfg=cfg["signal"],
         qc_thresholds=cfg["qc"] if check_qc else None,
         gates=chain,
+        resample=cfg["encoders"].get("resample", "recording"),
     )
     if report.qc_checked:
         typer.echo(
@@ -595,10 +587,11 @@ def heads_curve(
 
 def upstream_chain(cfg: dict, override: str | None) -> Upstream:
     """Fonctionnalités amont d'une commande : l'option `--upstream` si elle est donnée, sinon
-    celles activées dans `sequential.upstream` quand `sequential.position` contient upstream."""
+    celles activées dans `signal_processing.upstream` quand `signal_processing.position` contient
+    upstream."""
     if override is not None:
         return upstream_from_cfg(cfg, override)
-    position = (cfg.get("sequential", {}) or {}).get("position") or []
+    position = (cfg.get("signal_processing", {}) or {}).get("position") or []
     return upstream_from_cfg(cfg) if "upstream" in position else Upstream()
 
 
@@ -611,10 +604,12 @@ def upstream_bench_command(
     ] = None,
     upstream: Annotated[
         str | None,
-        typer.Option(help="Portes de la combinaison à comparer (défaut : sequential.upstream)."),
+        typer.Option(
+            help="Portes de la combinaison à comparer (défaut : signal_processing.upstream)."
+        ),
     ] = None,
 ) -> None:
-    """Banc d'essai des portes du module séquentiel en amont (DECISIONS n° 90, 103) : fenêtres
+    """Banc d'essai des portes du traitement du signal en amont (DECISIONS n° 90, 103) : fenêtres
     arrêtées contre positifs perdus, porte par porte et seuil par seuil. Lit l'audio (lecture
     seule)."""
     from blanci.evaluation.benchmark import to_markdown
@@ -625,7 +620,7 @@ def upstream_bench_command(
     reports = config_path(cfg, "reports") / "upstream"
     reports.mkdir(parents=True, exist_ok=True)
     stem = f"banc_{encoder or 'baselines'}".replace(":", "_")
-    text = ["# Banc d'essai des portes (module séquentiel en amont)", ""]
+    text = ["# Banc d'essai des portes (module de traitement du signal en amont)", ""]
     for name, table in out.items():
         table.to_csv(reports / f"{stem}_{name}.csv", index=False)
         text += [f"## {name}", "", to_markdown(table), ""]
@@ -1001,7 +996,7 @@ def onsets(
     ] = None,
     site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
 ) -> None:
-    """Débuts de notes par enregistrement (module séquentiel, §3). Lit l'audio, n'encode rien.
+    """Débuts de notes par enregistrement (traitement du signal, §3). Lit l'audio, n'encode rien.
 
     `blanci embed` les calcule déjà au passage ; cette commande sert aux enregistrements
     qu'on ne veut pas encoder. Reprenable : les enregistrements traités sont sautés.
@@ -1053,7 +1048,7 @@ def fusion(
         f"{'significatif' if p['significant'] else 'non significatif'}"
     )
     coefs = ", ".join(f"{k} {v:+.2f}" for k, v in result["coefficients"].items())
-    typer.echo(f"  {result['method']}, module séquentiel : {result['position'] or 'absent'}")
+    typer.echo(f"  {result['method']}, traitement du signal : {result['position'] or 'absent'}")
     typer.echo(f"  coefficients (standardisés) : {coefs}")
     parts = ", ".join(f"{k} {v:.0%}" for k, v in result["weights"].items())
     typer.echo(f"  part de chaque entrée : {parts}")
@@ -1073,7 +1068,7 @@ def fusion_bench(
     positions: Annotated[
         str | None,
         typer.Option(
-            help="Emplacements du module séquentiel séparés par « ; », ex. "
+            help="Emplacements du module de traitement du signal séparés par « ; », ex. "
             "« none;parallel;parallel,downstream » (défaut : fusion.benchmark_positions)."
         ),
     ] = None,
@@ -1082,7 +1077,7 @@ def fusion_bench(
         typer.Option(help="Autres entrées : head:<encodeur> (défaut : config)."),
     ] = None,
 ) -> None:
-    """Benchmark de la fusion (DECISIONS n° 94–95) : emplacement du module séquentiel ×
+    """Benchmark de la fusion (DECISIONS n° 94–95) : emplacement du module de traitement du signal ×
     méthode de fusion (pondération apprise, fixée, cherchée, moyenne, rangs, OU, ET), contre la
     tête seule, avec la part de chaque entrée."""
     from blanci.combination.stacking import fusion_benchmark, positions_from
@@ -1675,6 +1670,7 @@ def anuraset_campaign(
             overlap=overlap_from_cfg(cfg),
             channel=cfg["audio"]["channel"],
             signal_cfg=cfg["signal"],
+            resample=cfg["encoders"].get("resample", "recording"),
         )
         typer.echo(
             f"3. {done.encoder_id} : {done.recordings} encodés, {done.skipped} déjà faits "

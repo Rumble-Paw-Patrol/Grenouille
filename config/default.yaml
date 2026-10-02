@@ -41,17 +41,14 @@ grids:
   w5: {window_s: 5.0, hop_s: 2.5}
 
 qc:
-  # Drapeaux audio (DECISIONS n° 79) : silencieux et micro dans sac écartent du corpus,
-  # pluie et saturation sont des remarques. Calculés par `blanci qc`, avant tout encodage
-  # (DECISIONS n° 173) ; `embed` ne contrôle au passage que ce qui ne l'a pas été.
+  # Drapeaux audio : silencieux et micro dans sac écartent du corpus (fichiers cassés ou sans
+  # rapport avec le projet ; ni pluie ni saturation, DECISIONS n° 174). Calculés par
+  # `blanci qc`, avant tout encodage (n° 173) ; `embed` ne contrôle que ce qui ne l'a pas été.
   during_embed: true
   silent_dbfs: -70.0               # RMS en dessous : enregistrement muet
-  clip_fraction: 0.0001            # fraction d'échantillons saturés au-dessus : saturation
   # Énergie > 2 kHz / énergie totale en dessous : micro dans sac. Calibré (DECISIONS n° 76,
   # 81) : sac 0,001–0,30, enregistrements à A. blanci ≥ 0,265 ; 0,2 en signale 6 sur 8.
   in_bag_hf_ratio: 0.2
-  rain_flatness: 0.5               # platitude spectrale 1–10 kHz au-dessus...
-  rain_min_dbfs: -35.0             # ...et niveau au-dessus : pluie
   # Drapeaux calculés sur l'inventaire seul (sans lire l'audio), recalculés après chaque
   # inventaire ou par `blanci flag`. Un enregistrement signalé n'est jamais encodé.
   expected_duration_s: 120.0       # programme des Song Meter : 2 min toutes les 30 min
@@ -92,6 +89,10 @@ encoders:
   # (<encodeur>@o<%>) ; volume × 0,5 / (1 − chevauchement) : 50 fois plus de fenêtres à 0,99.
   overlap: 0.5
   batch_size: 64                   # fenêtres par appel ; un modèle peut fixer le sien
+  # Rééchantillonnage vers la fréquence de l'encodeur (DECISIONS n° 176) : recording =
+  # l'enregistrement entier, avant la découpe en fenêtres ; window = chaque fenêtre à part
+  # (stocks encodés avant le 02/10/2026, qui refusent d'être repris autrement).
+  resample: recording
   models:
     birdmae: {backend: bacpipe, model: birdmae}
     # Même calcul que birdmae (bacpipe : extracteur Base, réseau Huge), nommé face à birdmae_base.
@@ -332,7 +333,7 @@ fusion:
   # et 99 % ; `smoothness` : prix de la courbure (grand → droite). Provisoire (n° 130).
   R55: {segments: 8, smoothness: 1.0}
   R56: {cap: 2.0}                  # pas de veto : les descripteurs déplacent le logit d'au plus 2
-  # Emplacements comparés par `fusion-bench` ([] = module séquentiel absent, tête seule).
+  # Emplacements comparés par `fusion-bench` ([] = module de traitement du signal absent, tête seule).
   benchmark_positions:
     - []
     - [upstream]
@@ -341,7 +342,7 @@ fusion:
     - [parallel, downstream]
     - [upstream, parallel, downstream]
 
-# Module séquentiel et seuillage spectral, fusionnés (DECISIONS n° 95, 103), `sequential.py` :
+# Module de traitement du signal et seuillage spectral, fusionnés (DECISIONS n° 95, 103), `signal_processing.py` :
 # les mêmes descripteurs du signal, placés là où `position` le dit (liste, [] = pas du tout).
 #   upstream   (amont) : avant l'encodeur — transformations du son et portes ci-dessous
 #                        (`upstream`) ; à l'encodage, `--upstream a,b` les choisit pour une
@@ -350,7 +351,7 @@ fusion:
 #   parallel           : descripteurs de rythme (audio) fusionnés avec le score de la tête ;
 #   downstream (aval)  : descripteurs de persistance (scores de la tête sur l'enregistrement).
 # Défaut : la fusion telle qu'elle était (parallèle + aval).
-sequential:
+signal_processing:
   position: [parallel, downstream]
   # Descripteurs fusionnés avec la tête (§3) : ≤ 4, car il faut ~10 enregistrements positifs
   # indépendants par coefficient (51 aujourd'hui → 5 coefficients). L'emplacement dit lesquels

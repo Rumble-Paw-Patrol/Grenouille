@@ -67,12 +67,22 @@ def test_never_proposes_to_flag_a_recording_with_blanci():
     assert "chevauchement" in row["reason"]
 
 
-def test_rain_and_blanci_in_the_same_recording_stays_protected():
+def test_bag_and_blanci_in_the_same_recording_stays_protected():
     indices = _indices(
-        [("r", "rain", 0.3, 0.9), ("r", "blanci", 0.3, 0.9), ("b", "blanci", 0.3, 0.2)]
+        [("r", "in_bag", 0.3, 0.9), ("r", "blanci", 0.3, 0.9), ("b", "blanci", 0.3, 0.2)]
     )
-    row = suggest_thresholds(indices, load_config()["qc"]).set_index("flag").loc["rain"]
+    row = suggest_thresholds(indices, load_config()["qc"]).set_index("flag").loc["in_bag"]
     assert row["targets"] == 0 and row["blanci_recordings"] == 2
+
+
+def test_audio_qc_only_flags_broken_or_irrelevant_recordings():
+    """Ni pluie ni saturation : le contrôle audio n'écarte que silencieux et micro dans sac."""
+    from blanci.inputs.qc import AUDIO_FLAGS, qc_flags
+
+    saturated_noise = np.clip(np.random.default_rng(0).normal(0, 2, 48000), -1, 1)
+    flags = qc_flags(qc_indices(saturated_noise.astype(np.float32), 48000), load_config()["qc"])
+    assert set(flags) == {"silent", "in_bag", "indices"} == {*AUDIO_FLAGS, "indices"}
+    assert flags["indices"]["clip_fraction"] > 0.1 and not flags["silent"]
 
 
 def test_calibration_indices_read_each_recording_once(tmp_path):

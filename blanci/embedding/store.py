@@ -2,7 +2,8 @@
 
 Colonnes : window_id, recording_id, offset_s, emb (liste de taille fixe float16[dim]) ; `gated`
 (booléen) dans un stock encodé avec des portes : une fenêtre arrêtée a un embedding nul, jamais
-appris, et le score le plus bas (module séquentiel en amont, `blanci/heads/sequential.py`).
+appris, et le score le plus bas (traitement du signal en amont,
+`blanci/heads/signal_processing.py`).
 
 Pendant un encodage, les fenêtres arrivent par morceaux `<aaaamm>.part-<n>.parquet` (`append`),
 lus comme leur partition et fondus dans son fichier en fin de partition (`consolidate`).

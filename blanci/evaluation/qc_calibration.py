@@ -30,9 +30,7 @@ from blanci.inputs.qc import qc_flags, qc_indices
 # au-dessus (« above ») du seuil. Clé de config du seuil.
 FLAGS = {
     "in_bag": ("hf_ratio", "below", "in_bag_hf_ratio"),
-    "rain": ("flatness_1_10k", "above", "rain_flatness"),
     "silent": ("rms_dbfs", "below", "silent_dbfs"),
-    "saturation": ("clip_fraction", "above", "clip_fraction"),
 }
 
 
@@ -120,9 +118,9 @@ def suggest_thresholds(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.
     for flag, (index, direction, key) in FLAGS.items():
         column = f"r_{index}"
         protected = recordings.loc[has_blanci, column]
-        if flag in ("in_bag", "rain"):
+        if flag == "in_bag":
             is_target = recordings["groups"].map(lambda g, f=flag: f in g)
-            # Une cible qui contient aussi du chant (pluie + A. blanci) reste à protéger.
+            # Une cible qui contient aussi du chant reste à protéger.
             targets = recordings.loc[is_target & ~has_blanci, column]
         else:
             targets = pd.Series(dtype=float)

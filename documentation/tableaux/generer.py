@@ -1226,7 +1226,7 @@ REGULARISATIONS = Tableau(
 FUSION = Tableau(
     "fusion",
     "Benchmark de la fusion",
-    "blanci fusion-bench : score de la tête (hors-pli) + descripteurs du module séquentiel +"
+    "blanci fusion-bench : score de la tête (hors-pli) + descripteurs du traitement du signal +"
     " autres sources ; méthodes × emplacements, mêmes plis (n° 94–95, 103).",
     [
         Section(
@@ -1283,7 +1283,7 @@ FUSION = Tableau(
         Section(
             [
                 Colonne("Emplacement", 1.0, code=True),
-                Colonne("Ce que le module séquentiel y fait", 3.4),
+                Colonne("Ce que le module de traitement du signal y fait", 3.4),
             ],
             [
                 ["[]", "absent : la tête seule"],
@@ -1312,7 +1312,7 @@ FUSION = Tableau(
         "Au plus 4 descripteurs (~10 enregistrements positifs par coefficient) ; jamais de veto"
         " en parallèle ni en aval (R56). Les suffixes se combinent : logistic+R50+R52+R56,"
         " logistic+R50+R55=10 (« =v » : bins de R54, smoothness de R55, cap de R56). R54 et R55"
-        " ne courbent que les descripteurs du module séquentiel ; ils s'excluent."
+        " ne courbent que les descripteurs du module de traitement du signal ; ils s'excluent."
     ],
 )
 

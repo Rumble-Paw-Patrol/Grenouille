@@ -28,7 +28,7 @@ from blanci.heads.regularization import (
     grouped_search,
     nearest_similarity,
 )
-from blanci.heads.sequential import GATED_SCORE
+from blanci.heads.signal_processing import GATED_SCORE
 
 
 @dataclass(frozen=True)

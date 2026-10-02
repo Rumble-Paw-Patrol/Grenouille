@@ -4,16 +4,17 @@ Un drapeau est une remarque sur un enregistrement, rangée dans `recordings.qc_f
 fichier n'est jamais touché). Trois origines :
 - inventaire, sans lire l'audio : durée anormale (`duration_off`), hors relevé
   (`off_campaign`), horloge douteuse (`clock_off`) ;
-- audio, calculé sur le son (à l'inventaire avec contrôle, ou pendant `embed`) : silencieux,
-  saturation, micro dans sac, pluie ; indices simples (numpy/scipy), seuils de
-  config/default.yaml calibrés par `blanci qc-calibrate` ;
+- audio, calculé sur le son (`blanci qc`, avant tout encodage) : silencieux, micro dans sac ;
+  indices simples (numpy/scipy), seuils de config/default.yaml calibrés par
+  `blanci qc-calibrate` ;
 - écoute : clé `annotated`, présente sur tout enregistrement annoté à la main, avec la liste
   des drapeaux que l'annotateur y a posés (label `artefact_in_bag`, label ou mention de pluie).
 
-Seuls `EXCLUDING_FLAGS` écartent un enregistrement du corpus (jamais encodé) ; pluie et
-saturation sont des remarques : un micro sous la pluie enregistre son milieu, et ces
-enregistrements font partie du jeu de données (DECISIONS n° 79). Un enregistrement où
-A. blanci a été entendu n'est jamais écarté : l'écoute prime sur le calcul.
+Le contrôle audio ne sert qu'à sortir du projet les fichiers cassés ou sans rapport avec lui
+(DECISIONS n° 174) : il ne signale ni la pluie ni la saturation, qui font partie du milieu
+enregistré (n° 79). Seuls `EXCLUDING_FLAGS` écartent un enregistrement du corpus (jamais
+encodé). Un enregistrement où A. blanci a été entendu n'est jamais écarté : l'écoute prime sur
+le calcul.
 """
 
 from __future__ import annotations
@@ -32,9 +33,9 @@ from scipy.signal import get_window, welch
 from blanci.inputs.labels import POSITIVE_LABELS
 
 # Drapeaux qui écartent un enregistrement du corpus : jamais encodé, donc ni négatif apparié,
-# ni candidat à écouter, ni score. Les autres (pluie, saturation) sont des remarques.
+# ni candidat à écouter, ni score. La pluie notée à l'écoute est une remarque.
 EXCLUDING_FLAGS = ("in_bag", "silent", "duration_off", "off_campaign", "clock_off")
-AUDIO_FLAGS = ("silent", "saturation", "in_bag", "rain")
+AUDIO_FLAGS = ("silent", "in_bag")
 
 
 def parse_flags(qc: Any) -> dict[str, Any]:
@@ -107,14 +108,12 @@ def qc_indices(wav: np.ndarray, sr: int) -> dict[str, float]:
 
 def qc_flags(indices: dict[str, float], thresholds: dict[str, float]) -> dict[str, Any]:
     """Drapeaux audio d'après les indices. Les indices sont gardés avec eux : un seuil changé
-    se réapplique sans relire l'audio (`apply_audio_flags`)."""
+    se réapplique sans relire l'audio (`apply_audio_flags`). Tous les indices mesurés sont
+    rangés, y compris ceux qu'aucun drapeau ne lit (saturation, platitude du spectre)."""
     silent = indices["rms_dbfs"] < thresholds["silent_dbfs"]
     return {
         "silent": silent,
-        "saturation": indices["clip_fraction"] > thresholds["clip_fraction"],
         "in_bag": not silent and indices["hf_ratio"] < thresholds["in_bag_hf_ratio"],
-        "rain": indices["flatness_1_10k"] > thresholds["rain_flatness"]
-        and indices["rms_dbfs"] > thresholds["rain_min_dbfs"],
         "indices": {k: round(v, 6) for k, v in indices.items()},
     }
 
@@ -224,17 +223,15 @@ def check_recordings(
     raw_root: Any,
     thresholds: dict[str, Any],
     channel: int | str = 0,
-    signal_cfg: dict | None = None,
     workers: int = 4,
     commit_every: int = 100,
     progress_every: int = 1000,
 ) -> dict[str, int]:
     """Contrôle audio des enregistrements qui ne l'ont pas encore eu, sans encodeur : une
-    lecture de chaque fichier, dans `workers` fils. Avec `signal_cfg`, la même lecture donne
-    les débuts de notes (module séquentiel) de ceux qui n'en ont pas, sauf s'ils sont écartés.
+    lecture de chaque fichier, dans `workers` fils.
 
-    À lancer avant le premier encodage (`blanci qc`) : `embed` ne refait ni l'un ni l'autre, et
-    n'encode aucun enregistrement écarté. Reprenable : ce qui est fait est sauté.
+    À lancer avant le premier encodage (`blanci qc`) : `embed` ne le refait pas, et n'encode
+    aucun enregistrement écarté. Reprenable : ce qui est fait est sauté.
     """
     from pathlib import Path
     from time import perf_counter
@@ -242,55 +239,29 @@ def check_recordings(
     from blanci.core.ahead import ahead
     from blanci.core.audio import load_audio
 
-    with_onsets: set[str] = set()
-    if signal_cfg is not None:
-        from blanci.heads.sequential import recording_onsets, store_onsets
-
-        with_onsets = {row[0] for row in con.execute("SELECT recording_id FROM onsets")}
     protected = positive_recordings(con)
-    report = {"checked": 0, "excluded": 0, "onsets": 0, "skipped": 0, "errors": 0}
-    todo = []
-    for rec in recordings.itertuples():
-        known = parse_flags(rec.qc_flags)
-        need_qc = "indices" not in known
-        need_onsets = (
-            signal_cfg is not None
-            and rec.recording_id not in with_onsets
-            and (need_qc or not is_excluded(known) or rec.recording_id in protected)
-        )
-        if need_qc or need_onsets:
-            todo.append((rec, need_qc, need_onsets))
-        else:
-            report["skipped"] += 1
+    report = {"checked": 0, "excluded": 0, "skipped": 0, "errors": 0}
+    todo = [rec for rec in recordings.itertuples() if "indices" not in parse_flags(rec.qc_flags)]
+    report["skipped"] = len(recordings) - len(todo)
 
-    def prepare(job: tuple) -> tuple | None:
-        rec, need_qc, need_onsets = job
+    def prepare(rec: Any) -> dict[str, Any] | None:
         try:
             wav, sr = load_audio(Path(raw_root) / rec.path, channel)
         except Exception:  # fichier illisible : déjà signalé à l'inventaire
             return None
-        known = parse_flags(rec.qc_flags)
-        flags = qc_flags(qc_indices(wav, sr), thresholds) if need_qc else None
-        excluded = is_excluded(known | (flags or {})) and rec.recording_id not in protected
-        onsets = recording_onsets(wav, sr, signal_cfg) if need_onsets and not excluded else None
-        return flags, onsets
+        return qc_flags(qc_indices(wav, sr), thresholds)
 
     start = perf_counter()
-    for n, ((rec, _, _), out) in enumerate(ahead(todo, prepare, 2 * workers, workers), start=1):
-        if out is None:
+    for n, (rec, flags) in enumerate(ahead(todo, prepare, 2 * workers, workers), start=1):
+        if flags is None:
             if not Path(raw_root).exists():  # disque débranché : ne pas tout compter illisible
                 con.commit()
                 raise RuntimeError(f"{raw_root} n'est plus accessible ; relancer (reprenable)")
             report["errors"] += 1
             continue
-        flags, onsets = out
-        if flags is not None:
-            merged = merge_audio_flags(con, rec.recording_id, flags)
-            report["checked"] += 1
-            report["excluded"] += is_excluded(merged) and rec.recording_id not in protected
-        if onsets is not None:
-            store_onsets(con, rec.recording_id, onsets, channel)
-            report["onsets"] += 1
+        merged = merge_audio_flags(con, rec.recording_id, flags)
+        report["checked"] += 1
+        report["excluded"] += is_excluded(merged) and rec.recording_id not in protected
         if n % commit_every == 0:
             con.commit()
         if n % progress_every == 0:

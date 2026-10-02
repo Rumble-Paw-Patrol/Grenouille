@@ -84,7 +84,7 @@ $B export-labels     # fenêtres annotées : label, qualité, espèce, commentai
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid
 # Drapeaux (remarques sur un enregistrement, DECISIONS n° 79) : écartent du corpus
-# silencieux, micro dans sac, durée anormale, hors relevé ; pluie et saturation restent.
+# silencieux, micro dans sac, durée anormale, hors relevé.
 # Recalcule inventaire, audio (seuils actuels, sans relire l'audio) et drapeaux d'écoute.
 $B flag
 $B status
@@ -107,8 +107,8 @@ $B throughput --encoders birdnet,beats,perch_v2,birdmae_base   # → debit.md
 
 # --- Embeddings et choix d'encodeur (§2) : uv sync --group research -------
 # Contrôle audio de tout le corpus, une fois pour toutes, avant le premier encodage (n° 173) :
-# silencieux et micro dans sac écartés, débuts de notes rangés. Reprenable ; --no-onsets,
-# --dataset, --site.
+# silencieux et micro dans sac écartés (fichiers cassés ou sans rapport avec le projet).
+# Reprenable ; --dataset, --site.
 uv run blanci qc
 uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatifs appariés
 # (un enregistrement que `qc` n'a pas vu est contrôlé au passage ; --no-qc pour s'en passer)

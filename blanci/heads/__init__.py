@@ -11,7 +11,7 @@ Sur embeddings :
 - `finetune` : emplacement du fine-tuning (à venir).
 
 Sans encodeur :
-- `sequential` : module séquentiel et seuillage spectral (descripteurs du signal).
+- `signal_processing` : traitement du signal et seuillage spectral (descripteurs du signal).
 - `baselines` : seuillage spectral, onsets et rythme, template matching.
 - `detectors/` : détecteurs audio → score (distillation, modèle maison : à venir).
 """

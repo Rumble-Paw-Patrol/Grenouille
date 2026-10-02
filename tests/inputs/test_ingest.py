@@ -58,7 +58,7 @@ def test_ingest_inventories_and_flags(raw, cfg):
     assert first["start_utc"] == "2026-02-12T10:00:00Z"  # GUANO, UTC−3
     assert first["duration_s"] == 120.0 and first["sample_rate"] == 16000
     assert len(first["sha256"]) == 64
-    assert set(json.loads(first["qc_flags"])) >= {"rain", "saturation", "in_bag", "silent"}
+    assert set(json.loads(first["qc_flags"])) >= {"in_bag", "silent", "indices"}
     # Sans GUANO : horodatage du nom de fichier + décalage configuré (UTC−3).
     assert rows["SMM01_20260212_073000.wav"]["start_utc"] == "2026-02-12T10:30:00Z"
     # Extension en majuscules acceptée ; sans GUANO, le micro vient du préfixe du nom.
