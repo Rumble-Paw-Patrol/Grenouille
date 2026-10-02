@@ -18,7 +18,6 @@ import typer
 from blanci.annotation.workbench import agreement as annotator_agreement
 from blanci.annotation.workbench import (
     blancinet_candidates,
-    congener_candidates,
     flagged_candidates,
     random_candidates,
     recording_candidates,
@@ -1029,7 +1028,7 @@ def fusion_bench(
     ] = None,
     sources: Annotated[
         str | None,
-        typer.Option(help="Autres entrées : head:<encodeur>, congeners:<perch> (défaut : config)."),
+        typer.Option(help="Autres entrées : head:<encodeur> (défaut : config)."),
     ] = None,
 ) -> None:
     """Benchmark de la fusion (DECISIONS n° 94–95) : emplacement du module séquentiel ×
@@ -1175,7 +1174,7 @@ def benchmark_all(
     ] = None,
     external: Annotated[
         str | None,
-        typer.Option(help="Sources externes à ranger d'abord : blancinet, <encodeur perch>:logit."),
+        typer.Option(help="Sources externes à ranger d'abord : blancinet."),
     ] = None,
     own: Annotated[
         bool, typer.Option(help="Chaque source sur ses enregistrements (défaut : communs).")
@@ -1245,7 +1244,7 @@ def select(
         str,
         typer.Option(
             help="active, similarity, coverage, cluster, audit, random, negative_mining, "
-            "phenology, suspects, gaps, congeners, blancinet."
+            "phenology, suspects, gaps, blancinet."
         ),
     ],
     encoder: Annotated[
@@ -1797,11 +1796,7 @@ def candidates(
         Path | None,
         typer.Option("--from", help="Export Blancinet : ses détections jamais écoutées."),
     ] = None,
-    congeners: Annotated[
-        str | None,
-        typer.Option(help="Encodeur perch_v2 encodé : fenêtres où il entend un congénère."),
-    ] = None,
-    per_site: Annotated[int, typer.Option(help="Candidats Blancinet ou Perch par site.")] = 30,
+    per_site: Annotated[int, typer.Option(help="Candidats Blancinet par site.")] = 30,
     random: Annotated[int, typer.Option(help="Fenêtres tirées au hasard (heures de pic).")] = 10,
     whole: Annotated[
         int,
@@ -1832,8 +1827,6 @@ def candidates(
     parts = []
     if from_table is not None:
         parts.append(blancinet_candidates(con, from_table, cfg, per_site, wanted, seed))
-    if congeners:
-        parts.append(congener_candidates(con, congeners, per_site, wanted))
     if random:
         parts.append(random_candidates(con, cfg, random, wanted, seed=seed))
     if whole:
@@ -1841,9 +1834,7 @@ def candidates(
     if flag:
         parts.append(flagged_candidates(con, flag, wanted, seed=seed))
     if not parts:
-        raise typer.BadParameter(
-            "rien à tirer : --from, --congeners, --random, --entiers ou --drapeau"
-        )
+        raise typer.BadParameter("rien à tirer : --from, --random, --entiers ou --drapeau")
     queue = pd.concat(parts, ignore_index=True).sample(frac=1.0, random_state=seed)
     if queue.empty:
         typer.echo("aucun candidat")

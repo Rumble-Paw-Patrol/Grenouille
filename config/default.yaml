@@ -99,13 +99,8 @@ encoders:
     birdmae_base: {backend: bacpipe, model: birdmae, checkpoint: DBD-research-group/Bird-MAE-Base}
     beats: {backend: bacpipe, model: beats}
     naturebeats: {backend: bacpipe, model: naturebeats}
-    perch_v2:
-      backend: bacpipe
-      model: perch_v2
-      # Logits des congénères (§2) rangés dans `scores` pendant l'encodage : générateur de
-      # candidats (`blanci candidates --congeners`), sans seconde inférence.
-      logit_classes: [Anomaloglossus baeobatrachus, Anomaloglossus stepheni,
-                      Anomaloglossus surinamensis]
+    # Embedding seul : les logits des congénères ne sont plus gardés (DECISIONS n° 168).
+    perch_v2: {backend: bacpipe, model: perch_v2}
     birdnet: {backend: bacpipe, model: birdnet}     # référence du tuteur, non déployable
     # Contrôle passe-bas (§2) : birdmae n'entendant que < 8 kHz, comme un modèle à 16 kHz.
     birdmae_lp8k: {backend: bacpipe, model: birdmae, lowpass_hz: 8000}
@@ -121,9 +116,9 @@ encoders:
       backend: bacpipe
       model: birdnet_v3
       # Probabilités de son classifieur rangées dans `scores` (n° 151) : quatre espèces
-      # d'AnuraSet (PITAZU n'y est pas) et le congénère d'A. blanci.
+      # d'AnuraSet (PITAZU n'y est pas).
       logit_classes: [Dendropsophus minutus, Leptodactylus latrans, Physalaemus cuvieri,
-                      Hypsiboas faber, Anomaloglossus baeobatrachus]
+                      Hypsiboas faber]
     audioprotopnet: {backend: bacpipe, model: audioprotopnet}   # jetons gardés par bacpipe
     avesecho_passt: {backend: bacpipe, model: avesecho_passt}
     biolingual: {backend: bacpipe, model: biolingual}           # fenêtre de 10 s
@@ -319,7 +314,7 @@ fusion:
   weights: {}
   grid_step: 0.1                   # weight_grid : pas de la grille des poids
   # Autres entrées (ensemble de modèles) : head:<encodeur> (sa tête logistique, hors-pli,
-  # ramenée sur la grille de l'encodeur principal), congeners:<perch_v2…> (logits congénères).
+  # ramenée sur la grille de l'encodeur principal).
   sources: []
   # Variantes de la logistique, combinables (n° 127, 130) : +R50 (C par validation groupée),
   # +R52 (poids ≥ 0 sur les entrées orientées), +R53 (sélection L1 des entrées), +R54

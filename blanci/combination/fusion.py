@@ -3,7 +3,7 @@
 Entrées (colonnes de niveau 1), toutes hors-pli : le score de `head` (`OOFScores`, §13.7 : un
 score en-pli ferait croire à la fusion que `head` est parfaite), les descripteurs du module
 séquentiel, et autant d'autres sources qu'on veut : têtes d'autres encodeurs (ensemble de
-modèles), logits des congénères Perch. Environ 10 positifs indépendants par coefficient.
+modèles). Environ 10 positifs indépendants par coefficient.
 
 Méthodes comparées (`FUSION_METHODS`), toutes sur entrées standardisées sur l'entraînement :
 

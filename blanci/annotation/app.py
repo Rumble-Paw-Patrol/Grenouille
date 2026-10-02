@@ -59,7 +59,6 @@ MODES = {
     "phenology": "Échantillonnage phénologique",
     "suspects": "Détections isolées (« suspect »)",
     "gaps": "Trous dans un chant (faux négatifs suspects)",
-    "congeners": "Congénères (Perch)",
 }
 NEEDS_ENCODER = (
     "active",
@@ -69,7 +68,6 @@ NEEDS_ENCODER = (
     "cluster",
     "negative_mining",
     "suspects",
-    "congeners",
 )
 
 

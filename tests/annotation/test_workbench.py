@@ -14,7 +14,6 @@ from blanci.annotation.workbench import (
     agreement,
     blancinet_candidates,
     clip_spectrogram,
-    congener_candidates,
     ensure_window,
     load_candidates,
     local_time,
@@ -297,21 +296,21 @@ def test_agreement_between_two_annotators(corpus):
     assert table.loc["blanci", "bird"] == 1
 
 
-# --- Congénères de Perch 2.0 ---------------------------------------------------------------------
+# --- Logits de classes gardés à l'encodage (`logit_classes`) --------------------------------------
 
 
 class LogitToy:
-    """Encodeur factice qui, comme perch_v2, garde des logits de congénères pendant `embed`."""
+    """Encodeur factice qui, comme birdnet_v3, garde des logits de classes pendant `embed`."""
 
-    name, version, sample_rate, window_s, dim, has_tokens = "perchtoy", "1", SR, 3.0, 2, False
-    logit_names = ["Anomaloglossus stepheni", "Anomaloglossus surinamensis"]
+    name, version, sample_rate, window_s, dim, has_tokens = "logittoy", "1", SR, 3.0, 2, False
+    logit_names = ["Dendropsophus minutus", "Leptodactylus latrans"]
 
     def __init__(self):
         self._pending = []
 
     def embed(self, wav, sr):
         wav = np.atleast_2d(wav)
-        # « Logits » : niveau du canal lu, et son opposé ; le micro P2 sera le plus « congénère ».
+        # « Logits » : niveau du canal lu, et son opposé.
         level = wav.std(axis=1)
         self._pending.append(np.stack([level, -level], axis=1))
         return np.stack([wav.mean(axis=1), level], axis=1).astype(np.float32)
@@ -325,7 +324,7 @@ class LogitToy:
         return out
 
 
-def test_embed_stores_congener_logits_and_they_rank_candidates(corpus, tmp_path):
+def test_embed_stores_class_logits(corpus, tmp_path):
     from blanci.embedding.embed import embed_recordings, select_recordings
 
     con, cfg, raw = corpus
@@ -333,22 +332,9 @@ def test_embed_stores_congener_logits_and_they_rank_candidates(corpus, tmp_path)
         con, LogitToy(), select_recordings(con), raw, tmp_path / "emb", channel=1
     )
     n_scores = con.execute(
-        "SELECT COUNT(*) FROM scores WHERE model_id LIKE 'perchtoy-1:logit:%'"
+        "SELECT COUNT(*) FROM scores WHERE model_id LIKE 'logittoy-1:logit:%'"
     ).fetchone()[0]
     assert n_scores == 2 * report.windows
-
-    queue = congener_candidates(con, "perchtoy-1", per_site=3)
-    assert queue.groupby("site").size().to_dict() == {"CDR": 3, "Patawa": 3}
-    assert not queue.duplicated("recording_id").any()
-    assert (queue["reason"] == "congeneres_perch").all()
-    # Le meilleur de chaque micro d'abord : trois micros différents à CDR.
-    assert queue[queue["site"] == "CDR"]["mic_id"].nunique() == 3
-
-
-def test_congener_candidates_need_logits(corpus):
-    con, _, _ = corpus
-    with pytest.raises(ValueError, match="aucun logit"):
-        congener_candidates(con, "perch_v2-bacpipe1.3.5")
 
 
 def test_flagged_recordings_go_whole_to_the_listening_queue(corpus):

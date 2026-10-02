@@ -26,7 +26,7 @@ R11 : Lissage des labels : on remplace 0/1 par 0.05/0.95, ce qui absorbe les err
 R12 : Labels souples par confiance : un poids ou un label réduit pour les commentaires « second plan », « lointain », « malgré la pluie ».
 R13 : Pondération des exemples : les poids ne sont plus seulement équilibrés par classe, mais aussi par micro et par enregistrement. Ainsi un micro avec 40 positifs ne domine pas un micro avec 2 positifs (régularisation par la structure des groupes).
 R14 : Plafonnement par enregistrement : au plus k fenêtres positives par enregistrement à l'entraînement, contre la pseudo-réplication.
-R15 : Négatifs difficiles (les 158 faux amis, les logits des congénères élevés) : ils contraignent la frontière. Leur proportion est un hyperparamètre de régularisation.
+R15 : Négatifs difficiles (les 158 faux amis) : ils contraignent la frontière. Leur proportion est un hyperparamètre de régularisation.
 R16 : Ratio de négatifs (1:20 à 1:50) : c'est aussi un levier implicite sur la variance et le biais.
 # B. Représentation (embedding de l'encodeur)
 R17 : Normalisation L2 des embeddings : déjà faite pour les prototypes, pas pour la logistique, qui ne fait que standardiser. Il faut tester L2 puis standardiser, ou L2 seule.

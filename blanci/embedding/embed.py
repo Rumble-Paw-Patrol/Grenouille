@@ -120,8 +120,9 @@ def _flush(
 def _store_logits(
     con: sqlite3.Connection, encoder: Encoder, encoder_id: str, window_ids: list[str]
 ) -> None:
-    """Logits de classes gardés par l'encodeur pendant `embed` (perch_v2 : congénères, §2),
-    rangés dans `scores` sous `<encodeur>:logit:<classe>`. Sans effet pour les autres."""
+    """Logits de classes gardés par l'encodeur pendant `embed` (`logit_classes` : birdnet_v3
+    sur AnuraSet), rangés dans `scores` sous `<encodeur>:logit:<classe>`. Sans effet pour les
+    autres."""
     pop = getattr(encoder, "pop_logits", None)
     logits = pop() if pop else None
     if logits is None or len(logits) != len(window_ids):

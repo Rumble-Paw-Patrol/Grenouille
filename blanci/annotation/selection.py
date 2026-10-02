@@ -25,7 +25,6 @@ colonne `source` suit la fenêtre jusqu'au label : on saura quelle méthode a tr
 - `gaps` : le miroir — fenêtres négatives encadrées de positives (DECISIONS n° 102) ; mode
   `scores` : trous du modèle dans un chant (faux négatifs du modèle : positifs difficiles) ;
   mode `labels` : négatifs annotés entre deux positifs annotés, à réécouter ;
-- `congeners` : fenêtres où Perch entend un *Anomaloglossus* congénère ;
 - `blancinet` : détections Blancinet jamais écoutées.
 
 La carte des embeddings (projection 2-D, `embedding_map`) sert au poste d'annotation : on y
@@ -62,7 +61,6 @@ SELECTION_METHODS = (
     "phenology",
     "suspects",
     "gaps",
-    "congeners",
     "blancinet",
 )
 NEEDS_ENCODER = (
@@ -72,7 +70,6 @@ NEEDS_ENCODER = (
     "cluster",
     "negative_mining",
     "suspects",
-    "congeners",
 )
 
 
@@ -436,12 +433,6 @@ def gap_candidates(
     return _finish(con, found, "gap_scores", "gap")
 
 
-def congener_window_candidates(con, cfg, encoder_id, n=30, sites=None, **_):
-    from blanci.annotation.workbench import congener_candidates
-
-    return congener_candidates(con, encoder_id, n, sites)
-
-
 def blancinet_window_candidates(con, cfg, table=None, n=30, sites=None, seed=0, **_):
     from blanci.annotation.workbench import blancinet_candidates
 
@@ -461,7 +452,6 @@ _DISPATCH = {
     "phenology": phenology_candidates,
     "suspects": suspect_candidates,
     "gaps": gap_candidates,
-    "congeners": congener_window_candidates,
     "blancinet": blancinet_window_candidates,
 }
 

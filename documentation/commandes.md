@@ -110,7 +110,6 @@ uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatif
 # (contrôle audio au passage : silencieux et micro dans sac écartés ; --no-qc pour s'en passer)
 uv run blanci embed --encoder birdmae --peak-hours    # reprenable
 $B cluster --encoder birdmae-bacpipe1.3.5 --mode c1   # clustering C0/C1 (§5 bis)
-$B candidates --congeners perch_v2-bacpipe1.3.5       # logits des congénères de Perch
 uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md
 
 # --- Pré-benchmark AnuraSet (§2) : base et stocks à part -----------------

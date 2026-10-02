@@ -1190,7 +1190,7 @@ def fused_scores(
     Une fusion enregistrée avant la fusion à N entrées (clé `weights`) est relue telle quelle.
     """
     from blanci.combination.fusion import FusionModel, project_scores
-    from blanci.combination.stacking import congener_scores, sequential_features, store_rows
+    from blanci.combination.stacking import sequential_features, store_rows
     from blanci.heads.sequential import gate_mask
 
     persistence = recording_persistence(scored, fusion_params["persistence_threshold"])
@@ -1211,8 +1211,6 @@ def fused_scores(
             parts.append(head)
         elif column in features:
             parts.append(features[column].to_numpy(dtype=float))
-        elif column.startswith("congeners:"):
-            parts.append(congener_scores(con, column.split(":", 1)[1], windows))
         elif column.startswith("head:"):
             other = column.split(":", 1)[1]
             other_head, _ = load_head(con, other, "default")

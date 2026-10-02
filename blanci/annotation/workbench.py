@@ -212,45 +212,6 @@ def random_candidates(
     return _finish(_drop_labelled(con, out), seed)
 
 
-def congener_candidates(
-    con: sqlite3.Connection,
-    encoder_id: str,
-    per_site: int = 30,
-    sites: list[str] | None = None,
-) -> pd.DataFrame:
-    """Fenêtres où Perch 2.0 entend le plus un *Anomaloglossus* congénère (§2, §5).
-
-    Score d'une fenêtre = le plus grand des logits de congénères rangés par `embed`
-    (`<encodeur>:logit:<espèce>`). Logits non calibrés : ils ne servent qu'à classer. Par
-    site, la meilleure fenêtre de chaque enregistrement, puis les meilleurs enregistrements en
-    alternant les micros (le meilleur de chaque micro d'abord) : un micro bruyant ne remplit
-    pas la file à lui seul.
-    """
-    scores = pd.read_sql_query(
-        "SELECT s.window_id, MAX(s.score) AS score, w.recording_id, w.offset_s, w.dur_s "
-        "FROM scores s JOIN windows w USING (window_id) WHERE s.model_id LIKE ? "
-        "GROUP BY s.window_id",
-        con,
-        params=(f"{encoder_id}:logit:%",),
-    )
-    if scores.empty:
-        raise ValueError(f"aucun logit de congénère pour {encoder_id} (encoder avec perch_v2)")
-    recordings = select_recordings(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
-    found = scores.merge(recordings, on="recording_id")  # sans les enregistrements signalés
-    found = _drop_labelled(con, found)
-    if sites:
-        wanted = {s.lower() for s in sites}
-        found = found[found["site"].str.lower().isin(wanted)]
-    best = found.sort_values("score", ascending=False).drop_duplicates("recording_id")
-    picked = []
-    for _, part in best.groupby("site"):
-        part = part.assign(rank=part.groupby("mic_id").cumcount())
-        picked.append(part.sort_values(["rank", "score"], ascending=[True, False]).head(per_site))
-    out = pd.concat(picked) if picked else best.iloc[:0]
-    out = out.assign(reason="congeneres_perch", source="active")
-    return out.reindex(columns=CANDIDATE_COLUMNS).reset_index(drop=True)
-
-
 def recording_candidates(
     con: sqlite3.Connection,
     cfg: dict,

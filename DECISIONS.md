@@ -183,9 +183,6 @@ seulement s'il dépasse A et B de plus que l'incertitude.
   plis par site, milliers de positifs. Indicateur, pas garantie.
 - Sondes : kNN cosinus ; prototype différentiel ; régression logistique L2. Validation **groupée
   par micro**. Comparaisons appariées sur les mêmes plis, bootstrap.
-- Générateur de candidats : Perch 2.0 contient *A. baeobatrachus*, *A. stepheni*,
-  *A. surinamensis* ; leurs logits (non calibrés) donnent une première liste de candidats et des
-  descripteurs optionnels.
 - Mesures trompeuses : exactitude, AUROC, F1 au seuil 0,5, AMI/ARI.
 - `perch_v2` (TensorFlow, GPU) : wrapper CPU `[À VÉRIFIER]` ; `perch_v2_no_dft.onnx` repéré dans
   un notebook BirdCLEF+ 2026, à valider contre des embeddings de référence ; sinon extraction
@@ -205,7 +202,6 @@ seulement s'il dépasse A et B de plus que l'incertitude.
 | Prototype différentiel | ⟨x, μ₊ − μ₋⟩ + b, négatifs appariés | 10–50 | baseline permanente ; retire le fond partagé |
 | Linear probing | régression logistique L2 sur embeddings gelés | dizaines → centaines | **tête principale** |
 | Attentive probing | tête d'attention sur jetons pris avant agrégation | ≥ 150–200 | si jetons accessibles (nécessaire pour les transformers) |
-| Logits de congénères (Perch 2.0) | scores des 3 *Anomaloglossus* connus | 0 | générateur de candidats ; descripteur optionnel |
 | Clustering | HDBSCAN sur ACP ; UMAP pour voir | 0 | §5 bis |
 | LoRA / fine-tuning | adaptation partielle ou totale (`blanci/heads/finetune.py`, réservé) | centaines à milliers | conditionné ; hors chemin critique |
 | Distillation / modèle maison (`blanci/heads/detectors/`, réservés) | petit CNN bande 3–7 kHz imitant la chaîne gelée | 0 | livrable léger pour l'i5 ; après le choix de l'encodeur |
@@ -225,8 +221,8 @@ l'échantillonnage, au classement des points et à un drapeau de plausibilité i
 Courtois et al. ; entrée du classifieur seulement si validée sur Trésor et Kaw.
 
 **Tête de fusion (stacking à deux niveaux)** : `head` et `sequential` au niveau 1 ; régression
-logistique au niveau 2 sur (score de `head` **hors-pli**, 2–4 descripteurs, logits de congénères
-en option). Hors-pli = score produit par une version de `head` entraînée sans l'exemple.
+logistique au niveau 2 sur (score de `head` **hors-pli**, 2–4 descripteurs). Hors-pli = score
+produit par une version de `head` entraînée sans l'exemple.
 ≈ 10 enregistrements positifs indépendants par coefficient. Le score séquentiel module, jamais
 de veto.
 
@@ -747,7 +743,7 @@ avant l'application v1 (S16).
 
 **Gabarit du projet pour d'autres espèces** : propre à *A. blanci* : bande de fréquence
 (4,4–5,5 kHz), durée de note et intervalle, heures et mois d'activité, faux amis et schéma de
-labels, congénères dans les classes de Perch et de BirdNET 3. Le reste est générique (inventaire,
+labels. Le reste est générique (inventaire,
 drapeaux, plan de tirage, poste d'annotation, encodeur, tête, évaluation, application). Travail :
 regrouper ce qui est propre à l'espèce dans une section `species` de la configuration, rien de
 codé en dur ; un guide « adapter à une nouvelle espèce » ; un essai sur une deuxième espèce. À
@@ -1281,6 +1277,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     `scores` (`<encodeur>:logit:<espèce>`), sans seconde inférence. `blanci candidates
     --congeners <perch_v2-…>` en tire une file : meilleure fenêtre par enregistrement, le
     meilleur de chaque micro d'abord. Logits non calibrés : classement seulement.
+    **Révoquée le 02/10/2026 (n° 168).**
 
 71. **Métriques du §6 complétées** : `evaluate.recall_by_group` (rappel au seuil de précision
     plancher par qualité A/B/C, site, tranche de RSB, avec Wilson), affiché par
@@ -2827,3 +2824,42 @@ de Léonard, 01/10/2026.
      sous `blanci anuraset prepare|profile|benchmark|heads|campaign` (hors de l'aide principale).
      Au passage : les `generer.py` des rapports cherchaient `documentation/benchmarks/tableaux/`,
      déplacé en `documentation/tableaux/` (n° 164).
+
+## 2026-10-02 — Coût de l'encodage perch_v2, logits des congénères retirés du projet
+
+167. **Coût de l'encodage perch_v2 sur le MacBook Air M4** (CPU, sur batterie, d'autres
+     applications ouvertes ; bruit synthétique et un faux WAV de 2 min, 48 kHz stéréo). Question
+     de Léonard : quelques heures ou tout le weekend ?
+     - Débit : 26 à 34 fenêtres/s selon le passage (`blanci throughput` : 26,3 sur 256 fenêtres,
+       30,2 sur 47 ; modèle ONNX appelé seul : 33 à 35). L'i5 en fait 7,0 (n° 72) : ≈ 4 fois moins.
+     - Par enregistrement de 2 min (47 fenêtres au pas de 2,5 s) : modèle ≈ 1,4 à 1,6 s (97 %),
+       rééchantillonnage 48 → 32 kHz 0,04 s, lecture 0,02 s. **bacpipe n'ajoute rien de
+       mesurable** (moins de 0,01 s) : tout le temps est dans ONNX Runtime.
+     - **Canal 0 confirmé** (n° 50) : le lire seul prend 20 ms par fichier, la moyenne des deux
+       canaux 46 ms ; ≈ 45 min de moins sur 100 000 enregistrements.
+     - Les quatre sorties du modèle (embedding, jetons, spectrogramme, logits) ne coûtent rien :
+       34,3 fenêtres/s avec ou sans. À confirmer sur l'i5.
+     - Taille de lot sans effet (1 à 24 fenêtres : 30 à 39 fenêtres/s) ; 4 fils = réglage par
+       défaut (33), 2 fils 23,6, 1 fil 14,5.
+     - CoreML par ONNX Runtime (ANE ou GPU) : 13 à 16 fenêtres/s, plus lent que le CPU. CoreML ne
+       prend que 449 nœuds sur 725, en 162 morceaux ; le format MLProgram ne compile pas. Pas de
+       conversion pour Apple : la cible n'a que son CPU.
+     - Projection à 30 fenêtres/s : l'inventaire (29 513 enregistrements, 1,39 M de fenêtres)
+       ≈ 13 h, 6,5 h en fenêtres jointives ; sur l'i5, ≈ 55 h et 28 h. Lecture du disque externe
+       en plus (non mesurée).
+
+168. **Logits des congénères : retirés du projet** (Léonard ; revient sur le n° 70). Ils ne
+     servent pas, et ne coûtaient rien en calcul (n° 167) : c'est un choix de périmètre, pas de
+     vitesse.
+     - Configuration : `logit_classes` enlevé de `perch_v2` (l'encodage ne range plus de score
+       `<encodeur>:logit:<espèce>`) ; *A. baeobatrachus* enlevé de celles de birdnet_v3.
+     - Code retiré : `workbench.congener_candidates`, `blanci candidates --congeners`, la
+       stratégie `congeners` de `select` et du poste d'annotation, la source `congeners:<id>`
+       de la fusion (`stacking.congener_scores`, `service.fused_scores`), la source externe
+       `<encodeur>:logit` de `full-benchmark`.
+     - Gardé : le mécanisme `logit_classes` lui-même (`pop_logits`, `_store_logits`), dont
+       birdnet_v3 se sert pour le benchmark AnuraSet (n° 151, `global_bench.py --native`).
+     - Une fusion enregistrée avec une colonne `congeners:…` n'est plus relue (« entrée de
+       fusion inconnue ») ; les scores `:logit:` déjà rangés dans une base y restent, sans
+       lecteur. Les entrées plus haut du journal qui citent ces logits (n° 70, 94, 98, 151)
+       décrivent l'état d'alors.

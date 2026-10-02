@@ -4,7 +4,7 @@ Sources : tout ce que le stock de scores hors-pli contient (`blanci sources`) �
 têtes (`benchmark`, `heads`), baselines (`baselines`), fusions (`fusion-bench`), ensembles
 (`ensemble`), détecteurs (`detector-bench`) — plus des sources externes sans apprentissage,
 rangées à la demande sur les fenêtres des baselines (`external_source`) : Blancinet
-(`import-detections`), logits des congénères de Perch.
+(`import-detections`).
 
 Tout se compare au niveau enregistrement (score maximal de ses fenêtres) : une fenêtre de 3 s
 et une de 5 s ne se comparent pas, deux enregistrements si. Par défaut, sur les seuls
@@ -56,26 +56,24 @@ from blanci.evaluation.oof import (
 
 def external_source(con: sqlite3.Connection, cfg: dict, model: str, name: str | None = None) -> str:
     """Range un détecteur externe ou sans apprentissage dans le stock hors-pli, sur les fenêtres
-    des baselines : Blancinet (`model` = « blancinet », scores de ses détections) ou les logits
-    des congénères (`model` = « <encodeur perch>:logit »). Une fenêtre sans détection qui la
-    recouvre reçoit le score le plus bas du modèle (il ne l'a pas remontée)."""
+    des baselines : Blancinet (`model` = « blancinet », scores de ses détections). Une fenêtre
+    sans détection qui la recouvre reçoit le score le plus bas du modèle (il ne l'a pas
+    remontée)."""
     from blanci.heads.baselines import evaluation_windows
     from blanci.inputs.dataset import folds_for
 
     windows = evaluation_windows(con, cfg).reset_index(drop=True)
-    pattern = f"{model}:%" if model.endswith(":logit") else model
-    operator = "LIKE" if model.endswith(":logit") else "="
     scores = pd.read_sql_query(
         "SELECT w.recording_id, w.offset_s, w.dur_s, MAX(s.score) AS score FROM scores s "
-        f"JOIN windows w USING (window_id) WHERE s.model_id {operator} ? GROUP BY s.window_id",
+        "JOIN windows w USING (window_id) WHERE s.model_id = ? GROUP BY s.window_id",
         con,
-        params=(pattern,),
+        params=(model,),
     )
     if scores.empty:
         raise ValueError(f"aucun score pour {model!r} dans la base")
     values = project_scores(windows, scores)
     values = np.where(np.isnan(values), float(scores["score"].min()) - 1.0, values)
-    source = name or f"external/{model.replace(':logit', '/congeners')}"
+    source = name or f"external/{model}"
     save_oof(
         cfg,
         oof_frame(

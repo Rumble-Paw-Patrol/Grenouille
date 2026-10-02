@@ -196,8 +196,8 @@ couches ; intérêt ici). Les modèles marqués **[29/09]** sont à benchmarker 
   **647 amphibiens** et 350 mammifères. 4 de nos 5 espèces AnuraSet y sont (DENMIN, LEPLAT,
   PHYCUV, BOAFAB sous « Hypsiboas faber » ; pas PITAZU, *Pithecopus azureus*) : son classifieur
   se juge **sans entraînement** sur ces quatre-là. A. blanci n'y est pas ; son congénère
-  *Anomaloglossus baeobatrachus* (Guyane) y est, générateur de candidats possible comme les
-  congénères de Perch (n° 70). Sources d'entraînement non publiées : AnuraSet y est peut-être
+  *Anomaloglossus baeobatrachus* (Guyane) y est (logits non utilisés par le projet, n° 168).
+  Sources d'entraînement non publiées : AnuraSet y est peut-être
   (fuite possible, comme mix2) ; un score spectaculaire sur AnuraSet se revérifie sur les
   données ONF.
 - `aves_especies`, `birdaves_especies` : PyTorch (wav2vec2), 16 kHz, 1 s, animaux ; **toutes
@@ -513,8 +513,8 @@ phase 2 : perte = CE(linéaire, étiquettes) + λ · CE(linéaire, probabilités
 - **Classifieur linéaire de Perch 2.0 ≠ notre linear probe** : même forme (une couche linéaire
   sur l'embedding moyen), mais il est appris **pendant le préentraînement**, avec tout le
   réseau, sur 14 795 classes, et façonne l'embedding. Notre linear probe est une logistique
-  apprise **après**, sur embeddings gelés, avec nos quelques annotations. Ses 14 795 logits sont
-  ceux que le projet lit pour les congénères d'A. blanci (`logit_classes`, n° 70).
+  apprise **après**, sur embeddings gelés, avec nos quelques annotations. Le projet ne lit pas
+  ses 14 795 logits (n° 168).
 - **Pourquoi deux phases** : l'enseignant doit exister avant d'enseigner. En phase 1, la tête à
   prototypes apprend en « observant » l'embedding (stop-gradient : elle ne le modifie pas) ;
   quand elle est bonne, la phase 2 reprend le meilleur modèle de la phase 1 et allume la perte

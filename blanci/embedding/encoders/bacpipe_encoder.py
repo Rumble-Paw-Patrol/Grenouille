@@ -16,10 +16,10 @@ Validé contre bacpipe 1.3.5 (torch 2.6, TensorFlow 2.15, Windows) le 23/09/2026
 - les poids sont téléchargés par `bacpipe.ensure_models_exist` dans `paths.models/bacpipe`
   (pas dans le dossier courant, défaut de bacpipe) ; birdmae passe par le cache Hugging Face ;
 - perch_v2 (ONNX, sans TensorFlow) garde les logits de ses 14 795 classes après chaque appel
-  (`model.results["logits"]`, noms dans `model.classes`) : `logit_classes` en retient
-  quelques-unes (les trois *Anomaloglossus* congénères, §2), relues par `pop_logits` après
-  `embed`, sans seconde inférence. birdnet_v3 fait de même avec les probabilités de son
-  classifieur (`model.predictions`, 11 560 classes) ;
+  (`model.results["logits"]`, noms dans `model.classes`) : `logit_classes` peut en retenir
+  quelques-unes, relues par `pop_logits` après `embed`, sans seconde inférence (aucune par
+  défaut, DECISIONS n° 168). birdnet_v3 fait de même avec les probabilités de son classifieur
+  (`model.predictions`, 11 560 classes) ;
 - jetons (DECISIONS n° 151 : un transformer se juge sur ses jetons) : Bird-MAE (dernière couche
   cachée, jeton de classe retiré, 32 temps × 8 fréquences), BEATs et NatureBEATs (jetons avant
   la moyenne que fait bacpipe, temps × 8 fréquences), AudioProtoPNet (carte de la dernière

@@ -10,8 +10,7 @@ Entrées de niveau 1 d'une fusion, toutes hors-pli, sur les plis communs (`datas
 - autres sources (`fusion.sources`, ensemble de modèles) :
   - `head:<encodeur>` : tête logistique d'un autre encodeur, apprise pli par pli sur ses propres
     fenêtres, appliquée à toutes les fenêtres des enregistrements testés, ramenée sur la grille
-    de l'encodeur principal (`fusion.project_scores`) ;
-  - `congeners:<encodeur perch_v2>` : plus grand logit des *Anomaloglossus* congénères.
+    de l'encodeur principal (`fusion.project_scores`).
 
 Emplacement du module séquentiel (`sequential.position`, une liste, vide = pas du tout) :
 
@@ -143,12 +142,12 @@ def seq_columns(position: list[str], cfg: dict) -> list[str]:
 
 
 def _source_kind(source: str) -> tuple[str, str]:
-    """« head:<id> » ou « congeners:<id> » ; un identifiant nu est une tête."""
+    """« head:<id> » ; un identifiant nu est une tête."""
     kind, _, eid = source.partition(":")
     if not eid:
         return "head", kind
-    if kind not in ("head", "congeners"):
-        raise ValueError(f"source inconnue : {source!r} (head:<encodeur> ou congeners:<encodeur>)")
+    if kind != "head":
+        raise ValueError(f"source inconnue : {source!r} (head:<encodeur>)")
     return kind, eid
 
 
@@ -228,11 +227,8 @@ def build_level1(
     counts = onset_counts(data, onsets, tuple(cfg["signal"]["ioi_range_s"]))
     extra = pd.DataFrame(index=data.index)
     for source in sources:
-        kind, eid = _source_kind(source)
-        if kind == "head":
-            extra[f"head:{eid}"] = _secondary_head_oof(con, cfg, eid, data, assignment)
-        else:
-            extra[f"congeners:{eid}"] = congener_scores(con, eid, data)
+        _, eid = _source_kind(source)
+        extra[f"head:{eid}"] = _secondary_head_oof(con, cfg, eid, data, assignment)
     return Level1(
         encoder_id,
         data,
@@ -300,21 +296,6 @@ def _secondary_head_oof(
         )
         out[rows] = project_scores(target.iloc[rows], scored)
     return out
-
-
-def congener_scores(con: sqlite3.Connection, encoder_id: str, target: pd.DataFrame) -> np.ndarray:
-    """Plus grand logit de congénère (perch_v2, rangé par `embed`), ramené sur les fenêtres
-    cibles. Aucun apprentissage : hors-pli par nature."""
-    rows = pd.read_sql_query(
-        "SELECT w.recording_id, w.offset_s, w.dur_s, MAX(s.score) AS score FROM scores s "
-        "JOIN windows w USING (window_id) WHERE s.model_id LIKE ? GROUP BY s.window_id",
-        con,
-        params=(f"{encoder_id}:logit:%",),
-    )
-    rows = rows[rows["recording_id"].isin(set(target["recording_id"]))]
-    if rows.empty:
-        return np.full(len(target), np.nan)
-    return project_scores(target, rows)
 
 
 # --- Matrice de fusion et scores hors-pli ---------------------------------------------------------

@@ -264,33 +264,14 @@ def corpus(tmp_path, cfg):
     con.commit()
     write_stock(con, cfg, "main-1", 3.0, 1.5, rows, seed=0)
     write_stock(con, cfg, "other-1", 5.0, 2.5, rows, seed=1)
-    # logits de congénères sur la grille de 5 s de « other »
-    meta, _ = EmbeddingStore(cfg["paths"]["embeddings"], "other-1").load()
-    positive_rids = {rid for rid, _, p in rows if p}
-    con.executemany(
-        "INSERT OR IGNORE INTO windows (window_id, recording_id, offset_s, dur_s) "
-        "VALUES (?, ?, ?, 5.0)",
-        meta[["window_id", "recording_id", "offset_s"]].itertuples(index=False),
-    )
-    con.executemany(
-        "INSERT INTO scores (window_id, model_id, score) VALUES (?, 'other-1:logit:A. baeo', ?)",
-        [
-            (w, 2.0 if r in positive_rids else -2.0)
-            for w, r in zip(meta["window_id"], meta["recording_id"], strict=True)
-        ],
-    )
-    con.commit()
     return con
 
 
 def test_level1_holds_every_input_out_of_fold(corpus, cfg):
-    level1 = build_level1(corpus, cfg, "main-1", ["head:other-1", "congeners:other-1"])
+    level1 = build_level1(corpus, cfg, "main-1", ["head:other-1"])
     assert np.isfinite(level1.head.values).all()
     assert level1.sources["head:other-1"].notna().all()
-    assert level1.sources["congeners:other-1"].notna().all()
-    X, columns = design_matrix(
-        level1, ["parallel", "downstream"], cfg, ["head:other-1", "congeners:other-1"]
-    )
+    X, columns = design_matrix(level1, ["parallel", "downstream"], cfg, ["head:other-1"])
     assert columns == [
         "head",
         "frac_ioi_blanci",
@@ -298,9 +279,8 @@ def test_level1_holds_every_input_out_of_fold(corpus, cfg):
         "frac_windows",
         "longest_run",
         "head:other-1",
-        "congeners:other-1",
     ]
-    assert X.shape == (len(level1.y), 7)
+    assert X.shape == (len(level1.y), 6)
     assert design_matrix(level1, [], cfg)[1] == ["head"]
 
 
@@ -334,15 +314,16 @@ def test_upstream_gate_stops_windows_without_notes(corpus, cfg):
 
 
 @pytest.mark.filterwarnings("ignore")
-def test_production_fusion_with_a_congener_source_decides(corpus, cfg):
+def test_production_fusion_with_another_head_decides(corpus, cfg):
     """`blanci fusion` puis `score --fusion` avec une autre entrée et le module en aval seul."""
     from blanci.service import score_and_decide, train_and_register, train_fusion
 
-    cfg["fusion"] |= {"method": "mean", "sources": ["congeners:other-1"]}
+    cfg["fusion"] |= {"method": "mean", "sources": ["head:other-1"]}
     cfg["sequential"]["position"] = ["downstream"]
     train_and_register(corpus, "main-1", cfg)
+    train_and_register(corpus, "other-1", cfg)
     out = train_fusion(corpus, "main-1", cfg)
-    assert out["columns"] == ["head", "frac_windows", "longest_run", "congeners:other-1"]
+    assert out["columns"] == ["head", "frac_windows", "longest_run", "head:other-1"]
     assert abs(sum(out["weights"].values()) - 1) < 1e-9
     result = score_and_decide(corpus, "main-1", cfg, fusion=True)
     assert result.threshold_id.startswith("main-1:fusion:") and len(result.decisions) == 24
@@ -455,7 +436,6 @@ def test_full_benchmark_ranks_every_source_on_common_recordings(corpus, cfg):
         )
     corpus.commit()
     assert external_source(corpus, cfg, "blancinet") == "external/blancinet"
-    assert external_source(corpus, cfg, "other-1:logit") == "external/other-1/congeners"
     out = run_full_benchmark(corpus, cfg)
     table = out["table"]
     assert {"main-1/logistic", "other-1/prototype", "external/blancinet"} <= set(table["source"])

@@ -34,6 +34,6 @@ class UpstreamEncoder:
         return self.inner.embed_tokens(self.upstream.transform(wav, sr), sr)
 
     def pop_logits(self) -> np.ndarray | None:
-        """Logits de l'encodeur enveloppé (perch_v2 : congénères), sur le son transformé."""
+        """Logits de l'encodeur enveloppé (`logit_classes`), sur le son transformé."""
         pop = getattr(self.inner, "pop_logits", None)
         return pop() if pop else None
