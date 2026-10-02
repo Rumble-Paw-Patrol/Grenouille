@@ -218,6 +218,93 @@ def merge_audio_flags(
     return merged
 
 
+def check_recordings(
+    con: sqlite3.Connection,
+    recordings: pd.DataFrame,
+    raw_root: Any,
+    thresholds: dict[str, Any],
+    channel: int | str = 0,
+    signal_cfg: dict | None = None,
+    workers: int = 4,
+    commit_every: int = 100,
+    progress_every: int = 1000,
+) -> dict[str, int]:
+    """Contrôle audio des enregistrements qui ne l'ont pas encore eu, sans encodeur : une
+    lecture de chaque fichier, dans `workers` fils. Avec `signal_cfg`, la même lecture donne
+    les débuts de notes (module séquentiel) de ceux qui n'en ont pas, sauf s'ils sont écartés.
+
+    À lancer avant le premier encodage (`blanci qc`) : `embed` ne refait ni l'un ni l'autre, et
+    n'encode aucun enregistrement écarté. Reprenable : ce qui est fait est sauté.
+    """
+    from pathlib import Path
+    from time import perf_counter
+
+    from blanci.core.ahead import ahead
+    from blanci.core.audio import load_audio
+
+    with_onsets: set[str] = set()
+    if signal_cfg is not None:
+        from blanci.heads.sequential import recording_onsets, store_onsets
+
+        with_onsets = {row[0] for row in con.execute("SELECT recording_id FROM onsets")}
+    protected = positive_recordings(con)
+    report = {"checked": 0, "excluded": 0, "onsets": 0, "skipped": 0, "errors": 0}
+    todo = []
+    for rec in recordings.itertuples():
+        known = parse_flags(rec.qc_flags)
+        need_qc = "indices" not in known
+        need_onsets = (
+            signal_cfg is not None
+            and rec.recording_id not in with_onsets
+            and (need_qc or not is_excluded(known) or rec.recording_id in protected)
+        )
+        if need_qc or need_onsets:
+            todo.append((rec, need_qc, need_onsets))
+        else:
+            report["skipped"] += 1
+
+    def prepare(job: tuple) -> tuple | None:
+        rec, need_qc, need_onsets = job
+        try:
+            wav, sr = load_audio(Path(raw_root) / rec.path, channel)
+        except Exception:  # fichier illisible : déjà signalé à l'inventaire
+            return None
+        known = parse_flags(rec.qc_flags)
+        flags = qc_flags(qc_indices(wav, sr), thresholds) if need_qc else None
+        excluded = is_excluded(known | (flags or {})) and rec.recording_id not in protected
+        onsets = recording_onsets(wav, sr, signal_cfg) if need_onsets and not excluded else None
+        return flags, onsets
+
+    start = perf_counter()
+    for n, ((rec, _, _), out) in enumerate(ahead(todo, prepare, 2 * workers, workers), start=1):
+        if out is None:
+            if not Path(raw_root).exists():  # disque débranché : ne pas tout compter illisible
+                con.commit()
+                raise RuntimeError(f"{raw_root} n'est plus accessible ; relancer (reprenable)")
+            report["errors"] += 1
+            continue
+        flags, onsets = out
+        if flags is not None:
+            merged = merge_audio_flags(con, rec.recording_id, flags)
+            report["checked"] += 1
+            report["excluded"] += is_excluded(merged) and rec.recording_id not in protected
+        if onsets is not None:
+            store_onsets(con, rec.recording_id, onsets, channel)
+            report["onsets"] += 1
+        if n % commit_every == 0:
+            con.commit()
+        if n % progress_every == 0:
+            rate = n / (perf_counter() - start)
+            left_h = (len(todo) - n) / rate / 3600
+            print(
+                f"  {n}/{len(todo)} enregistrements, {rate:.1f} par seconde, "
+                f"reste ≈ {left_h:.1f} h",
+                flush=True,
+            )
+    con.commit()
+    return report
+
+
 def apply_audio_flags(con: sqlite3.Connection, thresholds: dict[str, Any]) -> dict[str, int]:
     """Recalcule les drapeaux audio depuis les indices déjà rangés, aux seuils actuels.
 

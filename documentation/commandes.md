@@ -106,8 +106,12 @@ $B agreement --annotators léonard,tuteur
 $B throughput --encoders birdnet,beats,perch_v2,birdmae_base   # → debit.md
 
 # --- Embeddings et choix d'encodeur (§2) : uv sync --group research -------
+# Contrôle audio de tout le corpus, une fois pour toutes, avant le premier encodage (n° 173) :
+# silencieux et micro dans sac écartés, débuts de notes rangés. Reprenable ; --no-onsets,
+# --dataset, --site.
+uv run blanci qc
 uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatifs appariés
-# (contrôle audio au passage : silencieux et micro dans sac écartés ; --no-qc pour s'en passer)
+# (un enregistrement que `qc` n'a pas vu est contrôlé au passage ; --no-qc pour s'en passer)
 uv run blanci embed --encoder birdmae --peak-hours    # reprenable
 $B cluster --encoder birdmae-bacpipe1.3.5 --mode c1   # clustering C0/C1 (§5 bis)
 uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md

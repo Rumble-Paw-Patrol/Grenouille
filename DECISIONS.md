@@ -2932,3 +2932,22 @@ de Léonard, 01/10/2026.
        mode d'alimentation de Windows (fréquence soutenue : 2,9 GHz en « Utilisation
        normale ») et un moteur sur le processeur graphique intégré (OpenVINO, DirectML), à
        mesurer. Tests : 802 réussis (suite rapide, hors notebooks non vidés).
+
+## 2026-10-02 — Contrôle audio avant l'encodage
+
+173. **`blanci qc` : le contrôle audio se fait une fois, avant tout encodage** (Léonard : le
+     benchmark des encodeurs n'est pas fait, aucun encodage ne doit porter ce contrôle).
+     `inputs.qc.check_recordings` lit chaque enregistrement retenu par `select_recordings` une
+     fois, dans 4 fils (`core.ahead`), range ses drapeaux audio et, sur la même lecture, ses
+     débuts de notes (`--no-onsets` pour s'en passer) ; un enregistrement écarté n'en reçoit pas.
+     Reprenable ; s'arrête si la racine audio disparaît (disque débranché) au lieu de tout
+     compter illisible. `embed` garde son contrôle au passage (`qc.during_embed`), qui ne
+     trouve plus rien à faire : filet pour un enregistrement inventorié après coup.
+     - Débit mesuré sur l'i5, fichiers en cache : 12 enregistrements/s sans les débuts de notes,
+       1,8 avec (la transformée de Hilbert sur 5,76 M d'échantillons ne passe pas à l'échelle
+       de 4 fils) ; 8 fils n'apportent rien.
+     - **Le disque limite** : le T7 Shield (SSD) se lit à 40 Mo/s à froid, débit d'une liaison
+       USB 2.0, quand le VERBATIM (mécanique) se lit à 120 Mo/s sur le même poste : câble, port
+       ou concentrateur à vérifier. À 40 Mo/s : 1,5 enregistrement/s sans les débuts de notes,
+       1,2 avec, soit ≈ 17 h et ≈ 22 h pour les 94 600 enregistrements encodables (≈ 5,5 h et
+       ≈ 7 h pour 2026 seul). Avec une liaison USB 3 : ≈ 2 h sans, ≈ 15 h avec.

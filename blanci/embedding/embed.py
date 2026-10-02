@@ -8,17 +8,16 @@ temps réel) est enregistré dans la table models : c'est la colonne « vitesse 
 (§2).
 
 La lecture, le contrôle audio et les débuts de notes de l'enregistrement suivant se font dans
-un fil à part pendant que l'encodeur traite le courant (`_ahead`) : faits à leur tour, ils
-prenaient un quart du temps d'un passage, encodeur à l'arrêt.
+un fil à part pendant que l'encodeur traite le courant (`core.ahead`) : faits à leur tour, ils
+prenaient un quart du temps d'un passage, encodeur à l'arrêt. `blanci qc` fait ce contrôle et
+ces débuts de notes d'avance, pour tout le corpus (`inputs.qc.check_recordings`) : il ne reste
+alors ici que la lecture et l'encodeur.
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
-from collections import deque
-from collections.abc import Callable, Iterable, Iterator
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import perf_counter
@@ -27,6 +26,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from blanci.core.ahead import ahead as read_ahead
 from blanci.core.audio import cut_windows, load_audio
 from blanci.core.db import utc_now, window_id_for
 from blanci.embedding.encoders.base import Encoder, stock_id
@@ -115,27 +115,6 @@ class _Audio:
     failed: bool = False  # fichier illisible
     flags: dict[str, Any] | None = None  # drapeaux audio, si le contrôle restait à faire
     onsets: np.ndarray | None = None  # débuts de notes, s'ils restaient à calculer
-
-
-def _ahead(
-    items: Iterable[Any], prepare: Callable[[Any], Any], ahead: int = 2
-) -> Iterator[tuple[Any, Any]]:
-    """(élément, prepare(élément)), dans l'ordre ; `prepare` tourne dans un fil à part, avec
-    `ahead` éléments d'avance sur celui qui est rendu (0 : chacun à son tour). Une exception
-    de `prepare` remonte ici, à son tour."""
-    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="blanci-lecture")
-    pending: deque = deque()
-    try:
-        for item in items:
-            pending.append((item, pool.submit(prepare, item)))
-            if len(pending) > ahead:
-                first, future = pending.popleft()
-                yield first, future.result()
-        while pending:
-            first, future = pending.popleft()
-            yield first, future.result()
-    finally:
-        pool.shutdown(wait=True, cancel_futures=True)
 
 
 def _flush(
@@ -248,7 +227,7 @@ def embed_recordings(
         todo = [rec for rec in group.itertuples() if rec.recording_id not in done]
         report.skipped += len(group) - len(todo)
 
-        for rec, audio in _ahead(todo, prepare, ahead):
+        for rec, audio in read_ahead(todo, prepare, ahead):
             if audio.failed:
                 report.errors += 1
                 continue

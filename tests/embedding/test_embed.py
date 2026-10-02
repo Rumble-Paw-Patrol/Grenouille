@@ -4,10 +4,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from blanci.core.ahead import ahead as _ahead
+from blanci.core.config import load_config
 from blanci.core.db import connect, recording_id_for
-from blanci.embedding.embed import _ahead, embed_recordings, month_of, select_recordings
+from blanci.embedding.embed import embed_recordings, month_of, select_recordings
 from blanci.embedding.encoders.base import BaseEncoder
 from blanci.embedding.store import EmbeddingStore
+from blanci.inputs.qc import check_recordings, parse_flags
 from tests.conftest import write_wav
 
 SR = 16000
@@ -274,6 +277,8 @@ def test_ahead_keeps_the_order_and_raises_in_turn():
             seen.append((item, value))
     assert seen == [(0, 0), (1, 1), (2, 4)]
     assert list(_ahead(range(3), prepare, ahead=0)) == [(0, 0), (1, 1), (2, 4)]
+    several = list(_ahead(range(40), lambda i: -i, ahead=8, workers=4))  # plusieurs fils
+    assert several == [(i, -i) for i in range(40)]
 
 
 def test_unreadable_file_is_counted_not_fatal(workspace):
@@ -289,6 +294,59 @@ def test_unreadable_file_is_counted_not_fatal(workspace):
     con.commit()
     report = embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root)
     assert report.errors == 1 and report.recordings == 1
+
+
+# --- Contrôle audio avant l'encodage ----------------------------------------------------------
+
+
+def test_qc_pass_leaves_nothing_to_check_during_embed(workspace):
+    """`blanci qc` : contrôle audio et débuts de notes une fois pour toutes, sans encodeur."""
+    import soundfile as sf
+
+    con, raw, store_root = workspace
+    cfg = load_config()
+    for i in range(3):
+        add_recording(con, raw, f"r{i}.wav")
+    silent = add_recording(con, raw, "muet.wav")
+    sf.write(raw / "muet.wav", np.zeros(int(SR * DURATION_S), np.float32), SR, subtype="PCM_16")
+
+    def check():
+        return check_recordings(
+            con, recordings_of(con), raw, cfg["qc"], signal_cfg=cfg["signal"], workers=2
+        )
+
+    assert check() == {"checked": 4, "excluded": 1, "onsets": 3, "skipped": 0, "errors": 0}
+    row = con.execute("SELECT qc_flags FROM recordings WHERE recording_id = ?", (silent,))
+    flags = parse_flags(row.fetchone()[0])
+    assert flags["silent"] is True and "indices" in flags
+    assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 3
+    assert check() == {"checked": 0, "excluded": 0, "onsets": 0, "skipped": 4, "errors": 0}
+
+    selected = select_recordings(con)
+    assert silent not in set(selected["recording_id"])
+    report = embed_recordings(
+        con,
+        FakeEncoder(),
+        selected,
+        raw,
+        store_root,
+        signal_cfg=cfg["signal"],
+        qc_thresholds=cfg["qc"],
+    )
+    assert (report.recordings, report.qc_checked) == (3, 0)
+    assert con.execute("SELECT COUNT(*) FROM onsets").fetchone()[0] == 3
+
+
+def test_qc_pass_counts_unreadable_files_but_stops_if_the_disk_is_gone(workspace):
+    con, raw, _ = workspace
+    cfg = load_config()
+    add_recording(con, raw, "bon.wav")
+    add_recording(con, raw, "casse.wav")
+    (raw / "casse.wav").write_bytes(b"pas un WAV")
+    report = check_recordings(con, recordings_of(con), raw, cfg["qc"], workers=1)
+    assert (report["checked"], report["errors"], report["onsets"]) == (1, 1, 0)
+    with pytest.raises(RuntimeError, match="plus accessible"):
+        check_recordings(con, recordings_of(con), raw / "absent", cfg["qc"], workers=1)
 
 
 # --- Débit enregistré -------------------------------------------------------------------------

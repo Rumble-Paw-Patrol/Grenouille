@@ -42,7 +42,8 @@ grids:
 
 qc:
   # Drapeaux audio (DECISIONS n° 79) : silencieux et micro dans sac écartent du corpus,
-  # pluie et saturation sont des remarques. Calculés pendant `embed` (sur l'audio déjà lu).
+  # pluie et saturation sont des remarques. Calculés par `blanci qc`, avant tout encodage
+  # (DECISIONS n° 173) ; `embed` ne contrôle au passage que ce qui ne l'a pas été.
   during_embed: true
   silent_dbfs: -70.0               # RMS en dessous : enregistrement muet
   clip_fraction: 0.0001            # fraction d'échantillons saturés au-dessus : saturation

@@ -51,6 +51,7 @@ from blanci.inputs.qc import (
     apply_annotation_flags,
     apply_audio_flags,
     apply_metadata_flags,
+    check_recordings,
     parse_flags,
 )
 from blanci.results.activity import write_activity_report
@@ -185,6 +186,52 @@ def _echo_annotated(counts: dict[str, int]) -> None:
         f"posés à l'écoute, sur {counts['annotated']} enregistrements annotés : "
         f"{counts['in_bag']} micro dans sac (jamais encodés), {counts['rain']} pluie (remarque)"
     )
+
+
+@app.command("qc")
+def qc_command(
+    ctx: typer.Context,
+    dataset: Annotated[str | None, typer.Option(help="Restreindre à un jeu (2023, 2026).")] = None,
+    site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
+    onsets: Annotated[
+        bool,
+        typer.Option(
+            "--onsets/--no-onsets",
+            help="Calculer aussi les débuts de notes (module séquentiel) sur la même lecture.",
+        ),
+    ] = True,
+    workers: Annotated[int, typer.Option(help="Fils de lecture et de calcul.")] = 4,
+) -> None:
+    """Contrôle audio de tous les enregistrements, avant tout encodage. Lit l'audio, n'encode rien.
+
+    Silencieux et micro dans sac écartent l'enregistrement (jamais encodé), pluie et saturation
+    sont des remarques. Fait une fois pour toutes : `blanci embed` ne contrôle que ce qui ne l'a
+    pas été. Reprenable : ce qui est fait est sauté.
+    """
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    raw = config_path(cfg, "raw")
+    if not raw.exists():
+        typer.echo(f"{raw} est inaccessible (paths.raw) : disque branché ?")
+        raise typer.Exit(1)
+    recordings = select_recordings(con, dataset=dataset, site=site)
+    typer.echo(f"{len(recordings)} enregistrements retenus (ceux déjà écartés ne sont pas lus)")
+    report = check_recordings(
+        con,
+        recordings,
+        raw,
+        cfg["qc"],
+        channel=cfg["audio"]["channel"],
+        signal_cfg=cfg["signal"] if onsets else None,
+        workers=workers,
+    )
+    typer.echo(
+        f"{report['checked']} contrôlés, dont {report['excluded']} écartés (silencieux ou micro "
+        f"dans sac) ; débuts de notes pour {report['onsets']} ; {report['skipped']} déjà faits, "
+        f"{report['errors']} illisibles"
+    )
+    audio = apply_audio_flags(con, cfg["qc"])
+    typer.echo("drapeaux audio : " + ", ".join(f"{k} {audio[k]}" for k in AUDIO_FLAGS))
 
 
 @app.command()
