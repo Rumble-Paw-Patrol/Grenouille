@@ -5,11 +5,16 @@ Labels courants, transfert vers la grille, négatifs appariés.
 - Transfert (DECISIONS n° 4) : une fenêtre de grille hérite du label d'une annotation si elle la
   contient (annotation courte, 3 s) ou si elle y est contenue (annotation d'enregistrement
   entier, §5). Les fenêtres qui ne font que chevaucher l'annotation sont écartées.
-- Intervalles (§5.6, DECISIONS n° 182) : sur un extrait écouté (span), une fenêtre de grille
-  est **positive si et seulement si elle chevauche un intervalle annoté**, même d'un
-  centième de seconde ; négative si elle est entièrement dans l'extrait sans en toucher
-  aucun ; sans label sinon (pas entièrement écoutée). Un intervalle « A. blanci ? » rend la
-  fenêtre incertaine, écartée comme `blanci_uncertain`. Valable pour toute grille (3, 5 s…).
+- Intervalles (§5.6, DECISIONS n° 182, 183) : sur un extrait écouté (span), recouvrement
+  r = durée commune / min(durée de l'intervalle, durée de la fenêtre). Une fenêtre est
+  **positive si r ≥ `MIN_INTERVAL_OVERLAP` (½)** pour un intervalle (elle contient le chant,
+  ou le chant la remplit, au moins à moitié) ; **« bord »** si elle ne fait qu'effleurer un
+  intervalle (0 < r < ½) : label `edge`, écartée de l'entraînement ; négative si elle est
+  entièrement dans l'extrait sans toucher d'intervalle ; sans label sinon (pas entièrement
+  écoutée). Avec des fenêtres glissantes à moitié recouvrantes (`encoders.overlap: 0.5`),
+  chaque intervalle a au moins une fenêtre positive, quelle que soit sa durée : écarter les
+  bords ne perd aucun chant. Un intervalle « A. blanci ? » rend incertaine toute fenêtre non
+  positive qui le touche (`blanci_uncertain`, écartée). Valable pour toute grille (3, 5 s…).
 - Négatifs appariés (§2) : fenêtres du même micro, dans des enregistrements sans label positif.
   Ce sont des négatifs *présumés* (colonne `presumed`) : jamais écrits dans la table labels.
   En saison, à l'heure de pic, une partie peut contenir A. blanci : bruit d'étiquette identique
@@ -41,7 +46,11 @@ from blanci.heads.signal_processing import GAP_RADIUS_S, surrounded_by_positives
 from blanci.inputs.labels import POSITIVE_LABELS
 from blanci.inputs.qc import EXCLUDING_FLAGS, is_excluded
 
-EXCLUDED_LABELS = ("blanci_uncertain", "uncertain")
+# « edge » : fenêtre qui ne fait qu'effleurer un intervalle annoté (jamais rangé dans labels).
+EXCLUDED_LABELS = ("blanci_uncertain", "uncertain", "edge")
+# Recouvrement minimal d'un intervalle pour qu'une fenêtre soit positive ; ½ garantit, avec
+# des fenêtres recouvrantes de moitié, au moins une fenêtre positive par intervalle.
+MIN_INTERVAL_OVERLAP = 0.5
 PAIRING_STRATEGIES = ("nearest", "other_day", "same_day", "mixed")
 
 
@@ -119,13 +128,18 @@ def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFr
 
 
 def interval_labels(
-    spans: pd.DataFrame, intervals: pd.DataFrame, grid: pd.DataFrame, eps: float = 1e-6
+    spans: pd.DataFrame,
+    intervals: pd.DataFrame,
+    grid: pd.DataFrame,
+    min_overlap: float = MIN_INTERVAL_OVERLAP,
+    eps: float = 1e-6,
 ) -> pd.DataFrame:
     """Labels des fenêtres de grille déduits des intervalles (règle en tête du module).
 
     grid : window_id, recording_id, offset_s, dur_s. Renvoie window_id, recording_id,
-    offset_s, label, y, quality, comment ; les fenêtres incertaines y sont (label
-    `blanci_uncertain`, y = 0) : à écarter pour l'entraînement (`EXCLUDED_LABELS`)."""
+    offset_s, label, y, quality, comment ; les fenêtres incertaines et les bords y sont
+    (labels `blanci_uncertain`, `edge`, y = 0) : à écarter pour l'entraînement
+    (`EXCLUDED_LABELS`)."""
     columns = ["window_id", "recording_id", "offset_s", "label", "y", "quality", "comment"]
     if spans.empty or grid.empty:
         return pd.DataFrame(columns=columns)
@@ -141,21 +155,27 @@ def interval_labels(
         inside = (w0[:, None] >= sp["start_s"].to_numpy()[None, :] - eps) & (
             w1[:, None] <= sp["end_s"].to_numpy()[None, :] + eps
         )
-        touch = (w0[:, None] < iv["end_s"].to_numpy()[None, :] - eps) & (
-            w1[:, None] > iv["start_s"].to_numpy()[None, :] + eps
-        )
+        i0, i1 = iv["start_s"].to_numpy(dtype=float), iv["end_s"].to_numpy(dtype=float)
+        common = np.minimum(w1[:, None], i1[None, :]) - np.maximum(w0[:, None], i0[None, :])
+        touch = common > eps
+        shorter = np.minimum((w1 - w0)[:, None], (i1 - i0)[None, :])
+        enough = touch & (common >= min_overlap * shorter - eps)
         labels = iv["label"].to_numpy()
         certain = labels != "blanci_uncertain"
+        ids = iv["span_id"].to_numpy()
         for j, (wid, off) in enumerate(zip(g["window_id"], g["offset_s"], strict=True)):
             hits = touch[j]
-            if (hits & certain).any():
-                k = np.flatnonzero(hits & certain)
+            if (enough[j] & certain).any():
+                k = enough[j] & certain
                 label = "blanci_chorus" if (labels[k] == "blanci_chorus").any() else "blanci"
-                info = span_info.loc[iv["span_id"].to_numpy()[k].max()]
+                info = span_info.loc[ids[k].max()]
                 y = 1
-            elif hits.any():
+            elif (hits & ~certain).any():
                 label, y = "blanci_uncertain", 0
-                info = span_info.loc[iv["span_id"].to_numpy()[np.flatnonzero(hits)].max()]
+                info = span_info.loc[ids[hits & ~certain].max()]
+            elif hits.any():
+                label, y = "edge", 0
+                info = span_info.loc[ids[hits].max()]
             elif inside[j].any():
                 info = span_info.loc[sp["span_id"].to_numpy()[np.flatnonzero(inside[j])].max()]
                 label, y = info["other_label"], 0

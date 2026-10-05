@@ -418,27 +418,50 @@ def _interval_labels(con, grid, annotator=None):
     return interval_labels(*load_spans(con, annotator), grid).set_index("offset_s")
 
 
-def test_a_window_is_positive_iff_it_touches_an_interval(con):
+def test_a_window_is_positive_when_it_holds_half_an_interval(con):
     """Grille de 3 s au pas de 1,5 s, intervalle 10,0–10,4 s sur l'extrait 0–30 s : positives
-    les fenêtres qui le touchent, même d'un peu ; négatives les autres fenêtres de
-    l'extrait ; rien hors de l'extrait."""
+    les fenêtres qui le contiennent ; négatives les autres fenêtres de l'extrait ; rien hors
+    de l'extrait."""
     rid = add_recording(con, "2026/mataroni/M1/a.wav")
     _span(con, rid, 0.0, 30.0, [(10.0, 10.4, "blanci")], other="bird")
     data = _interval_labels(con, grid_frame([rid]))
-    positives = sorted(data.index[data["y"] == 1])
-    assert positives == [7.5, 9.0]  # 7,5–10,5 et 9–12 ; 6–9 et 10,5–13,5 ne le touchent pas
+    assert sorted(data.index[data["y"] == 1]) == [7.5, 9.0]  # 7,5–10,5 et 9–12
     assert data.loc[6.0, "y"] == 0 and data.loc[6.0, "label"] == "bird"  # 6–9 : ne touche pas
     assert data.index.max() == 27.0  # 27–30 est la dernière fenêtre entièrement écoutée
     assert data.loc[7.5, "label"] == "blanci"
 
 
-def test_touching_only_the_border_is_not_overlapping(con):
-    """Une fenêtre qui finit exactement où l'intervalle commence ne le chevauche pas."""
+def test_windows_that_only_graze_an_interval_are_edges(con):
+    """Intervalle 10,2–11,2 s (1 s) : 7,5–10,5 n'en a que 0,3 s (< ½) → bord, écarté ;
+    10,5–13,5 en a 0,7 s → positive ; 9–12 le contient. Toucher la limite ne compte pas."""
     rid = add_recording(con, "2026/mataroni/M1/a.wav")
-    _span(con, rid, 0.0, 30.0, [(12.0, 13.0, "blanci_chorus")])
+    _span(con, rid, 0.0, 30.0, [(10.2, 11.2, "blanci"), (18.0, 19.0, "blanci_chorus")])
     data = _interval_labels(con, grid_frame([rid]))
-    assert data.loc[9.0, "y"] == 0  # 9–12
-    assert data.loc[10.5, "y"] == 1 and data.loc[10.5, "label"] == "blanci_chorus"
+    assert data.loc[7.5, "label"] == "edge" and data.loc[7.5, "y"] == 0
+    assert data.loc[9.0, "y"] == 1 and data.loc[10.5, "y"] == 1
+    assert data.loc[15.0, "y"] == 0 and data.loc[15.0, "label"] == "background"  # 15–18
+    assert data.loc[16.5, "label"] == "blanci_chorus"
+    training = training_set(con, grid_frame([rid])).set_index("offset_s")
+    assert 7.5 not in training.index and training.loc[9.0, "y"] == 1
+
+
+def test_half_overlapping_windows_never_lose_an_interval(con):
+    """Avec des fenêtres glissantes à moitié recouvrantes, chaque intervalle, court ou long,
+    a au moins une fenêtre positive, où qu'il tombe."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    rng = np.random.default_rng(0)
+    intervals = []
+    for k in range(40):
+        start = round(k * 3.0 + rng.uniform(0, 0.5), 2)
+        length = float(rng.choice([0.1, 0.9, 2.4, 3.1, 4.2]))
+        intervals.append((start, round(start + length, 2)))
+    for window_s in (3.0, 5.0):
+        for a, b in intervals:
+            span = _span(con, rid, 0.0, 120.0, [(a, b, "blanci")])
+            grid = grid_frame([rid], window_s=window_s, hop_s=window_s / 2)
+            grid["window_id"] = [window_id_for(rid, o, window_s) for o in grid["offset_s"]]
+            data = _interval_labels(con, grid)
+            assert (data["y"] == 1).any(), (window_s, a, b, span)
 
 
 def test_uncertain_intervals_make_windows_uncertain(con):

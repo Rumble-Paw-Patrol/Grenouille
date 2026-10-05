@@ -60,7 +60,7 @@ from blanci.core.db import connect, window_id_for
 from blanci.inputs.labels import QUALITIES
 
 CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
-NAMES = dict(ANSWERS)
+NAMES = dict(ANSWERS) | {"edge": "bord d'un intervalle (écarté)"}
 # Classes de l'extrait hors A. blanci, dont la présence se dit par les intervalles.
 OTHER_ANSWERS = tuple(a for a in ANSWERS if a not in INTERVAL_ANSWERS)
 CONTEXT, WHOLE = "context", "whole"

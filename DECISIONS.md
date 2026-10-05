@@ -3122,3 +3122,17 @@ de Léonard, 01/10/2026.
        composant : la page n'est plus rechargée à chaque clic, la lecture continue.
      - Pas encore lus par les intervalles : `explore`, les files de sélection (`selection`),
        `oof`, `baselines`, qui ne voient que les labels de fenêtres.
+
+183. **Retour au « bord » du §5.6** (Léonard), qui remplace la règle « positive dès qu'elle
+     chevauche » du n° 182. Recouvrement r = durée commune / min(durée de l'intervalle,
+     durée de la fenêtre) : **positive si r ≥ ½** (la fenêtre contient au moins la moitié du
+     chant, ou le chant remplit au moins la moitié de la fenêtre) ; **bord si 0 < r < ½**,
+     label `edge`, écarté de l'entraînement comme les incertains ; négative si aucun
+     intervalle n'est touché (`dataset.MIN_INTERVAL_OVERLAP`).
+     - Les fenêtres glissantes étaient déjà en place (`encoders.overlap: 0.5`, n° 1) : avec un
+       pas d'une demi-fenêtre, chaque intervalle a au moins une fenêtre avec r ≥ ½, quelle
+       que soit sa durée et où qu'il tombe (si la fenêtre la plus proche avant lui commence
+       au plus un demi-pas plus tôt, elle en couvre au moins min(durée, ½ fenêtre)). Écarter
+       les bords ne perd donc aucun chant ; vérifié par un test sur grilles de 3 et 5 s.
+     - Une fenêtre positive pour un intervalle sûr le reste même si elle touche aussi un
+       intervalle « A. blanci ? » ; sinon, toucher un intervalle incertain la rend incertaine.
