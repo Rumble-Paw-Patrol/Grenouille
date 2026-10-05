@@ -26,6 +26,7 @@ from blanci.annotation.workbench import (
 )
 from blanci.core.db import connect, window_id_for
 from blanci.inputs.ingest import ingest
+from blanci.service import append_label
 
 SR = 16_000
 DURATION_S = 12.0
@@ -273,6 +274,22 @@ def test_recording_candidates_skip_recordings_already_heard_in_full(corpus):
     save_answer(con, first, "background", "léonard")
     again = recording_candidates(con, cfg, n=50, sites=["patawa"])
     assert first["recording_id"] not in set(again["recording_id"])
+
+
+def test_blancinet_labels_never_remove_a_recording_from_the_queues(corpus):
+    """Une fenêtre annotée par Blancinet reste à écouter : seul notre label l'écarte."""
+    con, cfg, _ = corpus
+    first = recording_candidates(con, cfg, n=2, sites=["patawa"]).iloc[0].to_dict()
+    window = ensure_window(con, first["recording_id"], first["offset_s"], first["dur_s"])
+    append_label(con, window, "blanci", source="import")
+    again = recording_candidates(con, cfg, n=50, sites=["patawa"])
+    assert first["recording_id"] in set(again["recording_id"])
+    assert progress(con, pd.DataFrame([first])).tolist() == [None]
+
+    save_answer(con, first, "background", "léonard")
+    after = recording_candidates(con, cfg, n=50, sites=["patawa"])
+    assert first["recording_id"] not in set(after["recording_id"])
+    assert progress(con, pd.DataFrame([first])).tolist() == ["background"]
 
 
 def test_calibration_hides_only_my_own_answers(corpus):

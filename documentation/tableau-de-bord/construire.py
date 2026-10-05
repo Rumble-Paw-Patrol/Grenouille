@@ -84,16 +84,35 @@ def git(*args: str) -> str:
         return ""
 
 
-def numeros() -> dict[str, int]:
-    """Numéro de chaque commit le long de la branche courante (premier parent) : n° 1 = le
-    premier commit du dépôt. Ce sont les numéros qu'accepte le skill audit-n-from."""
-    hashes = git("rev-list", "--reverse", "--first-parent", "--abbrev-commit", "HEAD").split()
+def ref_main() -> str:
+    """La branche main telle qu'elle est sur GitHub (origin/main, rafraîchie si le réseau le
+    permet), sinon main locale, sinon HEAD. Les numéros de commit se comptent sur elle."""
+    try:
+        subprocess.run(
+            ["git", "fetch", "-q", "origin", "main"], cwd=RACINE, capture_output=True, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    for ref in ("origin/main", "main"):
+        if git("rev-parse", "--verify", "--quiet", ref).strip():
+            return ref
+    return "HEAD"
+
+
+def numeros(ref: str) -> dict[str, int]:
+    """Numéro de chaque commit poussé sur main (premier parent) : n° 1 = le premier commit du
+    dépôt. Ce sont les numéros qu'accepte le skill audit-n-from ; un commit d'une autre branche
+    n'en a pas."""
+    hashes = git("rev-list", "--reverse", "--first-parent", "--abbrev-commit", ref).split()
     return {h: i for i, h in enumerate(hashes, start=1)}
 
 
-def historique(n: int = 20) -> list[list]:
-    sortie = git("log", "--first-parent", f"-{n}", "--date=short", "--pretty=format:%h\t%ad\t%s")
-    num = numeros()
+def historique(ref: str, n: int = 20) -> list[list]:
+    """Derniers commits de main, avec leur numéro."""
+    sortie = git(
+        "log", "--first-parent", f"-{n}", "--date=short", "--pretty=format:%h\t%ad\t%s", ref
+    )
+    num = numeros(ref)
     out = []
     for ligne in sortie.splitlines():
         h, d, s = ligne.split("\t", 2)
@@ -399,7 +418,7 @@ def changements() -> str:
         base = json.loads(PUBLICATION.read_text(encoding="utf-8")).get("commit", "")
     if not base or not git("rev-parse", "--verify", "--quiet", base + "^{commit}").strip():
         base = git("log", "-1", "--format=%h", "--", "documentation/tableau-de-bord/").strip()
-    num = numeros()
+    num = numeros(ref_main())
     lignes = [f"# Changements depuis la dernière publication ({base}, n° {num.get(base, '?')})", ""]
     commits = git("log", "--first-parent", "--format=%h\t%ad\t%s", "--date=short", f"{base}..HEAD")
     lignes += ["## Commits", ""]
@@ -493,7 +512,7 @@ def main() -> None:
         "contenu": contenu,
         "annotations": annotations(config),
         "tests": {"total": sum(tests.values()), "par_dossier": tests},
-        "historique": historique(),
+        "historique": historique(ref_main()),
         "inventaire": inventaire(),
         "rapports": rapports(fichiers),
         "encodeurs": benchmark_encodeurs(),

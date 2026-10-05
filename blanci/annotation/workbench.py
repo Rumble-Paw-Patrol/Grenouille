@@ -33,6 +33,7 @@ from blanci.embedding.embed import select_recordings
 from blanci.embedding.grid import window_grid
 from blanci.inputs.dataset import local_minutes, recordings_table
 from blanci.inputs.labels import (
+    THIRD_PARTY_SOURCES,
     _is_blank,
     comment_fields,
     detect_columns,
@@ -297,8 +298,20 @@ def flagged_candidates(
     return _finish(out, seed)
 
 
+_NOT_THIRD_PARTY = f"source NOT IN ({', '.join('?' * len(THIRD_PARTY_SOURCES))})"
+
+
+def own_labelled_windows(con: sqlite3.Connection) -> set[str]:
+    """Fenêtres que nous avons déjà annotées. Les labels d'un tiers (`THIRD_PARTY_SOURCES`,
+    l'import Blancinet) n'en font pas partie : ils ne retirent rien des files."""
+    rows = con.execute(
+        f"SELECT DISTINCT window_id FROM labels WHERE {_NOT_THIRD_PARTY}", THIRD_PARTY_SOURCES
+    )
+    return {row[0] for row in rows}
+
+
 def _drop_labelled(con: sqlite3.Connection, candidates: pd.DataFrame) -> pd.DataFrame:
-    done = {row[0] for row in con.execute("SELECT DISTINCT window_id FROM labels")}
+    done = own_labelled_windows(con)
     return candidates[[i not in done for i in _window_ids(candidates)]]
 
 
@@ -338,15 +351,17 @@ def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
 def progress(
     con: sqlite3.Connection, queue: pd.DataFrame, annotator: str | None = None
 ) -> pd.Series:
-    """Pour chaque candidat : son dernier label s'il a déjà été écouté, sinon None.
+    """Pour chaque candidat : son dernier label s'il a déjà été écouté par nous, sinon None
+    (un label de Blancinet seul ne compte pas : la fenêtre reste à écouter).
 
     Avec `annotator` (calibration entre annotateurs, §5), seules ses propres réponses
     comptent : chacun écoute la même file sans voir ce que l'autre a répondu.
     """
-    if annotator is None:
+    if annotator is None:  # les labels d'un tiers ne comptent pas comme déjà écouté
         rows = con.execute(
             "SELECT window_id, label FROM labels WHERE label_id IN "
-            "(SELECT MAX(label_id) FROM labels GROUP BY window_id)"
+            f"(SELECT MAX(label_id) FROM labels WHERE {_NOT_THIRD_PARTY} GROUP BY window_id)",
+            THIRD_PARTY_SOURCES,
         )
     else:
         rows = con.execute(

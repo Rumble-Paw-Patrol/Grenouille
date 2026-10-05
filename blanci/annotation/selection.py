@@ -43,7 +43,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from blanci.annotation.workbench import CANDIDATE_COLUMNS, _drop_labelled, _round_robin
+from blanci.annotation.workbench import (
+    CANDIDATE_COLUMNS,
+    _drop_labelled,
+    _round_robin,
+    own_labelled_windows,
+)
 from blanci.core.config import config_path
 from blanci.core.db import encoder_params
 from blanci.embedding.index import l2_normalize, search
@@ -608,7 +613,7 @@ def label_cluster(
         raise ValueError(f"le groupe {cluster} a été entendu « {heard} », pas « {label} »")
     assignments = pd.read_parquet(cluster_path(cfg, encoder_id))
     members = assignments.loc[assignments["cluster"] == cluster]
-    done = set(current_labels(con)["window_id"])
+    done = own_labelled_windows(con)  # une fenêtre annotée par Blancinet reçoit aussi le label
     todo = [w for w in members["window_id"] if w not in done]
     return append_labels_bulk(
         con,

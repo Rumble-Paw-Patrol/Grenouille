@@ -23,17 +23,27 @@ Modèle du rapport : `documentation/audit-28-septembre.md` (même ton, mêmes se
 les derniers numéros de commit (`git log` ci-dessous). Ne jamais auditer tout le dépôt sans
 que Léonard ait écrit `debut`.
 
+On audite **main telle qu'elle est sur GitHub** : commencer par `git fetch origin main`, puis
+tout se lit sur `origin/main`, quelle que soit la branche de travail de la session.
+
 Résoudre les bornes :
-- numéros de commit = position le long de la branche courante, premier parent, n° 1 = premier
-  commit ; ce sont ceux du tableau de bord et de
-  `git rev-list --reverse --first-parent HEAD | nl`. Le n° k est la k-ième ligne ;
+- numéros de commit = position le long de `origin/main` (premier parent), n° 1 = premier
+  commit ; ce sont ceux du tableau de bord (« Derniers changements du dépôt ») et de
+  `git rev-list --reverse --first-parent origin/main | nl`. Le n° k est la k-ième ligne. Un
+  hash qui n'est pas sur main est refusé : le dire et demander une autre borne ;
 - `de` est inclus : la plage est `<parent du commit de>..<commit à>` ;
-- date `de` = premier commit de ce jour ou après ; date `à` = dernier commit de ce jour ou avant ;
+- `à` absent = le dernier commit de `origin/main` ;
+- date `de` = premier commit de main de ce jour ou après ; date `à` = dernier de ce jour ou avant ;
 - `dernier-audit` = le commit noté en tête du dernier `documentation/audit-*.md` ;
 - `debut` = tout le dépôt tel qu'il est à la borne `à` (pas de diff).
 
-Annoncer avant de commencer, en une ligne : « Audit à N agents, commits n° a → n° b (k
-commits, f fichiers), sur … ». Si f > 60 avec N ≤ 2, prévenir que ce sera long et proposer de
+Les fichiers se lisent dans leur état à la borne `à`, dans un arbre de travail à part
+(`git worktree add <dossier temporaire du scratchpad> <commit à>`), supprimé à la fin
+(`git worktree remove`). Les tests et ruff tournent dans cet arbre. Les corrections acceptées
+se font ensuite sur la branche de travail de la session, à jour de main.
+
+Annoncer avant de commencer, en une ligne : « Audit à N agents, commits de main n° a → n° b
+(k commits, f fichiers), sur … ». Si f > 60 avec N ≤ 2, prévenir que ce sera long et proposer de
 restreindre avec `sur`.
 
 ## 1. Ce qu'on audite
@@ -81,7 +91,7 @@ Les tests (`tests/`) vont avec l'axe du code qu'ils testent.
 ```
 # Audit du dépôt — JJ/MM/AAAA
 
-Plage : commits n° a → n° b (hash a → hash b), sur …, N agents. Commit des corrections.
+Plage : commits de main n° a → n° b (hash a → hash b), sur …, N agents. Commit des corrections.
 Tests (réussis / échoués / sautés), ruff.
 
 ## 1. Erreurs trouvées et corrigées      Problème | Effet | Correction, par thème
