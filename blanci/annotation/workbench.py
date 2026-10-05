@@ -460,51 +460,18 @@ def clip_spectrogram(
     return freqs[keep], times, 10 * np.log10(power[keep] + 1e-12)
 
 
-def spectrogram_png(
-    wav: np.ndarray, sr: int, fmax_hz: float = 12_000.0, max_columns: int = 4000
-) -> tuple[bytes, float]:
-    """(image PNG, fréquence du haut de l'image en Hz) : spectrogramme pour le visualiseur
-    zoomable, basses fréquences en bas, 60 dB de dynamique. Au-delà de `max_columns` pas de
-    temps, les colonnes voisines sont réunies par leur maximum (un chant bref reste visible)."""
-    from matplotlib import colormaps
-    from PIL import Image
-
-    freqs, _, db = clip_spectrogram(wav, sr, fmax_hz=min(fmax_hz, sr / 2))
-    if db.shape[1] > max_columns:
-        step = int(np.ceil(db.shape[1] / max_columns))
-        pad = (-db.shape[1]) % step
-        db = np.pad(db, ((0, 0), (0, pad)), mode="edge")
-        db = db.reshape(db.shape[0], -1, step).max(axis=2)
-    vmax = float(db.max())
-    norm = np.clip((db - (vmax - 60)) / 60, 0, 1)
-    rgb = (colormaps["magma"](norm[::-1])[..., :3] * 255).astype(np.uint8)
-    buffer = io.BytesIO()
-    Image.fromarray(rgb).save(buffer, format="PNG")
-    return buffer.getvalue(), float(freqs[-1]) if len(freqs) else fmax_hz
-
-
 def wav_bytes(
     wav: np.ndarray,
     sr: int,
     gain_db: float = 0.0,
     band_hz: tuple[float, float] | None = None,
-    max_sr: int | None = None,
 ) -> bytes:
     """WAV 16 bits en mémoire pour le lecteur ; `gain_db` et `band_hz` (passe-bande : on
-    n'entend que cette bande) n'agissent que sur l'écoute. `max_sr` : rééchantillonné plus
-    bas au-delà, pour qu'un enregistrement entier reste léger dans la page."""
+    n'entend que cette bande) n'agissent que sur l'écoute."""
     if band_hz is not None:
         from blanci.heads.signal_processing import bandpass
 
         wav = bandpass(wav, sr, band_hz)
-    if max_sr is not None and sr > max_sr:
-        from math import gcd
-
-        from scipy.signal import resample_poly
-
-        g = gcd(int(sr), int(max_sr))
-        wav = resample_poly(wav, int(max_sr) // g, int(sr) // g).astype(np.float32)
-        sr = int(max_sr)
     x = np.clip(wav * 10 ** (gain_db / 20), -1.0, 1.0)
     buffer = io.BytesIO()
     sf.write(buffer, x, sr, format="WAV", subtype="PCM_16")

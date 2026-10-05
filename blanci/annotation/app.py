@@ -37,7 +37,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from blanci.annotation.viewer import viewer, viewer_args
+from blanci.annotation.viewer import HELP, asset, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
     INTERVAL_ANSWERS,
@@ -51,7 +51,6 @@ from blanci.annotation.workbench import (
     save_answer,
     save_span,
     span_intervals,
-    spectrogram_png,
     split_windows,
     wav_bytes,
 )
@@ -65,8 +64,6 @@ NAMES = dict(ANSWERS) | {"edge": "bord d'un intervalle (écarté)"}
 OTHER_ANSWERS = tuple(a for a in ANSWERS if a not in INTERVAL_ANSWERS)
 CONTEXT, WHOLE = "context", "whole"
 EXTENTS = {CONTEXT: "candidat et contexte", WHOLE: "enregistrement entier"}
-# Au-delà, l'écoute est rééchantillonnée : un enregistrement entier reste léger dans la page.
-LONG_EXTRACT_S, LISTEN_MAX_SR = 20.0, 24_000
 EXISTING, MAP = "existing", "map"
 MODES = {
     EXISTING: "File déjà écrite",
@@ -355,18 +352,10 @@ def _candidate_strip(queue, done, chosen, key, offset_h) -> None:
 
 
 @st.cache_data(max_entries=6, show_spinner="Lecture de l'enregistrement…")
-def _media(
-    raw: str,
-    path: str,
-    offset_s: float,
-    dur_s: float,
-    context_s: float | None,
-    spectro_channel: int,
-    gain_db: float,
-    band_hz: tuple[float, float] | None,
-) -> dict:
-    """Spectrogramme et écoute des deux micros, gardés en cache : changer de fenêtre dans le
-    découpage ne relit pas le disque. `context_s` None : l'enregistrement entier."""
+def _media(raw: str, path: str, offset_s: float, dur_s: float, context_s: float | None) -> dict:
+    """Écoute des deux micros, rangée à côté du visualiseur et gardée en cache : changer de
+    fenêtre ou tracer un intervalle ne relit pas le disque. `context_s` None : l'enregistrement
+    entier. Le spectrogramme, le volume et la bande d'écoute se font dans le navigateur."""
     clips = {
         c: read_clip(
             Path(raw),
@@ -378,20 +367,31 @@ def _media(
         )
         for c in CHANNELS
     }
-    wav, sr, start = clips[spectro_channel]
-    stop = start + len(wav) / sr
-    max_sr = LISTEN_MAX_SR if stop - start > LONG_EXTRACT_S else None
-    png, fmax = spectrogram_png(wav, sr)
+    wav, sr, start = clips[0]
     return {
-        "png": png,
-        "fmax": fmax,
         "t0": start,
-        "t1": stop,
+        "t1": start + len(wav) / sr,
         "audios": [
-            (CHANNELS[c], wav_bytes(w, rate, gain_db, band_hz, max_sr), s0)
+            (CHANNELS[c], asset(wav_bytes(w, rate), ".wav"), s0)
             for c, (w, rate, s0) in clips.items()
         ],
     }
+
+
+# Streamlit < 1.37 : sans fragment, toute la page se réaffiche.
+_fragment = getattr(st, "fragment", lambda f: f)
+
+
+@_fragment
+def _viewer_fragment(args: dict, extract: str, ikey: str, ckey: str, interval_mode: bool):
+    """Visualiseur et liste des intervalles : tracer, ajuster ou effacer un intervalle ne
+    réaffiche que ce fragment, pas toute la page."""
+    value = viewer(args)
+    if value and value.get("key") == extract:
+        st.session_state[ikey] = value["intervals"]
+        st.session_state[ckey] = int(value.get("channel", 0))
+    if interval_mode:
+        st.caption(_interval_caption(st.session_state[ikey]))
 
 
 def _classes(form_key: str, answers) -> list[str]:
@@ -497,7 +497,8 @@ def main() -> None:
     cfg, con = _setup(config)
     _apply_pending_queue()
     raw, reports = config_path(cfg, "raw"), config_path(cfg, "reports")
-    band_default = tuple(f / 1000 for f in cfg["signal"]["band_hz"])
+    band_hz = tuple(float(f) for f in cfg["signal"]["band_hz"])
+    spectro_default = int(cfg["audio"]["channel"] == 1)
 
     with st.sidebar:
         st.header("Session")
@@ -516,12 +517,6 @@ def main() -> None:
             value=False,
             help="Deux annotateurs écoutent la même file sans voir les réponses de l'autre (§5).",
         )
-        channel = st.radio(
-            "Spectrogramme",
-            list(CHANNELS),
-            format_func=CHANNELS.get,
-            index=int(cfg["audio"]["channel"] == 1),
-        )
         extent = st.radio(
             "Étendue affichée", list(EXTENTS), format_func=EXTENTS.get, index=1, horizontal=True
         )
@@ -530,20 +525,9 @@ def main() -> None:
             if extent == CONTEXT
             else None
         )
-        gain_db = st.slider("Volume d'écoute (dB, n'agit que sur l'écoute)", 0, 30, 0, 3)
-        band_khz = st.slider(
-            "Bande d'écoute (kHz)",
-            0.1,
-            12.0,
-            band_default,
-            0.1,
-            help="Position et largeur de la bande : pointillés du spectrogramme.",
-        )
-        band_hz = (band_khz[0] * 1000, band_khz[1] * 1000)
-        band_only = st.checkbox(
-            "N'écouter que la bande",
-            value=False,
-            help="Passe-bande entre les pointillés du spectrogramme ; n'agit que sur l'écoute.",
+        st.caption(
+            "Bande d'écoute, volume, dynamique et micro du spectrogramme : dans la barre "
+            "au-dessus du spectrogramme."
         )
         st.header("Méthode")
         window_mode = st.checkbox(
@@ -584,6 +568,8 @@ def main() -> None:
     if done.notna().all():
         st.success("File terminée : tous les candidats ont été écoutés.")
 
+    with st.expander("❓ Mode d'emploi : souris et clavier"):
+        st.markdown(HELP)
     candidate = queue.iloc[pos].to_dict()
     st.subheader(
         f"{candidate['site']} · {candidate['mic_id']} · "
@@ -606,9 +592,6 @@ def main() -> None:
             float(candidate["offset_s"]),
             float(candidate["dur_s"]),
             context_s,
-            channel,
-            gain_db,
-            band_hz if band_only else None,
         )
     except Exception as exc:  # disque débranché, fichier déplacé
         st.error(f"Lecture impossible : {exc}")
@@ -630,6 +613,7 @@ def main() -> None:
     window_labels = latest_labels(con, ids, who) if window_mode else {}
 
     intervals: list = []
+    channel = spectro_default
     if media is not None:
         extract = f"{candidate['path']}:{media['t0']:.2f}:{media['t1']:.2f}"
         ikey = f"iv::{extract}"
@@ -646,12 +630,12 @@ def main() -> None:
             }
             for j, ((o, d), i) in enumerate(zip(windows, ids, strict=True))
         ]
-        value = viewer(
+        ckey = f"ch::{extract}"
+        st.session_state.setdefault(ckey, spectro_default)
+        _viewer_fragment(
             viewer_args(
-                media["png"],
                 media["t0"],
                 media["t1"],
-                media["fmax"],
                 media["audios"],
                 shown,
                 band_hz,
@@ -659,14 +643,17 @@ def main() -> None:
                 labels=list(INTERVAL_ANSWERS),
                 intervals=st.session_state[ikey],
                 interval_mode=not window_mode,
-            )
+                channel=spectro_default,
+            ),
+            extract,
+            ikey,
+            ckey,
+            not window_mode,
         )
-        if value and value.get("key") == extract:
-            st.session_state[ikey] = value["intervals"]
         intervals = st.session_state[ikey]
+        channel = st.session_state[ckey]
 
     if not window_mode:
-        st.caption(_interval_caption(intervals))
         form_key = f"span::{chosen}::{pos}"
         if media is not None and _span_form(
             con, candidate, media["t0"], media["t1"], intervals, form_key, annotator, channel

@@ -3136,3 +3136,23 @@ de Léonard, 01/10/2026.
        les bords ne perd donc aucun chant ; vérifié par un test sur grilles de 3 et 5 s.
      - Une fenêtre positive pour un intervalle sûr le reste même si elle touche aussi un
        intervalle « A. blanci ? » ; sinon, toucher un intervalle incertain la rend incertaine.
+
+184. **Poste d'annotation plus léger** (retours de Léonard après la première séance).
+     - **Spectrogramme calculé dans le navigateur, à la résolution de la vue** : une colonne
+       de transformée de Fourier par pixel, fenêtre de 512 à 8192 échantillons selon le zoom
+       (plus longue quand on zoome en fréquence). Zoomer affine l'image au lieu d'agrandir des
+       pixels. Python n'en calcule plus : c'était ≈ 3 s par enregistrement de 2 min, l'essentiel
+       du temps d'ouverture. Échelle de couleurs fixe pour l'extrait, dynamique réglable (40
+       à 80 dB).
+     - **Bande d'écoute, « n'écouter qu'elle », volume et micro du spectrogramme dans la barre
+       du visualiseur**, appliqués aussitôt par Web Audio (passe-haut et passe-bas d'ordre 4) :
+       plus d'aller-retour avec Python ni de relecture. Les pointillés se tirent à la souris.
+       Réglages gardés dans le navigateur d'une séance à l'autre.
+     - **L'audio est chargé en mémoire** : le serveur de fichiers des composants ne sert pas
+       les requêtes partielles, le lecteur ne pouvait pas se déplacer et repartait du début.
+       Un clic sur le spectrogramme place la lecture à cet instant, sans la lancer.
+     - **Tracer, ajuster ou effacer un intervalle ne réaffiche plus que le visualiseur**
+       (`st.fragment`) : la page ne se recharge pas, la lecture continue.
+     - Barre de lecture verte cerclée de noir (le rouge se perdait dans la palette magma) ;
+       intervalles d'A. blanci en bleu ; graduations intermédiaires sur les deux axes ;
+       mode d'emploi (souris, clavier) dépliable en haut de la page (`viewer.HELP`).
