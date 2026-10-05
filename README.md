@@ -112,9 +112,8 @@ ignorée par git) : racine du disque externe, jamais modifié.
 
 ## Données
 
-**Le dépôt ne contient aucun enregistrement.** L'audio de l'ONF et de Biophonia, la base SQLite,
-les embeddings et les modèles vivent sous `data/`, ignoré par git. Les exports d'annotations du
-prestataire (`documentation/*.xlsx`) restent eux aussi en local.
+**Le dépôt ne contient aucun enregistrement.** L'audio de l'ONF, la base SQLite, les embeddings
+et les modèles vivent sous `data/`, ignoré par git.
 
 Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), dont les
 embeddings et la base servent aux benchmarks. Elles sont rangées dans les branches

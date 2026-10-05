@@ -422,7 +422,7 @@ def test_full_benchmark_ranks_every_source_on_common_recordings(corpus, cfg):
 
     for eid in ("main-1", "other-1"):
         benchmark_encoder(corpus, eid, cfg["paths"]["embeddings"], cfg)
-    # Blancinet : une détection forte sur chaque enregistrement positif
+    # Détecteur importé : une détection forte sur chaque enregistrement positif
     positives = [
         r[0]
         for r in corpus.execute(
@@ -432,13 +432,13 @@ def test_full_benchmark_ranks_every_source_on_common_recordings(corpus, cfg):
     for rid in positives:
         wid = window_id_for(rid, 6.0)
         corpus.execute(
-            "INSERT INTO scores (window_id, model_id, score) VALUES (?, 'blancinet', 0.9)", (wid,)
+            "INSERT INTO scores (window_id, model_id, score) VALUES (?, 'externe', 0.9)", (wid,)
         )
     corpus.commit()
-    assert external_source(corpus, cfg, "blancinet") == "external/blancinet"
+    assert external_source(corpus, cfg, "externe") == "external/externe"
     out = run_full_benchmark(corpus, cfg)
     table = out["table"]
-    assert {"main-1/logistic", "other-1/prototype", "external/blancinet"} <= set(table["source"])
+    assert {"main-1/logistic", "other-1/prototype", "external/externe"} <= set(table["source"])
     assert table["n_recordings"].nunique() == 1  # enregistrements communs
     assert table["up_to_date"].all()
     assert set(out["comparisons"]["reference"]) == {out["reference"]}

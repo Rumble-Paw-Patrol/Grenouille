@@ -53,10 +53,6 @@ dans le sac, 1 521 à l'horloge douteuse (Molokoi SMA14636, avril 2024, en file 
 94 588 enregistrements de 120 s restent encodables. Détail et anomalies : DECISIONS n° 153
 et 154.
 
-Annotations : l'export Excel de Blancinet v0.1.0 (une ligne par détection de 3 s, clé S3,
-score, vérification `True` / `False`, commentaires). Seules les lignes vérifiées deviennent des
-labels.
-
 Hors git, sous `data/` : `db/blanci.sqlite` (inventaire, fenêtres, labels en ajout seul),
 `embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet`, `models/`, `reports/`.
 
@@ -74,11 +70,12 @@ B="uv run blanci --config config/local.yaml"
 $B ingest --dataset 2026 --site CDR --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025"
 $B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026"
 
-# Import des annotations ; --dry-run d'abord pour relire verdicts, espèces et lignes signalées
-$B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx --dry-run
-$B import-labels documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
-# Toutes les détections Blancinet, comme scores (pas comme labels) : comparables aux nôtres
-$B import-detections documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx
+# Import d'un tableau d'annotations ; --dry-run d'abord pour relire verdicts, espèces et lignes
+# signalées
+$B import-labels annotations.xlsx --dry-run
+$B import-labels annotations.xlsx
+# Détections d'un autre détecteur, comme scores (pas comme labels) : comparables aux nôtres
+$B import-detections detections.xlsx --model externe
 $B export-labels     # fenêtres annotées : label, qualité, espèce, commentaire
 
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
@@ -93,7 +90,7 @@ $B status
 $B baselines --channels 0,1                          # → data/reports/baselines.md
 
 # --- Annotation (§5) : uv sync --group app -------------------------------
-$B candidates --from documentation/All_detections_blancinet_v0.1.0_dataset1BV.xlsx    --per-site 30 --random 12 --name lot1             # → data/reports/candidats_lot1.csv
+$B candidates --random 12 --name lot1             # → data/reports/candidats_lot1.csv
 $B annotate                                          # poste d'écoute dans le navigateur
 
 # Enregistrements entiers (audit aléatoire, jeu gelé) ; accord entre deux annotateurs
@@ -163,7 +160,7 @@ $B fusion-bench --encoder birdmae-bacpipe1.3.5         # dont logistic+R50+R54, 
 $B ensemble --sources birdmae-bacpipe1.3.5/logistic,perch_v2-bacpipe1.3.5/logistic
 $B detector-bench --detector band_contrast           # distilled, homemade : réservés
 $B sources                                           # ce que le stock hors-pli contient
-$B benchmark-all --external blancinet                # tout, mêmes enregistrements
+$B benchmark-all --external externe                  # tout, mêmes enregistrements
 
 # --- Sélection des candidats (DECISIONS n° 99–100) -------------------------
 $B select --method active --encoder birdmae-bacpipe1.3.5 --n 40 --mix 0.4,0.2,0.4

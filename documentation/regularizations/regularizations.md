@@ -105,7 +105,7 @@ R80 : Limiter le nombre de comparaisons : chaque encodeur × tête × fusion × 
 R81 : Pseudo-étiquetage avec seuil haut et un poids faible pour les pseudo-labels (BirdCLEF), qui régularise par les données non étiquetées.
 R82 : Régularisation de cohérence : même prédiction pour deux augmentations d'une même fenêtre non étiquetée (Mean Teacher, FixMatch). Réservé aux réseaux entraînés.
 R83 : Minimisation d'entropie sur les fenêtres non étiquetées des nouveaux sites (adaptation de domaine), à surveiller car elle peut s'effondrer.
-R84 : Part d'aléatoire dans la file 60-20-20 : c'est une régularisation du jeu d'annotation contre le biais du détecteur (voir la « conséquence 2 » Biophonia).
+R84 : Part d'aléatoire dans la file 60-20-20 : c'est une régularisation du jeu d'annotation contre le biais du détecteur qui a choisi les premières annotations.
 Si je devais en retenir quelques-unes pour commencer, à cause des 51 positifs sur 13 micros tous à Mataroni :
 
 R19/R21 : centrage par micro et retrait des directions de micro.

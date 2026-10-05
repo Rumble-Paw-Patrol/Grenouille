@@ -348,7 +348,7 @@ function table(slide, rows, o) {
 // =====================================================================
 {
   const s = content("Données · 1/2", "Le jeu de données : 96 292 enregistrements, 8 sites",
-    "L'inventaire est complet depuis le 29 septembre. Deux jeux. La phénologie 2023-2024 : trois sites (Kaw, Molokoï, Trésor), deux enregistreurs par site, un an de décembre 2023 à novembre 2024, 66 779 enregistrements, 2 225 h. La campagne 2026 : cinq sites (Mataroni, RNRT, CDR, Patawa Est, Patawa Ouest), un relevé d'environ une semaine par site, 29 513 enregistrements, 979 h. Tous les enregistrements font 2 min, toutes les 30 min de 5 h à 20 h, en 48 kHz stéréo. Au total 3 204 h et 2,2 To. Après les drapeaux (durée anormale, hors relevé, micro dans le sac, horloge douteuse), 94 588 enregistrements restent encodables, soit 4,5 millions de fenêtres de 5 s au pas de 2,5 s. Deux conséquences. En 2026, chaque site n'a été enregistré qu'une semaine : le mois est confondu avec le site, seul le jeu 2023 couvre toutes les saisons. Et les 345 positifs et 150 négatifs importés de Blancinet sortent de l'entraînement et de l'évaluation : ils avaient été choisis par un détecteur et ne couvraient que Mataroni.");
+    "L'inventaire est complet depuis le 29 septembre. Deux jeux. La phénologie 2023-2024 : trois sites (Kaw, Molokoï, Trésor), deux enregistreurs par site, un an de décembre 2023 à novembre 2024, 66 779 enregistrements, 2 225 h. La campagne 2026 : cinq sites (Mataroni, RNRT, CDR, Patawa Est, Patawa Ouest), un relevé d'environ une semaine par site, 29 513 enregistrements, 979 h. Tous les enregistrements font 2 min, toutes les 30 min de 5 h à 20 h, en 48 kHz stéréo. Au total 3 204 h et 2,2 To. Après les drapeaux (durée anormale, hors relevé, micro dans le sac, horloge douteuse), 94 588 enregistrements restent encodables, soit 4,5 millions de fenêtres de 5 s au pas de 2,5 s. Deux conséquences. En 2026, chaque site n'a été enregistré qu'une semaine : le mois est confondu avec le site, seul le jeu 2023 couvre toutes les saisons.");
   const sites = [["Trésor", 770.2, 0], ["Kaw", 755.0, 0], ["Molokoï", 700.0, 0], ["Mataroni", 432.5, 1], ["RNRT", 242.7, 1], ["CDR", 179.7, 1], ["Patawa Est", 87.4, 1], ["Patawa Ouest", 36.6, 1]];
   tx(s, "Heures d'audio par site (enregistrements de 2 min)", { x: MX, y: 1.7, w: 7.3, h: 0.35, fontSize: 14, bold: true });
   const x0 = MX + 1.45, maxW = 5.3, maxV = 800, rowH = 0.5, y0 = 2.2;
@@ -373,8 +373,7 @@ function table(slide, rows, o) {
   });
   card(s, 8.3, 5.35, 4.4, 1.55, C.dark);
   tx(s, bullets([
-    "2026 : une semaine par site, le mois est confondu avec le site",
-    { t: "Labels Blancinet (345 + 150) : sortis", o: { color: C.gold, bold: true } },
+    { t: "2026 : une semaine par site, le mois est confondu avec le site", o: { color: C.gold, bold: true } },
   ], { gap: 8 }), { x: 8.5, y: 5.5, w: 4.05, h: 1.3, fontSize: 13.5, color: C.white });
 }
 

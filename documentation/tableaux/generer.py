@@ -631,7 +631,7 @@ PERTES = Tableau(
     ],
     [
         "Pourquoi les pertes bornées : les négatifs présumés sont contaminés (n° 106 : 80 % des"
-        " négatifs nearest détectés par BlanciNet). Avec la logistique, un vrai chant étiqueté"
+        " négatifs nearest détectés par un détecteur externe). Avec la logistique, un vrai chant étiqueté"
         " négatif et noté haut coûte sans limite et tire la frontière vers lui.",
         "hinge et focal se ressemblent : toutes deux négligent les exemples faciles et se"
         " concentrent sur les difficiles, et aucune ne plafonne le coût d'une étiquette fausse."
@@ -1372,14 +1372,14 @@ NEGATIFS = Tableau(
     "negatifs-apparies",
     "Négatifs appariés présumés",
     "benchmark.pairing : comment tirer les ~20 négatifs par positif, toujours sur le même micro"
-    " (n° 88, 101). Contamination mesurée : fenêtres détectées par BlanciNet ≥ 0,5 (n° 106).",
+    " (n° 88, 101). Contamination mesurée : fenêtres détectées ≥ 0,5 par un détecteur externe (n° 106).",
     [
         Section(
             [
                 Colonne("Stratégie", 0.9, code=True),
                 Colonne("Tirage", 2.4),
                 Colonne("Risque", 1.5),
-                Colonne("BlanciNet ≥ 0,5", 1.0),
+                Colonne("Détecteur ≥ 0,5", 1.0),
             ],
             [
                 [
@@ -1409,7 +1409,7 @@ NEGATIFS = Tableau(
         )
     ],
     [
-        "BlanciNet n'est pas la vérité (faux amis) ; l'écoute tranchera (notebook"
+        "Ce détecteur n'est pas la vérité (faux amis) ; l'écoute tranchera (notebook"
         " 02_negatifs_apparies). Parades : pertes bornées (R35), R15, négatifs annotés."
     ],
 )

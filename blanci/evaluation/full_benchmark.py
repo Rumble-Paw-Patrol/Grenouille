@@ -3,7 +3,7 @@
 Sources : tout ce que le stock de scores hors-pli contient (`blanci sources`) — encodeurs ×
 têtes (`benchmark`, `heads`), baselines (`baselines`), fusions (`fusion-bench`), ensembles
 (`ensemble`), détecteurs (`detector-bench`) — plus des sources externes sans apprentissage,
-rangées à la demande sur les fenêtres des baselines (`external_source`) : Blancinet
+rangées à la demande sur les fenêtres des baselines (`external_source`) : détecteurs importés
 (`import-detections`).
 
 Tout se compare au niveau enregistrement (score maximal de ses fenêtres) : une fenêtre de 3 s
@@ -21,9 +21,8 @@ seulement si la p-valeur corrigée de Holm sur toutes les comparaisons est sous 
 (`significant_holm`, DECISIONS n° 139, 140). Une source dont l'empreinte des labels n'est plus
 celle d'aujourd'hui est signalée (`up_to_date`) : à relancer.
 
-Réserves : Blancinet a peut-être été entraîné sur ces mêmes enregistrements de Mataroni (à
-confirmer avec Biophonia) ; son score est alors optimiste. Licence et prise en main : colonnes à
-remplir à la main (§2).
+Réserve : un détecteur importé a pu être entraîné sur ces mêmes enregistrements ; son score
+est alors optimiste. Licence et prise en main : colonnes à remplir à la main (§2).
 """
 
 from __future__ import annotations
@@ -56,7 +55,7 @@ from blanci.evaluation.oof import (
 
 def external_source(con: sqlite3.Connection, cfg: dict, model: str, name: str | None = None) -> str:
     """Range un détecteur externe ou sans apprentissage dans le stock hors-pli, sur les fenêtres
-    des baselines : Blancinet (`model` = « blancinet », scores de ses détections). Une fenêtre
+    des baselines (`model` = nom du détecteur importé, scores de ses détections). Une fenêtre
     sans détection qui la recouvre reçoit le score le plus bas du modèle (il ne l'a pas
     remontée)."""
     from blanci.heads.baselines import evaluation_windows

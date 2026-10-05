@@ -532,7 +532,7 @@ $("#pied").append(
     if (A.sites?.length) ann.append(el("div", { class: "defile" }, el("table", {},
       el("thead", {}, el("tr", {}, el("th", {}, "Site"), el("th", {}, "Jeu"), el("th", { class: "n" }, "Enregistrements"), el("th", { class: "n" }, "dont positifs"))),
       el("tbody", {}, A.sites.map(([site, jeu, n, p]) => el("tr", {}, el("td", {}, site), el("td", {}, jeu === "evaluation" ? "évaluation" : "entraînement"), el("td", { class: "n" }, entier(n)), el("td", { class: "n" }, entier(p))))))));
-    ann.append(el("p", { class: "sous" }, `Compté le ${dateFr(A.compte_le)} (${A.source}). Labels de l'import Blancinet et des enregistrements écartés non comptés.`));
+    ann.append(el("p", { class: "sous" }, `Compté le ${dateFr(A.compte_le)} (${A.source}). Labels des enregistrements écartés non comptés.`));
   }
   const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg, n]) =>
     el("div", {}, el("time", { title: h }, (n ? `n° ${n} · ` : "") + d.split("-").reverse().join("/")), el("span", {}, msg))));
@@ -648,8 +648,7 @@ $("#pied").append(
   const c3 = carte("Ce qui structure l'annotation", null, el("ul", { style: "margin:0;padding-left:18px;display:grid;gap:6px" },
     el("li", {}, "En 2026, chaque site n'a été enregistré qu'une semaine : le mois se confond avec le site. Seul le jeu 2023 couvre toutes les saisons."),
     el("li", {}, "Les points d'écoute sont répartis entre entraînement et test avant toute écoute : aucun point ne sert aux deux."),
-    el("li", {}, "Positifs et négatifs sont tirés dans les mêmes conditions (même point, même tranche horaire), pour que la tête apprenne le chant et pas l'heure."),
-    el("li", {}, "Les annotations importées de Blancinet sortent de l'entraînement et de l'évaluation : choisies par un détecteur, elles ne couvraient que Mataroni.")));
+    el("li", {}, "Positifs et négatifs sont tirés dans les mêmes conditions (même point, même tranche horaire), pour que la tête apprenne le chant et pas l'heure.")));
   s.append(el("div", { class: "grille-2" }, c1, el("div", { style: "display:grid;gap:14px" }, c2, c3)));
 }
 

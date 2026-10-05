@@ -491,7 +491,7 @@ def test_file_key_strips_only_an_s3_prefix():
 
 
 def provider_sheet(path, rows):
-    """Colonnes du fichier Blancinet réel, commentaires dans des colonnes sans nom."""
+    """Colonnes d'un fichier d'annotations réel, commentaires dans des colonnes sans nom."""
     pd.DataFrame(
         rows,
         columns=[
@@ -512,7 +512,7 @@ def provider_sheet(path, rows):
 def test_provider_sheet_columns_are_detected(tmp_path, cfg, ingested):
     con, names = ingested
     sheet = provider_sheet(
-        tmp_path / "blancinet.xlsx",
+        tmp_path / "annotations.xlsx",
         [(f"1-{names[0]}", "Mataroni_crique2_RB04", "ANOBLA", 36, 39, 0.9, True, None, None)],
     )
     report = import_label_file(con, sheet, cfg, kind=None, dry_run=True)
@@ -527,7 +527,7 @@ def test_anonymous_columns_feed_the_comment(tmp_path, cfg, ingested):
     """Les commentaires du vrai fichier sont dans « Colonne1 » et « Unnamed: 12 »."""
     con, names = ingested
     sheet = provider_sheet(
-        tmp_path / "blancinet.xlsx",
+        tmp_path / "annotations.xlsx",
         [
             (f"1-{names[2]}", "st", "ANOBLA", 3, 6, 0.8, False, "oiseau Fourmilier tacheté", None),
             (f"2-{names[1]}", "st", "ANOBLA", 9, 12, 0.7, False, None, "A. andreae"),

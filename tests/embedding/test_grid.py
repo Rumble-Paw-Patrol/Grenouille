@@ -59,7 +59,7 @@ def test_non_overlapping_grid_cuts_notes():
 
 
 @pytest.mark.parametrize("window_s, hop_s", [(3.0, 1.5), (5.0, 2.5)])
-def test_biophonia_3s_annotations_fit_in_one_window(window_s, hop_s):
+def test_3s_annotations_fit_in_one_window(window_s, hop_s):
     windows = window_grid(120.0, window_s, hop_s)
     for k in range(40):
         assert containing_windows(3.0 * k, 3.0 * k + 3.0, windows), k

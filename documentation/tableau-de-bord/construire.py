@@ -311,9 +311,9 @@ def tableaux(fichiers: dict[str, str]) -> list[dict]:
     return out
 
 
-# Sources de labels qui ne relèvent pas du plan d'annotation v1 : l'import Blancinet (choisi
-# par un détecteur, hors entraînement et évaluation) et l'écoute des enregistrements écartés.
-HORS_PLAN = ("import", "flag")
+# Source de labels qui ne relève pas du plan d'annotation v1 : l'écoute des enregistrements
+# écartés par un drapeau.
+HORS_PLAN = ("flag",)
 
 
 def annotations(config: Path | None) -> dict:

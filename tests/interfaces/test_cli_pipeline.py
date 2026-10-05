@@ -290,29 +290,12 @@ def test_baselines_command_writes_the_report(embedded):
 def test_candidates_command_writes_a_listening_queue(workspace):
     tmp_path, config = workspace
     run(config, "ingest", "--dataset", "2026", "--no-hash")
-    # Ni export ni strate aléatoire : rien à tirer, refus explicite.
+    # Ni strate aléatoire ni enregistrements entiers : rien à tirer, refus explicite.
     result = runner.invoke(app, ["--config", str(config), "candidates", "--random", "0"])
     assert result.exit_code != 0
-    output = run(config, "candidates", "--random", "0", "--from", str(_export(tmp_path)))
+    output = run(config, "candidates", "--random", "0", "--entiers", "2")
     assert "candidats" in output
     assert (tmp_path / "reports" / "candidats_lot1.csv").exists()
-
-
-def _export(tmp_path):
-    """Export Blancinet minimal : deux détections jamais écoutées."""
-    import pandas as pd
-
-    path = tmp_path / "export.xlsx"
-    pd.DataFrame(
-        {
-            "file_s3_key": ["1-m1_20260211_100000.flac", "2-t1_20260212_100000.flac"],
-            "station": ["mataroni", "tresor"],
-            "start_time": [3, 6],
-            "score": [0.2, 0.9],
-            "vérification": [None, None],
-        }
-    ).to_excel(path, index=False)
-    return path
 
 
 # --- Clustering (§5 bis) ---------------------------------------------------------------------

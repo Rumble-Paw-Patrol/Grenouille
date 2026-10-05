@@ -1,5 +1,5 @@
-"""Détections Blancinet (scores, pas labels), négatifs annotés négatifs quel que soit le
-voisinage (DECISIONS n° 85, 87), commentaires accolés aux fenêtres annotées (n° 82)."""
+"""Détections d'un détecteur importé (scores, pas labels), négatifs annotés négatifs quel que
+soit le voisinage (DECISIONS n° 85, 87), commentaires accolés aux fenêtres annotées (n° 82)."""
 
 import json
 
@@ -51,7 +51,7 @@ def label(con, rid, offset, value, comment=None, dur=3.0):
 
 def detection(con, rid, offset, score):
     con.execute(
-        "INSERT INTO scores (window_id, model_id, score) VALUES (?, 'blancinet', ?)",
+        "INSERT INTO scores (window_id, model_id, score) VALUES (?, 'externe', ?)",
         (window(con, rid, offset), score),
     )
     con.commit()

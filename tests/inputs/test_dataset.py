@@ -103,7 +103,7 @@ def annotation(recording_id, offset_s, dur_s, label="blanci_solo"):
 
 
 def test_window_containing_a_short_annotation_inherits_it():
-    """Annotation Biophonia de 3 s dans une fenêtre de 5 s : la fenêtre la contient."""
+    """Annotation de 3 s dans une fenêtre de 5 s : la fenêtre la contient."""
     grid = pd.DataFrame([{"window_id": "w", "recording_id": "r", "offset_s": 10.0, "dur_s": 5.0}])
     out = transfer_labels(annotation("r", 11.0, 3.0), grid)
     assert list(out["window_id"]) == ["w"] and out.loc[0, "y"] == 1

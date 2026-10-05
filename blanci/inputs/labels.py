@@ -63,10 +63,6 @@ SOURCES = (
     "external",
     "flag",
 )
-# Labels posés par un tiers (Blancinet, Biophonia). Ils ne retirent jamais une fenêtre ni un
-# enregistrement des files d'annotation : qu'ils aient été annotés ailleurs ne doit pas nous
-# empêcher de les écouter, sous peine de perdre les positifs que Blancinet avait trouvés.
-THIRD_PARTY_SOURCES = ("import",)
 TARGET_SPECIES = "Anomaloglossus blanci"
 
 Kind = Literal["positive", "negative"]
@@ -646,7 +642,7 @@ def import_label_file(
     return report
 
 
-# --- Détections d'un détecteur indépendant (Blancinet) ----------------------------------------
+# --- Détections d'un détecteur indépendant ------------------------------------------------------
 
 
 @dataclass
@@ -662,7 +658,7 @@ class DetectionImportReport:
 
 
 def import_detections(
-    con: sqlite3.Connection, path: Path, cfg: dict[str, Any], model_id: str = "blancinet"
+    con: sqlite3.Connection, path: Path, cfg: dict[str, Any], model_id: str = "externe"
 ) -> DetectionImportReport:
     """Range toutes les détections d'un export (vérifiées ou non) comme scores de `model_id`.
 

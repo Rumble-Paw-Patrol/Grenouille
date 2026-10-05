@@ -118,7 +118,7 @@ pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
   <https://www.reserve-tresor.fr/wp-content/uploads/2025/05/20250324_Rapport_etude_Pheno_Blanci.pdf>
   (le PDF n'est plus versionné dans le dépôt ; il est cité dans l'offre de stage)
   6 Song Meter mini (Kaw A/B, Trésor C/D, Molokoï E/F), 25/11/2023 → 24/11/2024, 2 min / 30 min
-  de 5 h à 20 h ; détecteur Biophonia. Pics 7–9 h et 15–17 h ; saison haute janvier–avril ;
+  de 5 h à 20 h ; détecteur automatique. Pics 7–9 h et 15–17 h ; saison haute janvier–avril ;
   ≈ 0 de juillet à octobre ; probabilité de détection journalière ≈ 1 à Molokoï de fin
   novembre à mars ; 1–2 jours d'enregistrement suffisent en forte densité, 3–5 à Kaw.
   → jeu de test temporel (niveau 3), échantillonnage de l'annotation, heure et saison hors du

@@ -1,6 +1,6 @@
 """Scores hors-pli enregistrés (DECISIONS n° 91) : le format commun de tous les benchmarks.
 
-Chaque benchmark (encodeur × tête, baseline, fusion, ensemble, détecteur, Blancinet) écrit ses
+Chaque benchmark (encodeur × tête, baseline, fusion, ensemble, détecteur importé) écrit ses
 scores hors-pli dans `paths.reports/oof/<source>.parquet`, une ligne par fenêtre évaluée :
 
     source, kind, window_id, recording_id, offset_s, dur_s, point, site, y, presumed, score,

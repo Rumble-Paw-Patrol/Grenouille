@@ -8,7 +8,7 @@ Version 3 (18/09/2026). `[HYPOTHÈSE Hn]` = information encore manquante (liste 
 - Données réelles : Song Meter Mini 2 partout ; 345 positifs = 345 enregistrements distincts, 13 micros, tous à Mataroni ; 158 négatifs d'espèces identifiées ; 2026 = Kaw 45 micros, Trésor 40, Mataroni > 70 ; pas de semaine réduite.
 - Renversement du protocole de généralisation : Mataroni est le site d'entraînement, Trésor et Kaw les sites tenus à l'écart, 2023 le test temporel (§6).
 - Phénologie établie par Courtois et al. 2025 : pics 7–9 h et 15–17 h, activité forte de janvier à avril, quasi nulle de juillet à octobre (§1, §5).
-- Baseline = écoute humaine ; détecteur Biophonia 2024 (rappel ≈ 0,69, précision 1) conservé comme point de repère chiffré, modèle non disponible (§6).
+- Baseline = écoute humaine ; détecteur externe 2024 (rappel ≈ 0,69, précision 1) conservé comme point de repère chiffré, modèle non disponible (§6).
 - Trois congénères dans les classes de Perch 2.0 → générateur de candidats (§3).
 - Machines cibles : portables Windows i5-1145G7, 16 Go ; l'ONF réentraîne après le stage (§7).
 - ProtoCLR rétrogradé (son auteur ne le recommande pas) ; NatureLM/BEATs maintenu dans le benchmark avec le contrôle passe-bas (§2).
@@ -29,10 +29,10 @@ Version 3 (18/09/2026). `[HYPOTHÈSE Hn]` = information encore manquante (liste 
 - Enregistreurs : Wildlife Acoustics Song Meter Mini 2 partout ; fréquence d'échantillonnage et format lus dans les en-têtes à l'inventaire `[À VÉRIFIER]`.
 - Jeu 2023 (établi : Courtois et al. 2025) : 6 enregistreurs, 2 par site (Kaw_A/B, Molokoï_E/F, Trésor_C/D), du 25/11/2023 au 24/11/2024, 2 min toutes les 30 min de 5 h à 20 h, 4 705 à 5 490 créneaux horaires par enregistreur ≈ 2 200 h au total ; capteurs de température et d'humidité associés.
 - Jeu 2026 : Kaw 45 micros et Trésor 40 micros pendant une semaine, Mataroni > 70 micros pendant 5 jours ; 2 min toutes les 30 min de 5 h à 19 h 30 (29 créneaux/jour) ≈ 27 400 enregistrements ≈ 910 h.
-- Total ≈ 3 100 h ≈ 3,7 millions de fenêtres de 3 s (convention Biophonia : 40 par enregistrement) ou 4,5 millions à 5 s, pas 2,5 s.
-- Annotations (avec le tuteur, expert naturaliste) : 345 fenêtres positives de 3 s, chacune dans un enregistrement de 2 min distinct, 13 micros, **toutes à Mataroni pour l'instant**, ajout de données annotées d'autres sites dans le futur ; commentaires de qualité (« second plan », « malgré la pluie », « lointain », « avec fourmilier tacheté ») ; 158 fenêtres de faux amis avec espèce identifiée. Origine : détections du modèle Biophonia confirmées à la main, certaines à score médiocre.
+- Total ≈ 3 100 h ≈ 3,7 millions de fenêtres de 3 s (convention du prestataire : 40 par enregistrement) ou 4,5 millions à 5 s, pas 2,5 s.
+- Annotations (avec le tuteur, expert naturaliste) : 345 fenêtres positives de 3 s, chacune dans un enregistrement de 2 min distinct, 13 micros, **toutes à Mataroni pour l'instant**, ajout de données annotées d'autres sites dans le futur ; commentaires de qualité (« second plan », « malgré la pluie », « lointain », « avec fourmilier tacheté ») ; 158 fenêtres de faux amis avec espèce identifiée. Origine : détections du modèle externe confirmées à la main, certaines à score médiocre.
 - Conséquence 1 : effectif effectif = 345 enregistrements, ce qui autorise le probing linéaire dès S3.
-- Conséquence 2 : le jeu étiqueté est **conditionné par le détecteur précédent** — les cris qu'il n'a pas vus n'y sont pas. Le rappel mesuré dessus est un rappel relatif à ce que Biophonia trouvait. Un audit aléatoire indépendant est indispensable (§6).
+- Conséquence 2 : le jeu étiqueté est **conditionné par le détecteur précédent** — les cris qu'il n'a pas vus n'y sont pas. Le rappel mesuré dessus est un rappel relatif à ce que le détecteur externe trouvait. Un audit aléatoire indépendant est indispensable (§6).
 - Conséquence 3 : aucun positif étiqueté hors Mataroni. La généralisation à de nouveaux sites se mesure sur Trésor et Kaw, après récolte et validation de positifs (§5, §6).
 
 **Phénologie (établi : Courtois et al. 2025)**
@@ -143,7 +143,7 @@ audio brut (Song Meter Mini 2 ; f_e et format lus à l'inventaire)
 
 **Schéma de labels** (levé H14) : positifs {blanci-solo, blanci-chœur, blanci-incertain} ; négatifs par famille {oiseau:<espèce>, amphibien:<espèce>, orthoptère, cri-de-contact-amphibien, pluie, artefact:micro-dans-sac, fond, autre} ; espèces recensées : fourmilier tacheté (le plus fréquent), moucherolle, manakin, tangara mordoré, pigeon plombé, évêque de Rothschild, sclérures, myrmidon, psittacidés, pic à cou rouge, martinet ; *Adenomera andreae*, *Allobates femoralis*, *A. hahneli*, *Hyalinobatrachium cappellei / mondolfii / iaspidiense*, *Amazophrynella teko*, *Otophryne* ; grillons. Les noms scientifiques des oiseaux sont `[À VÉRIFIER]` avant publication.
 
-**Apprentissage actif dès S3** : file = 60 % incertains, 20 % scores maximaux, 20 % aléatoire stratifié (micro, heure) — la strate aléatoire mesure les faux négatifs confiants, dont ceux que Biophonia n'avait jamais remontés. Lots de 30–50 enregistrements. Arrêt : gain d'AP sur le jeu gelé < 0,02 sur deux tours.
+**Apprentissage actif dès S3** : file = 60 % incertains, 20 % scores maximaux, 20 % aléatoire stratifié (micro, heure) — la strate aléatoire mesure les faux négatifs confiants, dont ceux que le détecteur externe n'avait jamais remontés. Lots de 30–50 enregistrements. Arrêt : gain d'AP sur le jeu gelé < 0,02 sur deux tours.
 
 **Récolte hors Mataroni (S4–S9)** : requêtes de similarité (positifs Mataroni, prototype différentiel, logits des congénères Perch) sur Trésor et Kaw 2026, puis sur Molokoï 2023 en janvier–avril 7–17 h (probabilité de détection ≈ 1, établi) : positifs abondants et faciles à valider ; validation par le tuteur, sur place.
 
@@ -177,7 +177,7 @@ audio brut (Song Meter Mini 2 ; f_e et format lus à l'inventaire)
 - Niveau 1, intra-site : validation groupée par micro dans Mataroni (5 plis sur ≥ 13 micros) ; AP et rappel par fenêtre et par enregistrement.
 - Niveau 2, nouveaux sites : Trésor 2026 et Kaw 2026, positifs récoltés et validés (§5), jamais entraînés avant P4 ; c'est **la** mesure demandée par le tuteur.
 - Niveau 3, temporel et matériel : jeu 2023 (autre année, autre saison, capteurs Song Meter mini de génération précédente `[À VÉRIFIER]`) ; validation sans étiquettes par **reproduction des patrons publiés** — notre détecteur, appliqué aux 2 200 h de 2023, doit retrouver les courbes journalières et annuelles de Courtois et al. 2025 (pics 7–9 h et 15–17 h, creux juillet–octobre, Kaw_B faible) ; un désaccord signale un problème de généralisation ou un artefact.
-- Audit aléatoire indépendant (S4, 300 enregistrements de Mataroni tirés au hasard, écoutés en entier) : seule mesure du rappel non conditionnée par le détecteur Biophonia.
+- Audit aléatoire indépendant (S4, 300 enregistrements de Mataroni tirés au hasard, écoutés en entier) : seule mesure du rappel non conditionnée par le détecteur externe.
 
 **Jeu gelé (S6–S9)** : 60 enregistrements de Mataroni écoutés en entier, stratifiés par micro et heure ; tous positifs validés de Trésor et Kaw ; qualité A/B/C, solo/chœur, SNR renseignés. Versionné, jamais entraîné.
 
@@ -185,7 +185,7 @@ audio brut (Song Meter Mini 2 ; f_e et format lus à l'inventaire)
 
 **Baseline et repères**
 - Baseline = écoute humaine (levé H10) : protocole homme–machine sur un lot commun de 60 enregistrements (30 positifs, 30 négatifs difficiles, mélangés) : rappel, précision et temps d'un naturaliste à l'oreille ; rappel, précision et temps de l'outil suivi d'une vérification humaine des seuls candidats. C'est la comparaison principale du rapport, conçue dès P2, exécutée en P4 avec deux naturalistes.
-- Repère chiffré : détecteur Biophonia 2024 (établi : Courtois et al. 2025) — réseau de neurones d'architecture non communiquée, ≈ 1 000 extraits annotés, test sur 450 : 0 faux positif, 24 faux négatifs, 53 vrais positifs, soit rappel ≈ 0,69 à précision 1. Modèle indisponible, jeu de test différent : comparaison indicative seulement, à la même précision.
+- Repère chiffré : détecteur externe 2024 (établi : Courtois et al. 2025) — réseau de neurones d'architecture non communiquée, ≈ 1 000 extraits annotés, test sur 450 : 0 faux positif, 24 faux négatifs, 53 vrais positifs, soit rappel ≈ 0,69 à précision 1. Modèle indisponible, jeu de test différent : comparaison indicative seulement, à la même précision.
 - Méthodes reproductibles : template matching ; détecteur en bande ; BirdNET + sonde (référence, non déployable).
 
 | Critère (tuteur) | Mesure | Comment |
@@ -262,7 +262,7 @@ audio brut (Song Meter Mini 2 ; f_e et format lus à l'inventaire)
 
 1. As-tu lu jusqu'ici ?
 2. « *A. blanci* chante-t-elle parfois de façon ponctuelle ? Chœur et mâle seul sont-ils distinguables à l'oreille ? » — H20, H21, règle d'agrégation.
-3. « Les sorties du détecteur Biophonia sur 2023 (instants, scores) et ses ≈ 1 000 extraits annotés sont-ils récupérables auprès d'ENIA ou de Trésor ? » — Positifs 2023 et repère de comparaison.
+3. « Les sorties du détecteur externe sur 2023 (instants, scores) et ses ≈ 1 000 extraits annotés sont-ils récupérables auprès d'ENIA ou de Trésor ? » — Positifs 2023 et repère de comparaison.
 4. « Quand un point est remonté « à vérifier », que se passe-t-il : visite de terrain, contrainte d'exploitation, à quelle échelle ? Et quel volume de points l'ONF peut-il vérifier par semaine ? » — H5 et précision plancher.
 5. « Taux d'émission et intervalles entre notes d'*A. blanci* ? » — H9.
 6. « Les enregistreurs 2023 (Song Meter mini) et 2026 (Mini 2) ont-ils la même réponse et les mêmes réglages ? » — Décalage matériel niveau 3.
@@ -283,7 +283,7 @@ audio brut (Song Meter Mini 2 ; f_e et format lus à l'inventaire)
 
 ## 12. Hypothèses
 
-**Levées** : H1 (Song Meter Mini 2 ; f_e et format restent à lire) · H2 (345 enregistrements, 13 micros, Mataroni, 3 s) · H3 (vraie pour Biophonia ; pour ce projet, Mataroni = entraînement) · H4 (extraits reçus) · H6 (i5-1145G7, 16 Go, Windows) · H7 (rapport accessible) · H8 (trois congénères dans Perch) · H10 (16 Go ; écoute humaine comme existant) · H11 (mars 2027) · H12 (annotation à la disponibilité) · H14 et H18 (liste des faux amis) · H15 (phénologie établie) · H16 (2026 partiellement : micros et durées connus, dates non) · H17 (pas de semaine réduite) · H19 (annotations expertes, classes A/B/C de Biophonia).
+**Levées** : H1 (Song Meter Mini 2 ; f_e et format restent à lire) · H2 (345 enregistrements, 13 micros, Mataroni, 3 s) · H3 (vraie pour le détecteur externe ; pour ce projet, Mataroni = entraînement) · H4 (extraits reçus) · H6 (i5-1145G7, 16 Go, Windows) · H7 (rapport accessible) · H8 (trois congénères dans Perch) · H10 (16 Go ; écoute humaine comme existant) · H11 (mars 2027) · H12 (annotation à la disponibilité) · H14 et H18 (liste des faux amis) · H15 (phénologie établie) · H16 (2026 partiellement : micros et durées connus, dates non) · H17 (pas de semaine réduite) · H19 (annotations expertes, classes A/B/C du prestataire).
 
 **Restantes**
 
@@ -441,7 +441,7 @@ blanci export-onnx --encoder birdmae --quantize int8 --check-equivalence
 
 ## Angles morts
 
-- **Le jeu étiqueté hérite du détecteur précédent.** Les 345 positifs sont ceux que Biophonia a remontés ; ce qu'il manquait manque aussi ; l'audit aléatoire est la seule correction, et elle est chère.
+- **Le jeu étiqueté hérite du détecteur précédent.** Les 345 positifs sont ceux que le détecteur externe a remontés ; ce qu'il manquait manque aussi ; l'audit aléatoire est la seule correction, et elle est chère.
 - **Mataroni est le seul site étiqueté.** La généralisation à Trésor et Kaw dépend d'une récolte qui n'a pas encore commencé ; si elle échoue, la question centrale du tuteur reste sans réponse chiffrée.
 - **Le modèle précédent n'est pas comparable.** Non communiqué, jeu de test différent : le rapport ne pourra pas démontrer une amélioration par rapport à l'existant, seulement par rapport à l'écoute humaine.
 - **H20 porte la règle d'agrégation et le sous-échantillonnage des fenêtres.** Si elle est fausse, deux économies disparaissent en même temps.

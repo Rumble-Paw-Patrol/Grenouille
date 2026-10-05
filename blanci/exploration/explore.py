@@ -2,7 +2,7 @@
 séquentiel, les négatifs appariés, les embeddings et le prototype différentiel.
 
 Tout est en lecture seule : la base est ouverte en lecture (`open_readonly`), l'audio est lu,
-jamais écrit (disques de l'ONF et de Biophonia). Les graphiques sont dans
+jamais écrit (disques de l'ONF). Les graphiques sont dans
 `blanci/exploration/explore_plots.py` (matplotlib, groupe `notebook`).
 """
 
@@ -82,8 +82,8 @@ def open_readonly(path: Path) -> sqlite3.Connection:
 
 def recordings_overview(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
     """Un enregistrement par ligne, avec de quoi choisir : heure locale, fenêtres annotées
-    (positives, négatives), détections des détecteurs importés (BlanciNet : nombre, score
-    max), exclusion par les drapeaux QC, jeu gelé. Les positifs d'abord."""
+    (positives, négatives), détections des détecteurs importés (nombre, score max), exclusion
+    par les drapeaux QC, jeu gelé. Les positifs d'abord."""
     rec = recordings_table(con)
     rec = rec[~rec["recording_id"].duplicated()].copy()
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
@@ -180,8 +180,8 @@ def recording_windows(
     Colonnes : window_id, recording_id, offset_s, dur_s, center_s ; label et y (annotation
     transférée à la grille, vide sinon) ; overlaps_positive, distance_to_positive_s (écart à
     l'annotation positive la plus proche, 0 si chevauchement) ; suspect_fn (encadrée de
-    positives, DECISIONS n° 102) ; une colonne par détecteur importé (BlanciNet : score max des
-    détections qui couvrent au moins la moitié de la fenêtre ; vide = pas de détection).
+    positives, DECISIONS n° 102) ; une colonne par détecteur importé (score max des détections qui
+    couvrent au moins la moitié de la fenêtre ; vide = pas de détection).
     `overlap` (0–0,99) remplace le pas de la grille de la config.
     """
     rec = recordings_table(con).drop_duplicates("recording_id").set_index("recording_id")
@@ -221,8 +221,8 @@ def recording_windows(
 
 
 def detections(con: sqlite3.Connection, recording_ids: list[str]) -> pd.DataFrame:
-    """Détections des détecteurs importés (modèles de type detector : BlanciNet, qui n'exporte
-    que les scores ≥ 0,1) : recording_id, model_id, offset_s, dur_s, score."""
+    """Détections des détecteurs importés (modèles de type detector) : recording_id, model_id,
+    offset_s, dur_s, score."""
     ids = list(dict.fromkeys(recording_ids))
     parts = [
         pd.read_sql_query(
@@ -240,7 +240,7 @@ def detections(con: sqlite3.Connection, recording_ids: list[str]) -> pd.DataFram
 
 
 def detector_models(con: sqlite3.Connection) -> list[str]:
-    """Détecteurs importés (modèles de type detector : BlanciNet)."""
+    """Détecteurs importés (modèles de type detector)."""
     rows = con.execute("SELECT model_id FROM models WHERE kind = 'detector' ORDER BY model_id")
     return [row[0] for row in rows]
 

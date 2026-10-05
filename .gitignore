@@ -11,8 +11,8 @@ data/
 # Configuration propre à une machine (chemin du disque externe) : voir config/local.example.yaml.
 config/local.yaml
 
-# Exports du prestataire (annotations, détections) : données de l'ONF et de Biophonia, pas les
-# nôtres. Elles restent en local, jamais sur GitHub.
+# Exports reçus (annotations, détections) : données de l'ONF, pas les nôtres. Ils restent en
+# local, jamais sur GitHub.
 documentation/*.xlsx
 
 # Fichiers de verrou d'Office (document ouvert dans PowerPoint, Word, Excel).

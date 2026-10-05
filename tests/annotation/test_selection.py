@@ -179,12 +179,11 @@ def test_clip_bridge_exports_clips_and_reads_answers_back(scored, cfg, tmp_path)
     ).to_csv(answers, index=False)
     with pytest.raises(ValueError, match="correspondance"):
         import_clip_labels(scored, manifest, answers)
+    before = len(current_labels(scored))
     written = import_clip_labels(
         scored, manifest, answers, {"Oiseau": "bird", "rien": "background"}
     )
-    # Les fenêtres tirées peuvent porter un label de Blancinet : la réponse s'y ajoute.
-    (external,) = scored.execute("SELECT COUNT(*) FROM labels WHERE source = 'external'").fetchone()
-    assert written == len(clips) == external
+    assert written == len(clips) and len(current_labels(scored)) == before + len(clips)
 
 
 def test_write_queue_is_read_by_the_workbench(scored, cfg):  # noqa: F811

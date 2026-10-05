@@ -223,18 +223,16 @@ def test_ranked_points_without_decisions_is_explicit(con, cfg, trained):
 # --- File de vérification ---------------------------------------------------------------------
 
 
-def test_make_queue_excludes_recordings_we_labelled_but_not_blancinet_ones(con, cfg, trained):
+def test_make_queue_excludes_already_labelled_recordings(con, cfg, trained):
     score_and_decide(con, "good-1", cfg)
-    query = (
-        "SELECT DISTINCT w.recording_id FROM labels l JOIN windows w USING (window_id) "
-        "WHERE l.source {} 'import'"
-    )
-    ours = {r["recording_id"] for r in con.execute(query.format("!="))}
-    theirs = {r["recording_id"] for r in con.execute(query.format("="))} - ours
-    rows = make_queue(con, "good-1", cfg, n=10_000)
-    assert not set(rows["recording_id"]) & ours
-    # Annotés par Blancinet seulement : ils restent dans la file.
-    assert theirs and theirs <= set(rows["recording_id"])
+    rows = make_queue(con, "good-1", cfg, n=6)
+    labelled = {
+        r["recording_id"]
+        for r in con.execute(
+            "SELECT DISTINCT w.recording_id FROM labels l JOIN windows w USING (window_id)"
+        )
+    }
+    assert not set(rows["recording_id"]) & labelled
 
 
 def test_make_queue_reports_reasons_and_context(con, cfg, trained):

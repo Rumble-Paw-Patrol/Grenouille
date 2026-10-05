@@ -225,7 +225,7 @@ def recording_id_for(path: str) -> str:
     return hashlib.sha256(recording_key(path).encode("utf-8")).hexdigest()[:16]
 
 
-# Durée des fenêtres annotées (Biophonia) et de la grille w3 : leur identifiant garde la forme
+# Durée des premières fenêtres annotées et de la grille w3 : leur identifiant garde la forme
 # historique « <enregistrement>:<décalage> ». Toute autre durée est écrite dans l'identifiant.
 LEGACY_WINDOW_S = 3.0
 

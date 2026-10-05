@@ -15,7 +15,7 @@ colonne `source` suit la fenêtre jusqu'au label : on saura quelle méthode a tr
 - `cluster` : une dizaine de fenêtres par groupe HDBSCAN ; `label_cluster` étiquette ensuite
   le groupe entier s'il est homogène (négatifs en volume, positifs si un groupe est pur) ;
 - `audit` : enregistrements entiers tirés au hasard (micro × heure) ; seule mesure du rappel
-  indépendante de Blancinet ;
+  indépendante de tout détecteur ;
 - `random` : fenêtres au hasard (site × micro, heures de pic) ; faux négatifs confiants ;
 - `negative_mining` : scores élevés là où A. blanci est improbable, ou fenêtres proches des
   faux amis annotés ; apprendre les confusions ;
@@ -24,8 +24,7 @@ colonne `source` suit la fenêtre jusqu'au label : on saura quelle méthode a tr
   ponctuel ;
 - `gaps` : le miroir — fenêtres négatives encadrées de positives (DECISIONS n° 102) ; mode
   `scores` : trous du modèle dans un chant (faux négatifs du modèle : positifs difficiles) ;
-  mode `labels` : négatifs annotés entre deux positifs annotés, à réécouter ;
-- `blancinet` : détections Blancinet jamais écoutées.
+  mode `labels` : négatifs annotés entre deux positifs annotés, à réécouter.
 
 La carte des embeddings (projection 2-D, `embedding_map`) sert au poste d'annotation : on y
 choisit à la main une zone à écouter (YAPAT fait maison, sélection interactive). YAPAT lui-même
@@ -47,7 +46,7 @@ from blanci.annotation.workbench import (
     CANDIDATE_COLUMNS,
     _drop_labelled,
     _round_robin,
-    own_labelled_windows,
+    labelled_windows,
 )
 from blanci.core.config import config_path
 from blanci.core.db import encoder_params
@@ -66,7 +65,6 @@ SELECTION_METHODS = (
     "phenology",
     "suspects",
     "gaps",
-    "blancinet",
 )
 NEEDS_ENCODER = (
     "active",
@@ -145,8 +143,8 @@ def build_queue(
 ) -> pd.DataFrame:
     """File de vérification pour l'apprentissage actif (§5) : `n` enregistrements non encore
     étiquetés, 60 % incertains, 20 % scores maximaux, 20 % aléatoire stratifié (micro, heure).
-    La strate aléatoire mesure les faux négatifs confiants, dont ceux que Biophonia n'avait
-    jamais remontés. Unité : l'enregistrement (lots de 30–50).
+    La strate aléatoire mesure les faux négatifs confiants. Unité : l'enregistrement (lots de
+    30–50).
 
     scores : recording_id, score, mic_id, hour (heure locale) ; labels : recording_id déjà vus.
     `threshold` : seuil de décision courant (0 pour un logit), les incertains en sont les plus
@@ -493,14 +491,6 @@ def gap_candidates(
     return _finish(con, found, "gap_scores", "gap")
 
 
-def blancinet_window_candidates(con, cfg, table=None, n=30, sites=None, seed=0, **_):
-    from blanci.annotation.workbench import blancinet_candidates
-
-    if table is None:
-        raise ValueError("blancinet : l'export des détections est à donner (table=…)")
-    return blancinet_candidates(con, Path(table), cfg, n, sites, seed)
-
-
 _DISPATCH = {
     "active": active_candidates,
     "similarity": similarity_candidates,
@@ -512,7 +502,6 @@ _DISPATCH = {
     "phenology": phenology_candidates,
     "suspects": suspect_candidates,
     "gaps": gap_candidates,
-    "blancinet": blancinet_window_candidates,
 }
 
 
@@ -613,7 +602,7 @@ def label_cluster(
         raise ValueError(f"le groupe {cluster} a été entendu « {heard} », pas « {label} »")
     assignments = pd.read_parquet(cluster_path(cfg, encoder_id))
     members = assignments.loc[assignments["cluster"] == cluster]
-    done = own_labelled_windows(con)  # une fenêtre annotée par Blancinet reçoit aussi le label
+    done = labelled_windows(con)
     todo = [w for w in members["window_id"] if w not in done]
     return append_labels_bulk(
         con,

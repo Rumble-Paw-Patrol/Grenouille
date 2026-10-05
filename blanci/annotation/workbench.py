@@ -4,11 +4,8 @@ Logique pure, sans interface : l'application Streamlit (`blanci/annotation/app.p
 affichage, et la future GUI du livrable appellera les mêmes fonctions (§4).
 
 Candidats = une file CSV (recording_id, offset_s, dur_s, reason, source, score…) :
-- `blancinet_candidates` : détections jamais écoutées de l'export Blancinet, réparties entre
-  sites, micros et tranches de score (hors Mataroni surtout : tous les positifs actuels en
-  viennent, l'évaluation « nouveaux sites » du §6 en manque) ;
-- `random_candidates` : fenêtres tirées au hasard (site, micro, heure), qui mesurent ce que
-  Blancinet n'a jamais remonté ;
+- `random_candidates` : fenêtres tirées au hasard (site, micro, heure), qui mesurent ce
+  qu'aucun détecteur n'a remonté ;
 - plus tard, les files `blanci queue` et `blanci search`, dès qu'un encodeur sera choisi.
 
 Chaque réponse est un label en ajout seul (`service.append_label`) ; la fenêtre est créée si
@@ -33,13 +30,7 @@ from blanci.embedding.embed import select_recordings
 from blanci.embedding.grid import window_grid
 from blanci.inputs.dataset import local_minutes, recordings_table
 from blanci.inputs.labels import (
-    THIRD_PARTY_SOURCES,
-    _is_blank,
     comment_fields,
-    detect_columns,
-    file_key,
-    parse_offset,
-    read_annotation_table,
 )
 from blanci.service import INTERVAL_LABELS, append_label, append_span
 
@@ -55,10 +46,6 @@ CANDIDATE_COLUMNS = [
     "reason",
     "source",
 ]
-
-# Tranches de score de Blancinet : les scores bas sont les plus nombreux et les plus
-# incertains, les hauts disent si le modèle se trompe quand il est sûr de lui.
-SCORE_BINS = (0.0, 0.3, 0.7, 1.01)
 
 # Réponses proposées à l'écoute : labels du schéma (§5), dans l'ordre des boutons.
 ANSWERS = (
@@ -105,72 +92,6 @@ def _round_robin(
         picked.append(groups[key].pop(0))
         used[key] += 1
     return frame.loc[picked]
-
-
-def blancinet_candidates(
-    con: sqlite3.Connection,
-    table: Path,
-    cfg: dict,
-    per_site: int = 30,
-    sites: list[str] | None = None,
-    seed: int = 0,
-) -> pd.DataFrame:
-    """Détections Blancinet jamais vérifiées, `per_site` par site.
-
-    Par site : parts égales entre tranches de score (`SCORE_BINS`), puis entre micros ; une
-    seule fenêtre par enregistrement, pour entendre le plus de situations possibles. Les
-    fenêtres déjà étiquetées et les enregistrements signalés sont écartés.
-    """
-    rng = np.random.default_rng(seed)
-    icfg = cfg["labels"]["import"]
-    df = read_annotation_table(Path(table))
-    columns = detect_columns(df, icfg["columns"])
-    for needed in ("file", "offset_s", "verdict"):
-        if needed not in columns:
-            raise ValueError(f"colonne {needed!r} introuvable dans {Path(table).name}")
-    df = df[df[columns["verdict"]].map(_is_blank)]
-
-    recordings = select_recordings(con)  # sans les enregistrements signalés
-    by_key = {file_key(p): i for i, p in recordings["path"].items()}
-    rows = []
-    for record in df.to_dict("records"):
-        i = by_key.get(file_key(str(record[columns["file"]])))
-        if i is None:
-            continue
-        try:
-            offset = parse_offset(
-                record[columns["offset_s"]], icfg["offset_unit"], float(icfg["window_s"])
-            )
-        except ValueError:
-            continue
-        score = record.get(columns.get("score", ""), np.nan)
-        rows.append((i, round(offset, 2), float(score) if not pd.isna(score) else np.nan))
-    if not rows:
-        return pd.DataFrame(columns=CANDIDATE_COLUMNS)
-
-    found = pd.DataFrame(rows, columns=["row", "offset_s", "score"])
-    found = found.join(recordings, on="row").drop(columns="row")
-    found["dur_s"] = float(icfg["window_s"])
-    found = _drop_labelled(con, found)
-    if sites:
-        wanted = {s.lower() for s in sites}
-        found = found[found["site"].str.lower().isin(wanted)]
-    found["bin"] = pd.cut(found["score"].fillna(0.0), SCORE_BINS, right=False, labels=False)
-
-    picked = []
-    for _, part in found.groupby("site"):
-        part = part.sample(frac=1.0, random_state=int(rng.integers(1 << 31)))
-        part = part.drop_duplicates("recording_id")
-        bins = sorted(part["bin"].dropna().unique())
-        used: Counter = Counter()  # micros servis, d'une tranche à l'autre
-        for b, q in zip(bins, _split_quota(per_site, len(bins)), strict=True):
-            picked.append(_round_robin(part[part["bin"] == b], "mic_id", q, rng, used))
-    out = pd.concat(picked) if picked else found.iloc[:0]
-    out = out.assign(
-        reason="blancinet_" + out["bin"].map(lambda b: _bin_name(int(b))).astype(str),
-        source="active",
-    )
-    return _finish(out, seed)
 
 
 def random_candidates(
@@ -225,7 +146,7 @@ def recording_candidates(
     """`n` enregistrements à écouter en entier, à parts égales entre micros puis heures locales.
 
     Sert à l'audit aléatoire (§6 : 300 enregistrements de Mataroni, seule mesure du rappel qui
-    ne dépend pas du détecteur Biophonia) et au jeu gelé (§6 : 60 enregistrements stratifiés
+    ne dépend d'aucun détecteur) et au jeu gelé (§6 : 60 enregistrements stratifiés
     par micro et heure). La fenêtre couvre tout l'enregistrement : son label vaut pour toutes
     les fenêtres de la grille (annotation par enregistrement, §5). Source « audit ».
     Les enregistrements qui portent déjà un label d'enregistrement entier sont écartés.
@@ -266,11 +187,6 @@ def _split_quota(n: int, parts: int) -> list[int]:
     return [n // parts + (1 if i < n % parts else 0) for i in range(parts)]
 
 
-def _bin_name(b: int) -> str:
-    lo, hi = SCORE_BINS[b], min(SCORE_BINS[b + 1], 1.0)
-    return f"{lo:.1f}-{hi:.1f}"
-
-
 def flagged_candidates(
     con: sqlite3.Connection, flag: str, sites: list[str] | None = None, seed: int = 0
 ) -> pd.DataFrame:
@@ -298,20 +214,13 @@ def flagged_candidates(
     return _finish(out, seed)
 
 
-_NOT_THIRD_PARTY = f"source NOT IN ({', '.join('?' * len(THIRD_PARTY_SOURCES))})"
-
-
-def own_labelled_windows(con: sqlite3.Connection) -> set[str]:
-    """Fenêtres que nous avons déjà annotées. Les labels d'un tiers (`THIRD_PARTY_SOURCES`,
-    l'import Blancinet) n'en font pas partie : ils ne retirent rien des files."""
-    rows = con.execute(
-        f"SELECT DISTINCT window_id FROM labels WHERE {_NOT_THIRD_PARTY}", THIRD_PARTY_SOURCES
-    )
-    return {row[0] for row in rows}
+def labelled_windows(con: sqlite3.Connection) -> set[str]:
+    """Fenêtres qui portent déjà un label."""
+    return {row[0] for row in con.execute("SELECT DISTINCT window_id FROM labels")}
 
 
 def _drop_labelled(con: sqlite3.Connection, candidates: pd.DataFrame) -> pd.DataFrame:
-    done = own_labelled_windows(con)
+    done = labelled_windows(con)
     return candidates[[i not in done for i in _window_ids(candidates)]]
 
 
@@ -351,17 +260,15 @@ def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
 def latest_labels(
     con: sqlite3.Connection, window_ids: list[str], annotator: str | None = None
 ) -> dict[str, str]:
-    """Dernier label de chacune de ces fenêtres déjà écoutées par nous (les autres sont
-    absentes) : un label de Blancinet seul ne compte pas, la fenêtre reste à écouter.
+    """Dernier label de chacune de ces fenêtres déjà écoutées (les autres sont absentes).
 
     Avec `annotator` (calibration entre annotateurs, §5), seules ses propres réponses
     comptent : chacun écoute la même file sans voir ce que l'autre a répondu.
     """
-    if annotator is None:  # les labels d'un tiers ne comptent pas comme déjà écouté
+    if annotator is None:
         rows = con.execute(
             "SELECT window_id, label FROM labels WHERE label_id IN "
-            f"(SELECT MAX(label_id) FROM labels WHERE {_NOT_THIRD_PARTY} GROUP BY window_id)",
-            THIRD_PARTY_SOURCES,
+            "(SELECT MAX(label_id) FROM labels GROUP BY window_id)"
         )
     else:
         rows = con.execute(

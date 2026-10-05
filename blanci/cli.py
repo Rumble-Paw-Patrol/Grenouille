@@ -17,7 +17,6 @@ import typer
 
 from blanci.annotation.workbench import agreement as annotator_agreement
 from blanci.annotation.workbench import (
-    blancinet_candidates,
     flagged_candidates,
     random_candidates,
     recording_candidates,
@@ -283,8 +282,8 @@ def import_labels(
 @app.command("import-detections")
 def import_detections_command(
     ctx: typer.Context,
-    table: Annotated[Path, typer.Argument(help="Export des détections (Blancinet).")],
-    model: Annotated[str, typer.Option(help="Nom du détecteur dans la base.")] = "blancinet",
+    table: Annotated[Path, typer.Argument(help="Export des détections du détecteur.")],
+    model: Annotated[str, typer.Option(help="Nom du détecteur dans la base.")] = "externe",
 ) -> None:
     """Range les détections d'un détecteur indépendant comme scores (pas comme labels),
     pour les comparer à celles de nos têtes sur les mêmes fenêtres."""
@@ -1228,14 +1227,14 @@ def benchmark_all(
     ] = None,
     external: Annotated[
         str | None,
-        typer.Option(help="Sources externes à ranger d'abord : blancinet."),
+        typer.Option(help="Détecteurs importés à ranger d'abord (noms dans la base)."),
     ] = None,
     own: Annotated[
         bool, typer.Option(help="Chaque source sur ses enregistrements (défaut : communs).")
     ] = False,
 ) -> None:
     """Benchmark complet des modèles (DECISIONS n° 98) : encodeurs × têtes, baselines,
-    fusions, ensembles, détecteurs, Blancinet, sur les mêmes enregistrements."""
+    fusions, ensembles, détecteurs importés, sur les mêmes enregistrements."""
     from blanci.evaluation.benchmark import to_markdown
     from blanci.evaluation.full_benchmark import external_source, run_full_benchmark
 
@@ -1298,7 +1297,7 @@ def select(
         str,
         typer.Option(
             help="active, similarity, coverage, cluster, audit, random, negative_mining, "
-            "phenology, suspects, gaps, blancinet."
+            "phenology, suspects, gaps."
         ),
     ],
     encoder: Annotated[
@@ -1318,7 +1317,6 @@ def select(
     whole: Annotated[
         bool, typer.Option(help="phenology : enregistrements entiers plutôt que fenêtres.")
     ] = False,
-    table: Annotated[Path | None, typer.Option(help="blancinet : export des détections.")] = None,
     name: Annotated[str | None, typer.Option(help="Nom de la file (défaut : la méthode).")] = None,
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
 ) -> None:
@@ -1339,8 +1337,6 @@ def select(
         options["site"], options["sites"] = site, _split(site)
     if whole:
         options["whole"] = True
-    if table is not None:
-        options["table"] = table
     queue = select_candidates(con, cfg, method, encoder, **options)
     if queue.empty:
         typer.echo("aucun candidat")
@@ -1846,11 +1842,6 @@ def throughput(
 @app.command()
 def candidates(
     ctx: typer.Context,
-    from_table: Annotated[
-        Path | None,
-        typer.Option("--from", help="Export Blancinet : ses détections jamais écoutées."),
-    ] = None,
-    per_site: Annotated[int, typer.Option(help="Candidats Blancinet par site.")] = 30,
     random: Annotated[int, typer.Option(help="Fenêtres tirées au hasard (heures de pic).")] = 10,
     whole: Annotated[
         int,
@@ -1873,14 +1864,12 @@ def candidates(
     name: Annotated[str, typer.Option(help="Nom de la file : candidats_<nom>.csv.")] = "lot1",
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
 ) -> None:
-    """File d'écoute pour le poste d'annotation (§5) : Blancinet réparti, strate aléatoire,
+    """File d'écoute pour le poste d'annotation (§5) : strate aléatoire,
     enregistrements entiers (audit aléatoire et jeu gelé, §6)."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     wanted = _split(sites) or None
     parts = []
-    if from_table is not None:
-        parts.append(blancinet_candidates(con, from_table, cfg, per_site, wanted, seed))
     if random:
         parts.append(random_candidates(con, cfg, random, wanted, seed=seed))
     if whole:
@@ -1888,7 +1877,7 @@ def candidates(
     if flag:
         parts.append(flagged_candidates(con, flag, wanted, seed=seed))
     if not parts:
-        raise typer.BadParameter("rien à tirer : --from, --random, --entiers ou --drapeau")
+        raise typer.BadParameter("rien à tirer : --random, --entiers ou --drapeau")
     queue = pd.concat(parts, ignore_index=True).sample(frac=1.0, random_state=seed)
     if queue.empty:
         typer.echo("aucun candidat")

@@ -99,7 +99,7 @@ def plot_recording(
     """Enregistrement entier : spectrogramme (débuts de notes en traits cyan, fenêtre choisie
     en cadre blanc) ; en dessous, une piste par sorte de fenêtre (annotées positives et
     négatives, faux négatifs suspects, négatifs appariés tirés dans l'enregistrement, fenêtre
-    choisie), puis les scores des détecteurs importés (BlanciNet)."""
+    choisie), puis les scores des détecteurs importés."""
     band = tuple(cfg["signal"]["band_hz"])
     dur = float(windows["dur_s"].iloc[0])
     fig, (top, middle, bottom) = plt.subplots(

@@ -561,16 +561,7 @@ def make_queue(
     offset = cfg["recorder"]["filename_utc_offset_h"]
     scores["hour"] = (local_minutes(scores["start_utc"], offset) // 60).astype("Int64")
 
-    from blanci.inputs.labels import THIRD_PARTY_SOURCES
-
-    # Enregistrements déjà écoutés par nous : un label de Blancinet seul n'en exclut aucun.
-    marks = ", ".join("?" * len(THIRD_PARTY_SOURCES))
-    labelled = pd.read_sql_query(
-        "SELECT DISTINCT w.recording_id FROM labels l JOIN windows w USING (window_id) "
-        f"WHERE l.source NOT IN ({marks})",
-        con,
-        params=THIRD_PARTY_SOURCES,
-    )
+    labelled = current_labels(con)[["recording_id"]].drop_duplicates()
     queue = build_queue(
         scores,
         labelled,

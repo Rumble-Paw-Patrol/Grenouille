@@ -34,8 +34,8 @@ def soundscape(seed: int, song_until_s: float = 0.0) -> np.ndarray:
 @pytest.fixture
 def corpus(tmp_path, cfg):
     """2 micros × 3 jours à 10 h, stéréo. Premier jour : chant de 0 à 9 s, annoté à 0, 3 et 6 s
-    sur M1, à 0 et 6 s sur M2 (la fenêtre à 3 s est un trou). BlanciNet : une détection à 0 s
-    et une à 9 s (hors annotation) sur M1."""
+    sur M1, à 0 et 6 s sur M2 (la fenêtre à 3 s est un trou). Détecteur importé : une détection
+    à 0 s et une à 9 s (hors annotation) sur M1."""
     raw = tmp_path / "raw"
     cfg["paths"]["raw"] = str(raw)
     cfg["qc"]["expected_duration_s"] = DURATION_S
@@ -64,7 +64,7 @@ def corpus(tmp_path, cfg):
                 (wid, rids[mic], offset),
             )
             append_label(con, wid, "blanci", "import")
-    register_model(con, "blancinet", "detector", "blancinet", "v0", {"source": "test"})
+    register_model(con, "externe", "detector", "externe", "v0", {"source": "test"})
     for offset, score in ((0.0, 0.9), (9.0, 0.7)):
         wid = window_id_for(rids["M1"], offset)
         con.execute(
@@ -72,7 +72,7 @@ def corpus(tmp_path, cfg):
             "VALUES (?,?,?,3.0)",
             (wid, rids["M1"], offset),
         )
-        con.execute("INSERT INTO scores VALUES (?, 'blancinet', ?)", (wid, score))
+        con.execute("INSERT INTO scores VALUES (?, 'externe', ?)", (wid, score))
     con.commit()
     readonly = ex.open_readonly(tmp_path / "db.sqlite")
     yield readonly, cfg, rids, raw
@@ -92,7 +92,7 @@ def test_overview_lists_positives_first_with_detections(corpus):
     assert len(overview) == 6
     assert overview["n_positive"].head(2).tolist() == [3, 2]
     m1 = overview.set_index("recording_id").loc[rids["M1"]]
-    assert m1["n_blancinet"] == 2 and m1["max_blancinet"] == pytest.approx(0.9)
+    assert m1["n_externe"] == 2 and m1["max_externe"] == pytest.approx(0.9)
     assert str(m1["local"]) == "2026-02-10 10:00:00"
 
 
@@ -105,7 +105,7 @@ def test_recording_windows_know_labels_gaps_and_detections(corpus):
     assert windows["distance_to_positive_s"].iloc[-1] == 0.0
     # Une détection couvre une fenêtre dont elle occupe au moins la moitié.
     expected = [0.9, 0.9, np.nan, np.nan, np.nan, 0.7, 0.7]
-    np.testing.assert_allclose(windows["blancinet"], expected)
+    np.testing.assert_allclose(windows["externe"], expected)
 
     gap = ex.recording_windows(con, cfg, rids["M2"]).set_index("offset_s")
     assert gap.at[3.0, "suspect_fn"] and not gap.at[3.0, "overlaps_positive"]

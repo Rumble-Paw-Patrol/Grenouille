@@ -101,7 +101,7 @@ des approches par score, vitesse, prise en main.
   29 513 enregistrements, 979 h. **En 2026, le mois est confondu avec le site.**
 - Total : 96 292 enregistrements, 3 204 h de 120 s, 2 216 Go ; 94 588 encodables après les
   drapeaux ; 4,5 millions de fenêtres de 5 s au pas de 2,5 s.
-- **Annotations : reprises de zéro** (§5). Les 345 positifs et 150 négatifs Blancinet (51
+- **Annotations : reprises de zéro** (§5). Les 345 positifs et 150 négatifs du détecteur externe (51
   enregistrements, 13 micros, tous à Mataroni, n° 34–35) restent dans la base (ajout seul) mais
   sortent de l'entraînement et de l'évaluation : ils sont conditionnés par un détecteur, ne
   couvrent qu'un site, et leurs négatifs sont des faux amis choisis, pas un échantillon du stock.
@@ -269,7 +269,7 @@ aussi équilibré que possible pour **généraliser à de nouveaux points**.
    tirage biaisé ne fausse pas une tête si les négatifs couvrent tous les fonds). L'**évaluation**
    est tirée au hasard dans des strates, sur des **points tenus à l'écart**, avec la probabilité
    de tirage de chaque enregistrement : sans elle, aucune métrique ne se ramène au stock réel.
-3. **Aucun détecteur dans le tirage du premier lot** (ni Blancinet, ni nos têtes). Les modèles
+3. **Aucun détecteur dans le tirage du premier lot** (ni le détecteur externe, ni nos têtes). Les modèles
    reviennent après le go, pour les lots d'entraînement seulement (§5.9).
 4. **Chaque strate qui donne des positifs donne aussi des négatifs**, des mêmes points aux mêmes
    heures. Sinon la tête apprend l'heure, la saison ou le site à la place du chant.
@@ -286,7 +286,7 @@ aussi équilibré que possible pour **généraliser à de nouveaux points**.
 | Entraînement | tout le reste | — |
 
 Un point tenu à l'écart ne donne jamais rien à l'entraînement, à la validation croisée ni au
-réglage du seuil. Les enregistrements qui portent un label Blancinet sont exclus du tirage
+réglage du seuil. Les enregistrements qui portent un label du détecteur externe sont exclus du tirage
 d'évaluation. Pour 2023, le point est la station (Kaw_A, Kaw_B…) `[À VÉRIFIER]`.
 
 #### 5.3 Strates
@@ -485,10 +485,10 @@ Rien n'est jugé sur les données ONF avant le go (§5.7).
   positifs, 30 négatifs difficiles) : rappel, précision et temps d'un naturaliste à l'oreille
   contre l'outil suivi d'une vérification des seuls candidats. Comparaison principale du rapport,
   exécutée en P4 avec deux naturalistes.
-- **Repères** : au plus deux encodeurs non libres comme objectifs à battre ; détections Blancinet
+- **Repères** : au plus deux encodeurs non libres comme objectifs à battre ; détections du détecteur externe
   v0.1.0 (`import-detections`, score ≥ 0,10, jeu 2026) jugées au niveau de l'enregistrement sur
   les mêmes enregistrements (réserve : on ignore sur quoi il a été entraîné) ; détecteur
-  Biophonia 2024 (Courtois et al. : ≈ 1 000 extraits annotés, test sur 450 : 0 faux positif, 24
+  externe 2024 (Courtois et al. : ≈ 1 000 extraits annotés, test sur 450 : 0 faux positif, 24
   faux négatifs, 53 vrais positifs, rappel ≈ 0,69 à précision 1) : indicatif seulement.
 - **Cibles** : rappel ≥ 0,9 au seuil le plus élevé qui garde une précision ≥ 0,1 sur le site tenu
   à l'écart ; file hebdomadaire ≤ 1 h à 10 s par candidat. Intervalles : Wilson en
@@ -604,7 +604,7 @@ lecture.
 6. **Élodie** : qui, à l'ONF, lancera l'application et réentraînera la tête, sur quelle machine ?
 7. *A. blanci* chante-t-elle parfois de façon ponctuelle ? Chœur et mâle seul sont-ils
    distinguables à l'oreille ? (H20, H21)
-8. Les sorties du détecteur Biophonia sur 2023 et ses ≈ 1 000 extraits annotés sont-ils
+8. Les sorties du détecteur externe sur 2023 et ses ≈ 1 000 extraits annotés sont-ils
    récupérables auprès d'ENIA ou de Trésor ?
 9. Quand un point est remonté « à vérifier », que se passe-t-il (visite de terrain, contrainte
    d'exploitation) et quel volume l'ONF peut-il vérifier par semaine ? (H5)
@@ -703,7 +703,7 @@ README).
 **À coder (liste v5, dans l'ordre).** (1) Plan de tirage : partition des points versionnée,
 `candidates --plan` (strates, quotas, graine), probabilité de tirage enregistrée. (2) Annotation
 par intervalles : mode « extrait + intervalles », labels de fenêtres déduits pour chaque grille,
-poids 1 / nombre de fenêtres. (3) Sources exclues par défaut : `import` (Blancinet) hors
+poids 1 / nombre de fenêtres. (3) Sources exclues par défaut : `import` (détecteur externe) hors
 entraînement et évaluation ; `active` et `similarity` hors évaluation. (4) Vérification à l'aveugle :
 export WAV + Excel sans le label de Léonard, réimport des réponses comme labels, `agreement` par
 classe avec bornes. (5) Métriques repondérées (AP, précision, fausses alarmes par heure, rappel
@@ -760,7 +760,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
   main » au jeu d'évaluation le casse.
 - **En 2026, mois et site sont confondus** : l'effet saison ne se mesure que sur les six stations
   de 2023.
-- **Le modèle précédent reste mal comparable** (Blancinet) : on ignore sur quoi il a été entraîné.
+- **Le modèle précédent reste mal comparable** (détecteur externe) : on ignore sur quoi il a été entraîné.
 - **H20 porte trois économies** (règle d'agrégation, sous-échantillonnage des fenêtres, extraits
   de 30 s) : si elle est fausse, elles disparaissent ensemble.
 - **Phénologie comme piège** : très prédictive d'un site à l'autre ; hors classifieur par défaut,
@@ -799,7 +799,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
    `uncertain` sont exclus de l'entraînement par défaut.
 
 4. **Fenêtres annotées stockées telles quelles** dans `windows` (décalage et durée de
-   l'annotation, 3 s Biophonia), indépendamment des grilles d'encodeur. Le transfert des
+   l'annotation, 3 s du prestataire), indépendamment des grilles d'encodeur. Le transfert des
    labels vers une grille (3 s / 1,5 s ou 5 s / 2,5 s) se fera par inclusion au moment de
    l'entraînement (M1). `blanci check-grid` vérifie que chaque annotation positive tient
    entière dans une fenêtre de chaque grille.
@@ -942,7 +942,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
 
 31. **Score de l'ancien prestataire conservé** dans `labels.conditions.previous_model_score`,
     et résumé (min / médiane / max) par `--dry-run`. C'est le repère chiffré du §6 : il
-    permettra plus tard de mesurer le rappel relatif au détecteur Biophonia, et de voir quels
+    permettra plus tard de mesurer le rappel relatif au détecteur externe, et de voir quels
     positifs il ne remontait qu'à score médiocre (§5, conséquence 2).
 
 32. **Détection des colonnes en deux passes** : égalité exacte d'abord, puis libellé composé
@@ -955,8 +955,8 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
 
 ## 2026-09-22 — Acceptation M0 sur le disque réel
 
-34. **Le fichier d'annotations est l'export complet de Blancinet v0.1.0**
-    (`All_detections_blancinet_v0.1.0_dataset1BV.xlsx`) : 74 785 détections (score ≥ 0,10),
+34. **Le fichier d'annotations est l'export complet du détecteur externe**
+    (`export_detections.xlsx`) : 74 785 détections (score ≥ 0,10),
     dont **345 vérifiées `True`, 150 `False`**, 4 en attente (« à vérif », « à conf ») et
     74 286 jamais écoutées. Seules les vérifiées deviennent des labels. Une cellule de
     vérification vide est comptée « non vérifiée » et ignorée ; « à vérif » / « à conf » sont
@@ -1189,7 +1189,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
 
 63. **Poste d'annotation** (`blanci/annotation/workbench.py`, `blanci/annotation/app.py` Streamlit, `blanci annotate`,
     `blanci candidates`). Files CSV dans `data/reports/candidats_*.csv` (aussi `queue_*` et
-    `search_*`). `candidates --from <export Blancinet>` tire les détections jamais écoutées,
+    `search_*`). `candidates --from <export>` tire les détections jamais écoutées,
     `per_site` par site, à parts égales entre tranches de score (0–0,3 ; 0,3–0,7 ; 0,7–1) puis
     entre micros, une fenêtre par enregistrement ; `--random` ajoute des fenêtres au hasard aux
     heures de pic, à parts égales entre sites. Chaque réponse est un label en ajout seul
@@ -1323,7 +1323,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     une fenêtre de 3, 5 et 6 s. Pas de fenêtres recentrées sur les annotations.
     **Risque mesuré sur le contexte ajouté** : aucun des 150 négatifs n'est dans un
     enregistrement qui contient un positif annoté, mais pour 42 d'entre eux (5 s) et 28
-    (6 s), Blancinet a une détection non écoutée de score ≥ 0,5 dans les 2–3 s ajoutées.
+    (6 s), le détecteur externe a une détection non écoutée de score ≥ 0,5 dans les 2–3 s ajoutées.
     Si du chant s'y trouve, la fenêtre est un négatif faux : la tête apprend à baisser le
     score d'un chant vrai, et le benchmark compte une fausse alarme là où l'encodeur avait
     raison. Le bruit touche les encodeurs à fenêtre longue, pas birdnet (3 s).
@@ -1399,13 +1399,13 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     3 s ; les encodeurs à fenêtre de 5–6 s y ajoutent 1 à 3 s jamais écoutées. Règle : un
     négatif est **suspect** si A. blanci est détecté dans les fenêtres voisines (± 3 s, la
     fenêtre de 3 s de chaque côté, ce qui couvre tous les encodeurs du §2) ; sinon il reste
-    négatif. « Détecté » = détection Blancinet de score ≥ 0,5 que personne n'a écoutée
+    négatif. « Détecté » = détection du détecteur externe de score ≥ 0,5 que personne n'a écoutée
     (aucune fenêtre annotée ne la contient), ou positif annoté. Jamais les scores de nos
     propres têtes (ils choisiraient les labels qui les jugent). Un suspect ne sert ni à
     l'entraînement ni à l'évaluation, **pour tous les encodeurs** (mêmes négatifs pour tous,
     benchmark comparable). Même règle pour les négatifs appariés présumés : aucun n'est tiré
-    à moins de 3 s d'une détection non écoutée. Les détections Blancinet (74 785, dont
-    74 286 jamais écoutées) sont rangées comme scores du détecteur « blancinet »
+    à moins de 3 s d'une détection non écoutée. Les détections du détecteur externe (74 785, dont
+    74 286 jamais écoutées) sont rangées comme scores du détecteur « externe »
     (`blanci import-detections`), pas comme labels. Au 23/09 : **46 négatifs suspects sur
     149**. `candidates --suspects` tire les 52 détections voisines à écouter : une voisine
     écoutée et non-blanci lève le soupçon, une voisine blanci le confirme (et donne un
@@ -1413,11 +1413,11 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     46 suspects annotés change peu l'AP (meilleure baseline, fenêtres : 0,368 → 0,374) ;
     écarter aussi les négatifs présumés voisins d'une détection la fait passer à 0,543
     (enregistrements : 0,155 → 0,263). Deux lectures : bruit d'étiquette retiré (au même
-    micro, même créneau, en saison, une détection Blancinet ≥ 0,5 est souvent un vrai
+    micro, même créneau, en saison, une détection du détecteur externe ≥ 0,5 est souvent un vrai
     chant) ou négatifs difficiles retirés (évaluation optimiste). Le jeu gelé, écouté en
     entier, tranchera. Revers constaté : les suspects annotés sont surtout les faux amis
     principaux (*A. andreae* 12 sur 22, Fourmilier tacheté 11 sur 23), qui chantent en
-    continu et déclenchent Blancinet sur les fenêtres voisines : sans écoute des voisins,
+    continu et déclenchent le détecteur externe sur les fenêtres voisines : sans écoute des voisins,
     la tête perd la moitié de ses exemples de ces faux amis. Écouter les 52 voisins avant
     l'entraînement.
 
@@ -1469,7 +1469,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     **Biais possible, gardé en tête** : quelques fenêtres « négatives » de 5–6 s peuvent
     contenir la fin d'un chant ; il pèserait sur les encodeurs à fenêtre longue. Supprimés :
     colonne `suspect`, `candidates --suspects`. **Gardé** (question distincte, non
-    tranchée) : aucun négatif *présumé* n'est tiré à ± 3 s d'une détection Blancinet ≥ 0,5
+    tranchée) : aucun négatif *présumé* n'est tiré à ± 3 s d'une détection du détecteur externe ≥ 0,5
     non écoutée ; les détections restent rangées comme scores. Baselines relancées sous
     cette règle.
 
@@ -1487,9 +1487,9 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     Léonard.
 
 87. **Règle des négatifs présumés voisins supprimée** (23/09/2026, Léonard). Plus aucune
-    règle liée aux détections Blancinet dans la construction des jeux : négatifs annotés et
+    règle liée aux détections du détecteur externe dans la construction des jeux : négatifs annotés et
     présumés sont tirés comme avant le n° 80. Les détections restent rangées comme scores
-    du détecteur « blancinet » (`import-detections`), pour comparer Blancinet et nos têtes
+    du détecteur « externe » (`import-detections`), pour comparer le détecteur externe et nos têtes
     sur les mêmes fenêtres. Baselines relancées : de nouveau celles d'avant le n° 80.
 
 ## 2026-09-24 — Ajouts demandés par Léonard (liste du 24/09, après le point d'étape)
@@ -1538,7 +1538,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     réglages : une source calculée sur d'autres labels est signalée au lieu d'être comparée
     en silence. Noms des sources : `<encodeur>/<tête>`, `baseline/<nom>/c<canal>`,
     `<encodeur>/fusion:<emplacement>/<méthode>`, `ensemble:<méthode>(…)`, `detector/<nom>`,
-    `external/blancinet`.
+    `external/externe`.
 
 92. **Toutes les têtes à comparer** (`head.py`, `pooling.py`, `head_benchmark.py`,
     `blanci heads`). Ajouts : recherche par l'exemple (plus proche positif ;
@@ -1605,8 +1605,8 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     les sources au niveau enregistrement, sur les enregistrements évalués par toutes : AP [IC],
     rappels aux précisions plancher [Wilson], rappel par site, coût des encodeurs (dimension,
     débit), fraîcheur des labels ; comparaison appariée à la référence. Sources externes
-    rangées à la demande sur les fenêtres des baselines : Blancinet (peut-être entraîné sur ces
-    mêmes enregistrements : optimiste, à confirmer avec Biophonia), logits des congénères.
+    rangées à la demande sur les fenêtres des baselines : le détecteur externe (peut-être entraîné sur ces
+    mêmes enregistrements : optimiste, à confirmer avec le prestataire), logits des congénères.
 
 99. **Outil de sélection unique** (`selection.py`, `blanci select`, `cluster-status`,
     `cluster-label`, `yapat-export`, `yapat-import`). Méthodes : 60-20-20 à proportions
@@ -1614,7 +1614,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
     HDBSCAN puis étiquetage en bloc d'un groupe homogène (10 écoutes d'un même label,
     `selection.cluster_min_checked`), audit aléatoire, hasard, negative mining (scores hauts là
     où A. blanci est improbable, ou proches des faux amis annotés), gabarit phénologique
-    (`selection.phenology`), détections isolées, congénères, Blancinet. Nouvelles sources de
+    (`selection.phenology`), détections isolées, congénères, le détecteur externe. Nouvelles sources de
     labels : mining, phenology, suspect, coverage, cluster, bulk (propagé sans écoute), yapat.
     YAPAT (Docker, PostgreSQL, embeddings BirdNET, licence non commerciale) n'est pas embarqué :
     export d'extraits + manifeste, relecture des réponses (format non documenté : à valider au
@@ -1691,19 +1691,19 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
 
 106. **Mesure : « non annotée » ne veut pas dire « négative »** (25/09/2026, lecture seule,
      canal 0). 51 enregistrements positifs de 120 s : 3 fenêtres annotées en médiane (9 s sur
-     120), aucune annotée négative. Les 345 positives sont toutes des détections BlanciNet
+     120), aucune annotée négative. Les 345 positives sont toutes des détections du détecteur externe
      validées ; 87 % des 1 695 tranches de 3 s non annotées de ces enregistrements sont aussi
      détectées (score médian 0,93). L'expert a validé une partie des détections, il n'a pas
      marqué tout le chant. `nearest` tire bien la fenêtre libre la plus proche d'une
      annotation, mais elle n'est pas écoutée : sur 1 020 négatifs `nearest`, 965 sont dans
-     l'enregistrement positif et 80 % de ceux-là ont une détection BlanciNet ≥ 0,5 ; contraste
+     l'enregistrement positif et 80 % de ceux-là ont une détection du détecteur externe ≥ 0,5 ; contraste
      en bande médian 6,1 dB (annotées 8,9 ; 7,6 à moins de 6 s d'une annotation, 5,4–5,9
-     au-delà de 15 s). Les autres stratégies ne sont pas propres non plus : BlanciNet ≥ 0,5 sur
+     au-delà de 15 s). Les autres stratégies ne sont pas propres non plus : le détecteur externe ≥ 0,5 sur
      46 % des négatifs `same_day` et 43 % des `other_day` (janvier à Mataroni : A. blanci
-     chante aux mêmes heures d'un jour à l'autre). BlanciNet n'est pas la vérité (faux amis),
+     chante aux mêmes heures d'un jour à l'autre). Le détecteur externe n'est pas la vérité (faux amis),
      l'écoute tranchera (`02_negatifs_apparies`, section 4). Options soumises à Léonard, non
-     tranchées — le n° 87 a retiré toute règle liée à BlanciNet : (a) négatif présumé = ni
-     annoté, ni détecté par BlanciNet au-dessus d'un seuil ; (b) jamais dans un enregistrement
+     tranchées — le n° 87 a retiré toute règle liée au détecteur externe : (a) négatif présumé = ni
+     annoté, ni détecté par le détecteur externe au-dessus d'un seuil ; (b) jamais dans un enregistrement
      positif (« elle chante du début à la fin », notes de phénologie) ; (c) garder, et mesurer
      la contamination à l'écoute.
 
@@ -2678,7 +2678,7 @@ faire au fil de l'eau : chaque nouvelle fonction évite de coder *A. blanci* en 
      au 29/09, aucun ne le fait (perch_v2 en tête du benchmark 07). La vague 2 d'AnuraSet se
      clôt le **09/10/2026** ; ce qui n'est pas fini ce jour-là est abandonné.
 
-157. **Annotations reprises de zéro** (V5 §5). Les 345 positifs et 150 négatifs Blancinet
+157. **Annotations reprises de zéro** (V5 §5). Les 345 positifs et 150 négatifs du détecteur externe
      (n° 34) restent dans la base (ajout seul) mais sortent de l'entraînement et de
      l'évaluation. Jeu v1 tiré par plan, avant écoute, sans aucun détecteur : partition des
      points (un site 2026 entier, 20 % des points des autres sites, une station 2023 sur deux
@@ -2768,7 +2768,7 @@ de Léonard, 01/10/2026.
      `documentation/old/`.
 
 163. **Échantillon versionné retiré** (n° 113). Les 66 clips d'`echantillon/` (60 Mo de FLAC tirés
-     des enregistrements de l'ONF et de Biophonia) sortent de l'arbre de travail, avec
+     des enregistrements de l'ONF) sortent de l'arbre de travail, avec
      `blanci/echantillon.py`, la commande `blanci echantillon` et `tests/test_echantillon.py` :
      les enregistrements ne sont pas à publier, et Léonard dispose maintenant du jeu complet. Ils
      restent dans l'historique git (dernier commit qui les contient : `ad43369`) ; les
@@ -3136,3 +3136,17 @@ de Léonard, 01/10/2026.
        les bords ne perd donc aucun chant ; vérifié par un test sur grilles de 3 et 5 s.
      - Une fenêtre positive pour un intervalle sûr le reste même si elle touche aussi un
        intervalle « A. blanci ? » ; sinon, toucher un intervalle incertain la rend incertaine.
+
+## 2026-10-05 — Le détecteur externe et ses annotations sortent du projet
+
+184. **Plus aucune annotation ni détection du détecteur externe dans le dépôt ni dans la base**
+     (Léonard). Ses labels (source `import`) et ses scores sont extraits une fois de la base
+     locale par un script hors dépôt et rangés dans `grenouille-local/` (à côté du dépôt, hors
+     git), pour comparer plus tard les scores de nos modèles à ses annotations ; ils sont
+     ensuite retirés de la base (copie de sauvegarde faite avant). Retirés du code : les
+     candidats tirés de ses détections (`candidates --from`, `select --method` de même nom), et
+     la règle du jour qui exemptait ses labels du veto des files (inutile sans ses labels).
+     Restent, génériques : `import-labels` (tableau d'annotations), `import-detections` et la
+     source `external/<nom>` du benchmark complet, pour tout détecteur importé. Son nom est
+     retiré des fichiers du dépôt, archives et présentations comprises ; il reste dans
+     l'historique git, qu'on ne réécrit pas.

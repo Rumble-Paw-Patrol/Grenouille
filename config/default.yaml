@@ -72,12 +72,12 @@ labels:
       verdict: [verif_manuelle, verif, verification, validation, valide, confirme, controle,
                 verif_humaine, verifie]
       label: [label, etiquette, classe, class]
-      score: [score, score_modele, score_biophonia, confiance, confidence, proba, probabilite]
+      score: [score, score_modele, confiance, confidence, proba, probabilite]
       quality: [qualite, quality]
       site: [site]
       mic_id: [micro, mic, mic_id, capteur, enregistreur]
-    offset_unit: seconds           # seconds | window_index (indice de fenêtre Biophonia)
-    window_s: 3.0                  # durée des fenêtres annotées (convention Biophonia)
+    offset_unit: seconds           # seconds | window_index (indice de fenêtre du fichier reçu)
+    window_s: 3.0                  # durée des fenêtres annotées du fichier reçu
     annotator: expert
 
 # Encodeurs (§2). La f_e et la durée de fenêtre sont lues dans le modèle ; la grille en découle.

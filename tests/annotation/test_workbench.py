@@ -12,7 +12,6 @@ from blanci.annotation.workbench import (
     ANSWERS,
     CANDIDATE_COLUMNS,
     agreement,
-    blancinet_candidates,
     clip_spectrogram,
     ensure_window,
     latest_labels,
@@ -31,7 +30,6 @@ from blanci.annotation.workbench import (
 )
 from blanci.core.db import connect, window_id_for
 from blanci.inputs.ingest import ingest
-from blanci.service import append_label
 
 SR = 16_000
 DURATION_S = 12.0
@@ -55,77 +53,6 @@ def corpus(tmp_path, cfg):
     con = connect(tmp_path / "db.sqlite")
     ingest(con, raw, "2026", cfg, run_qc=False, hash_file=False)
     return con, cfg, raw
-
-
-def blancinet_export(tmp_path, rows):
-    """Export au format Blancinet : clé S3, station, début, score, vérification."""
-    df = pd.DataFrame(
-        rows, columns=["file_s3_key", "station", "start_time", "score", "vérification"]
-    )
-    df.insert(2, "label_name", "Anomaloglossus blanci")
-    path = tmp_path / "export.xlsx"
-    df.to_excel(path, index=False)
-    return path
-
-
-def all_detections(verified=()):
-    """Une détection par fenêtre de 3 s de chaque enregistrement, scores étalés sur [0,1]."""
-    rows, k = [], 0
-    for site, mics in SITES.items():
-        for mic in mics:
-            for day, hour in ((10, 7), (11, 7), (12, 7), (13, 12)):
-                for offset in (0, 3, 6, 9):
-                    name = f"{1000 + k}-{mic.lower()}_202602{day}_{hour:02d}0000.flac"
-                    verdict = True if (mic, day, offset) in verified else None
-                    rows.append((name, site, offset, round((k % 10) / 10 + 0.05, 2), verdict))
-                    k += 1
-    return rows
-
-
-# --- Files de candidats ---------------------------------------------------------------------
-
-
-def test_blancinet_candidates_are_spread_over_sites_scores_and_mics(corpus, tmp_path):
-    con, cfg, _ = corpus
-    export = blancinet_export(tmp_path, all_detections())
-    queue = blancinet_candidates(con, export, cfg, per_site=6)
-    assert list(queue.columns) == CANDIDATE_COLUMNS
-    assert queue.groupby("site").size().to_dict() == {"CDR": 6, "Patawa": 6}
-    # Une seule fenêtre par enregistrement ; les trois tranches de score représentées.
-    assert not queue.duplicated(["recording_id"]).any()
-    for _, part in queue.groupby("site"):
-        assert part["reason"].nunique() == 3
-    assert queue.groupby("site")["mic_id"].nunique().to_dict() == {"CDR": 3, "Patawa": 2}
-    assert (queue["source"] == "active").all() and (queue["dur_s"] == 3.0).all()
-
-
-def test_blancinet_candidates_skip_verified_rows_and_labelled_windows(corpus, tmp_path):
-    con, cfg, _ = corpus
-    # La vérification remplie pour M1 : ce n'est plus un candidat.
-    verified = {("C1", day, off) for day in (10, 11, 12, 13) for off in (0, 3, 6, 9)}
-    export = blancinet_export(tmp_path, all_detections(verified))
-    queue = blancinet_candidates(con, export, cfg, per_site=50)
-    assert "C1" not in set(queue["mic_id"])
-
-    # Une fenêtre déjà étiquetée (par le poste) ne revient pas.
-    first = queue.iloc[0].to_dict()
-    save_answer(con, first, "background", "léonard")
-    again = blancinet_candidates(con, export, cfg, per_site=50)
-    pairs = zip(again["recording_id"], again["offset_s"], strict=True)
-    ids = {window_id_for(r, o) for r, o in pairs}  # fenêtres de 3 s
-    assert window_id_for(first["recording_id"], first["offset_s"]) not in ids
-
-
-def test_blancinet_candidates_skip_flagged_recordings_and_filter_sites(corpus, tmp_path):
-    con, cfg, _ = corpus
-    con.execute(
-        "UPDATE recordings SET qc_flags = ? WHERE path LIKE '%P1_20260210%'",
-        (json.dumps({"off_campaign": True}),),
-    )
-    export = blancinet_export(tmp_path, all_detections())
-    queue = blancinet_candidates(con, export, cfg, per_site=50, sites=["patawa"])
-    assert set(queue["site"]) == {"Patawa"}
-    assert not queue["path"].str.contains("P1_20260210").any()
 
 
 def test_random_candidates_draw_peak_hours_evenly_across_sites(corpus):
@@ -163,7 +90,7 @@ def test_save_answer_creates_the_window_and_appends_labels(corpus):
         "offset_s": 4.5,
         "dur_s": 3.0,
         "score": 0.82,
-        "reason": "blancinet_0.7-1.0",
+        "reason": "random",
         "source": "active",
     }
     save_answer(con, candidate, "blanci", "léonard", quality="C", comment="lointain", channel=1)
@@ -174,7 +101,7 @@ def test_save_answer_creates_the_window_and_appends_labels(corpus):
     assert [r["label"] for r in rows] == ["blanci", "blanci_uncertain"]
     first = json.loads(rows[0]["conditions"])
     assert first == {
-        "candidate_reason": "blancinet_0.7-1.0",
+        "candidate_reason": "random",
         "comment": "lointain",
         "tags": ["distant"],  # lu comme à l'import (DECISIONS n° 82)
         "channel_listened": 1,
@@ -279,22 +206,6 @@ def test_recording_candidates_skip_recordings_already_heard_in_full(corpus):
     save_answer(con, first, "background", "léonard")
     again = recording_candidates(con, cfg, n=50, sites=["patawa"])
     assert first["recording_id"] not in set(again["recording_id"])
-
-
-def test_blancinet_labels_never_remove_a_recording_from_the_queues(corpus):
-    """Une fenêtre annotée par Blancinet reste à écouter : seul notre label l'écarte."""
-    con, cfg, _ = corpus
-    first = recording_candidates(con, cfg, n=2, sites=["patawa"]).iloc[0].to_dict()
-    window = ensure_window(con, first["recording_id"], first["offset_s"], first["dur_s"])
-    append_label(con, window, "blanci", source="import")
-    again = recording_candidates(con, cfg, n=50, sites=["patawa"])
-    assert first["recording_id"] in set(again["recording_id"])
-    assert progress(con, pd.DataFrame([first])).tolist() == [None]
-
-    save_answer(con, first, "background", "léonard")
-    after = recording_candidates(con, cfg, n=50, sites=["patawa"])
-    assert first["recording_id"] not in set(after["recording_id"])
-    assert progress(con, pd.DataFrame([first])).tolist() == ["background"]
 
 
 def test_calibration_hides_only_my_own_answers(corpus):

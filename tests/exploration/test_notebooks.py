@@ -1,5 +1,5 @@
 """Notebooks d'exploration (`notebooks/`) : committés sans sorties — les lecteurs audio
-embarquent le son des enregistrements, données de l'ONF et de Biophonia, qui ne vont jamais sur
+embarquent le son des enregistrements, données de l'ONF, qui ne vont jamais sur
 GitHub — et leur code se compile."""
 
 import ast
