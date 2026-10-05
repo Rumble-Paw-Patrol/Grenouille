@@ -401,3 +401,104 @@ def test_training_set_without_paired_negatives_has_only_real_labels(con):
     add_label(con, add_window(con, rid, 0.0), "blanci_solo")
     data = training_set(con, grid_frame([rid]), per_positive=0)
     assert not data["presumed"].any() and len(data) == 1
+
+
+# --- Intervalles (§5.6, DECISIONS n° 182) -------------------------------------------------------
+
+
+def _span(con, rid, start, end, intervals, other="background", annotator="léonard"):
+    from blanci.service import append_span
+
+    return append_span(con, rid, start, end, intervals, other, source="random", annotator=annotator)
+
+
+def _interval_labels(con, grid, annotator=None):
+    from blanci.inputs.dataset import interval_labels, load_spans
+
+    return interval_labels(*load_spans(con, annotator), grid).set_index("offset_s")
+
+
+def test_a_window_is_positive_iff_it_touches_an_interval(con):
+    """Grille de 3 s au pas de 1,5 s, intervalle 10,0–10,4 s sur l'extrait 0–30 s : positives
+    les fenêtres qui le touchent, même d'un peu ; négatives les autres fenêtres de
+    l'extrait ; rien hors de l'extrait."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    _span(con, rid, 0.0, 30.0, [(10.0, 10.4, "blanci")], other="bird")
+    data = _interval_labels(con, grid_frame([rid]))
+    positives = sorted(data.index[data["y"] == 1])
+    assert positives == [7.5, 9.0]  # 7,5–10,5 et 9–12 ; 6–9 et 10,5–13,5 ne le touchent pas
+    assert data.loc[6.0, "y"] == 0 and data.loc[6.0, "label"] == "bird"  # 6–9 : ne touche pas
+    assert data.index.max() == 27.0  # 27–30 est la dernière fenêtre entièrement écoutée
+    assert data.loc[7.5, "label"] == "blanci"
+
+
+def test_touching_only_the_border_is_not_overlapping(con):
+    """Une fenêtre qui finit exactement où l'intervalle commence ne le chevauche pas."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    _span(con, rid, 0.0, 30.0, [(12.0, 13.0, "blanci_chorus")])
+    data = _interval_labels(con, grid_frame([rid]))
+    assert data.loc[9.0, "y"] == 0  # 9–12
+    assert data.loc[10.5, "y"] == 1 and data.loc[10.5, "label"] == "blanci_chorus"
+
+
+def test_uncertain_intervals_make_windows_uncertain(con):
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    _span(con, rid, 0.0, 30.0, [(10.0, 11.0, "blanci_uncertain"), (20.0, 21.0, "blanci")])
+    data = _interval_labels(con, grid_frame([rid]))
+    assert data.loc[9.0, "label"] == "blanci_uncertain" and data.loc[9.0, "y"] == 0
+    assert data.loc[19.5, "y"] == 1
+
+
+def test_a_later_span_corrects_the_intervals_it_covers(con):
+    """Réécoute de tout l'enregistrement sans l'intervalle de 10 s : il ne compte plus ; un
+    intervalle hors du nouvel extrait reste."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    _span(con, rid, 0.0, 30.0, [(10.0, 10.4, "blanci")])
+    _span(con, rid, 60.0, 90.0, [(70.0, 71.0, "blanci")])
+    _span(con, rid, 0.0, 45.0, [])
+    data = _interval_labels(con, grid_frame([rid]))
+    assert data.loc[9.0, "y"] == 0
+    assert data.loc[69.0, "y"] == 1
+
+
+def test_interval_labels_follow_any_grid(con):
+    """Mêmes intervalles, grille de 5 s jointive (perch) : les labels se déduisent aussi."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    _span(con, rid, 0.0, 120.0, [(42.0, 43.0, "blanci")])
+    grid = grid_frame([rid], window_s=5.0, hop_s=5.0).assign(dur_s=5.0)
+    grid["window_id"] = [window_id_for(rid, o, 5.0) for o in grid["offset_s"]]
+    data = _interval_labels(con, grid)
+    assert list(data.index[data["y"] == 1]) == [40.0]
+    assert len(data) == 24
+
+
+def test_calibration_reads_only_the_annotators_spans(con):
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    _span(con, rid, 0.0, 30.0, [(10.0, 10.4, "blanci")], annotator="tuteur")
+    assert _interval_labels(con, grid_frame([rid]), annotator="léonard").empty
+    assert not _interval_labels(con, grid_frame([rid]), annotator="tuteur").empty
+
+
+def test_training_set_uses_intervals_with_window_labels(con):
+    """Intervalles et labels de fenêtres ensemble ; les fenêtres incertaines sont écartées,
+    un désaccord entre les deux écarte la fenêtre."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    _span(con, rid, 0.0, 30.0, [(10.0, 10.4, "blanci"), (20.0, 20.5, "blanci_uncertain")])
+    add_label(con, add_window(con, rid, 60.0), "bird")
+    add_label(con, add_window(con, rid, 3.0), "blanci")  # en désaccord avec l'extrait (négatif)
+    data = training_set(con, grid_frame([rid])).set_index("offset_s")
+    assert data.loc[9.0, "y"] == 1 and data.loc[60.0, "y"] == 0
+    assert 19.5 not in data.index and 3.0 not in data.index
+
+
+def test_append_span_refuses_bad_input(con):
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    with pytest.raises(ValueError, match="hors intervalles"):
+        _span(con, rid, 0.0, 30.0, [], other="blanci")
+    with pytest.raises(ValueError, match="label d'intervalle"):
+        _span(con, rid, 0.0, 30.0, [(1.0, 2.0, "bird")])
+    with pytest.raises(ValueError, match="vide"):
+        _span(con, rid, 0.0, 30.0, [(40.0, 41.0, "blanci")])
+    span = _span(con, rid, 0.0, 30.0, [(-1.0, 2.0, "blanci")])  # rogné à l'extrait
+    row = con.execute("SELECT start_s, end_s FROM intervals WHERE span_id = ?", (span,))
+    assert tuple(row.fetchone()) == (0.0, 2.0)

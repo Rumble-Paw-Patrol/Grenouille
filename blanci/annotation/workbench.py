@@ -40,7 +40,7 @@ from blanci.inputs.labels import (
     parse_offset,
     read_annotation_table,
 )
-from blanci.service import append_label
+from blanci.service import INTERVAL_LABELS, append_label, append_span
 
 CANDIDATE_COLUMNS = [
     "recording_id",
@@ -361,10 +361,23 @@ def latest_labels(
 def progress(
     con: sqlite3.Connection, queue: pd.DataFrame, annotator: str | None = None
 ) -> pd.Series:
-    """Pour chaque candidat : son dernier label s'il a déjà été écouté, sinon None
-    (`annotator` : voir `latest_labels`)."""
+    """Pour chaque candidat : son label s'il a déjà été écouté, sinon None (`annotator` : voir
+    `latest_labels`). Un candidat entièrement dans un extrait annoté par intervalles prend le
+    label qui s'en déduit (A. blanci s'il touche un intervalle), avant son label de fenêtre."""
+    from blanci.inputs.dataset import interval_labels, load_spans
+
     ids = _window_ids(queue)
     latest = latest_labels(con, ids, annotator)
+    grid = pd.DataFrame(
+        {
+            "window_id": ids,
+            "recording_id": queue["recording_id"].to_numpy(),
+            "offset_s": queue["offset_s"].to_numpy(dtype=float),
+            "dur_s": queue["dur_s"].to_numpy(dtype=float),
+        }
+    ).drop_duplicates("window_id")
+    derived = interval_labels(*load_spans(con, annotator), grid)
+    latest |= dict(zip(derived["window_id"], derived["label"], strict=True))
     return pd.Series([latest.get(i) for i in ids], index=queue.index, dtype=object)
 
 
@@ -557,6 +570,84 @@ def save_answer(
         conditions=conditions,
         annotator=annotator,
     )
+
+
+INTERVAL_ANSWERS = tuple((label, name) for label, name in ANSWERS if label in INTERVAL_LABELS)
+
+
+def save_span(
+    con: sqlite3.Connection,
+    candidate: dict[str, Any],
+    start_s: float,
+    end_s: float,
+    intervals: list[tuple[float, float, str]],
+    classes: list[str],
+    annotator: str,
+    quality: str | None = None,
+    comment: str | None = None,
+    channel: int | None = None,
+    species: str | None = None,
+) -> int:
+    """Enregistre un extrait écouté et ses intervalles d'A. blanci ; renvoie span_id.
+
+    `classes` : classes entendues dans l'extrait (cases cochées) ; celles d'A. blanci
+    s'ajoutent d'elles-mêmes d'après les intervalles. A. blanci coché sans aucun intervalle
+    est refusé : toutes les fenêtres de l'extrait deviendraient négatives. Les fenêtres hors
+    intervalles prennent la première des autres classes (`ordered_classes`), « rien » sinon.
+    """
+    blanci = {"blanci", "blanci_chorus", "blanci_uncertain"}
+    if blanci & set(classes) and not intervals:
+        raise ValueError("A. blanci coché sans intervalle : tracer où il chante")
+    heard = list(dict.fromkeys([*classes, *(label for _, _, label in intervals)]))
+    other, _ = ordered_classes([c for c in heard if c not in blanci])
+    conditions: dict[str, Any] = {"candidate_reason": candidate.get("reason") or None}
+    if comment:
+        conditions |= comment_fields(comment) | {"comment": comment}
+    if channel is not None:
+        conditions["channel_listened"] = channel
+    conditions = {k: v for k, v in conditions.items() if v is not None}
+    return append_span(
+        con,
+        candidate["recording_id"],
+        start_s,
+        end_s,
+        intervals,
+        other,
+        source=candidate.get("source") or "active",
+        classes=heard or ["background"],
+        quality=quality,
+        species=species or None,
+        conditions=conditions,
+        annotator=annotator,
+    )
+
+
+def span_intervals(
+    con: sqlite3.Connection,
+    recording_id: str,
+    start_s: float,
+    end_s: float,
+    annotator: str | None = None,
+) -> list[tuple[float, float, str]] | None:
+    """Intervalles du dernier extrait [start_s, end_s] déjà annoté (à réafficher quand on y
+    revient), None s'il ne l'a jamais été."""
+    sql = (
+        "SELECT span_id FROM spans WHERE recording_id = ? AND ABS(start_s - ?) < 0.006 "
+        "AND ABS(end_s - ?) < 0.006"
+    )
+    params: tuple = (recording_id, start_s, end_s)
+    if annotator is not None:
+        sql, params = sql + " AND annotator = ?", (*params, annotator)
+    row = con.execute(sql + " ORDER BY span_id DESC LIMIT 1", params).fetchone()
+    if row is None:
+        return None
+    return [
+        (float(a), float(b), str(c))
+        for a, b, c in con.execute(
+            "SELECT start_s, end_s, label FROM intervals WHERE span_id = ? ORDER BY start_s",
+            (row[0],),
+        )
+    ]
 
 
 def local_time(start_utc: str | None, utc_offset_h: float) -> str:

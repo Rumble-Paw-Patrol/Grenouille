@@ -37,9 +37,10 @@ from pathlib import Path
 
 import streamlit as st
 
-from blanci.annotation.viewer import viewer_html
+from blanci.annotation.viewer import viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
+    INTERVAL_ANSWERS,
     latest_labels,
     load_candidates,
     local_time,
@@ -48,6 +49,8 @@ from blanci.annotation.workbench import (
     progress,
     read_clip,
     save_answer,
+    save_span,
+    span_intervals,
     spectrogram_png,
     split_windows,
     wav_bytes,
@@ -58,6 +61,8 @@ from blanci.inputs.labels import QUALITIES
 
 CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
 NAMES = dict(ANSWERS)
+# Classes de l'extrait hors A. blanci, dont la présence se dit par les intervalles.
+OTHER_ANSWERS = tuple(a for a in ANSWERS if a not in INTERVAL_ANSWERS)
 CONTEXT, WHOLE = "context", "whole"
 EXTENTS = {CONTEXT: "candidat et contexte", WHOLE: "enregistrement entier"}
 # Au-delà, l'écoute est rééchantillonnée : un enregistrement entier reste léger dans la page.
@@ -389,31 +394,71 @@ def _media(
     }
 
 
-def _iframe(html: str, height: int) -> None:
-    """Page HTML avec scripts : `st.iframe` (Streamlit ≥ 1.5x), sinon l'ancien
-    `components.html`, retiré des versions récentes."""
-    if hasattr(st, "iframe"):
-        st.iframe(html, height=height)
-    else:
-        import streamlit.components.v1 as components
+def _classes(form_key: str, answers) -> list[str]:
+    columns = st.columns(5)
+    return [
+        label
+        for i, (label, name) in enumerate(answers)
+        if columns[i % 5].checkbox(name, key=f"{form_key}::{label}")
+    ]
 
-        components.html(html, height=height)
+
+def _details() -> tuple[str | None, str | None, str | None]:
+    quality = st.radio("Qualité (si A. blanci)", ["—", *QUALITIES], horizontal=True)
+    species = st.text_input("Espèce entendue (faux ami, congénère…)")
+    comment = st.text_input("Commentaire (conditions, chant lointain, pluie…)")
+    return (
+        None if quality == "—" else quality,
+        species.strip() or None,
+        comment.strip() or None,
+    )
+
+
+def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel) -> bool:
+    """Annotation par intervalles : les intervalles viennent du spectrogramme, le formulaire
+    dit le reste de l'extrait. Vrai si l'extrait a été enregistré."""
+    with st.form(key=form_key, clear_on_submit=True):
+        st.markdown(
+            "**Autres classes entendues dans l'extrait** (A. blanci : par les intervalles ; "
+            "aucune cochée : rien)"
+        )
+        ticked = _classes(form_key, OTHER_ANSWERS)
+        quality, species, comment = _details()
+        sent = st.form_submit_button(
+            "Envoyer l'extrait ▶", type="primary", use_container_width=True
+        )
+    if not sent:
+        return False
+    if not annotator.strip():
+        st.error("Indiquer l'annotateur dans le panneau de gauche.")
+        return False
+    try:
+        save_span(
+            con,
+            candidate,
+            t0,
+            t1,
+            [tuple(i) for i in intervals],
+            ticked,
+            annotator.strip(),
+            quality=quality,
+            comment=comment,
+            channel=channel,
+            species=species,
+        )
+    except ValueError as exc:
+        st.error(str(exc))
+        return False
+    return True
 
 
 def _answer_form(con, target, form_key, annotator, channel) -> bool:
-    """Classes (plusieurs possibles), qualité, espèce, commentaire ; vrai si un label a été
-    enregistré."""
+    """Annotation par fenêtres (suspendue) : classes (plusieurs possibles), qualité, espèce,
+    commentaire ; vrai si un label a été enregistré."""
     with st.form(key=form_key, clear_on_submit=True):
         st.markdown("**Classes entendues** (plusieurs possibles ; aucune cochée : rien)")
-        columns = st.columns(5)
-        ticked = [
-            label
-            for i, (label, name) in enumerate(ANSWERS)
-            if columns[i % 5].checkbox(name, key=f"{form_key}::{label}")
-        ]
-        quality = st.radio("Qualité (si A. blanci)", ["—", *QUALITIES], horizontal=True)
-        species = st.text_input("Espèce entendue (faux ami, congénère…)")
-        comment = st.text_input("Commentaire (conditions, chant lointain, pluie…)")
+        ticked = _classes(form_key, ANSWERS)
+        quality, species, comment = _details()
         sent = st.form_submit_button("Envoyer ▶", type="primary", use_container_width=True)
     if not sent:
         return False
@@ -426,13 +471,24 @@ def _answer_form(con, target, form_key, annotator, channel) -> bool:
         target,
         label,
         annotator.strip(),
-        quality=None if quality == "—" else quality,
-        comment=comment.strip() or None,
+        quality=quality,
+        comment=comment,
         channel=channel,
-        species=species.strip() or None,
+        species=species,
         extra_labels=extra,
     )
     return True
+
+
+def _interval_caption(intervals) -> str:
+    if not intervals:
+        return (
+            "Aucun intervalle tracé : tout l'extrait sera négatif. Glisser sur le "
+            "spectrogramme là où A. blanci chante."
+        )
+    return f"{len(intervals)} intervalle(s) : " + " · ".join(
+        f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)})" for a, b, c in sorted(intervals)
+    )
 
 
 def main() -> None:
@@ -467,19 +523,12 @@ def main() -> None:
             index=int(cfg["audio"]["channel"] == 1),
         )
         extent = st.radio(
-            "Étendue affichée", list(EXTENTS), format_func=EXTENTS.get, horizontal=True
+            "Étendue affichée", list(EXTENTS), format_func=EXTENTS.get, index=1, horizontal=True
         )
         context_s = (
-            st.slider("Contexte autour de la fenêtre (s)", 0.0, 30.0, 3.0, 0.5)
+            st.slider("Contexte autour de la fenêtre (s)", 0.0, 30.0, 13.5, 0.5)
             if extent == CONTEXT
             else None
-        )
-        split = st.checkbox(
-            "Découper en fenêtres",
-            help="Fenêtres calées sur le candidat, annotées une à une sur la même page.",
-        )
-        split_s = st.number_input(
-            "Longueur des fenêtres (s)", 0.5, 60.0, 3.0, 0.5, disabled=not split
         )
         gain_db = st.slider("Volume d'écoute (dB, n'agit que sur l'écoute)", 0, 30, 0, 3)
         band_khz = st.slider(
@@ -495,6 +544,16 @@ def main() -> None:
             "N'écouter que la bande",
             value=False,
             help="Passe-bande entre les pointillés du spectrogramme ; n'agit que sur l'écoute.",
+        )
+        st.header("Méthode")
+        window_mode = st.checkbox(
+            "Annoter par fenêtres (suspendu)",
+            value=False,
+            help="Ancienne méthode : un label par fenêtre de longueur fixe, sur la même page. "
+            "Par défaut, on trace les intervalles où A. blanci chante (§5.6).",
+        )
+        split_s = st.number_input(
+            "Longueur des fenêtres (s)", 0.5, 60.0, 3.0, 0.5, disabled=not window_mode
         )
 
     if mode == MAP:
@@ -555,10 +614,10 @@ def main() -> None:
         st.error(f"Lecture impossible : {exc}")
         media = None
 
-    # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait.
+    # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait (mode fenêtres).
     cand_offset, cand_dur = float(candidate["offset_s"]), float(candidate["dur_s"])
     windows = [(cand_offset, cand_dur)]
-    if split and media is not None:
+    if window_mode and media is not None:
         offsets = split_windows(media["t0"], media["t1"], cand_offset, float(split_s))
         windows = [(o, float(split_s)) for o in offsets] or windows
     wkey = f"win::{chosen}::{pos}::{len(windows)}"
@@ -568,21 +627,27 @@ def main() -> None:
         )
     w = min(int(st.session_state[wkey]), len(windows) - 1)
     ids = [window_id_for(candidate["recording_id"], o, d) for o, d in windows]
-    window_labels = latest_labels(con, ids, who)
+    window_labels = latest_labels(con, ids, who) if window_mode else {}
 
+    intervals: list = []
     if media is not None:
+        extract = f"{candidate['path']}:{media['t0']:.2f}:{media['t1']:.2f}"
+        ikey = f"iv::{extract}"
+        if ikey not in st.session_state:
+            saved = span_intervals(con, candidate["recording_id"], media["t0"], media["t1"], who)
+            st.session_state[ikey] = [list(i) for i in saved or []]
         shown = [
             {
                 "t0": o,
                 "t1": o + d,
                 "label": NAMES.get(window_labels.get(i), window_labels.get(i)),
-                "current": j == w,
+                "current": window_mode and j == w,
                 "candidate": abs(o - cand_offset) < 0.005 and abs(d - cand_dur) < 0.005,
             }
             for j, ((o, d), i) in enumerate(zip(windows, ids, strict=True))
         ]
-        _iframe(
-            viewer_html(
+        value = viewer(
+            viewer_args(
                 media["png"],
                 media["t0"],
                 media["t1"],
@@ -590,56 +655,60 @@ def main() -> None:
                 media["audios"],
                 shown,
                 band_hz,
-                key=f"{candidate['path']}:{media['t0']:.2f}:{media['t1']:.2f}",
-            ),
-            410,
-        )
-
-    offset, dur = windows[w]
-    if len(windows) > 1:
-        cols = st.columns([1, 6, 1])
-        cols[0].button("◀ Fenêtre", disabled=w == 0, on_click=_goto, args=(wkey, w - 1))
-        widget = f"{wkey}::select"
-        st.session_state[widget] = w
-        cols[1].selectbox(
-            "Fenêtre",
-            range(len(windows)),
-            format_func=lambda j: (
-                f"Fenêtre {j + 1} / {len(windows)} : "
-                f"{windows[j][0]:.1f}–{windows[j][0] + windows[j][1]:.1f} s"
-                + (
-                    f" · ✓ {NAMES.get(window_labels[ids[j]], window_labels[ids[j]])}"
-                    if ids[j] in window_labels
-                    else ""
-                )
-            ),
-            key=widget,
-            on_change=_follow,
-            args=(wkey, widget),
-            label_visibility="collapsed",
-        )
-        cols[2].button(
-            "Fenêtre ▶", disabled=w >= len(windows) - 1, on_click=_goto, args=(wkey, w + 1)
-        )
-    else:
-        st.caption(
-            f"Fenêtre annotée : {offset:.1f}–{offset + dur:.1f} s"
-            + (
-                f" · ✓ {NAMES.get(window_labels[ids[w]], window_labels[ids[w]])}"
-                if ids[w] in window_labels
-                else ""
+                key=extract,
+                labels=list(INTERVAL_ANSWERS),
+                intervals=st.session_state[ikey],
+                interval_mode=not window_mode,
             )
         )
+        if value and value.get("key") == extract:
+            st.session_state[ikey] = value["intervals"]
+        intervals = st.session_state[ikey]
 
-    target = dict(candidate, offset_s=offset, dur_s=dur)
-    if (offset, dur) != (cand_offset, cand_dur):
-        target["score"] = None  # le score précédent est celui de la fenêtre du candidat
-    if _answer_form(con, target, f"form::{chosen}::{pos}::{w}", annotator, channel):
-        if w < len(windows) - 1:
-            st.session_state[wkey] = w + 1
-        else:
+    if not window_mode:
+        st.caption(_interval_caption(intervals))
+        form_key = f"span::{chosen}::{pos}"
+        if media is not None and _span_form(
+            con, candidate, media["t0"], media["t1"], intervals, form_key, annotator, channel
+        ):
             st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
-        st.rerun()
+            st.rerun()
+    else:
+        offset, dur = windows[w]
+        if len(windows) > 1:
+            cols = st.columns([1, 6, 1])
+            cols[0].button("◀ Fenêtre", disabled=w == 0, on_click=_goto, args=(wkey, w - 1))
+            widget = f"{wkey}::select"
+            st.session_state[widget] = w
+            cols[1].selectbox(
+                "Fenêtre",
+                range(len(windows)),
+                format_func=lambda j: (
+                    f"Fenêtre {j + 1} / {len(windows)} : "
+                    f"{windows[j][0]:.1f}–{windows[j][0] + windows[j][1]:.1f} s"
+                    + (
+                        f" · ✓ {NAMES.get(window_labels[ids[j]], window_labels[ids[j]])}"
+                        if ids[j] in window_labels
+                        else ""
+                    )
+                ),
+                key=widget,
+                on_change=_follow,
+                args=(wkey, widget),
+                label_visibility="collapsed",
+            )
+            cols[2].button(
+                "Fenêtre ▶", disabled=w >= len(windows) - 1, on_click=_goto, args=(wkey, w + 1)
+            )
+        target = dict(candidate, offset_s=offset, dur_s=dur)
+        if (offset, dur) != (cand_offset, cand_dur):
+            target["score"] = None  # le score précédent est celui de la fenêtre du candidat
+        if _answer_form(con, target, f"form::{chosen}::{pos}::{w}", annotator, channel):
+            if w < len(windows) - 1:
+                st.session_state[wkey] = w + 1
+            else:
+                st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
+            st.rerun()
 
     nav = st.columns(3)
     nav[0].button("◀ Candidat précédent", disabled=pos == 0, on_click=_goto, args=(key, pos - 1))

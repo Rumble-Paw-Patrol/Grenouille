@@ -626,6 +626,77 @@ def _in_chunks(con: sqlite3.Connection, sql: str, ids: list[str], size: int = 50
     return rows
 
 
+INTERVAL_LABELS = ("blanci", "blanci_chorus", "blanci_uncertain")
+
+
+def append_span(
+    con: sqlite3.Connection,
+    recording_id: str,
+    start_s: float,
+    end_s: float,
+    intervals: list[tuple[float, float, str]],
+    other_label: str,
+    source: str,
+    classes: list[str] | None = None,
+    quality: str | None = None,
+    species: str | None = None,
+    conditions: dict | None = None,
+    annotator: str | None = None,
+) -> int:
+    """Ajoute un extrait écouté [start_s, end_s] et ses intervalles d'A. blanci (début, fin,
+    label) ; renvoie span_id. `other_label` : label des fenêtres de l'extrait qui ne touchent
+    aucun intervalle. Ajout seul : une correction est un nouveau span (§13.7)."""
+    if not end_s > start_s:
+        raise ValueError(f"extrait vide : {start_s}–{end_s} s")
+    if other_label not in LABELS or other_label in POSITIVE_LABELS:
+        raise ValueError(f"label hors intervalles impossible : {other_label!r}")
+    for label in classes or ():
+        if label not in LABELS:
+            raise ValueError(f"classe inconnue : {label!r}")
+    if quality is not None and quality not in QUALITIES:
+        raise ValueError(f"qualité inconnue : {quality!r} (attendues : {', '.join(QUALITIES)})")
+    if source not in SOURCES:
+        raise ValueError(f"source inconnue : {source!r} (attendues : {', '.join(SOURCES)})")
+    cleaned = []
+    for i0, i1, label in intervals:
+        if label not in INTERVAL_LABELS:
+            raise ValueError(f"label d'intervalle inconnu : {label!r}")
+        i0, i1 = max(float(i0), start_s), min(float(i1), end_s)
+        if i1 <= i0:
+            raise ValueError(f"intervalle vide ou hors de l'extrait : {i0}–{i1} s")
+        cleaned.append((round(i0, 2), round(i1, 2), label))
+    if (
+        con.execute("SELECT 1 FROM recordings WHERE recording_id = ?", (recording_id,)).fetchone()
+        is None
+    ):
+        raise ValueError(f"enregistrement inconnu : {recording_id}")
+    cursor = con.execute(
+        "INSERT INTO spans (recording_id, start_s, end_s, other_label, classes, quality, "
+        "species, conditions, annotator, source, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            recording_id,
+            round(float(start_s), 2),
+            round(float(end_s), 2),
+            other_label,
+            json.dumps(list(classes), ensure_ascii=False) if classes else None,
+            quality,
+            species,
+            json.dumps(conditions, ensure_ascii=False) if conditions else None,
+            annotator,
+            source,
+            utc_now(),
+        ),
+    )
+    span_id = int(cursor.lastrowid)
+    con.executemany(
+        "INSERT INTO intervals (span_id, start_s, end_s, label) VALUES (?, ?, ?, ?)",
+        [(span_id, *interval) for interval in cleaned],
+    )
+    con.commit()
+    return span_id
+
+
 def append_labels_bulk(
     con: sqlite3.Connection,
     window_ids: list[str],

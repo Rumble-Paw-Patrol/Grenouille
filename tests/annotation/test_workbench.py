@@ -436,19 +436,46 @@ def test_spectrogram_png_and_resampled_listening():
     assert sr == 24_000 and len(x) == 48_000
 
 
-def test_viewer_page_carries_the_extract():
-    from blanci.annotation.viewer import viewer_html
+def test_viewer_serves_its_files_next_to_the_page(tmp_path, monkeypatch):
+    """Spectrogramme et écoute rangés à côté de la page du composant, nommés par leur
+    contenu : les arguments ne transportent que leurs chemins."""
+    from blanci.annotation import viewer
 
-    html = viewer_html(
+    monkeypatch.setattr(viewer, "VIEWER_DIR", tmp_path / "viewer")
+    args = viewer.viewer_args(
         b"png",
         1.0,
         7.0,
         8000.0,
         [("micro 1", b"wav", 1.0)],
-        [{"t0": 3.0, "t1": 6.0, "label": "</script>", "current": True, "candidate": True}],
+        [{"t0": 3.0, "t1": 6.0, "label": None, "current": True, "candidate": True}],
         (4400.0, 5500.0),
         key="a.wav:1.00:7.00",
+        labels=[("blanci", "A. blanci")],
+        intervals=[(2.0, 2.5, "blanci")],
+        interval_mode=True,
     )
-    assert "__DATA__" not in html
-    assert html.count("</script>") == 1  # un label ne ferme pas le script
-    assert "data:audio/wav;base64," in html and '"band": [4400.0, 5500.0]' in html
+    assert (tmp_path / "viewer" / "index.html").read_text().startswith("<!doctype html>")
+    assert (tmp_path / "viewer" / args["image"]).read_bytes() == b"png"
+    assert (tmp_path / "viewer" / args["audios"][0]["src"]).read_bytes() == b"wav"
+    assert args["extract"] == "a.wav:1.00:7.00"
+    assert args["intervals"] == [[2.0, 2.5, "blanci"]]
+
+
+def test_save_span_derives_the_other_label(corpus):
+    """Les fenêtres hors intervalles prennent la première autre classe cochée ; A. blanci
+    sans intervalle est refusé."""
+    from blanci.annotation.workbench import save_span, span_intervals
+
+    con, _, _ = corpus
+    rid = con.execute("SELECT recording_id FROM recordings LIMIT 1").fetchone()[0]
+    candidate = {"recording_id": rid, "offset_s": 3.0, "dur_s": 3.0, "source": "random"}
+    with pytest.raises(ValueError, match="sans intervalle"):
+        save_span(con, candidate, 0.0, 12.0, [], ["blanci"], "léonard")
+    assert span_intervals(con, rid, 0.0, 12.0) is None
+    save_span(con, candidate, 0.0, 12.0, [(4.0, 5.0, "blanci")], ["rain", "bird"], "léonard")
+    other, classes = con.execute("SELECT other_label, classes FROM spans").fetchone()
+    assert other == "bird" and json.loads(classes) == ["rain", "bird", "blanci"]
+    assert span_intervals(con, rid, 0.0, 12.0) == [(4.0, 5.0, "blanci")]
+    queue = pd.DataFrame({"recording_id": [rid] * 2, "offset_s": [3.0, 6.0], "dur_s": 3.0})
+    assert progress(con, queue).tolist() == ["blanci", "bird"]

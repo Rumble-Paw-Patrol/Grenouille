@@ -74,16 +74,78 @@ def _labels(cfg):
     ).fetchall()
 
 
+def _window_mode(at):
+    next(c for c in at.sidebar.checkbox if c.label.startswith("Annoter par fenêtres")).check()
+    at.run()
+
+
+def _draw(at, intervals):
+    """Intervalles « tracés » : la valeur que renverrait le spectrogramme."""
+    key = next(k for k in at.session_state if k.startswith("iv::"))
+    at.session_state[key] = intervals
+
+
+def _spans(cfg):
+    con = connect(cfg["paths"]["db"])
+    spans = con.execute(
+        "SELECT span_id, start_s, end_s, other_label, classes, annotator, source, species "
+        "FROM spans ORDER BY span_id"
+    ).fetchall()
+    intervals = con.execute(
+        "SELECT span_id, start_s, end_s, label FROM intervals ORDER BY interval_id"
+    ).fetchall()
+    return [tuple(r) for r in spans], [tuple(r) for r in intervals]
+
+
 def _caption(at):
     return next(c.value for c in at.caption if c.value.startswith("Candidat "))
 
 
-def test_app_shows_a_candidate_and_saves_an_answer(app_config):
-    """Classe, espèce, commentaire, puis « Envoyer » : un label, et la fenêtre suivante."""
+def test_intervals_are_drawn_on_the_whole_recording_and_saved(app_config):
+    """Méthode par défaut : l'enregistrement entier, des intervalles tracés, les autres
+    classes cochées, puis « Envoyer l'extrait » : un span et ses intervalles."""
     at = AppTest.from_file(APP, default_timeout=60).run()
     assert not at.exception
     assert "CDR" in at.subheader[0].value
     at.sidebar.text_input[0].input("léonard").run()
+    assert any("Aucun intervalle" in c.value for c in at.caption)
+    _draw(at, [[4.0, 5.5, "blanci"], [8.0, 8.4, "blanci_uncertain"]])
+    _tick(at, "oiseau")
+    next(t for t in at.text_input if t.label.startswith("Espèce")).input("Fourmilier tacheté")
+    _button(at, "Envoyer l'extrait ▶").click().run()
+    assert not at.exception
+    spans, intervals = _spans(app_config)
+    [(span_id, start, end, other, classes, annotator, source, species)] = spans
+    assert (start, end, other, annotator, source, species) == (
+        0.0,
+        12.0,
+        "bird",
+        "léonard",
+        "random",
+        "Fourmilier tacheté",
+    )
+    assert json.loads(classes) == ["bird", "blanci", "blanci_uncertain"]
+    assert intervals == [(span_id, 4.0, 5.5, "blanci"), (span_id, 8.0, 8.4, "blanci_uncertain")]
+    assert any("File terminée" in s.value for s in at.success)
+    assert "déjà écouté : A. blanci" in _caption(at)  # le candidat (3–6 s) touche 4–5,5 s
+
+
+def test_blanci_ticked_without_interval_is_refused(app_config):
+    """Une case A. blanci n'existe pas dans le formulaire : ce sont les intervalles qui le
+    disent ; sans intervalle, l'extrait est enregistré négatif."""
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.sidebar.text_input[0].input("léonard").run()
+    assert not any(c.label == "A. blanci" for c in at.main.checkbox)
+    _button(at, "Envoyer l'extrait ▶").click().run()
+    spans, intervals = _spans(app_config)
+    assert [s[3] for s in spans] == ["background"] and intervals == []
+
+
+def test_window_mode_saves_a_label(app_config):
+    """Méthode par fenêtres (suspendue) : classe, espèce, commentaire, puis « Envoyer »."""
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.sidebar.text_input[0].input("léonard").run()
+    _window_mode(at)
     _tick(at, "oiseau")
     next(t for t in at.text_input if t.label.startswith("Espèce")).input("Fourmilier tacheté")
     next(t for t in at.text_input if t.label.startswith("Commentaire")).input("chant lointain")
@@ -91,16 +153,14 @@ def test_app_shows_a_candidate_and_saves_an_answer(app_config):
     assert not at.exception
     con = connect(app_config["paths"]["db"])
     rows = con.execute("SELECT label, annotator, source, species FROM labels").fetchall()
-    assert [tuple(r) for r in rows] == [("bird", "léonard", "random", "Fourmilier tacheté")]
-    assert any("File terminée" in s.value for s in at.success)
+    assert ("bird", "léonard", "random", "Fourmilier tacheté") in [tuple(r) for r in rows]
 
 
 def test_sending_without_an_annotator_is_refused(app_config):
     at = AppTest.from_file(APP, default_timeout=60).run()
-    _button(at, "Envoyer ▶").click().run()
+    _button(at, "Envoyer l'extrait ▶").click().run()
     assert any("annotateur" in e.value for e in at.error)
-    con = connect(app_config["paths"]["db"])
-    assert con.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == 0
+    assert _spans(app_config) == ([], [])
 
 
 def test_a_queue_is_drawn_in_the_app_and_opened(app_config):
@@ -131,7 +191,10 @@ def test_numbering_follows_the_whole_queue_and_going_back_works(app_config):
     déjà écouté, par ◀ ou par la liste des candidats, et on le corrige."""
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.text_input[0].input("léonard").run()
+    _window_mode(at)
     assert _caption(at).startswith("Candidat 1 / 3")
+    next(r for r in at.sidebar.radio if r.label == "Étendue affichée").set_value("context").run()
+    next(s for s in at.sidebar.slider if s.label.startswith("Contexte")).set_value(0.0).run()
     _button(at, "Envoyer ▶").click().run()
     assert not at.exception
     assert _caption(at).startswith("Candidat 2 / 3")
@@ -151,9 +214,13 @@ def test_numbering_follows_the_whole_queue_and_going_back_works(app_config):
 
 
 def test_several_classes_are_saved_together(app_config):
-    """A. blanci et pluie cochés : label A. blanci, la pluie dans `extra_labels`."""
+    """Méthode par fenêtres, A. blanci et pluie cochés : label A. blanci, la pluie dans
+    `extra_labels`."""
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.text_input[0].input("léonard").run()
+    _window_mode(at)
+    next(r for r in at.sidebar.radio if r.label == "Étendue affichée").set_value("context").run()
+    next(s for s in at.sidebar.slider if s.label.startswith("Contexte")).set_value(0.0).run()
     _tick(at, "pluie")
     _tick(at, "A. blanci")
     _button(at, "Envoyer ▶").click().run()
@@ -164,13 +231,12 @@ def test_several_classes_are_saved_together(app_config):
 
 
 def test_a_recording_is_split_into_windows_annotated_on_the_same_page(app_config):
-    """Enregistrement entier (12 s) découpé en fenêtres de 3 s, calées sur le candidat (3 s) :
-    4 fenêtres, la première annotée est celle du candidat, puis la suivante, sans changer
-    de candidat."""
+    """Méthode par fenêtres sur l'enregistrement entier (12 s), fenêtres de 3 s calées sur le
+    candidat (3 s) : 4 fenêtres, la première annotée est celle du candidat, puis la suivante,
+    sans changer de candidat."""
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.text_input[0].input("léonard").run()
-    next(r for r in at.sidebar.radio if r.label == "Étendue affichée").set_value("whole").run()
-    next(c for c in at.sidebar.checkbox if c.label == "Découper en fenêtres").check().run()
+    _window_mode(at)
     assert not at.exception
     window = next(s for s in at.selectbox if s.label == "Fenêtre")
     assert len(window.options) == 4

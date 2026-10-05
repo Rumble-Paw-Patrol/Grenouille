@@ -97,6 +97,45 @@ MIGRATIONS = [
         computed_at  TEXT NOT NULL
     );
     """,
+    # 3 — annotation par intervalles (§5.6, DECISIONS n° 182) : un extrait écouté (span) et
+    # les intervalles où A. blanci chante. Les labels des fenêtres de n'importe quelle grille
+    # s'en déduisent (`dataset.interval_labels`). Ajout seul, comme `labels` : réécouter un
+    # extrait ajoute un span, le plus récent qui couvre un intervalle l'emporte.
+    """
+    CREATE TABLE spans (
+        span_id      INTEGER PRIMARY KEY,
+        recording_id TEXT NOT NULL REFERENCES recordings(recording_id),
+        start_s      REAL NOT NULL,
+        end_s        REAL NOT NULL,
+        other_label  TEXT NOT NULL,          -- label des fenêtres sans A. blanci (« rien »…)
+        classes      TEXT,                   -- JSON : toutes les classes entendues
+        quality      TEXT,
+        species      TEXT,
+        conditions   TEXT,                   -- JSON : commentaire, canal écouté, raison…
+        annotator    TEXT,
+        source       TEXT NOT NULL,
+        created_at   TEXT NOT NULL
+    );
+    CREATE INDEX spans_recording ON spans(recording_id);
+
+    CREATE TABLE intervals (
+        interval_id INTEGER PRIMARY KEY,
+        span_id     INTEGER NOT NULL REFERENCES spans(span_id),
+        start_s     REAL NOT NULL,
+        end_s       REAL NOT NULL,
+        label       TEXT NOT NULL            -- blanci, blanci_chorus, blanci_uncertain
+    );
+    CREATE INDEX intervals_span ON intervals(span_id);
+
+    CREATE TRIGGER spans_no_update BEFORE UPDATE ON spans
+    BEGIN SELECT RAISE(ABORT, 'spans are append-only'); END;
+    CREATE TRIGGER spans_no_delete BEFORE DELETE ON spans
+    BEGIN SELECT RAISE(ABORT, 'spans are append-only'); END;
+    CREATE TRIGGER intervals_no_update BEFORE UPDATE ON intervals
+    BEGIN SELECT RAISE(ABORT, 'intervals are append-only'); END;
+    CREATE TRIGGER intervals_no_delete BEFORE DELETE ON intervals
+    BEGIN SELECT RAISE(ABORT, 'intervals are append-only'); END;
+    """,
 ]
 
 
