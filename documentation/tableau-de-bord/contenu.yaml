@@ -1,0 +1,249 @@
+# Contenu éditorial du tableau de bord : ce que les fichiers du dépôt ne disent pas d'eux-mêmes.
+# Le reste (benchmarks, rapports, tableaux, bibliographie, inventaire, tests, commits) est lu
+# par construire.py. Après modification : uv run python documentation/tableau-de-bord/construire.py
+#
+# État d'un élément : fait | en_cours | a_venir | bloque
+
+mis_a_jour: 2026-10-05
+
+projet:
+  titre: Détection acoustique d'Anomaloglossus blanci
+  stage: Stage ONF Guyane, 15/09/2026 → 14/03/2027
+  auteur: Léonard Laplace-Palette
+  objectif: >-
+    Un détecteur d'A. blanci qui fonctionne sur les points d'écoute des futures campagnes
+    (couples micro + site jamais vus), qu'un naturaliste utilise sans écrire de code et que
+    l'ONF réentraîne seul après le stage.
+  depot: https://github.com/Rumble-Paw-Patrol/Grenouille
+  criteres:
+    - [Filtre, Encodeur libre d'accès, "poids publics et licence qui permet l'usage par l'ONF"]
+    - [1, Performance, "AP et rappel par enregistrement sur des points tenus à l'écart"]
+    - [2, Facilité d'utilisation, "installation et usage sans code"]
+    - [3, Durée d'encodage, "heures pour une campagne d'une semaine sur l'i5 de l'ONF"]
+
+# Chaîne de traitement. « etape » = nom affiché ; « module » = dossier ou fichier de blanci/ ;
+# « tests » = dossier de tests/ dont on compte les tests ; « suite » = étapes suivantes.
+chaine:
+  - id: inventaire
+    etape: Inventaire
+    groupe: donnees
+    module: blanci/inputs/ingest.py
+    tests: tests/inputs
+    commandes: [ingest, flag, status]
+    etat: fait
+    resume: >-
+      Chaque enregistrement est rangé en base avec son jeu, son site, son micro et son heure.
+      Les drapeaux écartent les fichiers de durée anormale, hors relevé ou à l'horloge douteuse.
+    chiffre: 96 292 enregistrements, 3 204 h
+    suite: [qc]
+  - id: qc
+    etape: Contrôle audio
+    groupe: donnees
+    module: blanci/inputs/qc.py
+    tests: tests/inputs
+    commandes: [qc]
+    etat: fait
+    resume: >-
+      Une seule lecture de tout le corpus avant l'encodage, pour sortir les fichiers cassés ou
+      sans rapport avec le projet (silencieux, micro resté dans le sac).
+    chiffre: 94 588 enregistrements encodables
+    suite: [signal, encodage]
+  - id: signal
+    etape: Traitement du signal
+    groupe: signal
+    module: blanci/heads/signal_processing.py
+    tests: tests/heads
+    commandes: [onsets]
+    etat: en_cours
+    resume: >-
+      Détecte les débuts de notes dans la bande 4,4–5,5 kHz et mesure le rythme (une note de
+      0,09 s toutes les 1,2 à 1,9 s), sans apprentissage. Les chants faibles ne sont pas
+      encore retenus : seuil à hystérésis à ajouter.
+    chiffre: bande 4,4–5,5 kHz
+    suite: [fusion]
+  - id: encodage
+    etape: Encodage
+    groupe: modele
+    module: blanci/embedding
+    tests: tests/embedding
+    commandes: [embed, tokens]
+    etat: en_cours
+    resume: >-
+      L'encodeur gelé transforme chaque fenêtre de 5 s en un vecteur (embedding), et en
+      jetons pour les têtes qui les lisent. perch_v2 tourne sur le processeur de l'i5, graphe
+      réduit aux sorties utiles.
+    chiffre: 2,05 s par enregistrement de 2 min
+    suite: [tetes, recherche]
+  - id: recherche
+    etape: Recherche par similarité
+    groupe: modele
+    module: blanci/embedding/index.py
+    tests: tests/embedding
+    commandes: [search]
+    etat: fait
+    resume: >-
+      Retrouve les fenêtres les plus proches d'un exemple : sert à récolter des positifs pour
+      l'entraînement, jamais pour l'évaluation.
+    suite: [verification]
+  - id: tetes
+    etape: Têtes de classification
+    groupe: modele
+    module: blanci/heads
+    tests: tests/heads
+    commandes: [train, heads, heads-curve]
+    etat: fait
+    resume: >-
+      Une petite couche apprise sur les embeddings donne un score par fenêtre : logistique,
+      prototypes, sonde attentive ou à prototypes sur les jetons, avec les régularisations
+      contre « apprendre le site ».
+    chiffre: 14 têtes et régularisations comparées
+    suite: [fusion]
+  - id: fusion
+    etape: Fusion
+    groupe: modele
+    module: blanci/combination
+    tests: tests/interfaces
+    commandes: [fusion, fusion-bench, ensemble]
+    etat: fait
+    resume: >-
+      Combine le score de la tête, le rythme mesuré et la persistance dans le temps en un seul
+      score.
+    suite: [score]
+  - id: score
+    etape: Score et agrégation
+    groupe: sortie
+    module: blanci/results
+    tests: tests/results
+    commandes: [score, activity]
+    etat: fait
+    resume: >-
+      Passe de la fenêtre à l'enregistrement puis au point d'écoute, avec un seuil par site ;
+      produit les courbes d'activité.
+    suite: [evaluation, verification]
+  - id: evaluation
+    etape: Évaluation
+    groupe: sortie
+    module: blanci/evaluation
+    tests: tests/evaluation
+    commandes: [evaluate, freeze, benchmark]
+    etat: a_venir
+    resume: >-
+      AP et rappel par enregistrement sur des points tenus à l'écart et sur le jeu gelé. Sur
+      les données ONF : seulement après le go des experts sur les annotations.
+    chiffre: rappel ≥ 0,85 à précision ≥ 0,1 visé
+  - id: verification
+    etape: File de vérification
+    groupe: annotation
+    module: blanci/annotation/selection.py
+    tests: tests/annotation
+    commandes: [queue, select, candidates]
+    etat: fait
+    resume: >-
+      Choisit quoi faire écouter : 60 % de candidats sûrs, 20 % d'incertains, 20 % au hasard ;
+      ou des extraits tirés selon le plan d'annotation.
+    suite: [annotation]
+  - id: annotation
+    etape: Poste d'annotation
+    groupe: annotation
+    module: blanci/annotation/app.py
+    tests: tests/annotation
+    commandes: [annotate, clips-export, clips-import, label]
+    etat: en_cours
+    resume: >-
+      Écoute dans le navigateur avec spectrogramme ; passerelle vers Raven ou Audacity. Mode
+      « extrait + intervalles » en cours d'écriture.
+    suite: [reentrainement]
+  - id: reentrainement
+    etape: Réentraînement
+    groupe: annotation
+    module: blanci/service.py
+    tests: tests/interfaces
+    commandes: [retrain]
+    etat: fait
+    resume: >-
+      Une nouvelle tête est apprise sur tous les labels, jugée sur le jeu gelé, et adoptée
+      seulement si elle n'est pas moins bonne.
+    suite: [tetes]
+  - id: livrable
+    etape: Application Windows
+    groupe: sortie
+    module: blanci/embedding/encoders/export.py
+    tests: tests/embedding
+    commandes: []
+    etat: a_venir
+    resume: >-
+      Encodeur exporté en ONNX (int8), écrans pour analyser une campagne sans code,
+      installateur .exe, guide de réentraînement pour l'ONF.
+    chiffre: 1 h d'audio en moins de 10 min visé
+
+# Planning du stage (semaines S1 = 14–18/09/2026).
+planning:
+  - [P0 Cadrage, 2026-09-14, 2026-10-02, fait, "Lecture, inventaire, chaîne CLI, benchmarks AnuraSet 01–07"]
+  - [P0 bis Clôture et plan, 2026-09-29, 2026-10-09, en_cours, "Vague 2 AnuraSet, plan de tirage, essai d'empaquetage .exe"]
+  - [P1 Annotation v1, 2026-10-05, 2026-10-30, a_venir, "≈ 450 extraits d'entraînement, ≈ 250 enregistrements d'évaluation"]
+  - [Go des experts, 2026-10-30, 2026-11-06, a_venir, "Vérification à l'aveugle par Élodie et Benoît"]
+  - [P2 Benchmark ONF, 2026-11-02, 2026-11-20, a_venir, "Choix de l'encodeur le 20/11"]
+  - [P3 Outil v1, 2026-10-12, 2026-12-31, a_venir, "ONNX, écrans, installateur, test sur une machine ONF"]
+  - [P4 Transfert, 2027-01-04, 2027-02-05, a_venir, "Tests d'usage, documentation, gel fin S21"]
+  - [P5 Rapport, 2027-02-08, 2027-03-12, a_venir, "Rédaction et soutenance"]
+
+jalons:
+  - [2026-10-09, Clôture AnuraSet]
+  - [2026-11-06, Go des experts]
+  - [2026-11-20, Choix de l'encodeur]
+  - [2027-03-12, Soutenance]
+
+# Travail en cours : ce qui est sur la table cette semaine.
+en_cours:
+  - titre: Partition des points d'écoute et plan de tirage
+    etat: en_cours
+    detail: >-
+      Répartir les points d'écoute entre entraînement et test avant toute écoute (aucun point
+      ne sert aux deux), puis tirer les extraits par point, heure et période.
+    suite: Plan à valider par Sylvain et Élodie.
+  - titre: Mode « extrait + intervalles » du poste d'annotation
+    etat: en_cours
+    detail: >-
+      Annoter un extrait de 30 s en marquant les intervalles où A. blanci chante, plutôt que
+      fenêtre par fenêtre.
+    suite: Essai chronométré sur 50 extraits.
+  - titre: Encodage du corpus avec perch_v2
+    etat: en_cours
+    detail: >-
+      De 8,0 à 2,05 s par enregistrement de 2 min sur l'i5 (graphe réduit, lecture en avance,
+      rééchantillonnage par enregistrement). Corpus entier : environ 54 h au lieu de 210 h.
+    suite: Vérifier le câble du SSD externe, lu à 40 Mo/s (USB 2).
+  - titre: Essai d'empaquetage .exe
+    etat: a_venir
+    detail: >-
+      Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une
+      machine Windows propre.
+    suite: Repli prévu, Gradio à la place de Streamlit.
+  - titre: Vague 2 AnuraSet
+    etat: en_cours
+    detail: >-
+      audioprotopnet, avesecho_passt et biolingual restent à ajouter au benchmark des
+      encodeurs ; clôture le 09/10.
+    suite: Puis plus aucun benchmark AnuraSet.
+
+# Débit de l'encodage perch_v2 sur l'i5, secondes par enregistrement de 2 min.
+debit:
+  - [Origine, 8.0]
+  - [Lot de 1, 7.3]
+  - [Lecture en avance, 6.2]
+  - [Calculs du signal allégés, 5.7]
+  - [Rééchantillonnage par enregistrement, 4.9]
+  - [Iris Xe (OpenVINO), 3.25]
+  - ["Graphe réduit, CPU", 2.05]
+
+# Plan d'annotation v1 (cibles) ; « fait » se met à jour à la main ou depuis la base locale.
+annotation:
+  - [Extraits d'entraînement (30 s), 0, 450]
+  - [Enregistrements d'évaluation (2 min), 0, 250]
+  - [Positifs à l'évaluation, 0, 60]
+
+prochaines_etapes:
+  - Partition des points d'écoute et plan de tirage
+  - Mode « extrait + intervalles »
+  - Première série d'annotations
+  - Essai d'empaquetage .exe

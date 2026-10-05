@@ -1,0 +1,1016 @@
+<title>Tableau de bord Grenouille</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,650&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Mise en page : barre latérale fixe (sections) + colonne de lecture ; une bande « spectrogramme »
+   en tête reprend le motif du chant d'A. blanci (note de 0,09 s toutes les 1,4 s, 4,4–5,5 kHz).
+   Charte : celle des présentations de suivi (verts forêt, accent or). */
+:root {
+  --bg: #F3F7F4;
+  --surface: #FFFFFF;
+  --surface-2: #E8F0EB;
+  --ink: #1B2A24;
+  --muted: #5B6B63;
+  --line: #CFDDD5;
+  --deep: #0E2A24;
+  --deep-ink: #E4EEE8;
+  --deep-muted: #A7BFB2;
+  --accent: #2A7F72;
+  --accent-ink: #FFFFFF;
+  --gold: #B47A12;
+  --gold-soft: #F6E7C4;
+  --ok: #2E7D4F;
+  --ok-soft: #DDEFE3;
+  --warn: #A86A00;
+  --warn-soft: #F8EBCB;
+  --idle: #6B7A73;
+  --idle-soft: #E6ECE8;
+  --bad: #B23B2A;
+  --bad-soft: #F6DDD7;
+  --s1: #2E8B57; --s2: #3E7CB1; --s3: #D9822B; --s4: #8A6BBE; --s5: #C0492F;
+  --f-display: "Source Serif 4", Cambria, Georgia, serif;
+  --f-body: "Source Sans 3", Calibri, "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0C1714; --surface: #13211D; --surface-2: #1A2B26; --ink: #E3EDE7; --muted: #9DB0A6;
+    --line: #2A3E37; --deep: #08110F; --deep-ink: #E3EDE7; --deep-muted: #8FA79B;
+    --accent: #5BB8A8; --accent-ink: #08110F; --gold: #E9B44C; --gold-soft: #3A2E14;
+    --ok: #5FC08A; --ok-soft: #173426; --warn: #E9B44C; --warn-soft: #3A2E14;
+    --idle: #8FA39A; --idle-soft: #22322D; --bad: #E07A5F; --bad-soft: #3D211B;
+    --s1: #3A9E66; --s2: #4F8BD0; --s3: #C67A28; --s4: #9A7FD6; --s5: #D3604A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0C1714; --surface: #13211D; --surface-2: #1A2B26; --ink: #E3EDE7; --muted: #9DB0A6;
+  --line: #2A3E37; --deep: #08110F; --deep-ink: #E3EDE7; --deep-muted: #8FA79B;
+  --accent: #5BB8A8; --accent-ink: #08110F; --gold: #E9B44C; --gold-soft: #3A2E14;
+  --ok: #5FC08A; --ok-soft: #173426; --warn: #E9B44C; --warn-soft: #3A2E14;
+  --idle: #8FA39A; --idle-soft: #22322D; --bad: #E07A5F; --bad-soft: #3D211B;
+  --s1: #3A9E66; --s2: #4F8BD0; --s3: #C67A28; --s4: #9A7FD6; --s5: #D3604A;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3, h4 { font-family: var(--f-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--f-mono); font-size: .86em; }
+
+.shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100%; }
+.side { background: var(--deep); color: var(--deep-ink); position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; overflow-y: auto; padding: 22px 16px; display: flex; flex-direction: column; gap: 18px; }
+.brand { display: flex; flex-direction: column; gap: 4px; }
+.brand b { font-family: var(--f-display); font-size: 20px; font-weight: 650; letter-spacing: .01em; }
+.brand span { color: var(--deep-muted); font-size: 12.5px; }
+.brand i { font-style: italic; }
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav a { color: var(--deep-muted); text-decoration: none; padding: 7px 10px; border-radius: 6px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
+.nav a:hover { color: var(--deep-ink); background: rgba(255,255,255,.06); }
+.nav a.actif { color: var(--deep-ink); background: rgba(255,255,255,.1); box-shadow: inset 2px 0 0 var(--gold); }
+.nav small { color: var(--deep-muted); font-family: var(--f-mono); font-size: 11px; opacity: .8; }
+.side .pied { margin-top: auto; color: var(--deep-muted); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+.side .pied a { color: var(--deep-ink); }
+
+main { padding-inline: clamp(16px, 4vw, 48px); padding-block: 0 64px; min-width: 0; }
+.bande { margin-inline: calc(-1 * clamp(16px, 4vw, 48px)); background: var(--deep); color: var(--deep-ink); padding-inline: clamp(16px, 4vw, 48px); padding-block: 26px 18px; display: grid; gap: 14px; }
+.bande h1 { font-size: clamp(24px, 3.2vw, 34px); font-weight: 650; }
+.bande h1 i { font-weight: 650; }
+.bande p { margin: 0; color: var(--deep-muted); max-width: 72ch; }
+.spectro { width: 100%; height: 54px; display: block; }
+.spectro-legende { display: flex; flex-wrap: wrap; gap: 4px 16px; font-family: var(--f-mono); font-size: 11px; color: var(--deep-muted); }
+
+section.vue { padding-top: 40px; scroll-margin-top: 12px; display: grid; gap: 18px; }
+.vue-tete { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.vue-tete h2 { font-size: 26px; font-weight: 650; }
+.vue-tete p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.eyebrow { font-size: 11.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+
+.carte { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
+.carte h3 { font-size: 17px; font-weight: 650; }
+.carte .sous { color: var(--muted); font-size: 13.5px; margin: 0; }
+.carte-tete { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.grille { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.grille-2 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+
+.tuiles { display: grid; gap: 1px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.tuile { background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; }
+.tuile b { font-family: var(--f-display); font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.tuile span { color: var(--muted); font-size: 13px; }
+.tuile em { font-style: normal; font-size: 12px; color: var(--muted); font-family: var(--f-mono); }
+
+.puce { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.puce::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.e-fait { color: var(--ok); background: var(--ok-soft); }
+.e-en_cours { color: var(--warn); background: var(--warn-soft); }
+.e-a_venir { color: var(--idle); background: var(--idle-soft); }
+.e-bloque { color: var(--bad); background: var(--bad-soft); }
+.lic-oui { color: var(--ok); background: var(--ok-soft); }
+.lic-non { color: var(--bad); background: var(--bad-soft); }
+.lic-autre { color: var(--warn); background: var(--warn-soft); }
+
+.commenter { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.commenter:hover { color: var(--accent); border-color: var(--accent); }
+.commenter svg { width: 13px; height: 13px; }
+
+.controles { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: flex-end; }
+.champ { display: grid; gap: 4px; min-width: 0; }
+.champ > span { font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+select, input[type="search"] { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13.5px; border: 0; background: var(--surface); color: var(--muted); padding: 6px 11px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.choix { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 3px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.choix[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); background: var(--surface-2); }
+.choix i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.lien-btn { font: inherit; font-size: 12.5px; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; text-decoration: underline; }
+
+.defile { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; white-space: nowrap; }
+th button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; letter-spacing: inherit; text-transform: inherit; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--surface-2); }
+.barre-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.barre-cell i { display: block; height: 6px; border-radius: 3px; background: var(--accent); }
+
+svg text { fill: var(--muted); font-family: var(--f-body); font-size: 11.5px; }
+svg .fort { fill: var(--ink); font-weight: 600; }
+svg .grille-l { stroke: var(--line); stroke-width: 1; }
+.graphe { width: 100%; height: auto; display: block; overflow: visible; }
+.legende { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.legende span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.legende i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.legende .anneau { background: transparent !important; border: 2px solid var(--ink); width: 11px; height: 11px; }
+.legende .trait { width: 14px; height: 2px; border-radius: 0; background: var(--ink); }
+.legende .tirets { width: 14px; height: 0; border-top: 2px dashed var(--gold); border-radius: 0; background: none; }
+
+#bulle { position: fixed; z-index: 30; pointer-events: none; background: var(--deep); color: var(--deep-ink); font-size: 12.5px; padding: 7px 10px; border-radius: 6px; max-width: 290px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+#bulle b { font-weight: 700; }
+
+/* Chaîne de traitement */
+.chaine { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(84px, auto); gap: 30px 22px; padding: 6px 0; }
+.chaine svg.liens { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.chaine svg.liens path { fill: none; stroke: var(--muted); stroke-width: 1.4; opacity: .7; }
+.chaine svg.liens path.boucle { stroke: var(--gold); stroke-dasharray: 5 4; opacity: 1; }
+.noeud { position: relative; z-index: 1; font: inherit; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; cursor: pointer; display: grid; gap: 5px; align-content: start; color: var(--ink); }
+.noeud:hover { border-color: var(--accent); }
+.noeud[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.noeud b { font-size: 13.5px; line-height: 1.25; padding-right: 14px; }
+.noeud .etat { width: 8px; height: 8px; border-radius: 50%; position: absolute; top: 10px; right: 10px; }
+.noeud small { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+.couloir { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; align-self: end; }
+.suites-mobile { display: none; }
+@media (max-width: 900px) {
+  .chaine { grid-template-columns: 1fr; gap: 8px; }
+  .chaine .noeud { grid-column: auto !important; grid-row: auto !important; }
+  .chaine svg.liens, .couloir { display: none; }
+  .suites-mobile { display: block; }
+}
+.detail-etape dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 14px; }
+.detail-etape dt { color: var(--muted); }
+.detail-etape dd { margin: 0; }
+code { font-family: var(--f-mono); font-size: .86em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+
+/* Gantt */
+.gantt-ligne rect.phase { rx: 4; }
+
+/* Rapports */
+.rapports { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.liste-rapports { display: grid; gap: 6px; position: sticky; top: 12px; }
+.liste-rapports button { font: inherit; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 12px; cursor: pointer; color: var(--ink); display: grid; gap: 2px; }
+.liste-rapports button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.liste-rapports b { font-size: 13.5px; }
+.liste-rapports small { color: var(--muted); font-size: 12px; }
+@media (max-width: 900px) { .rapports { grid-template-columns: 1fr; } .liste-rapports { position: static; } }
+.md { font-size: 15px; min-width: 0; }
+.md > * { max-width: 78ch; }
+.md > .tbl, .md > figure, .md > pre { max-width: 100%; }
+.md h1 { font-size: 24px; margin: 6px 0 12px; }
+.md h2 { font-size: 20px; margin: 26px 0 8px; }
+.md h3 { font-size: 17px; margin: 20px 0 6px; }
+.md h4 { font-size: 15px; margin: 16px 0 4px; }
+.md p { margin: 8px 0; }
+.md a { overflow-wrap: anywhere; }
+.md ul, .md ol { padding-left: 22px; margin: 6px 0; }
+.md li { margin: 3px 0; }
+.md blockquote { margin: 10px 0; padding: 4px 14px; border-left: 3px solid var(--gold); color: var(--muted); }
+.md pre { background: var(--surface-2); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; }
+.md pre code { background: none; padding: 0; }
+.md figure { margin: 14px 0; display: grid; gap: 6px; }
+.md figure img { border: 1px solid var(--line); border-radius: 6px; background: #FFFFFF; cursor: zoom-in; }
+.md figcaption, .md em.legende-fig { color: var(--muted); font-size: 13.5px; }
+.md table { margin: 10px 0; }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+.md .tbl { overflow-x: auto; }
+.surligne { background: var(--gold-soft); color: inherit; border-radius: 2px; }
+
+.galerie { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.galerie figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: grid; grid-template-rows: 180px auto; }
+.galerie img { width: 100%; height: 180px; object-fit: cover; object-position: top left; background: #FFFFFF; cursor: zoom-in; border-bottom: 1px solid var(--line); }
+.galerie figcaption { padding: 10px 12px; display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.galerie figcaption b { color: var(--ink); font-size: 14px; text-transform: capitalize; }
+
+#visionneuse { position: fixed; inset: 0; z-index: 40; background: rgba(4,10,8,.86); display: grid; place-items: center; padding: 24px; }
+#visionneuse img { max-width: min(1400px, 100%); max-height: 86vh; background: #FFFFFF; border-radius: 6px; }
+#visionneuse button { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: 16px; font: inherit; color: #FFFFFF; background: rgba(255,255,255,.14); border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+#visionneuse p { color: #E4EEE8; margin: 10px 0 0; font-size: 13px; text-align: center; }
+
+.commits { display: grid; gap: 0; }
+.commits div { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.commits div:last-child { border-bottom: 0; }
+.commits time { color: var(--muted); font-family: var(--f-mono); font-size: 12px; }
+.progres { display: grid; gap: 10px; }
+.progres div { display: grid; gap: 4px; }
+.progres .rail { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.progres .rail i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.progres .lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; }
+.vide { color: var(--muted); font-size: 13.5px; padding: 14px 0; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { position: sticky; top: env(safe-area-inset-top, 0px); height: auto; z-index: 10; flex-direction: row; align-items: center; padding: 8px 16px; gap: 12px; overflow: hidden; }
+  .brand span, .side .pied { display: none; }
+  .brand b { font-size: 16px; }
+  .nav { flex-direction: row; overflow-x: auto; gap: 2px; scrollbar-width: none; }
+  .nav a { white-space: nowrap; padding: 6px 9px; font-size: 13px; }
+  .nav small { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><b>Grenouille</b><span>Détection d'<i>A. blanci</i> · ONF Guyane</span></div>
+    <nav class="nav" id="nav" aria-label="Sections"></nav>
+    <div class="pied" id="pied"></div>
+  </aside>
+  <main id="main">
+    <header class="bande">
+      <div class="eyebrow" style="color: var(--gold)">Tableau de bord du stage</div>
+      <h1>Détection acoustique d'<i>Anomaloglossus blanci</i></h1>
+      <p id="objectif"></p>
+      <svg class="spectro" id="spectro" viewBox="0 0 1000 54" preserveAspectRatio="none" role="img" aria-label="Motif du chant d'A. blanci : une note brève toutes les 1,4 s dans une bande saturée par d'autres espèces"></svg>
+      <div class="spectro-legende"><span>chant d'A. blanci : note de 0,09 s · toutes les 1,2–1,9 s · 4,4–5,5 kHz</span><span id="maj"></span></div>
+    </header>
+    <div id="vues"></div>
+  </main>
+</div>
+<div id="bulle" hidden></div>
+<div id="visionneuse" hidden><div><img alt=""><p></p></div><button type="button" id="fermer">Fermer</button></div>
+
+<script>
+const D = /*DONNEES*/null;
+const C = D.contenu;
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "html") e.innerHTML = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+};
+const NS = "http://www.w3.org/2000/svg";
+const sv = (tag, attrs = {}, ...kids) => {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat(Infinity)) if (k != null) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+};
+const fr = (x, n = 2) => x == null || Number.isNaN(x) ? "—" : x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n });
+const entier = (x) => Math.round(x).toLocaleString("fr-FR");
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ETATS = { fait: "fait", en_cours: "en cours", a_venir: "à venir", bloque: "bloqué" };
+const puceEtat = (e) => el("span", { class: `puce e-${e}` }, ETATS[e] || e);
+const dateFr = (s) => new Date(s + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
+/* ---------- bulle d'aide ---------- */
+const bulle = $("#bulle");
+function montrer(ev, html) {
+  bulle.innerHTML = html; bulle.hidden = false;
+  const w = bulle.offsetWidth, h = bulle.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - 14;
+  if (y + h > innerHeight - 8) y = ev.clientY - h - 14;
+  bulle.style.left = Math.max(8, x) + "px"; bulle.style.top = Math.max(8, y) + "px";
+}
+const cacher = () => { bulle.hidden = true; };
+const survol = (node, f) => { node.addEventListener("pointermove", (ev) => montrer(ev, f())); node.addEventListener("pointerleave", cacher); };
+
+/* ---------- commentaires ---------- */
+let commentaires = null;
+const ICONE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>';
+function boutonCommenter(cible, libelle = "Commenter") {
+  const b = el("button", { type: "button", class: "commenter", hidden: true, title: "Laisser un commentaire ici", html: ICONE + esc(libelle) });
+  b.addEventListener("click", async () => {
+    if (!commentaires) return;
+    const t = typeof cible === "function" ? cible() : cible;
+    try { await commentaires.openComposer({ element: t }); }
+    catch (e) { if (e && (e.code === "unavailable" || e.code === "forbidden" || e.code === "not_granted")) document.querySelectorAll(".commenter").forEach((x) => (x.hidden = true)); }
+  });
+  return b;
+}
+(async () => {
+  try { commentaires = await window.claude?.use?.("comments"); } catch { commentaires = null; }
+  if (commentaires) document.querySelectorAll(".commenter").forEach((b) => (b.hidden = false));
+})();
+
+/* ---------- visionneuse ---------- */
+const vis = $("#visionneuse");
+function ouvrirImage(src, legende) { $("img", vis).src = src; $("img", vis).alt = legende || ""; $("p", vis).textContent = legende || ""; vis.hidden = false; $("#fermer").focus(); }
+$("#fermer").addEventListener("click", () => (vis.hidden = true));
+vis.addEventListener("click", (e) => { if (e.target === vis) vis.hidden = true; });
+addEventListener("keydown", (e) => { if (e.key === "Escape") vis.hidden = true; });
+
+/* ---------- Markdown (sous-ensemble utilisé dans le dépôt) ---------- */
+function inline(s) {
+  s = esc(s);
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, a, u) => `<img src="${u}" alt="${a}">`);
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) => {
+    if (/^https?:/.test(u)) return `<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
+    return `<span title="${u}">${t}</span>`;
+  });
+  s = s.replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g, (m, u) => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a>`);
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, "$1<em>$2</em>");
+  return s;
+}
+function markdown(src) {
+  const L = src.replace(/\r/g, "").split("\n");
+  let out = [], i = 0;
+  const liste = (start) => {
+    const items = []; let j = start; const base = L[start].match(/^(\s*)/)[1].length;
+    const ordonnee = /^\s*\d+\.\s/.test(L[start]);
+    while (j < L.length) {
+      const m = L[j].match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
+      if (m && m[1].length === base) { items.push([m[3]]); j++; continue; }
+      if (L[j].trim() === "") { if (j + 1 < L.length && /^\s+\S/.test(L[j + 1]) && L[j + 1].match(/^(\s*)/)[1].length > base) { j++; continue; } break; }
+      const ind = L[j].match(/^(\s*)/)[1].length;
+      if (ind > base && items.length) { items[items.length - 1].push(L[j]); j++; continue; }
+      break;
+    }
+    const html = items.map((it) => {
+      const [premier, ...reste] = it;
+      const sous = reste.findIndex((r) => /^\s*([-*]|\d+\.)\s+/.test(r));
+      const texte = sous === -1 ? [premier, ...reste] : [premier, ...reste.slice(0, sous)];
+      const corps = sous === -1 ? "" : markdown(reste.slice(sous).map((r) => r.replace(new RegExp("^\\s{0," + (base + 2) + "}"), "")).join("\n"));
+      return `<li>${inline(texte.map((t) => t.trim()).join(" "))}${corps}</li>`;
+    }).join("");
+    out.push(ordonnee ? `<ol>${html}</ol>` : `<ul>${html}</ul>`);
+    return j;
+  };
+  while (i < L.length) {
+    const l = L[i];
+    if (l.trim() === "") { i++; continue; }
+    if (/^```/.test(l)) { let j = i + 1; const b = []; while (j < L.length && !/^```/.test(L[j])) b.push(L[j++]); out.push(`<pre><code>${esc(b.join("\n"))}</code></pre>`); i = j + 1; continue; }
+    const h = l.match(/^(#{1,4})\s+(.*)$/);
+    if (h) { out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+    if (/^---+\s*$/.test(l)) { out.push("<hr>"); i++; continue; }
+    if (/^\s*\|/.test(l) && i + 1 < L.length && /^\s*\|[\s:|-]+\|\s*$/.test(L[i + 1])) {
+      const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const tete = cells(l); let j = i + 2; const rows = [];
+      while (j < L.length && /^\s*\|/.test(L[j])) rows.push(cells(L[j++]));
+      const num = (c) => /^[−+-]?[\d\s ,.]+%?$/.test(c);
+      out.push(`<div class="tbl"><table><thead><tr>${tete.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td${num(c) ? ' class="n"' : ""}>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      i = j; continue;
+    }
+    if (/^>\s?/.test(l)) { const b = []; while (i < L.length && /^>\s?/.test(L[i])) b.push(L[i++].replace(/^>\s?/, "")); out.push(`<blockquote>${markdown(b.join("\n"))}</blockquote>`); continue; }
+    if (/^\s*([-*]|\d+\.)\s+/.test(l)) { i = liste(i); continue; }
+    const img = l.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+    if (img) {
+      let leg = "";
+      let j = i + 1; while (j < L.length && L[j].trim() === "") j++;
+      if (j < L.length && /^\*[^*]/.test(L[j])) { const b = []; while (j < L.length && L[j].trim() !== "") b.push(L[j++]); leg = b.join(" ").replace(/^\*|\*$/g, ""); i = j; } else i++;
+      out.push(`<figure><img src="${img[2]}" alt="${esc(img[1])}" loading="lazy" data-legende="${esc(leg || img[1])}">${leg ? `<figcaption>${inline(leg)}</figcaption>` : ""}</figure>`);
+      continue;
+    }
+    const b = []; while (i < L.length && L[i].trim() !== "" && !/^(#{1,4}\s|```|\s*\||>|\s*([-*]|\d+\.)\s+|!\[)/.test(L[i])) b.push(L[i++]);
+    if (!b.length) b.push(L[i++]);
+    out.push(`<p>${inline(b.join(" "))}</p>`);
+  }
+  return out.join("\n");
+}
+function brancherImages(racine) {
+  racine.querySelectorAll("img").forEach((im) => im.addEventListener("click", () => ouvrirImage(im.src, im.dataset.legende || im.alt)));
+}
+
+/* ---------- libellés ---------- */
+const TETES = {
+  "logistic": "logistique", "proto_probe": "sonde à prototypes (jetons)", "attentive": "sonde attentive (jetons)",
+  "logistic:max": "logistique sur le max des jetons", "simple_prototype": "prototype simple", "lda_shrunk": "LDA rétrécie",
+  "logistic+R37=glmm": "logistique + biais par site (GLMM)", "logistic+R37": "logistique + biais par site", "prototype": "prototype différentiel",
+  "knn:k=5": "5 plus proches voisins", "dann": "DANN (adversaire du site)", "loss:focal": "logistique, perte focale",
+  "logistic+R13": "logistique + poids par micro", "logistic+R18=64": "logistique + ACP à 64 dimensions", "logistic+R19": "logistique + centrage par point",
+  "logistic+R19+R37": "logistique + centrage par point + biais par site", "logistic+R20": "logistique + AdaBN par site",
+  "logistic+R21": "logistique + retrait des directions du site", "classifieur_origine": "classifieur d'origine (sans entraînement)",
+};
+const tete = (h) => TETES[h] || h;
+const ESPECES = ["DENMIN", "PITAZU", "PHYCUV", "LEPLAT", "BOAFAB"];
+const NOMS_ESP = { DENMIN: "Dendropsophus minutus", PITAZU: "Pithecopus azureus", PHYCUV: "Physalaemus cuvieri", LEPLAT: "Leptodactylus latrans", BOAFAB: "Boana faber" };
+const coulEsp = (s) => `var(--s${ESPECES.indexOf(s) + 1})`;
+const nomEnc = (e) => e.replace(/^esp_aves2_/, "aves2 ");
+
+/* ---------- squelette des sections ---------- */
+const SECTIONS = [
+  ["accueil", "Vue d'ensemble"], ["en-cours", "Travail en cours"], ["chaine", "Chaîne de traitement"],
+  ["donnees", "Données"], ["encodeurs", "Encodeurs"], ["explorateur", "Explorateur des têtes"],
+  ["rapports", "Rapports"], ["tableaux", "Tableaux"], ["biblio", "Bibliographie"], ["glossaire", "Glossaire"],
+];
+const vues = $("#vues");
+function section(id, titre, sous, eyebrow) {
+  const s = el("section", { class: "vue", id, "data-comment-target": "" });
+  const h = el("div", { class: "vue-tete" },
+    el("div", {}, eyebrow ? el("div", { class: "eyebrow" }, eyebrow) : null, el("h2", {}, titre), sous ? el("p", {}, sous) : null),
+    boutonCommenter(s, "Commenter la section"));
+  s.append(h); vues.append(s); return s;
+}
+const carte = (titre, sous, ...kids) => {
+  const c = el("div", { class: "carte", "data-comment-target": "" });
+  if (titre) c.append(el("div", { class: "carte-tete" }, el("h3", {}, titre), boutonCommenter(c)));
+  if (sous) c.append(el("p", { class: "sous" }, sous));
+  c.append(...kids); return c;
+};
+
+/* ---------- en-tête ---------- */
+$("#objectif").textContent = C.projet.objectif;
+$("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}` + (D.genere.commit ? ` · commit ${D.genere.commit}` : "");
+(function spectro() {
+  const s = $("#spectro"); const W = 1000, H = 54;
+  // fond saturé (insectes, autres anoures) puis notes d'A. blanci : 0,09 s toutes les 1,4 s sur ~14 s
+  let seed = 7; const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 260; i++) s.append(sv("rect", { x: r() * W, y: 4 + r() * (H - 8), width: 2 + r() * 10, height: 1.2, fill: "var(--deep-muted)", opacity: (0.12 + r() * 0.22).toFixed(2) }));
+  s.append(sv("rect", { x: 0, y: H * 0.18, width: W, height: 1.4, fill: "var(--deep-muted)", opacity: 0.35 }));
+  s.append(sv("rect", { x: 0, y: H * 0.42, width: W, height: H * 0.2, fill: "var(--gold)", opacity: 0.08 }));
+  const px = W / 14;
+  for (let t = 0.4; t < 14; t += 1.2 + r() * 0.5) s.append(sv("rect", { x: t * px, y: H * 0.44, width: Math.max(3, 0.09 * px), height: H * 0.16, rx: 1, fill: "var(--gold)" }));
+})();
+
+/* ---------- navigation ---------- */
+const nav = $("#nav");
+for (const [id, nom] of SECTIONS) nav.append(el("a", { href: "#" + id, "data-id": id }, nom));
+$("#pied").append(
+  el("div", {}, C.projet.stage), el("div", {}, C.projet.auteur),
+  el("a", { href: C.projet.depot, target: "_blank", rel: "noopener" }, "Dépôt GitHub"),
+  el("div", {}, "Pour commenter : bouton « Commenter » sur chaque carte, ou mode commentaire de claude.ai."));
+
+/* ======================================================================
+   1. Vue d'ensemble
+   ====================================================================== */
+{
+  const s = section("accueil", "Vue d'ensemble", "Où en est le stage, les critères de choix et le calendrier.", C.projet.stage);
+  const totalH = D.inventaire.sites.reduce((a, x) => a + x.heures, 0);
+  const totalN = D.inventaire.sites.reduce((a, x) => a + x.enregistrements, 0);
+  const libre = D.encodeurs.encodeurs.filter((e) => e.libre === "oui" && e.ap_site_best != null).sort((a, b) => b.ap_site_best - a.ap_site_best)[0];
+  const jalon = C.jalons.find((j) => new Date(j[0]) >= new Date()) || C.jalons[C.jalons.length - 1];
+  const jours = Math.ceil((new Date(jalon[0] + "T12:00:00") - new Date()) / 864e5);
+  const tuile = (b, span, em) => el("div", { class: "tuile" }, el("b", {}, b), el("span", {}, span), em ? el("em", {}, em) : null);
+  s.append(el("div", { class: "tuiles" },
+    tuile(entier(totalH) + " h", `${entier(totalN)} enregistrements de 2 min`, `${D.inventaire.sites.length} sites`),
+    tuile(fr(libre.ap_site_best), `meilleur encodeur libre : ${libre.encoder}`, "AP moyenne par site, AnuraSet"),
+    tuile(String(D.encodeurs.encodeurs.filter((e) => e.ap_site_best != null).length), "encodeurs comparés", "benchmark 08"),
+    tuile(jours >= 0 ? `J−${jours}` : "—", jalon[1], dateFr(jalon[0])),
+    tuile(String(D.tests.total), "tests automatiques", "suite pytest")));
+
+  const crit = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Rang"), el("th", {}, "Critère"), el("th", {}, "Mesure"))),
+    el("tbody", {}, C.projet.criteres.map(([r, c, m]) => el("tr", {}, el("td", { class: "num" }, String(r)), el("td", {}, el("strong", {}, c)), el("td", {}, m)))));
+  const etat = el("div", { class: "grille-2" },
+    carte("Critères de choix du détecteur", "Appliqués dans cet ordre. Un encodeur non libre n'entre jamais dans le livrable.", el("div", { class: "defile" }, crit)),
+    carte("Prochaines étapes", null, el("ol", { style: "margin:0;padding-left:20px;display:grid;gap:6px" }, C.prochaines_etapes.map((t) => el("li", {}, t)))));
+  s.append(etat);
+
+  const g = carte("Calendrier", "Phases du stage ; trait doré : aujourd'hui ; losanges : jalons.");
+  const holder = el("div", { class: "defile" }); g.append(holder, el("div", { class: "legende" },
+    el("span", {}, el("i", { style: "background:var(--ok)" }), "fait"), el("span", {}, el("i", { style: "background:var(--warn)" }), "en cours"),
+    el("span", {}, el("i", { style: "background:var(--idle)" }), "à venir")));
+  s.append(g);
+  const d0 = new Date("2026-09-14T00:00:00"), d1 = new Date("2027-03-15T00:00:00");
+  const W = 900, gauche = 170, droite = 14, rh = 26, haut = 30, H = haut + C.planning.length * rh + 26;
+  const x = (d) => gauche + ((new Date(d) - d0) / (d1 - d0)) * (W - gauche - droite);
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", style: `min-width:640px`, role: "img", "aria-label": "Calendrier du stage" });
+  for (let m = new Date(d0.getFullYear(), d0.getMonth() + 1, 1); m < d1; m.setMonth(m.getMonth() + 1)) {
+    const xx = x(m);
+    svg.append(sv("line", { x1: xx, x2: xx, y1: haut - 6, y2: H - 22, class: "grille-l" }));
+    svg.append(sv("text", { x: xx + 4, y: haut - 12 }, m.toLocaleDateString("fr-FR", { month: "short" }) + (m.getMonth() === 0 ? " " + m.getFullYear() : "")));
+  }
+  const coul = { fait: "var(--ok)", en_cours: "var(--warn)", a_venir: "var(--idle)", bloque: "var(--bad)" };
+  C.planning.forEach(([nom, a, b, e, det], k) => {
+    const y = haut + k * rh;
+    svg.append(sv("text", { x: 0, y: y + 16, class: "fort" }, nom));
+    const r = sv("rect", { x: x(a), y: y + 5, width: Math.max(4, x(b) - x(a)), height: rh - 10, rx: 4, fill: coul[e], opacity: e === "a_venir" ? 0.55 : 0.9 });
+    survol(r, () => `<b>${esc(nom)}</b><br>${dateFr(a)} → ${dateFr(b)}<br>${esc(det)}`);
+    svg.append(r);
+  });
+  C.jalons.forEach(([d, nom]) => {
+    const xx = x(d), y = H - 14;
+    const p = sv("path", { d: `M${xx} ${y - 6} l6 6 l-6 6 l-6 -6 z`, fill: "var(--gold)" });
+    survol(p, () => `<b>${esc(nom)}</b><br>${dateFr(d)}`);
+    svg.append(p);
+  });
+  const auj = new Date();
+  if (auj > d0 && auj < d1) {
+    svg.append(sv("line", { x1: x(auj), x2: x(auj), y1: haut - 6, y2: H - 22, stroke: "var(--gold)", "stroke-width": 2 }));
+    svg.append(sv("text", { x: x(auj) + 4, y: H - 24, class: "fort" }, "aujourd'hui"));
+  }
+  holder.append(svg);
+}
+
+/* ======================================================================
+   2. Travail en cours
+   ====================================================================== */
+{
+  const s = section("en-cours", "Travail en cours", "Ce qui est sur la table en ce moment, et ce qui a bougé dans le dépôt.", `Mis à jour le ${dateFr(String(C.mis_a_jour))}`);
+  const g = el("div", { class: "grille" });
+  for (const t of C.en_cours) {
+    const c = el("div", { class: "carte", "data-comment-target": "" },
+      el("div", { class: "carte-tete" }, puceEtat(t.etat), null),
+      el("h3", {}, t.titre), el("p", { style: "margin:0" }, t.detail),
+      el("p", { class: "sous" }, el("strong", {}, "Ensuite : "), t.suite));
+    c.firstChild.append(boutonCommenter(c));
+    g.append(c);
+  }
+  s.append(g);
+
+  // débit de l'encodage
+  const deb = C.debit; const W = 640, gauche = 230, rh = 28, H = deb.length * rh + 8;
+  const max = Math.max(...deb.map((d) => d[1]));
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", role: "img", "aria-label": "Débit de l'encodage perch_v2" });
+  deb.forEach(([nom, v], k) => {
+    const y = k * rh + 4, w = (v / max) * (W - gauche - 70);
+    svg.append(sv("text", { x: gauche - 10, y: y + 15, "text-anchor": "end", class: k === deb.length - 1 ? "fort" : null }, nom));
+    const r = sv("rect", { x: gauche, y: y + 4, width: w, height: rh - 12, rx: 3, fill: k === deb.length - 1 ? "var(--accent)" : "var(--idle)", opacity: k === deb.length - 1 ? 1 : 0.55 });
+    survol(r, () => `<b>${esc(nom)}</b><br>${fr(v)} s par enregistrement<br>≈ ${entier((v * 94588) / 3600)} h pour les 94 588 enregistrements encodables`);
+    svg.append(r, sv("text", { x: gauche + w + 6, y: y + 15, class: "fort num" }, fr(v) + " s"));
+  });
+  const ann = el("div", { class: "progres" }, C.annotation.map(([nom, fait, cible]) => el("div", {},
+    el("div", { class: "lbl" }, el("span", {}, nom), el("span", { class: "num" }, `${entier(fait)} / ${entier(cible)}`)),
+    el("div", { class: "rail" }, el("i", { style: `width:${Math.min(100, (100 * fait) / cible)}%` })))));
+  const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg]) =>
+    el("div", {}, el("time", { title: h }, d.split("-").reverse().join("/")), el("span", {}, msg))));
+  s.append(el("div", { class: "grille-2" },
+    carte("Encodage plus rapide", "perch_v2 sur l'i5 de l'ONF, secondes par enregistrement de 2 min, étape après étape.", svg),
+    carte("Plan d'annotation v1", "Avancement vers les cibles ; aucun benchmark sur les données ONF avant le go des experts.", ann)));
+  s.append(carte("Derniers changements du dépôt", null, commits));
+}
+
+/* ======================================================================
+   3. Chaîne de traitement
+   ====================================================================== */
+{
+  const s = section("chaine", "Chaîne de traitement", "Du fichier audio au détecteur livré. Cliquer une étape pour son détail ; pointillés dorés : la boucle d'annotation et de réentraînement.");
+  const POS = { recherche: [4, 1], inventaire: [1, 2], qc: [2, 2], encodage: [3, 2], tetes: [4, 2], fusion: [5, 2], score: [6, 2], evaluation: [7, 2],
+    signal: [3, 3], livrable: [7, 3], reentrainement: [4, 4], annotation: [5, 4], verification: [6, 4] };
+  const box = el("div", { class: "chaine" });
+  const liens = sv("svg", { class: "liens", "aria-hidden": "true" });
+  box.append(liens);
+  const detail = el("div", { class: "carte detail-etape", "data-comment-target": "" });
+  const noeuds = {};
+  const byId = Object.fromEntries(C.chaine.map((e) => [e.id, e]));
+  const coul = { fait: "var(--ok)", en_cours: "var(--warn)", a_venir: "var(--idle)", bloque: "var(--bad)" };
+  box.append(el("div", { class: "couloir", style: "grid-column:1/3;grid-row:1" }, "Recherche"));
+  box.append(el("div", { class: "couloir", style: "grid-column:1/3;grid-row:4" }, "Boucle d'annotation"));
+  for (const e of C.chaine) {
+    const [c, r] = POS[e.id] || [1, 5];
+    const n = el("button", { type: "button", class: "noeud", style: `grid-column:${c};grid-row:${r}`, "aria-pressed": "false" },
+      el("span", { class: "etat", style: `background:${coul[e.etat]}`, title: ETATS[e.etat] }),
+      el("b", {}, e.etape), e.chiffre ? el("small", {}, e.chiffre) : null,
+      el("small", { class: "suites-mobile" }, e.suite?.length ? "→ " + e.suite.map((x) => byId[x]?.etape || x).join(", ") : ""));
+    n.addEventListener("click", () => choisir(e.id));
+    noeuds[e.id] = n; box.append(n);
+  }
+  function choisir(id) {
+    const e = byId[id];
+    Object.entries(noeuds).forEach(([k, n]) => n.setAttribute("aria-pressed", String(k === id)));
+    detail.replaceChildren(
+      el("div", { class: "carte-tete" }, el("h3", {}, e.etape), el("span", { style: "display:flex;gap:8px;align-items:center" }, puceEtat(e.etat), boutonCommenter(detail))),
+      el("p", { style: "margin:0;max-width:72ch" }, e.resume),
+      el("dl", {},
+        el("dt", {}, "Module"), el("dd", {}, el("code", {}, e.module)),
+        el("dt", {}, "Commandes"), el("dd", {}, e.commandes.length ? e.commandes.map((c) => [el("code", {}, "blanci " + c), " "]) : "à écrire"),
+        e.chiffre ? [el("dt", {}, "Repère"), el("dd", {}, e.chiffre)] : null,
+        el("dt", {}, "Tests"), el("dd", {}, `${e.n_tests} dans `, el("code", {}, e.tests + "/")),
+        el("dt", {}, "Ensuite"), el("dd", {}, e.suite?.length ? e.suite.map((x) => byId[x]?.etape || x).join(", ") : "—")));
+    if (commentaires) detail.querySelectorAll(".commenter").forEach((b) => (b.hidden = false));
+  }
+  function tracer() {
+    liens.replaceChildren();
+    if (getComputedStyle(liens).display === "none") return;
+    const B = box.getBoundingClientRect();
+    liens.setAttribute("viewBox", `0 0 ${B.width} ${B.height}`);
+    liens.append(sv("defs", {}, sv("marker", { id: "fl", viewBox: "0 0 8 8", refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, sv("path", { d: "M0 0L8 4L0 8z", fill: "var(--muted)" })),
+      sv("marker", { id: "flb", viewBox: "0 0 8 8", refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, sv("path", { d: "M0 0L8 4L0 8z", fill: "var(--gold)" }))));
+    const R = (id) => { const r = noeuds[id].getBoundingClientRect(); return { l: r.left - B.left, r: r.right - B.left, t: r.top - B.top, b: r.bottom - B.top, cx: (r.left + r.right) / 2 - B.left, cy: (r.top + r.bottom) / 2 - B.top }; };
+    const BOUCLE = new Set(["verification>annotation", "annotation>reentrainement", "reentrainement>tetes", "score>verification"]);
+    for (const e of C.chaine) for (const t of e.suite || []) {
+      if (!noeuds[t] || (e.id === "recherche")) continue;
+      const a = R(e.id), b = R(t); let d;
+      const [ca, ra] = POS[e.id], [cb, rb] = POS[t];
+      if (ra === rb) d = cb > ca ? `M${a.r} ${a.cy} L${b.l - 2} ${b.cy}` : `M${a.l} ${a.cy} L${b.r + 2} ${b.cy}`;
+      else if (ca === cb) d = rb > ra ? `M${a.cx} ${a.b} L${b.cx} ${b.t - 2}` : `M${a.cx} ${a.t} L${b.cx} ${b.b + 2}`;
+      else if (rb > ra) d = `M${a.cx} ${a.b} C${a.cx} ${(a.b + b.cy) / 2} ${a.cx} ${b.cy} ${b.l - 2} ${b.cy}`;
+      else d = `M${a.r} ${a.cy} C${b.cx} ${a.cy} ${b.cx} ${a.cy} ${b.cx} ${b.b + 2}`;
+      const boucle = BOUCLE.has(`${e.id}>${t}`);
+      liens.append(sv("path", { d, class: boucle ? "boucle" : null, "marker-end": boucle ? "url(#flb)" : "url(#fl)" }));
+    }
+    { const a = R("encodage"), b = R("recherche"); liens.append(sv("path", { d: `M${a.cx} ${a.t} C${a.cx} ${b.cy} ${a.cx} ${b.cy} ${b.l - 2} ${b.cy}`, "marker-end": "url(#fl)" })); }
+  }
+  s.append(carte(null, null, box, el("div", { class: "legende" },
+    el("span", {}, el("i", { style: "background:var(--ok)" }), "écrit et testé"), el("span", {}, el("i", { style: "background:var(--warn)" }), "en cours"),
+    el("span", {}, el("i", { style: "background:var(--idle)" }), "à venir"), el("span", {}, el("i", { class: "tirets" }), "boucle d'annotation"))), detail);
+  choisir("encodage");
+  requestAnimationFrame(tracer);
+  new ResizeObserver(() => tracer()).observe(box);
+  document.fonts?.ready.then(tracer);
+}
+
+/* ======================================================================
+   4. Données
+   ====================================================================== */
+{
+  const s = section("donnees", "Données", "Inventaire des enregistrements de l'ONF (2 min, toutes les 30 min de 5 h à 20 h, 48 kHz stéréo). L'audio reste sur les disques, jamais dans le dépôt.");
+  const inv = D.inventaire; const sites = inv.sites;
+  const JEUX = { "2023": "var(--s1)", "2026": "var(--s2)" };
+  const W = 640, gauche = 110, rh = 30, H = sites.length * rh + 30;
+  const max = Math.max(...sites.map((x) => x.heures));
+  const xs = (v) => gauche + (v / 800) * (W - gauche - 60);
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", role: "img", "aria-label": "Heures enregistrées par site" });
+  for (let v = 0; v <= 800; v += 200) { svg.append(sv("line", { x1: xs(v), x2: xs(v), y1: 0, y2: H - 22, class: "grille-l" }), sv("text", { x: xs(v), y: H - 6, "text-anchor": "middle" }, v + " h")); }
+  sites.forEach((x, k) => {
+    const y = k * rh;
+    svg.append(sv("text", { x: gauche - 10, y: y + 19, "text-anchor": "end", class: "fort" }, x.site));
+    const r = sv("rect", { x: xs(0), y: y + 7, width: xs(x.heures) - xs(0), height: rh - 12, rx: 3, fill: JEUX[x.jeu] });
+    survol(r, () => `<b>${esc(x.site)}</b> · jeu ${x.jeu}<br>${entier(x.enregistrements)} enregistrements<br>${fr(x.heures, 1)} h · ${fr(x.go, 1)} Go`);
+    svg.append(r, sv("text", { x: xs(x.heures) + 6, y: y + 19, class: "num" }, entier(x.heures) + " h"));
+  });
+  const tot = (j) => sites.filter((x) => x.jeu === j);
+  const somme = (a, k) => a.reduce((s, x) => s + x[k], 0);
+  const tbl = el("table", {}, el("thead", {}, el("tr", {}, ["Jeu", "Site", "Enregistrements", "Heures", "Go"].map((h, i) => el("th", { class: i > 1 ? "n" : null }, h)))),
+    el("tbody", {}, sites.map((x) => el("tr", {}, el("td", {}, x.jeu), el("td", {}, x.site), el("td", { class: "n" }, entier(x.enregistrements)), el("td", { class: "n" }, fr(x.heures, 1)), el("td", { class: "n" }, fr(x.go, 1)))),
+      el("tr", {}, el("td", {}, el("strong", {}, "Total")), el("td", {}), el("td", { class: "n" }, el("strong", {}, entier(somme(sites, "enregistrements")))), el("td", { class: "n" }, el("strong", {}, entier(somme(sites, "heures")))), el("td", { class: "n" }, el("strong", {}, entier(somme(sites, "go")))))));
+  const vueTable = el("div", { class: "defile", hidden: true }, tbl);
+  const bascule = el("button", { type: "button", class: "lien-btn" }, "Voir le tableau");
+  bascule.addEventListener("click", () => { vueTable.hidden = !vueTable.hidden; svg.style.display = vueTable.hidden ? "" : "none"; bascule.textContent = vueTable.hidden ? "Voir le tableau" : "Voir le graphique"; });
+  const c1 = carte("Heures enregistrées par site", null, el("div", { class: "legende" },
+    ...Object.entries(JEUX).map(([j, c]) => el("span", {}, el("i", { style: `background:${c}` }), inv.jeux[j]))), svg, vueTable, bascule);
+  const fen = el("table", {}, el("thead", {}, el("tr", {}, ["Fenêtre", "Pas", "Par enregistrement", "Au total"].map((h, i) => el("th", { class: i > 1 ? "n" : null }, h)))),
+    el("tbody", {}, inv.fenetres.map((f) => el("tr", {}, el("td", {}, f[0]), el("td", {}, f[1]), el("td", { class: "n" }, String(f[2])), el("td", { class: "n" }, entier(f[3]))))));
+  const c2 = carte("Fenêtres à encoder", "Chevauchement de moitié, sur les enregistrements de 120 s. perch_v2 lit des fenêtres de 5 s.", el("div", { class: "defile" }, fen),
+    el("p", { class: "sous" }, inv.drapeaux + "."));
+  const c3 = carte("Ce qui structure l'annotation", null, el("ul", { style: "margin:0;padding-left:18px;display:grid;gap:6px" },
+    el("li", {}, "En 2026, chaque site n'a été enregistré qu'une semaine : le mois se confond avec le site. Seul le jeu 2023 couvre toutes les saisons."),
+    el("li", {}, "Les points d'écoute sont répartis entre entraînement et test avant toute écoute : aucun point ne sert aux deux."),
+    el("li", {}, "Positifs et négatifs sont tirés dans les mêmes conditions (même point, même tranche horaire), pour que la tête apprenne le chant et pas l'heure."),
+    el("li", {}, "Les annotations importées de Blancinet sortent de l'entraînement et de l'évaluation : choisies par un détecteur, elles ne couvraient que Mataroni.")));
+  s.append(el("div", { class: "grille-2" }, c1, el("div", { style: "display:grid;gap:14px" }, c2, c3)));
+}
+
+/* ======================================================================
+   5. Encodeurs
+   ====================================================================== */
+{
+  const s = section("encodeurs", "Encodeurs", "Benchmark 08 sur AnuraSet (anoures du Brésil) : chaque encodeur jugé avec la tête adaptée à sa sortie, un site tenu à l'écart à la fois. Indicateur, pas verdict : le choix se fera sur les données de l'ONF le 20/11.", "Pré-benchmark AnuraSet");
+  const E = D.encodeurs.encodeurs.filter((e) => e.ap_site_best != null);
+  const lic = (e) => e.libre === "oui" ? ["libre", "lic-oui"] : e.libre === "non" ? ["non libre", "lic-non"] : [e.libre, "lic-autre"];
+  let filtreLibre = false, tri = "ap_site_best", sens = -1, recherche = "";
+  const corps = el("tbody");
+  const COLS = [["encoder", "Encodeur"], ["famille", "Famille"], ["libre", "Licence"], ["fenetres_par_s", "Débit (fen./s)"], ["best_head", "Meilleure tête"], ["ap_site_best", "AP par site"], ["ap_site_logistic", "AP logistique"]];
+  const thead = el("thead", {}, el("tr", {}, COLS.map(([k, n]) => {
+    const b = el("button", { type: "button" }, n);
+    b.addEventListener("click", () => { if (tri === k) sens = -sens; else { tri = k; sens = typeof E[0][k] === "number" ? -1 : 1; } rendre(); });
+    return el("th", { class: ["fenetres_par_s", "ap_site_best", "ap_site_logistic"].includes(k) ? "n" : null, "aria-sort": "none" }, b);
+  })));
+  function rendre() {
+    let rows = E.filter((e) => (!filtreLibre || e.libre === "oui") && (!recherche || (e.encoder + " " + e.famille).toLowerCase().includes(recherche)));
+    rows.sort((a, b) => { const x = a[tri], y = b[tri]; if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * sens; });
+    corps.replaceChildren(...rows.map((e) => {
+      const [l, c] = lic(e);
+      return el("tr", {},
+        el("td", {}, el("strong", {}, nomEnc(e.encoder))),
+        el("td", {}, e.famille),
+        el("td", { title: e.licence }, el("span", { class: `puce ${c}` }, l)),
+        el("td", { class: "n" }, e.fenetres_par_s ? fr(e.fenetres_par_s, 1) : "—"),
+        el("td", {}, tete(e.best_head)),
+        el("td", { class: "n" }, el("span", { class: "barre-cell" }, el("i", { style: `width:${Math.max(0, (e.ap_site_best - 0.3) * 120)}px` }), fr(e.ap_site_best))),
+        el("td", { class: "n" }, fr(e.ap_site_logistic)));
+    }));
+  }
+  const fl = el("div", { class: "seg", role: "group", "aria-label": "Licence" },
+    el("button", { type: "button", "aria-pressed": "true" }, "Tous"), el("button", { type: "button", "aria-pressed": "false" }, "Libres seulement"));
+  fl.querySelectorAll("button").forEach((b, i) => b.addEventListener("click", () => { filtreLibre = i === 1; fl.querySelectorAll("button").forEach((x, j) => x.setAttribute("aria-pressed", String(j === i))); rendre(); }));
+  const rech = el("input", { type: "search", id: "rech-enc", placeholder: "perch, transformer…", "aria-label": "Chercher un encodeur" });
+  rech.addEventListener("input", () => { recherche = rech.value.trim().toLowerCase(); rendre(); });
+  rendre();
+  s.append(carte("Classement des encodeurs", "AP moyenne par site tenu à l'écart (minute, cinq espèces), avec la meilleure tête de chaque encodeur, choisie après coup. Cliquer un en-tête pour trier.",
+    el("div", { class: "controles" }, el("label", { class: "champ" }, el("span", {}, "Licence"), fl), el("label", { class: "champ" }, el("span", {}, "Chercher"), rech)),
+    el("div", { class: "defile" }, el("table", {}, thead, corps))));
+
+  // coût contre qualité
+  const W = 900, H = 380, g = 48, d = 16, h = 16, b = 40;
+  const xs = (v) => g + ((Math.log10(v) - Math.log10(1)) / (Math.log10(100) - Math.log10(1))) * (W - g - d);
+  const ys = (v) => h + (1 - (v - 0.35) / (0.9 - 0.35)) * (H - h - b);
+  const sc = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", role: "img", "aria-label": "Débit contre qualité" });
+  for (const v of [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]) sc.append(sv("line", { x1: g, x2: W - d, y1: ys(v), y2: ys(v), class: "grille-l" }), sv("text", { x: g - 8, y: ys(v) + 4, "text-anchor": "end" }, fr(v, 1)));
+  for (const v of [1, 2, 5, 10, 20, 50, 100]) sc.append(sv("text", { x: xs(v), y: H - b + 18, "text-anchor": "middle" }, String(v)));
+  sc.append(sv("text", { x: (g + W) / 2, y: H - 4, "text-anchor": "middle" }, "fenêtres de 5 s encodées par seconde (échelle log ; temps réel = 0,2)"));
+  sc.append(sv("text", { x: 4, y: 10 }, "AP par site"));
+  const libres = E.filter((e) => e.fenetres_par_s);
+  const etiq = new Set(["perch_v2", "naturebeats", "convnext_birdset", "birdnet_v3", "rcl_fs_bsed", "birdmae_base", "perch_bird", "insect66"]);
+  for (const e of libres) {
+    const oui = e.libre === "oui";
+    const c = sv("circle", { cx: xs(e.fenetres_par_s), cy: ys(e.ap_site_best), r: 6, fill: oui ? "var(--accent)" : "var(--surface)", stroke: oui ? "var(--surface)" : "var(--muted)", "stroke-width": 2 });
+    survol(c, () => `<b>${esc(nomEnc(e.encoder))}</b> · ${esc(lic(e)[0])}<br>${esc(e.famille)}<br>AP par site ${fr(e.ap_site_best)} (${esc(tete(e.best_head))})<br>${fr(e.fenetres_par_s, 1)} fenêtres/s`);
+    sc.append(c);
+    if (etiq.has(e.encoder)) sc.append(sv("text", { x: xs(e.fenetres_par_s) + 9, y: ys(e.ap_site_best) + 4, class: e.encoder === "perch_v2" ? "fort" : null }, nomEnc(e.encoder)));
+  }
+
+  // courbe d'amorçage
+  const COURBE = D.encodeurs.courbe; // [enc, head, k, apw, apm]
+  const K = [0, 1, 2, 5, 10, 20, -1], KN = ["0", "1", "2", "5", "10", "20", "tout"];
+  const encsC = [...new Set(COURBE.map((r) => r[0]))].sort();
+  const tetesC = [...new Set(COURBE.map((r) => r[1]))];
+  let selC = ["convnext_birdset", "perch_v2", "naturebeats", "birdnet_v3", "perch_bird"].filter((e) => encsC.includes(e)), teteC = "logistic", nivC = 3;
+  const slots = {}; // couleur attachée à l'encodeur tant qu'il est choisi
+  const libresSlots = () => [1, 2, 3, 4, 5].filter((k) => !Object.values(slots).includes(k));
+  selC.forEach((e) => (slots[e] = libresSlots()[0]));
+  const zone = el("div");
+  const chips = el("div", { class: "puces" });
+  const selT = el("select", { id: "courbe-tete", "aria-label": "Tête" }, tetesC.map((t) => el("option", { value: t, selected: t === teteC }, tete(t))));
+  selT.addEventListener("change", () => { teteC = selT.value; dessinerC(); });
+  const selN = el("div", { class: "seg" }, el("button", { type: "button", "aria-pressed": "true" }, "fenêtre"), el("button", { type: "button", "aria-pressed": "false" }, "minute"));
+  selN.querySelectorAll("button").forEach((bt, i) => bt.addEventListener("click", () => { nivC = i === 0 ? 3 : 4; selN.querySelectorAll("button").forEach((x, j) => x.setAttribute("aria-pressed", String(i === j))); dessinerC(); }));
+  function puces() {
+    chips.replaceChildren(...encsC.map((e) => {
+      const on = selC.includes(e);
+      const bt = el("button", { type: "button", class: "choix", "aria-pressed": String(on) }, on ? el("i", { style: `background:var(--s${slots[e]})` }) : null, nomEnc(e));
+      bt.addEventListener("click", () => {
+        if (on) { selC = selC.filter((x) => x !== e); delete slots[e]; }
+        else { if (selC.length >= 5) return; selC.push(e); slots[e] = libresSlots()[0]; }
+        puces(); dessinerC();
+      });
+      return bt;
+    }));
+  }
+  function dessinerC() {
+    const W2 = 900, H2 = 320, g2 = 44, d2 = 140, h2 = 12, b2 = 40;
+    const toutes = selC.flatMap((e) => COURBE.filter((r) => r[0] === e && r[1] === teteC).map((r) => r[nivC])).filter((v) => v != null);
+    const lo = toutes.length ? Math.max(0, Math.floor(Math.min(...toutes) * 10) / 10) : 0.3;
+    const xk = (i) => g2 + (i / (K.length - 1)) * (W2 - g2 - d2);
+    const yv = (v) => h2 + (1 - (v - lo) / (1 - lo)) * (H2 - h2 - b2);
+    const svg = sv("svg", { viewBox: `0 0 ${W2} ${H2}`, class: "graphe", role: "img", "aria-label": "Courbe d'amorçage" });
+    for (let v = lo; v <= 1.0001; v += 0.1) svg.append(sv("line", { x1: g2, x2: W2 - d2, y1: yv(v), y2: yv(v), class: "grille-l" }), sv("text", { x: g2 - 8, y: yv(v) + 4, "text-anchor": "end" }, fr(v, 1)));
+    K.forEach((k, i) => svg.append(sv("text", { x: xk(i), y: H2 - b2 + 18, "text-anchor": "middle" }, KN[i])));
+    svg.append(sv("text", { x: (g2 + W2 - d2) / 2, y: H2 - 4, "text-anchor": "middle" }, "enregistrements positifs du site neuf annotés (k)"));
+    const series = selC.map((e) => ({ e, v: K.map((k) => { const r = COURBE.find((r) => r[0] === e && r[1] === teteC && r[2] === k); return r ? r[nivC] : null; }) }));
+    const fins = [];
+    for (const { e, v } of series) {
+      const pts = v.map((y, i) => (y == null ? null : [xk(i), yv(y)])).filter(Boolean);
+      if (!pts.length) continue;
+      svg.append(sv("path", { d: "M" + pts.map((p) => p.join(" ")).join(" L"), fill: "none", stroke: `var(--s${slots[e]})`, "stroke-width": 2 }));
+      pts.forEach((p) => svg.append(sv("circle", { cx: p[0], cy: p[1], r: 4, fill: `var(--s${slots[e]})`, stroke: "var(--surface)", "stroke-width": 2 })));
+      const last = v.map((y, i) => [y, i]).filter((x) => x[0] != null).pop();
+      fins.push({ y: yv(last[0]), e, x: xk(last[1]) });
+    }
+    fins.sort((a, b) => a.y - b.y); for (let i = 1; i < fins.length; i++) if (fins[i].y - fins[i - 1].y < 13) fins[i].y = fins[i - 1].y + 13;
+    fins.forEach((f) => svg.append(sv("text", { x: W2 - d2 + 8, y: f.y + 4, class: "fort" }, nomEnc(f.e))));
+    const curseur = sv("line", { y1: h2, y2: H2 - b2, stroke: "var(--muted)", "stroke-dasharray": "3 3", opacity: 0 });
+    svg.append(curseur);
+    const cible = sv("rect", { x: g2 - 20, y: 0, width: W2 - g2 - d2 + 40, height: H2 - b2, fill: "transparent" });
+    cible.addEventListener("pointermove", (ev) => {
+      const r = svg.getBoundingClientRect(); const px = ((ev.clientX - r.left) / r.width) * W2;
+      const i = Math.max(0, Math.min(K.length - 1, Math.round(((px - g2) / (W2 - g2 - d2)) * (K.length - 1))));
+      curseur.setAttribute("x1", xk(i)); curseur.setAttribute("x2", xk(i)); curseur.setAttribute("opacity", 1);
+      const lignes = series.map(({ e, v }) => [e, v[i]]).filter((x) => x[1] != null).sort((a, b) => b[1] - a[1]);
+      montrer(ev, `<b>k = ${KN[i]}</b> · ${esc(tete(teteC))}<br>` + lignes.map(([e, y]) => `${esc(nomEnc(e))} : ${fr(y)}`).join("<br>"));
+    });
+    cible.addEventListener("pointerleave", () => { cacher(); curseur.setAttribute("opacity", 0); });
+    svg.append(cible);
+    zone.replaceChildren(svg);
+  }
+  puces(); dessinerC();
+  s.append(el("div", { style: "display:grid;gap:14px" },
+    carte("Débit contre qualité", "Plein : libre d'accès. Le meilleur libre, perch_v2, encode 43 fois plus vite que le temps réel.", sc,
+      el("div", { class: "legende" }, el("span", {}, el("i", { style: "background:var(--accent)" }), "libre"), el("span", {}, el("i", { class: "anneau", style: "border-color:var(--muted)" }), "non libre ou non relevé"))),
+    carte("Amorcer un site neuf", "AP sur le site tenu à l'écart selon le nombre d'enregistrements positifs de ce site déjà annotés, moyenne des espèces et des sites. Cinq encodeurs au plus.",
+      el("div", { class: "controles" }, el("label", { class: "champ" }, el("span", {}, "Tête"), selT), el("div", { class: "champ" }, el("span", {}, "Unité"), selN)), chips, zone)));
+}
+
+/* ======================================================================
+   6. Explorateur des têtes
+   ====================================================================== */
+{
+  const s = section("explorateur", "Explorateur des têtes", "Choisir ce qu'on compare : encodeurs, têtes, espèces, unité et lecture de l'AP. Chaque ligne est un couple encodeur · tête ; chaque point une espèce ; le trait, la moyenne des espèces choisies.", "Comparaison à la carte");
+  const SOURCES = {
+    adaptees: { nom: "Encodeurs × têtes adaptées (benchmark 08)", rows: D.encodeurs.transfert.map((r) => ({ enc: r[0], sp: r[1], head: r[2], lvl: r[3], ap: r[4], aps: r[5] })),
+      ref: ["perch_v2", "logistic"], encs: ["perch_v2", "naturebeats", "convnext_birdset", "birdmae_base", "perch_bird", "birdnet_v3"], heads: ["logistic", "proto_probe", "attentive"] },
+    regul: { nom: "Têtes et régularisations (benchmarks 01–06)", rows: D.tetes.map((r) => ({ enc: r[0], sp: r[1], head: r[2], lvl: r[3], ap: r[4], aps: r[5], diff: r[6], sig: r[7] })),
+      ref: ["perch_v2", "logistic"], encs: ["perch_v2"], heads: null },
+  };
+  const comp08 = new Map(D.encodeurs.comparaisons.map((r) => [`${r[0]}|${r[1]}|${r[2]}|${r[3]}`, { diff: r[4], sig: r[8] }]));
+  const etat = { src: "adaptees", lvl: "minute", met: "aps", encs: new Set(), heads: new Set(), sps: new Set(ESPECES), vue: "graphe" };
+  const ctrl = el("div", { style: "display:grid;gap:12px" });
+  const zone = el("div");
+  const res = el("p", { class: "sous", "aria-live": "polite" });
+  const c = carte(null, null, ctrl, res, zone);
+  s.append(c);
+  function init(src) {
+    const S = SOURCES[src]; etat.src = src;
+    etat.encs = new Set(S.encs);
+    const hs = [...new Set(S.rows.map((r) => r.head))];
+    etat.heads = new Set(S.heads ? S.heads.filter((h) => hs.includes(h)) : hs);
+    if (src === "regul") { etat.lvl = "fenetre"; }
+    controles();
+  }
+  const seg = (options, val, f, label) => {
+    const g = el("div", { class: "seg", role: "group", "aria-label": label });
+    options.forEach(([v, n]) => { const b = el("button", { type: "button", "aria-pressed": String(v === val) }, n); b.addEventListener("click", () => f(v)); g.append(b); });
+    return g;
+  };
+  const multi = (tous, set, nom, coul) => {
+    const g = el("div", { class: "puces" });
+    tous.forEach((v) => {
+      const b = el("button", { type: "button", class: "choix", "aria-pressed": String(set.has(v)), title: v }, coul ? el("i", { style: `background:${coul(v)}` }) : null, nom(v));
+      b.addEventListener("click", () => { set.has(v) ? set.delete(v) : set.add(v); b.setAttribute("aria-pressed", String(set.has(v))); dessiner(); });
+      g.append(b);
+    });
+    return g;
+  };
+  const raccourcis = (tous, set) => {
+    const a = el("button", { type: "button", class: "lien-btn" }, "tout"), b = el("button", { type: "button", class: "lien-btn" }, "aucun");
+    a.addEventListener("click", () => { tous.forEach((v) => set.add(v)); controles(); });
+    b.addEventListener("click", () => { set.clear(); controles(); });
+    return el("span", { style: "display:inline-flex;gap:8px;margin-left:8px;text-transform:none;letter-spacing:0;font-weight:400" }, a, b);
+  };
+  function controles() {
+    const S = SOURCES[etat.src];
+    const encs = [...new Set(S.rows.map((r) => r.enc))].sort();
+    const heads = [...new Set(S.rows.map((r) => r.head))];
+    ctrl.replaceChildren(
+      el("div", { class: "controles" },
+        el("label", { class: "champ" }, el("span", {}, "Données"), (() => { const x = el("select", { id: "expl-source" }, Object.entries(SOURCES).map(([k, v]) => el("option", { value: k, selected: k === etat.src }, v.nom))); x.addEventListener("change", () => init(x.value)); return x; })()),
+        el("div", { class: "champ" }, el("span", {}, "Unité"), seg([["fenetre", "fenêtre"], ["minute", etat.src === "regul" ? "enregistrement" : "minute"]], etat.lvl, (v) => { etat.lvl = v; controles(); }, "Unité")),
+        el("div", { class: "champ" }, el("span", {}, "Lecture de l'AP"), seg([["aps", "moyenne par site"], ["ap", "poolée"]], etat.met, (v) => { etat.met = v; controles(); }, "Lecture")),
+        el("div", { class: "champ" }, el("span", {}, "Affichage"), seg([["graphe", "graphique"], ["table", "tableau"]], etat.vue, (v) => { etat.vue = v; controles(); }, "Affichage"))),
+      el("div", { class: "champ" }, el("span", {}, "Encodeurs", raccourcis(encs, etat.encs)), multi(encs, etat.encs, nomEnc)),
+      el("div", { class: "champ" }, el("span", {}, "Têtes", raccourcis(heads, etat.heads)), multi(heads, etat.heads, tete)),
+      el("div", { class: "champ" }, el("span", {}, "Espèces"), multi(ESPECES, etat.sps, (v) => v, coulEsp)));
+    dessiner();
+  }
+  function donnees() {
+    const S = SOURCES[etat.src];
+    let met = etat.met, note = "";
+    if (etat.src === "regul" && met === "aps" && etat.lvl !== "fenetre") { met = "ap"; note = "L'AP moyenne par site n'existe qu'à la fenêtre pour les benchmarks 01–06 : AP poolée affichée."; }
+    const sps = ESPECES.filter((x) => etat.sps.has(x));
+    const groupes = new Map();
+    for (const r of S.rows) {
+      if (r.lvl !== etat.lvl || !etat.encs.has(r.enc) || !etat.heads.has(r.head) || !etat.sps.has(r.sp)) continue;
+      const k = r.enc + "|" + r.head;
+      if (!groupes.has(k)) groupes.set(k, { enc: r.enc, head: r.head, v: {}, sig: {} });
+      const g = groupes.get(k); g.v[r.sp] = r[met];
+      if (etat.src === "regul") g.sig[r.sp] = r.diff != null ? { diff: r.diff, sig: r.sig } : null;
+      else g.sig[r.sp] = comp08.get(`${r.enc}|${r.head}|${r.sp}|${etat.lvl}`) || null;
+    }
+    const lignes = [...groupes.values()].map((g) => {
+      const vals = sps.map((x) => g.v[x]).filter((x) => x != null);
+      return { ...g, moy: vals.length === sps.length && vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null, n: vals.length };
+    }).sort((a, b) => (b.moy ?? -1) - (a.moy ?? -1));
+    const ref = lignes.find((l) => l.enc === S.ref[0] && l.head === S.ref[1]);
+    return { lignes, sps, met, note, ref };
+  }
+  function dessiner() {
+    const { lignes, sps, met, note, ref } = donnees();
+    const lect = met === "aps" ? "AP moyenne par site tenu à l'écart" : "AP poolée (tous les sites ensemble)";
+    const refTxt = etat.src === "regul" ? "Anneau : écart à la logistique du même encodeur significatif après Holm." : "Anneau : écart à perch_v2 + logistique significatif après Holm.";
+    res.textContent = `${lignes.length} couples · ${lect}, ${etat.lvl === "fenetre" ? "par fenêtre" : etat.src === "regul" ? "par enregistrement" : "par minute"}. ${refTxt} ${note}`;
+    if (!lignes.length) { zone.replaceChildren(el("p", { class: "vide" }, "Aucune combinaison : choisir au moins un encodeur, une tête et une espèce.")); return; }
+    if (etat.vue === "table") {
+      zone.replaceChildren(el("div", { class: "defile" }, el("table", {},
+        el("thead", {}, el("tr", {}, el("th", {}, "Encodeur"), el("th", {}, "Tête"), sps.map((x) => el("th", { class: "n" }, x)), el("th", { class: "n" }, "Moyenne"))),
+        el("tbody", {}, lignes.map((l) => el("tr", {}, el("td", {}, nomEnc(l.enc)), el("td", {}, tete(l.head)),
+          sps.map((x) => el("td", { class: "n", title: l.sig[x] ? `écart ${fr(l.sig[x].diff)}${l.sig[x].sig ? ", significatif (Holm)" : ""}` : null }, fr(l.v[x]) + (l.sig[x]?.sig ? " *" : ""))),
+          el("td", { class: "n" }, el("strong", {}, fr(l.moy)))))))),
+        el("p", { class: "sous" }, "* écart significatif après Holm."));
+      return;
+    }
+    const W = 760, g = 300, d = 56, rh = 24, h = 26, H = h + lignes.length * rh + 30;
+    const xs = (v) => g + v * (W - g - d);
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", style: "min-width:600px", role: "img", "aria-label": "Comparaison des têtes" });
+    for (const v of [0, 0.2, 0.4, 0.6, 0.8, 1]) svg.append(sv("line", { x1: xs(v), x2: xs(v), y1: h - 6, y2: H - 26, class: "grille-l" }), sv("text", { x: xs(v), y: H - 10, "text-anchor": "middle" }, fr(v, 1)), sv("text", { x: xs(v), y: h - 12, "text-anchor": "middle" }, fr(v, 1)));
+    if (ref?.moy != null) svg.append(sv("line", { x1: xs(ref.moy), x2: xs(ref.moy), y1: h - 4, y2: H - 28, stroke: "var(--gold)", "stroke-width": 1.5, "stroke-dasharray": "5 4" }));
+    lignes.forEach((l, i) => {
+      const y = h + i * rh + rh / 2;
+      if (i % 2 === 0) svg.append(sv("rect", { x: 0, y: y - rh / 2, width: W, height: rh, fill: "var(--surface-2)", opacity: 0.5 }));
+      const estRef = ref && l === ref;
+      svg.append(sv("text", { x: g - 12, y: y + 4, "text-anchor": "end", class: estRef ? "fort" : null }, `${nomEnc(l.enc)} · ${tete(l.head)}`.slice(0, 52)));
+      const vals = sps.map((x) => l.v[x]).filter((v) => v != null);
+      if (vals.length > 1) svg.append(sv("line", { x1: xs(Math.min(...vals)), x2: xs(Math.max(...vals)), y1: y, y2: y, stroke: "var(--line)", "stroke-width": 2 }));
+      sps.forEach((x) => {
+        const v = l.v[x]; if (v == null) return;
+        const sg = l.sig[x];
+        const c = sv("circle", { cx: xs(v), cy: y, r: 5, fill: coulEsp(x), stroke: sg?.sig ? "var(--ink)" : "var(--surface)", "stroke-width": sg?.sig ? 2 : 1.5 });
+        survol(c, () => `<b>${esc(nomEnc(l.enc))} · ${esc(tete(l.head))}</b><br>${x} (<i>${NOMS_ESP[x]}</i>) : ${fr(v)}` + (sg ? `<br>écart à la référence ${sg.diff > 0 ? "+" : ""}${fr(sg.diff)}${sg.sig ? ", significatif (Holm)" : ", non significatif"}` : "") + `<br><span style="opacity:.75">${esc(l.head)}</span>`);
+        svg.append(c);
+      });
+      if (l.moy != null) {
+        svg.append(sv("rect", { x: xs(l.moy) - 1.5, y: y - 8, width: 3, height: 16, rx: 1.5, fill: "var(--ink)" }));
+        svg.append(sv("text", { x: W - d + 8, y: y + 4, class: "fort num" }, fr(l.moy)));
+      }
+    });
+    svg.append(sv("text", { x: W - d + 8, y: h - 12, class: "fort" }, "moy."));
+    zone.replaceChildren(el("div", { class: "defile" }, svg), el("div", { class: "legende" },
+      ...sps.map((x) => el("span", {}, el("i", { style: `background:${coulEsp(x)}` }), x)),
+      el("span", {}, el("i", { class: "trait", style: "height:12px;width:3px" }), "moyenne"),
+      el("span", {}, el("i", { class: "anneau" }), "écart significatif"),
+      ref ? el("span", {}, el("i", { class: "tirets" }), "référence : perch_v2 · logistique") : null));
+  }
+  init("adaptees");
+}
+
+/* ======================================================================
+   7. Rapports
+   ====================================================================== */
+{
+  const s = section("rapports", "Rapports de benchmark", "Les huit rapports complets, avec leurs figures. Chacun a ses données (CSV) et le script qui les redessine dans le dépôt.");
+  const liste = el("div", { class: "liste-rapports", role: "group", "aria-label": "Rapports" });
+  const lecteur = el("article", { class: "carte md", "data-comment-target": "" });
+  const boutons = [];
+  D.rapports.forEach((r) => {
+    const b = el("button", { type: "button", "aria-pressed": "false" }, el("b", {}, `${r.numero} · ${r.objet.split(";")[0].split(",")[0]}`), el("small", {}, `${r.date.split("-").reverse().join("/")} · ${r.statut}`));
+    b.addEventListener("click", () => ouvrir(r.id, true));
+    boutons.push([r.id, b]); liste.append(b);
+  });
+  function ouvrir(id, defiler) {
+    const r = D.rapports.find((x) => x.id === id);
+    boutons.forEach(([k, b]) => b.setAttribute("aria-pressed", String(k === id)));
+    lecteur.innerHTML = markdown(r.texte);
+    const pied = el("div", { class: "legende", style: "margin-top:16px;border-top:1px solid var(--line);padding-top:10px" },
+      el("span", {}, "Données : ", r.donnees.map((f) => el("code", {}, f)).flatMap((x) => [x, " "])),
+      el("a", { href: `${C.projet.depot}/tree/main/documentation/benchmarks/${r.id}`, target: "_blank", rel: "noopener" }, "Ouvrir le dossier sur GitHub"));
+    const tete = el("div", { class: "carte-tete" }, el("span", { class: "eyebrow" }, `Benchmark ${r.numero}`), boutonCommenter(lecteur, "Commenter ce rapport"));
+    if (commentaires) tete.querySelector(".commenter").hidden = false;
+    lecteur.prepend(tete); lecteur.append(pied);
+    brancherImages(lecteur);
+    if (defiler && innerWidth < 900) lecteur.scrollIntoView({ block: "start" });
+  }
+  s.append(el("div", { class: "rapports" }, liste, lecteur));
+  ouvrir(D.rapports[D.rapports.length - 1].id, false);
+}
+
+/* ======================================================================
+   8. Tableaux
+   ====================================================================== */
+{
+  const s = section("tableaux", "Tableaux de référence", "Un tableau par famille de méthodes : protocole, encodeurs, têtes, régularisations, fusion… Cliquer pour agrandir.");
+  const g = el("div", { class: "galerie" });
+  D.tableaux.forEach((t) => {
+    const f = el("figure", { "data-comment-target": "" },
+      el("img", { src: t.image, alt: t.nom, loading: "lazy" }),
+      el("figcaption", {}, el("div", { class: "carte-tete" }, el("b", {}, t.nom), null), t.description || ""));
+    f.querySelector(".carte-tete").append(boutonCommenter(f));
+    f.querySelector("img").addEventListener("click", () => ouvrirImage(t.image, t.nom + (t.description ? " · " + t.description : "")));
+    g.append(f);
+  });
+  s.append(g);
+}
+
+/* ======================================================================
+   9–10. Bibliographie, glossaire (avec recherche)
+   ====================================================================== */
+function lecture(id, titre, sous, texte, eyebrow) {
+  const s = section(id, titre, sous, eyebrow);
+  const champ = el("input", { type: "search", id: id + "-q", placeholder: "Chercher…", "aria-label": "Chercher dans " + titre });
+  const nb = el("span", { class: "sous" });
+  const corps = el("div", { class: "carte md", "data-comment-target": "" });
+  corps.innerHTML = markdown(texte.replace(/^# .*\n/, ""));
+  const blocs = [...corps.querySelectorAll(":scope > ul > li, :scope > p, :scope > ol > li")];
+  champ.addEventListener("input", () => {
+    const q = champ.value.trim().toLowerCase(); let n = 0;
+    blocs.forEach((b) => { const ok = !q || b.textContent.toLowerCase().includes(q); b.hidden = !ok; if (ok && q) n++; });
+    corps.querySelectorAll("h2, h3, hr").forEach((h) => (h.hidden = !!q));
+    nb.textContent = q ? `${n} résultat${n > 1 ? "s" : ""}` : "";
+  });
+  s.append(el("div", { class: "controles" }, el("label", { class: "champ", style: "flex:1;max-width:420px" }, el("span", {}, "Chercher"), champ), nb), corps);
+}
+lecture("biblio", "Bibliographie", "Chaque référence avec ce qu'on en retient pour A. blanci.", D.biblio, "documentation/biblio/biblio.md");
+lecture("glossaire", "Glossaire", "Les termes de bioacoustique et d'apprentissage automatique employés dans le projet.", D.glossaire);
+
+/* ---------- section active dans la navigation ---------- */
+const liensNav = [...nav.querySelectorAll("a")];
+const obs = new IntersectionObserver((entrees) => {
+  for (const e of entrees) if (e.isIntersecting) liensNav.forEach((a) => a.classList.toggle("actif", a.dataset.id === e.target.id));
+}, { rootMargin: "-20% 0px -70% 0px" });
+document.querySelectorAll("section.vue").forEach((x) => obs.observe(x));
+if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) setTimeout(() => t.scrollIntoView(), 50); }
+</script>

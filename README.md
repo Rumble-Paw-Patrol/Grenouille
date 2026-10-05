@@ -24,6 +24,10 @@ Prochaines étapes : partition des points d'écoute et plan de tirage, mode d'an
 
 ## Pour les encadrants : par où commencer
 
+**[Tableau de bord](https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8)** (page claude.ai, accès sur
+invitation) : chaîne de traitement, données, benchmarks à explorer, rapports et travail en cours,
+avec un bouton « Commenter » sur chaque carte. Sources : `documentation/tableau-de-bord/`.
+
 1. **[DECISIONS.md](DECISIONS.md)** : le *cadre du projet* en tête (objectifs et critères §0,
    protocole d'annotation §5, évaluation §6, livrable §7, planning §8, risques §9), puis le
    journal des décisions numérotées (n° 1 à 165) qui dit pourquoi le code est comme il est.

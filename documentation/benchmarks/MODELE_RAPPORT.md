@@ -30,7 +30,7 @@ date · commit · statut
 ## En bref            3 à 5 puces : ce qu'on retient, avec le chiffre qui le porte
 ## 1. Question        une phrase
 ## 2. Données         jeu, sélection, volumes ; figure de la composition (où sont les positifs)
-## 3. Pipeline et choix   tableau Étape | Choix | Pourquoi (renvoi aux DECISIONS)
+## 3. Pipeline et choix   tableau Étape | Choix | Pourquoi (la raison en une phrase)
 ## 4. Résultats       tableau principal (PNG), 2 à 3 figures, légendes d'une ligne
 ## 5. Hypothèses      numérotées, chacune étayée ou avec son test
 ## 6. Ce qu'on en retient pour A. blanci

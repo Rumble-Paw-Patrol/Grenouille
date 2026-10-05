@@ -17,3 +17,7 @@ documentation/*.xlsx
 
 # Fichiers de verrou d'Office (document ouvert dans PowerPoint, Word, Excel).
 ~$*
+
+# Tableau de bord : produit par documentation/tableau-de-bord/construire.py.
+documentation/tableau-de-bord/index.html
+documentation/tableau-de-bord/fichiers.json
