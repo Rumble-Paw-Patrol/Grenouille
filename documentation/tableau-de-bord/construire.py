@@ -3,11 +3,16 @@
     uv run python documentation/tableau-de-bord/construire.py
 
 Lit les rapports et les CSV de documentation/benchmarks/, les tableaux PNG, la bibliographie,
-le glossaire, l'inventaire de documentation/commandes.md, les tests, l'historique git et
-contenu.yaml (le contenu éditorial : chaîne, planning, travail en cours). Écrit :
+le glossaire, l'inventaire de documentation/commandes.md, les tests, l'historique git,
+structure.yaml (objectif, chaîne, débit), en_cours.yaml (le travail en cours, tenu à la main)
+et, si la base locale existe, l'avancement des annotations. Écrit :
 
 - index.html : modele.html avec toutes les données intégrées ;
-- fichiers.json : les images à publier à côté de la page (chemin publié → chemin du dépôt).
+- fichiers.json : les images à publier à côté de la page (chemin publié → chemin du dépôt) ;
+- annotations.json : l'avancement des annotations, relu tel quel quand la base est absente
+  (session sans les données) ; versionné.
+
+    uv run python documentation/tableau-de-bord/construire.py [--config config/local.yaml]
 
 Rien n'est calculé de neuf : les chiffres sont ceux des CSV, regroupés. Pour publier, voir
 LISEZMOI.md.
@@ -15,9 +20,12 @@ LISEZMOI.md.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
+import sqlite3
 import subprocess
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -275,15 +283,93 @@ def tableaux(fichiers: dict[str, str]) -> list[dict]:
     return out
 
 
+# Sources de labels qui ne relèvent pas du plan d'annotation v1 : l'import Blancinet (choisi
+# par un détecteur, hors entraînement et évaluation) et l'écoute des enregistrements écartés.
+HORS_PLAN = ("import", "flag")
+
+
+def annotations(config: Path | None) -> dict:
+    """Avancement du plan d'annotation v1, compté dans la base locale (lecture seule).
+
+    Entraînement : enregistrements hors jeu gelé ayant au moins un label du plan. Évaluation :
+    enregistrements du jeu gelé (toutes versions) ayant au moins un label ; positifs : ceux qui
+    ont au moins une fenêtre positive. Dernier label de chaque fenêtre. Sans base, relit
+    annotations.json (dernier comptage connu).
+    """
+    sauvegarde = ICI / "annotations.json"
+    try:
+        from blanci.core.config import config_path, load_config
+        from blanci.inputs.dataset import current_labels, recordings_table
+        from blanci.inputs.frozen import frozen_recordings
+        from blanci.inputs.labels import POSITIVE_LABELS
+
+        if config is None and (RACINE / "config" / "local.yaml").exists():
+            config = RACINE / "config" / "local.yaml"
+        cfg = load_config(config)
+        base = config_path(cfg, "db")
+        if not base.exists():
+            raise FileNotFoundError(base)
+        con = sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)
+        try:
+            labels = current_labels(con)
+            recs = recordings_table(con)[["recording_id", "site"]]
+        finally:
+            con.close()
+        try:
+            geles = frozen_recordings(cfg)
+        except (OSError, ValueError):
+            geles = set()
+    except (ImportError, OSError, sqlite3.Error) as err:
+        if sauvegarde.exists():
+            ancien = json.loads(sauvegarde.read_text(encoding="utf-8"))
+            ancien["source"] = f"dernier comptage connu ({type(err).__name__} : base absente)"
+            return ancien
+        return {"compte": None, "source": "base locale absente, aucun comptage enregistré"}
+
+    labels = labels[~labels["source"].isin(HORS_PLAN)]
+    par_rec = labels.groupby("recording_id")["label"].apply(
+        lambda s: bool(s.isin(POSITIVE_LABELS).any())
+    )
+    par_rec = par_rec.rename("positif").reset_index().merge(recs, on="recording_id", how="left")
+    par_rec["gele"] = par_rec["recording_id"].isin(geles)
+    entr, ev = par_rec[~par_rec["gele"]], par_rec[par_rec["gele"]]
+    sites = (
+        par_rec.assign(jeu=par_rec["gele"].map({True: "evaluation", False: "entrainement"}))
+        .groupby(["site", "jeu"])["positif"]
+        .agg(["size", "sum"])
+        .reset_index()
+    )
+    resultat = {
+        "compte": {
+            "entrainement": int(len(entr)),
+            "positifs_entrainement": int(entr["positif"].sum()),
+            "evaluation": int(len(ev)),
+            "positifs_evaluation": int(ev["positif"].sum()),
+        },
+        "sites": [
+            [r.site or "?", r.jeu, int(r.size), int(r.sum)] for r in sites.itertuples(index=False)
+        ],
+        "compte_le": date.today().isoformat(),
+        "source": "base locale",
+    }
+    sauvegarde.write_text(json.dumps(resultat, ensure_ascii=False, indent=1), encoding="utf-8")
+    return resultat
+
+
 def main() -> None:
-    contenu = yaml.safe_load((ICI / "contenu.yaml").read_text(encoding="utf-8"))
+    args = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    args.add_argument("--config", type=Path, default=None, help="config/local.yaml par défaut")
+    config = args.parse_args().config
+    contenu = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
+    contenu.update(yaml.safe_load((ICI / "en_cours.yaml").read_text(encoding="utf-8")))
     fichiers: dict[str, str] = {}
     tests = compter_tests()
     for etape in contenu["chaine"]:
         etape["n_tests"] = tests.get(etape.get("tests", ""), 0)
     donnees = {
-        "genere": {"commit": commit_courant(), "date": str(contenu.get("mis_a_jour", ""))},
+        "genere": {"commit": commit_courant(), "date": date.today().isoformat()},
         "contenu": contenu,
+        "annotations": annotations(config),
         "tests": {"total": sum(tests.values()), "par_dossier": tests},
         "historique": historique(),
         "inventaire": inventaire(),

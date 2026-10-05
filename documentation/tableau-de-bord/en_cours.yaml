@@ -1,0 +1,36 @@
+# Travail en cours : LE SEUL FICHIER DU TABLEAU DE BORD À TENIR À LA MAIN.
+# Un chantier = titre, etat (en_cours | a_venir | bloque | fait), detail, suite (prochaine action).
+# Retirer un chantier quand il est fini. Puis : /tableau-de-bord (ou demander « mets à jour le
+# tableau de bord »).
+
+en_cours:
+  - titre: Partition des points d'écoute et plan de tirage
+    etat: en_cours
+    detail: >-
+      Répartir les points d'écoute entre entraînement et test avant toute écoute (aucun point
+      ne sert aux deux), puis tirer les extraits par point, heure et période.
+    suite: Plan à valider par Sylvain et Élodie.
+  - titre: Mode « extrait + intervalles » du poste d'annotation
+    etat: en_cours
+    detail: >-
+      Annoter un extrait de 30 s en marquant les intervalles où A. blanci chante, plutôt que
+      fenêtre par fenêtre.
+    suite: Essai chronométré sur 50 extraits.
+  - titre: Encodage du corpus avec perch_v2
+    etat: en_cours
+    detail: >-
+      De 8,0 à 2,05 s par enregistrement de 2 min sur l'i5 (graphe réduit, lecture en avance,
+      rééchantillonnage par enregistrement). Corpus entier : environ 54 h au lieu de 210 h.
+    suite: Vérifier le câble du SSD externe, lu à 40 Mo/s (USB 2).
+  - titre: Essai d'empaquetage .exe
+    etat: a_venir
+    detail: >-
+      Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une
+      machine Windows propre.
+    suite: Repli prévu, Gradio à la place de Streamlit.
+  - titre: Vague 2 AnuraSet
+    etat: en_cours
+    detail: >-
+      audioprotopnet, avesecho_passt et biolingual restent à ajouter au benchmark des
+      encodeurs.
+    suite: Puis plus aucun benchmark AnuraSet.

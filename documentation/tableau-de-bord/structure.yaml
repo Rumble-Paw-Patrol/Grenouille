@@ -1,10 +1,9 @@
-# Contenu éditorial du tableau de bord : ce que les fichiers du dépôt ne disent pas d'eux-mêmes.
-# Le reste (benchmarks, rapports, tableaux, bibliographie, inventaire, tests, commits) est lu
-# par construire.py. Après modification : uv run python documentation/tableau-de-bord/construire.py
+# Structure du projet pour le tableau de bord : ce que le code ne dit pas de lui-même (objectif,
+# critères, étapes de la chaîne et leur état, débit de l'encodage). Tenu à jour par Claude
+# (skill tableau-de-bord) quand le code change ; le travail en cours est dans en_cours.yaml et
+# le compteur d'annotations est lu dans la base locale.
 #
-# État d'un élément : fait | en_cours | a_venir | bloque
-
-mis_a_jour: 2026-10-05
+# État d'une étape : fait | en_cours | a_venir | bloque
 
 projet:
   titre: Détection acoustique d'Anomaloglossus blanci
@@ -176,56 +175,6 @@ chaine:
       installateur .exe, guide de réentraînement pour l'ONF.
     chiffre: 1 h d'audio en moins de 10 min visé
 
-# Planning du stage (semaines S1 = 14–18/09/2026).
-planning:
-  - [P0 Cadrage, 2026-09-14, 2026-10-02, fait, "Lecture, inventaire, chaîne CLI, benchmarks AnuraSet 01–07"]
-  - [P0 bis Clôture et plan, 2026-09-29, 2026-10-09, en_cours, "Vague 2 AnuraSet, plan de tirage, essai d'empaquetage .exe"]
-  - [P1 Annotation v1, 2026-10-05, 2026-10-30, a_venir, "≈ 450 extraits d'entraînement, ≈ 250 enregistrements d'évaluation"]
-  - [Go des experts, 2026-10-30, 2026-11-06, a_venir, "Vérification à l'aveugle par Élodie et Benoît"]
-  - [P2 Benchmark ONF, 2026-11-02, 2026-11-20, a_venir, "Choix de l'encodeur le 20/11"]
-  - [P3 Outil v1, 2026-10-12, 2026-12-31, a_venir, "ONNX, écrans, installateur, test sur une machine ONF"]
-  - [P4 Transfert, 2027-01-04, 2027-02-05, a_venir, "Tests d'usage, documentation, gel fin S21"]
-  - [P5 Rapport, 2027-02-08, 2027-03-12, a_venir, "Rédaction et soutenance"]
-
-jalons:
-  - [2026-10-09, Clôture AnuraSet]
-  - [2026-11-06, Go des experts]
-  - [2026-11-20, Choix de l'encodeur]
-  - [2027-03-12, Soutenance]
-
-# Travail en cours : ce qui est sur la table cette semaine.
-en_cours:
-  - titre: Partition des points d'écoute et plan de tirage
-    etat: en_cours
-    detail: >-
-      Répartir les points d'écoute entre entraînement et test avant toute écoute (aucun point
-      ne sert aux deux), puis tirer les extraits par point, heure et période.
-    suite: Plan à valider par Sylvain et Élodie.
-  - titre: Mode « extrait + intervalles » du poste d'annotation
-    etat: en_cours
-    detail: >-
-      Annoter un extrait de 30 s en marquant les intervalles où A. blanci chante, plutôt que
-      fenêtre par fenêtre.
-    suite: Essai chronométré sur 50 extraits.
-  - titre: Encodage du corpus avec perch_v2
-    etat: en_cours
-    detail: >-
-      De 8,0 à 2,05 s par enregistrement de 2 min sur l'i5 (graphe réduit, lecture en avance,
-      rééchantillonnage par enregistrement). Corpus entier : environ 54 h au lieu de 210 h.
-    suite: Vérifier le câble du SSD externe, lu à 40 Mo/s (USB 2).
-  - titre: Essai d'empaquetage .exe
-    etat: a_venir
-    detail: >-
-      Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une
-      machine Windows propre.
-    suite: Repli prévu, Gradio à la place de Streamlit.
-  - titre: Vague 2 AnuraSet
-    etat: en_cours
-    detail: >-
-      audioprotopnet, avesecho_passt et biolingual restent à ajouter au benchmark des
-      encodeurs ; clôture le 09/10.
-    suite: Puis plus aucun benchmark AnuraSet.
-
 # Débit de l'encodage perch_v2 sur l'i5, secondes par enregistrement de 2 min.
 debit:
   - [Origine, 8.0]
@@ -236,14 +185,8 @@ debit:
   - [Iris Xe (OpenVINO), 3.25]
   - ["Graphe réduit, CPU", 2.05]
 
-# Plan d'annotation v1 (cibles) ; « fait » se met à jour à la main ou depuis la base locale.
-annotation:
-  - [Extraits d'entraînement (30 s), 0, 450]
-  - [Enregistrements d'évaluation (2 min), 0, 250]
-  - [Positifs à l'évaluation, 0, 60]
-
-prochaines_etapes:
-  - Partition des points d'écoute et plan de tirage
-  - Mode « extrait + intervalles »
-  - Première série d'annotations
-  - Essai d'empaquetage .exe
+# Cibles du plan d'annotation v1 ; l'avancement est compté dans data/db/blanci.sqlite.
+annotation_cibles:
+  entrainement: 450      # enregistrements annotés hors jeu gelé (≈ un extrait de 30 s chacun)
+  evaluation: 250        # enregistrements du jeu gelé, écoutés en entier
+  positifs_evaluation: 60

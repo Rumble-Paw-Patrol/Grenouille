@@ -68,9 +68,7 @@ Relire chaque chiffre du texte contre `donnees/` avant de rendre.
 2. `documentation/tableaux/generer.py` : si le benchmark introduit des têtes, encodeurs ou
    régularisations nouveaux, compléter la liste `TABLEAUX`, puis
    `uv run --group notebook python documentation/tableaux/generer.py`.
-3. Tableau de bord : `uv run python documentation/tableau-de-bord/construire.py`, puis
-   republier l'artifact (URL dans `documentation/tableau-de-bord/LISEZMOI.md`) avec l'outil
-   Artifact, `url` = cette URL, et les nouvelles figures dans `files`.
+3. Tableau de bord : suivre le skill `tableau-de-bord` (reconstruction et publication).
 4. `README.md` « Où en est le projet » si la conclusion change l'état du projet (meilleur
    libre, encodeur retenu).
 

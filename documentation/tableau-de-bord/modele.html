@@ -471,68 +471,33 @@ $("#pied").append(
    1. Vue d'ensemble
    ====================================================================== */
 {
-  const s = section("accueil", "Vue d'ensemble", "Où en est le stage, les critères de choix et le calendrier.", C.projet.stage);
+  const s = section("accueil", "Vue d'ensemble", "Où en est le projet et les critères de choix du détecteur.", C.projet.stage);
   const totalH = D.inventaire.sites.reduce((a, x) => a + x.heures, 0);
   const totalN = D.inventaire.sites.reduce((a, x) => a + x.enregistrements, 0);
   const libre = D.encodeurs.encodeurs.filter((e) => e.libre === "oui" && e.ap_site_best != null).sort((a, b) => b.ap_site_best - a.ap_site_best)[0];
-  const jalon = C.jalons.find((j) => new Date(j[0]) >= new Date()) || C.jalons[C.jalons.length - 1];
-  const jours = Math.ceil((new Date(jalon[0] + "T12:00:00") - new Date()) / 864e5);
   const tuile = (b, span, em) => el("div", { class: "tuile" }, el("b", {}, b), el("span", {}, span), em ? el("em", {}, em) : null);
   s.append(el("div", { class: "tuiles" },
     tuile(entier(totalH) + " h", `${entier(totalN)} enregistrements de 2 min`, `${D.inventaire.sites.length} sites`),
     tuile(fr(libre.ap_site_best), `meilleur encodeur libre : ${libre.encoder}`, "AP moyenne par site, AnuraSet"),
     tuile(String(D.encodeurs.encodeurs.filter((e) => e.ap_site_best != null).length), "encodeurs comparés", "benchmark 08"),
-    tuile(jours >= 0 ? `J−${jours}` : "—", jalon[1], dateFr(jalon[0])),
+    tuile(String(D.rapports.length), "rapports de benchmark", "figures et données jointes"),
     tuile(String(D.tests.total), "tests automatiques", "suite pytest")));
 
   const crit = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Rang"), el("th", {}, "Critère"), el("th", {}, "Mesure"))),
     el("tbody", {}, C.projet.criteres.map(([r, c, m]) => el("tr", {}, el("td", { class: "num" }, String(r)), el("td", {}, el("strong", {}, c)), el("td", {}, m)))));
   const etat = el("div", { class: "grille-2" },
     carte("Critères de choix du détecteur", "Appliqués dans cet ordre. Un encodeur non libre n'entre jamais dans le livrable.", el("div", { class: "defile" }, crit)),
-    carte("Prochaines étapes", null, el("ol", { style: "margin:0;padding-left:20px;display:grid;gap:6px" }, C.prochaines_etapes.map((t) => el("li", {}, t)))));
+    carte("Chantiers en cours", null, el("ul", { style: "margin:0;padding:0;list-style:none;display:grid;gap:8px" },
+      C.en_cours.map((t) => el("li", { style: "display:flex;gap:10px;align-items:baseline;justify-content:space-between" }, el("a", { href: "#en-cours" }, t.titre), puceEtat(t.etat))))));
   s.append(etat);
 
-  const g = carte("Calendrier", "Phases du stage ; trait doré : aujourd'hui ; losanges : jalons.");
-  const holder = el("div", { class: "defile" }); g.append(holder, el("div", { class: "legende" },
-    el("span", {}, el("i", { style: "background:var(--ok)" }), "fait"), el("span", {}, el("i", { style: "background:var(--warn)" }), "en cours"),
-    el("span", {}, el("i", { style: "background:var(--idle)" }), "à venir")));
-  s.append(g);
-  const d0 = new Date("2026-09-14T00:00:00"), d1 = new Date("2027-03-15T00:00:00");
-  const W = 900, gauche = 170, droite = 14, rh = 26, haut = 30, H = haut + C.planning.length * rh + 26;
-  const x = (d) => gauche + ((new Date(d) - d0) / (d1 - d0)) * (W - gauche - droite);
-  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", style: `min-width:640px`, role: "img", "aria-label": "Calendrier du stage" });
-  for (let m = new Date(d0.getFullYear(), d0.getMonth() + 1, 1); m < d1; m.setMonth(m.getMonth() + 1)) {
-    const xx = x(m);
-    svg.append(sv("line", { x1: xx, x2: xx, y1: haut - 6, y2: H - 22, class: "grille-l" }));
-    svg.append(sv("text", { x: xx + 4, y: haut - 12 }, m.toLocaleDateString("fr-FR", { month: "short" }) + (m.getMonth() === 0 ? " " + m.getFullYear() : "")));
-  }
-  const coul = { fait: "var(--ok)", en_cours: "var(--warn)", a_venir: "var(--idle)", bloque: "var(--bad)" };
-  C.planning.forEach(([nom, a, b, e, det], k) => {
-    const y = haut + k * rh;
-    svg.append(sv("text", { x: 0, y: y + 16, class: "fort" }, nom));
-    const r = sv("rect", { x: x(a), y: y + 5, width: Math.max(4, x(b) - x(a)), height: rh - 10, rx: 4, fill: coul[e], opacity: e === "a_venir" ? 0.55 : 0.9 });
-    survol(r, () => `<b>${esc(nom)}</b><br>${dateFr(a)} → ${dateFr(b)}<br>${esc(det)}`);
-    svg.append(r);
-  });
-  C.jalons.forEach(([d, nom]) => {
-    const xx = x(d), y = H - 14;
-    const p = sv("path", { d: `M${xx} ${y - 6} l6 6 l-6 6 l-6 -6 z`, fill: "var(--gold)" });
-    survol(p, () => `<b>${esc(nom)}</b><br>${dateFr(d)}`);
-    svg.append(p);
-  });
-  const auj = new Date();
-  if (auj > d0 && auj < d1) {
-    svg.append(sv("line", { x1: x(auj), x2: x(auj), y1: haut - 6, y2: H - 22, stroke: "var(--gold)", "stroke-width": 2 }));
-    svg.append(sv("text", { x: x(auj) + 4, y: H - 24, class: "fort" }, "aujourd'hui"));
-  }
-  holder.append(svg);
 }
 
 /* ======================================================================
    2. Travail en cours
    ====================================================================== */
 {
-  const s = section("en-cours", "Travail en cours", "Ce qui est sur la table en ce moment, et ce qui a bougé dans le dépôt.", `Mis à jour le ${dateFr(String(C.mis_a_jour))}`);
+  const s = section("en-cours", "Travail en cours", "Ce qui est sur la table en ce moment, et ce qui a bougé dans le dépôt.", `Mis à jour le ${dateFr(String(D.genere.date))}`);
   const g = el("div", { class: "grille" });
   for (const t of C.en_cours) {
     const c = el("div", { class: "carte", "data-comment-target": "" },
@@ -555,9 +520,20 @@ $("#pied").append(
     survol(r, () => `<b>${esc(nom)}</b><br>${fr(v)} s par enregistrement<br>≈ ${entier((v * 94588) / 3600)} h pour les 94 588 enregistrements encodables`);
     svg.append(r, sv("text", { x: gauche + w + 6, y: y + 15, class: "fort num" }, fr(v) + " s"));
   });
-  const ann = el("div", { class: "progres" }, C.annotation.map(([nom, fait, cible]) => el("div", {},
-    el("div", { class: "lbl" }, el("span", {}, nom), el("span", { class: "num" }, `${entier(fait)} / ${entier(cible)}`)),
-    el("div", { class: "rail" }, el("i", { style: `width:${Math.min(100, (100 * fait) / cible)}%` })))));
+  const A = D.annotations || {}, K = A.compte, cib = C.annotation_cibles;
+  const ann = el("div", { class: "progres" });
+  if (!K) ann.append(el("p", { class: "vide" }, "Pas encore de comptage : il se fait à la construction du tableau de bord sur la machine qui a la base d'annotations."));
+  else {
+    [["Enregistrements annotés pour l'entraînement", K.entrainement, cib.entrainement, `${entier(K.positifs_entrainement)} positifs`],
+     ["Enregistrements d'évaluation (jeu gelé)", K.evaluation, cib.evaluation, null],
+     ["Positifs à l'évaluation", K.positifs_evaluation, cib.positifs_evaluation, null]].forEach(([nom, fait, cible, note]) => ann.append(el("div", {},
+      el("div", { class: "lbl" }, el("span", {}, nom, note ? el("span", { class: "sous" }, ` · ${note}`) : null), el("span", { class: "num" }, `${entier(fait)} / ${entier(cible)}`)),
+      el("div", { class: "rail" }, el("i", { style: `width:${Math.min(100, (100 * fait) / cible)}%` })))));
+    if (A.sites?.length) ann.append(el("div", { class: "defile" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "Site"), el("th", {}, "Jeu"), el("th", { class: "n" }, "Enregistrements"), el("th", { class: "n" }, "dont positifs"))),
+      el("tbody", {}, A.sites.map(([site, jeu, n, p]) => el("tr", {}, el("td", {}, site), el("td", {}, jeu === "evaluation" ? "évaluation" : "entraînement"), el("td", { class: "n" }, entier(n)), el("td", { class: "n" }, entier(p))))))));
+    ann.append(el("p", { class: "sous" }, `Compté le ${dateFr(A.compte_le)} (${A.source}). Labels de l'import Blancinet et des enregistrements écartés non comptés.`));
+  }
   const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg]) =>
     el("div", {}, el("time", { title: h }, d.split("-").reverse().join("/")), el("span", {}, msg))));
   s.append(el("div", { class: "grille-2" },
