@@ -3056,3 +3056,83 @@ de Léonard, 01/10/2026.
        réseau moyennent sur toute la fenêtre de 5 s : les fenêtres ne partagent pas leurs
        calculs intermédiaires, et le résultat serait un autre modèle.
      - Mode débit d'OpenVINO et requêtes parallèles sur l'Iris Xe : sans effet (21,3 à 21,5).
+
+## 2026-10-05 — Poste d'annotation : navigation, spectrogramme zoomable, découpage, plusieurs classes
+
+181. **Poste d'annotation remanié à la demande de Léonard** (`annotation/app.py`, `viewer.py`).
+     Les réponses étaient déjà sûres : chaque « Envoyer » écrit le label dans la base
+     (`append_label`, validé aussitôt) ; fermer la page ou VS Code ne perd rien.
+     - **Numérotation et retour en arrière.** La position est prise dans la file entière, et
+       non plus dans les seuls candidats restants : après « 1 / 1521 » vient « 2 / 1521 » (la
+       file raccourcissait à chaque réponse, d'où « 1 / 1520 »). Les candidats déjà écoutés
+       ne sont plus masqués : ◀ ▶ les parcourent tous, « Prochain jamais écouté ⏭ » saute
+       les autres, et après une réponse on passe au prochain jamais écouté (case à cocher).
+       Une nouvelle réponse sur un candidat déjà écouté s'ajoute (correction, §13.7).
+     - **Liste des candidats** de la file ouverte, sous la liste des files : numéro, site,
+       micro, heure, décalage, ✓ et label s'il a été écouté ; on y saute à n'importe lequel.
+     - **Spectrogramme zoomable** (`viewer.py`, page HTML autonome) : molette (temps),
+       Maj + molette (fréquence), glisser, double-clic pour tout revoir ; barre de lecture qui
+       suit le micro écouté (la vue suit si elle sort de l'écran) ; clic : la lecture saute là.
+       La vue et la position de lecture sont gardées d'un affichage à l'autre du même extrait.
+     - **Bande d'écoute réglable** (position et largeur, en kHz) au lieu de `signal.band_hz`
+       fixe, qui reste la valeur de départ ; pointillés sur le spectrogramme.
+     - **Découpage** : l'extrait (candidat ± contexte, ou enregistrement entier) se découpe
+       en fenêtres de longueur choisie, calées sur le début du candidat
+       (`workbench.split_windows`, le candidat reste une des fenêtres) ; elles s'annotent une
+       à une sans changer de page, chacune avec sa propre fenêtre en base. Le score du modèle
+       n'est gardé que pour la fenêtre du candidat. Au-delà de 20 s d'extrait, l'écoute est
+       rééchantillonnée à 24 kHz pour que la page reste légère (le spectrogramme ne l'est pas).
+     - **Plusieurs classes** par réponse (cases à cocher) : `labels.label` reçoit la première
+       dans l'ordre de `ANSWERS` (A. blanci d'abord, donc un positif reste un positif pour
+       tout ce qui lit `label`), les autres vont dans `conditions.extra_labels`
+       (`workbench.ordered_classes`) ; aucune case : « rien », « rien » avec une autre classe
+       est ignoré. Le schéma ne change pas.
+
+## 2026-10-05 (suite) — Annotation par intervalles
+
+182. **On annote des intervalles, plus des fenêtres** (§5.6, Léonard). L'annotation par
+     fenêtres de longueur fixe dépendait de l'encodeur (3 s pour BirdNET, 5 s pour perch_v2)
+     alors que l'encodeur final n'est pas choisi. Le poste trace maintenant, sur le
+     spectrogramme de l'extrait (l'enregistrement entier par défaut), les intervalles où
+     A. blanci chante ; les autres classes, la qualité, l'espèce et le commentaire valent pour
+     tout l'extrait. Un « Envoyer l'extrait » par extrait.
+     - **Règle de transfert, pour toute grille** (`dataset.interval_labels`) : une fenêtre est
+       **positive si et seulement si elle chevauche un intervalle annoté** (même un instant ;
+       toucher le bord ne compte pas) ; négative si elle est entièrement dans l'extrait sans
+       toucher d'intervalle ; sans label sinon. Le « bord » du §5.6 (fenêtre qui ne fait
+       qu'effleurer un intervalle, écartée) n'est pas retenu : une fenêtre avec 0,1 s de note
+       est positive. Risque connu : des positifs presque vides, plus nombreux sur une grille
+       de 5 s ; à mesurer sur le benchmark (part de positifs dont le recouvrement est < 0,5 s)
+       avant de rouvrir la question.
+     - Intervalle « A. blanci ? » : fenêtres incertaines, écartées comme `blanci_uncertain`.
+       « A. blanci, plusieurs » : fenêtres `blanci_chorus`. Les fenêtres négatives prennent la
+       première des autres classes cochées (oiseau, pluie…), « rien » sinon.
+     - **Stockage** : tables `spans` (extrait écouté) et `intervals`, en ajout seul comme
+       `labels` (migration 3). Réécouter un extrait ajoute un span ; un span plus récent qui
+       couvre entièrement un intervalle l'annule (correction).
+     - Branché dans `training_set` (benchmark et têtes) avec les labels de fenêtres : une
+       fenêtre que les deux étiquettent en désaccord est écartée ; les intervalles positifs
+       servent aussi aux faux négatifs suspects et aux négatifs appariés ; `benchmark_recordings`
+       compte les enregistrements annotés par intervalles.
+     - **Annotation par fenêtres gardée, désactivée** (case « Annoter par fenêtres
+       (suspendu) », avec la longueur des fenêtres) : à reprendre une fois l'encodeur choisi.
+     - Le spectrogramme devient un composant Streamlit bidirectionnel (`viewer.py`) : glisser
+       trace un intervalle, tirer un bord l'ajuste, clic droit ou Suppr l'efface, Maj +
+       glisser déplace la vue. Spectrogramme et écoute sont servis comme fichiers à côté du
+       composant : la page n'est plus rechargée à chaque clic, la lecture continue.
+     - Pas encore lus par les intervalles : `explore`, les files de sélection (`selection`),
+       `oof`, `baselines`, qui ne voient que les labels de fenêtres.
+
+183. **Retour au « bord » du §5.6** (Léonard), qui remplace la règle « positive dès qu'elle
+     chevauche » du n° 182. Recouvrement r = durée commune / min(durée de l'intervalle,
+     durée de la fenêtre) : **positive si r ≥ ½** (la fenêtre contient au moins la moitié du
+     chant, ou le chant remplit au moins la moitié de la fenêtre) ; **bord si 0 < r < ½**,
+     label `edge`, écarté de l'entraînement comme les incertains ; négative si aucun
+     intervalle n'est touché (`dataset.MIN_INTERVAL_OVERLAP`).
+     - Les fenêtres glissantes étaient déjà en place (`encoders.overlap: 0.5`, n° 1) : avec un
+       pas d'une demi-fenêtre, chaque intervalle a au moins une fenêtre avec r ≥ ½, quelle
+       que soit sa durée et où qu'il tombe (si la fenêtre la plus proche avant lui commence
+       au plus un demi-pas plus tôt, elle en couvre au moins min(durée, ½ fenêtre)). Écarter
+       les bords ne perd donc aucun chant ; vérifié par un test sur grilles de 3 et 5 s.
+     - Une fenêtre positive pour un intervalle sûr le reste même si elle touche aussi un
+       intervalle « A. blanci ? » ; sinon, toucher un intervalle incertain la rend incertaine.

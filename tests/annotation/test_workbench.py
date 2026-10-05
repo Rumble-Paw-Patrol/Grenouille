@@ -15,13 +15,18 @@ from blanci.annotation.workbench import (
     blancinet_candidates,
     clip_spectrogram,
     ensure_window,
+    latest_labels,
     load_candidates,
     local_time,
+    next_position,
+    ordered_classes,
     progress,
     random_candidates,
     read_clip,
     recording_candidates,
     save_answer,
+    spectrogram_png,
+    split_windows,
     wav_bytes,
 )
 from blanci.core.db import connect, window_id_for
@@ -391,3 +396,103 @@ def test_flagged_recordings_go_whole_to_the_listening_queue(corpus):
     append_label(con, wid, "background", "flag")
     assert len(flagged_candidates(con, "clock_off")) == 3  # déjà écouté : sauté
     assert flagged_candidates(con, "clock_off", sites=["CDR"]).empty
+
+
+# --- Navigation, découpage, plusieurs classes ---------------------------------------------------
+
+
+def test_next_position_counts_in_the_whole_queue():
+    done = pd.Series([None, "bird", None, None], dtype=object)
+    assert next_position(done, 0, unheard_only=False) == 1
+    assert next_position(done, 0, unheard_only=True) == 2  # saute le candidat déjà écouté
+    assert next_position(done, 3, unheard_only=True) == 0  # repart du début
+    assert next_position(done, -1, unheard_only=True) == 0  # ouverture de la file
+    assert next_position(pd.Series(["bird"] * 2, dtype=object), 1, unheard_only=True) == 1
+    assert next_position(done, 3, unheard_only=False) == 3
+
+
+def test_split_windows_are_anchored_on_the_candidate():
+    assert split_windows(0.0, 12.0, 4.5, 3.0) == [1.5, 4.5, 7.5]
+    assert split_windows(0.0, 12.0, 3.0, 3.0) == [0.0, 3.0, 6.0, 9.0]
+    assert split_windows(1.5, 10.5, 4.5, 3.0) == [1.5, 4.5, 7.5]
+    assert split_windows(0.0, 2.0, 0.0, 3.0) == []
+    with pytest.raises(ValueError):
+        split_windows(0.0, 2.0, 0.0, 0.0)
+
+
+def test_ordered_classes_puts_blanci_first():
+    assert ordered_classes([]) == ("background", [])
+    assert ordered_classes(["rain", "blanci"]) == ("blanci", ["rain"])
+    assert ordered_classes(["background", "bird"]) == ("bird", [])
+    assert ordered_classes(["orthoptera", "bird", "bird"]) == ("bird", ["orthoptera"])
+
+
+def test_save_answer_keeps_the_other_classes(corpus):
+    con, _, _ = corpus
+    rid = con.execute("SELECT recording_id FROM recordings LIMIT 1").fetchone()[0]
+    candidate = {"recording_id": rid, "offset_s": 0.0, "dur_s": 3.0, "source": "random"}
+    save_answer(con, candidate, "blanci", "léonard", extra_labels=["rain", "bird"])
+    conditions = json.loads(con.execute("SELECT conditions FROM labels").fetchone()[0])
+    assert conditions["extra_labels"] == ["rain", "bird"]
+    with pytest.raises(ValueError, match="classe inconnue"):
+        save_answer(con, candidate, "blanci", "léonard", extra_labels=["dragon"])
+    wid = window_id_for(rid, 0.0, 3.0)
+    assert latest_labels(con, [wid, window_id_for(rid, 3.0, 3.0)]) == {wid: "blanci"}
+    assert latest_labels(con, [wid], annotator="tuteur") == {}
+
+
+def test_spectrogram_png_and_resampled_listening():
+    from PIL import Image
+
+    wav = np.random.default_rng(0).normal(0, 0.1, 48_000 * 2).astype(np.float32)
+    png, fmax = spectrogram_png(wav, 48_000, fmax_hz=12_000, max_columns=50)
+    image = Image.open(io.BytesIO(png))
+    assert image.width <= 50 and image.height > 100
+    assert 11_900 < fmax <= 12_000
+    x, sr = sf.read(io.BytesIO(wav_bytes(wav, 48_000, max_sr=24_000)))
+    assert sr == 24_000 and len(x) == 48_000
+
+
+def test_viewer_serves_its_files_next_to_the_page(tmp_path, monkeypatch):
+    """Spectrogramme et écoute rangés à côté de la page du composant, nommés par leur
+    contenu : les arguments ne transportent que leurs chemins."""
+    from blanci.annotation import viewer
+
+    monkeypatch.setattr(viewer, "VIEWER_DIR", tmp_path / "viewer")
+    args = viewer.viewer_args(
+        b"png",
+        1.0,
+        7.0,
+        8000.0,
+        [("micro 1", b"wav", 1.0)],
+        [{"t0": 3.0, "t1": 6.0, "label": None, "current": True, "candidate": True}],
+        (4400.0, 5500.0),
+        key="a.wav:1.00:7.00",
+        labels=[("blanci", "A. blanci")],
+        intervals=[(2.0, 2.5, "blanci")],
+        interval_mode=True,
+    )
+    assert (tmp_path / "viewer" / "index.html").read_text().startswith("<!doctype html>")
+    assert (tmp_path / "viewer" / args["image"]).read_bytes() == b"png"
+    assert (tmp_path / "viewer" / args["audios"][0]["src"]).read_bytes() == b"wav"
+    assert args["extract"] == "a.wav:1.00:7.00"
+    assert args["intervals"] == [[2.0, 2.5, "blanci"]]
+
+
+def test_save_span_derives_the_other_label(corpus):
+    """Les fenêtres hors intervalles prennent la première autre classe cochée ; A. blanci
+    sans intervalle est refusé."""
+    from blanci.annotation.workbench import save_span, span_intervals
+
+    con, _, _ = corpus
+    rid = con.execute("SELECT recording_id FROM recordings LIMIT 1").fetchone()[0]
+    candidate = {"recording_id": rid, "offset_s": 3.0, "dur_s": 3.0, "source": "random"}
+    with pytest.raises(ValueError, match="sans intervalle"):
+        save_span(con, candidate, 0.0, 12.0, [], ["blanci"], "léonard")
+    assert span_intervals(con, rid, 0.0, 12.0) is None
+    save_span(con, candidate, 0.0, 12.0, [(4.0, 5.0, "blanci")], ["rain", "bird"], "léonard")
+    other, classes = con.execute("SELECT other_label, classes FROM spans").fetchone()
+    assert other == "bird" and json.loads(classes) == ["rain", "bird", "blanci"]
+    assert span_intervals(con, rid, 0.0, 12.0) == [(4.0, 5.0, "blanci")]
+    queue = pd.DataFrame({"recording_id": [rid] * 2, "offset_s": [3.0, 6.0], "dur_s": 3.0})
+    assert progress(con, queue).tolist() == ["blanci", "bird"]

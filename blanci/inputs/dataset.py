@@ -5,6 +5,16 @@ Labels courants, transfert vers la grille, négatifs appariés.
 - Transfert (DECISIONS n° 4) : une fenêtre de grille hérite du label d'une annotation si elle la
   contient (annotation courte, 3 s) ou si elle y est contenue (annotation d'enregistrement
   entier, §5). Les fenêtres qui ne font que chevaucher l'annotation sont écartées.
+- Intervalles (§5.6, DECISIONS n° 182, 183) : sur un extrait écouté (span), recouvrement
+  r = durée commune / min(durée de l'intervalle, durée de la fenêtre). Une fenêtre est
+  **positive si r ≥ `MIN_INTERVAL_OVERLAP` (½)** pour un intervalle (elle contient le chant,
+  ou le chant la remplit, au moins à moitié) ; **« bord »** si elle ne fait qu'effleurer un
+  intervalle (0 < r < ½) : label `edge`, écartée de l'entraînement ; négative si elle est
+  entièrement dans l'extrait sans toucher d'intervalle ; sans label sinon (pas entièrement
+  écoutée). Avec des fenêtres glissantes à moitié recouvrantes (`encoders.overlap: 0.5`),
+  chaque intervalle a au moins une fenêtre positive, quelle que soit sa durée : écarter les
+  bords ne perd aucun chant. Un intervalle « A. blanci ? » rend incertaine toute fenêtre non
+  positive qui le touche (`blanci_uncertain`, écartée). Valable pour toute grille (3, 5 s…).
 - Négatifs appariés (§2) : fenêtres du même micro, dans des enregistrements sans label positif.
   Ce sont des négatifs *présumés* (colonne `presumed`) : jamais écrits dans la table labels.
   En saison, à l'heure de pic, une partie peut contenir A. blanci : bruit d'étiquette identique
@@ -36,7 +46,11 @@ from blanci.heads.signal_processing import GAP_RADIUS_S, surrounded_by_positives
 from blanci.inputs.labels import POSITIVE_LABELS
 from blanci.inputs.qc import EXCLUDING_FLAGS, is_excluded
 
-EXCLUDED_LABELS = ("blanci_uncertain", "uncertain")
+# « edge » : fenêtre qui ne fait qu'effleurer un intervalle annoté (jamais rangé dans labels).
+EXCLUDED_LABELS = ("blanci_uncertain", "uncertain", "edge")
+# Recouvrement minimal d'un intervalle pour qu'une fenêtre soit positive ; ½ garantit, avec
+# des fenêtres recouvrantes de moitié, au moins une fenêtre positive par intervalle.
+MIN_INTERVAL_OVERLAP = 0.5
 PAIRING_STRATEGIES = ("nearest", "other_day", "same_day", "mixed")
 
 
@@ -71,6 +85,104 @@ def current_labels(con: sqlite3.Connection) -> pd.DataFrame:
     )
     df["comment"] = df["conditions"].map(_comment)
     return df.drop(columns="conditions")
+
+
+def load_spans(
+    con: sqlite3.Connection, annotator: str | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(extraits écoutés, intervalles) de l'annotation par intervalles. Les intervalles
+    portent recording_id ; `annotator` : seulement ses extraits (calibration, §5)."""
+    where, params = ("WHERE annotator = ?", (annotator,)) if annotator is not None else ("", ())
+    where_joined = where.replace("annotator", "s.annotator")
+    spans = pd.read_sql_query(
+        "SELECT span_id, recording_id, start_s, end_s, other_label, quality, conditions "
+        f"FROM spans {where} ORDER BY span_id",
+        con,
+        params=params,
+    )
+    spans["comment"] = spans["conditions"].map(_comment)
+    spans = spans.drop(columns="conditions")
+    intervals = pd.read_sql_query(
+        "SELECT i.span_id, s.recording_id, i.start_s, i.end_s, i.label "
+        f"FROM intervals i JOIN spans s USING (span_id) {where_joined} "
+        "ORDER BY i.interval_id",
+        con,
+        params=params,
+    )
+    return spans, intervals
+
+
+def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFrame:
+    """Intervalles encore valables : un extrait réécouté plus tard qui couvre entièrement un
+    intervalle le remplace (correction en ajout seul, comme les labels)."""
+    if intervals.empty:
+        return intervals
+    keep = []
+    by_recording = {rid: g for rid, g in spans.groupby("recording_id")}
+    for row in intervals.itertuples(index=False):
+        later = by_recording[row.recording_id]
+        later = later[later["span_id"] > row.span_id]
+        covered = (later["start_s"] <= row.start_s + 1e-6) & (later["end_s"] >= row.end_s - 1e-6)
+        keep.append(not covered.any())
+    return intervals[keep].reset_index(drop=True)
+
+
+def interval_labels(
+    spans: pd.DataFrame,
+    intervals: pd.DataFrame,
+    grid: pd.DataFrame,
+    min_overlap: float = MIN_INTERVAL_OVERLAP,
+    eps: float = 1e-6,
+) -> pd.DataFrame:
+    """Labels des fenêtres de grille déduits des intervalles (règle en tête du module).
+
+    grid : window_id, recording_id, offset_s, dur_s. Renvoie window_id, recording_id,
+    offset_s, label, y, quality, comment ; les fenêtres incertaines et les bords y sont
+    (labels `blanci_uncertain`, `edge`, y = 0) : à écarter pour l'entraînement
+    (`EXCLUDED_LABELS`)."""
+    columns = ["window_id", "recording_id", "offset_s", "label", "y", "quality", "comment"]
+    if spans.empty or grid.empty:
+        return pd.DataFrame(columns=columns)
+    valid = current_intervals(spans, intervals)
+    span_info = spans.set_index("span_id")
+    rows = []
+    grid = grid[grid["recording_id"].isin(set(spans["recording_id"]))]
+    for rid, g in grid.groupby("recording_id"):
+        w0 = g["offset_s"].to_numpy(dtype=float)
+        w1 = w0 + g["dur_s"].to_numpy(dtype=float)
+        sp = spans[spans["recording_id"] == rid]
+        iv = valid[valid["recording_id"] == rid]
+        inside = (w0[:, None] >= sp["start_s"].to_numpy()[None, :] - eps) & (
+            w1[:, None] <= sp["end_s"].to_numpy()[None, :] + eps
+        )
+        i0, i1 = iv["start_s"].to_numpy(dtype=float), iv["end_s"].to_numpy(dtype=float)
+        common = np.minimum(w1[:, None], i1[None, :]) - np.maximum(w0[:, None], i0[None, :])
+        touch = common > eps
+        shorter = np.minimum((w1 - w0)[:, None], (i1 - i0)[None, :])
+        enough = touch & (common >= min_overlap * shorter - eps)
+        labels = iv["label"].to_numpy()
+        certain = labels != "blanci_uncertain"
+        ids = iv["span_id"].to_numpy()
+        for j, (wid, off) in enumerate(zip(g["window_id"], g["offset_s"], strict=True)):
+            hits = touch[j]
+            if (enough[j] & certain).any():
+                k = enough[j] & certain
+                label = "blanci_chorus" if (labels[k] == "blanci_chorus").any() else "blanci"
+                info = span_info.loc[ids[k].max()]
+                y = 1
+            elif (hits & ~certain).any():
+                label, y = "blanci_uncertain", 0
+                info = span_info.loc[ids[hits & ~certain].max()]
+            elif hits.any():
+                label, y = "edge", 0
+                info = span_info.loc[ids[hits].max()]
+            elif inside[j].any():
+                info = span_info.loc[sp["span_id"].to_numpy()[np.flatnonzero(inside[j])].max()]
+                label, y = info["other_label"], 0
+            else:
+                continue
+            rows.append((wid, rid, off, label, y, info["quality"], info["comment"]))
+    return pd.DataFrame(rows, columns=columns)
 
 
 def recordings_table(con: sqlite3.Connection) -> pd.DataFrame:
@@ -302,6 +414,31 @@ def suspect_false_negatives(
     return out
 
 
+def _merge_labelled(*parts: pd.DataFrame) -> pd.DataFrame:
+    """Fenêtres étiquetées par les annotations de fenêtres et par les intervalles : une
+    fenêtre que les deux étiquettent en désaccord (positive / négative) est écartée."""
+    parts = [p for p in parts if not p.empty]
+    if not parts:
+        return pd.DataFrame(columns=["window_id", "recording_id", "offset_s", "label", "y"])
+    data = pd.concat(parts, ignore_index=True)
+    conflicts = data.groupby("window_id")["y"].nunique()
+    data = data[~data["window_id"].isin(conflicts[conflicts > 1].index)]
+    return data.drop_duplicates("window_id", keep="last").reset_index(drop=True)
+
+
+def _positive_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFrame:
+    """Intervalles positifs valables, au format de `positive_annotations`."""
+    valid = current_intervals(spans, intervals[intervals["span_id"].isin(spans["span_id"])])
+    valid = valid[valid["label"].isin(POSITIVE_LABELS)]
+    return pd.DataFrame(
+        {
+            "recording_id": valid["recording_id"],
+            "offset_s": valid["start_s"],
+            "dur_s": valid["end_s"] - valid["start_s"],
+        }
+    )
+
+
 def training_set(
     con: sqlite3.Connection,
     grid: pd.DataFrame,
@@ -327,8 +464,20 @@ def training_set(
     if exclude_recordings:
         grid = grid[~grid["recording_id"].isin(exclude_recordings)]
     annotations = current_labels(con)
-    labeled = transfer_labels(annotations, grid)
-    positive_windows = positive_annotations(annotations, exclude_recordings)
+    spans, intervals = load_spans(con)
+    if exclude_recordings:
+        spans = spans[~spans["recording_id"].isin(exclude_recordings)]
+    labeled = _merge_labelled(
+        transfer_labels(annotations, grid),
+        interval_labels(spans, intervals, grid).query("label not in @EXCLUDED_LABELS"),
+    )
+    positive_windows = pd.concat(
+        [
+            positive_annotations(annotations, exclude_recordings),
+            _positive_intervals(spans, intervals),
+        ],
+        ignore_index=True,
+    )
     labeled["suspect_fn"] = suspect_false_negatives(labeled, grid, positive_windows, gap_radius_s)
     parts = [labeled.assign(presumed=False)]
     recordings = recordings_table(con)
@@ -413,8 +562,11 @@ def benchmark_recordings(
     recordings = recordings_table(con)
     labels = current_labels(con)
     labels = labels[~labels["label"].isin(EXCLUDED_LABELS)]
-    labelled = set(labels["recording_id"])
-    positives = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"])
+    spans, intervals = load_spans(con)
+    labelled = set(labels["recording_id"]) | set(spans["recording_id"])
+    positives = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"]) | set(
+        _positive_intervals(spans, intervals)["recording_id"]
+    )
 
     flagged = recordings["qc_flags"].map(lambda q: is_excluded(q, exclude_flags))
     rec = recordings.set_index("recording_id").assign(
