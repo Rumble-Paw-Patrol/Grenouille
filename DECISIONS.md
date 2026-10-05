@@ -3056,3 +3056,34 @@ de Léonard, 01/10/2026.
        réseau moyennent sur toute la fenêtre de 5 s : les fenêtres ne partagent pas leurs
        calculs intermédiaires, et le résultat serait un autre modèle.
      - Mode débit d'OpenVINO et requêtes parallèles sur l'Iris Xe : sans effet (21,3 à 21,5).
+
+## 2026-10-05 — Poste d'annotation : navigation, spectrogramme zoomable, découpage, plusieurs classes
+
+181. **Poste d'annotation remanié à la demande de Léonard** (`annotation/app.py`, `viewer.py`).
+     Les réponses étaient déjà sûres : chaque « Envoyer » écrit le label dans la base
+     (`append_label`, validé aussitôt) ; fermer la page ou VS Code ne perd rien.
+     - **Numérotation et retour en arrière.** La position est prise dans la file entière, et
+       non plus dans les seuls candidats restants : après « 1 / 1521 » vient « 2 / 1521 » (la
+       file raccourcissait à chaque réponse, d'où « 1 / 1520 »). Les candidats déjà écoutés
+       ne sont plus masqués : ◀ ▶ les parcourent tous, « Prochain jamais écouté ⏭ » saute
+       les autres, et après une réponse on passe au prochain jamais écouté (case à cocher).
+       Une nouvelle réponse sur un candidat déjà écouté s'ajoute (correction, §13.7).
+     - **Liste des candidats** de la file ouverte, sous la liste des files : numéro, site,
+       micro, heure, décalage, ✓ et label s'il a été écouté ; on y saute à n'importe lequel.
+     - **Spectrogramme zoomable** (`viewer.py`, page HTML autonome) : molette (temps),
+       Maj + molette (fréquence), glisser, double-clic pour tout revoir ; barre de lecture qui
+       suit le micro écouté (la vue suit si elle sort de l'écran) ; clic : la lecture saute là.
+       La vue et la position de lecture sont gardées d'un affichage à l'autre du même extrait.
+     - **Bande d'écoute réglable** (position et largeur, en kHz) au lieu de `signal.band_hz`
+       fixe, qui reste la valeur de départ ; pointillés sur le spectrogramme.
+     - **Découpage** : l'extrait (candidat ± contexte, ou enregistrement entier) se découpe
+       en fenêtres de longueur choisie, calées sur le début du candidat
+       (`workbench.split_windows`, le candidat reste une des fenêtres) ; elles s'annotent une
+       à une sans changer de page, chacune avec sa propre fenêtre en base. Le score du modèle
+       n'est gardé que pour la fenêtre du candidat. Au-delà de 20 s d'extrait, l'écoute est
+       rééchantillonnée à 24 kHz pour que la page reste légère (le spectrogramme ne l'est pas).
+     - **Plusieurs classes** par réponse (cases à cocher) : `labels.label` reçoit la première
+       dans l'ordre de `ANSWERS` (A. blanci d'abord, donc un positif reste un positif pour
+       tout ce qui lit `label`), les autres vont dans `conditions.extra_labels`
+       (`workbench.ordered_classes`) ; aucune case : « rien », « rien » avec une autre classe
+       est ignoré. Le schéma ne change pas.

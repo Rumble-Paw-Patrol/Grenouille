@@ -335,10 +335,10 @@ def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
     return queue
 
 
-def progress(
-    con: sqlite3.Connection, queue: pd.DataFrame, annotator: str | None = None
-) -> pd.Series:
-    """Pour chaque candidat : son dernier label s'il a déjà été écouté, sinon None.
+def latest_labels(
+    con: sqlite3.Connection, window_ids: list[str], annotator: str | None = None
+) -> dict[str, str]:
+    """Dernier label de chacune de ces fenêtres déjà écoutées (les autres sont absentes).
 
     Avec `annotator` (calibration entre annotateurs, §5), seules ses propres réponses
     comptent : chacun écoute la même file sans voir ce que l'autre a répondu.
@@ -354,8 +354,60 @@ def progress(
             "(SELECT MAX(label_id) FROM labels WHERE annotator = ? GROUP BY window_id)",
             (annotator,),
         )
-    latest = dict(rows.fetchall())
-    return pd.Series([latest.get(i) for i in _window_ids(queue)], index=queue.index, dtype=object)
+    wanted = set(window_ids)
+    return {wid: label for wid, label in rows if wid in wanted}
+
+
+def progress(
+    con: sqlite3.Connection, queue: pd.DataFrame, annotator: str | None = None
+) -> pd.Series:
+    """Pour chaque candidat : son dernier label s'il a déjà été écouté, sinon None
+    (`annotator` : voir `latest_labels`)."""
+    ids = _window_ids(queue)
+    latest = latest_labels(con, ids, annotator)
+    return pd.Series([latest.get(i) for i in ids], index=queue.index, dtype=object)
+
+
+def next_position(done: pd.Series, pos: int, unheard_only: bool) -> int:
+    """Candidat qui suit `pos` dans la file (position dans la file entière, jamais dans les
+    seuls candidats restants : « 2 / 1521 » suit « 1 / 1521 »). `unheard_only` : le prochain
+    jamais écouté, en repartant du début s'il n'y en a plus après ; `pos` si tout est écouté."""
+    n = len(done)
+    if not unheard_only:
+        return min(pos + 1, n - 1)
+    heard = done.notna().to_numpy()
+    for i in [*range(pos + 1, n), *range(pos + 1)]:
+        if not heard[i]:
+            return i
+    return pos
+
+
+def split_windows(start_s: float, stop_s: float, anchor_s: float, length_s: float) -> list[float]:
+    """Débuts des fenêtres de `length_s` qui découpent [start_s, stop_s], calées sur `anchor_s`
+    (le début du candidat, qui reste donc une des fenêtres) ; les bouts plus courts sont
+    laissés de côté."""
+    if length_s <= 0:
+        raise ValueError("longueur de fenêtre nulle")
+    k = int(np.ceil((start_s - anchor_s) / length_s - 1e-6))
+    offsets = []
+    while anchor_s + k * length_s + length_s <= stop_s + 1e-6:
+        offsets.append(round(anchor_s + k * length_s, 2))
+        k += 1
+    return offsets
+
+
+def ordered_classes(classes: list[str]) -> tuple[str, list[str]]:
+    """(label, autres classes) d'une réponse à plusieurs classes : le label rangé dans
+    `labels.label` est la première dans l'ordre de `ANSWERS` (A. blanci d'abord), les autres
+    vont dans `conditions.extra_labels`. Rien de coché : « rien » ; « rien » coché avec une
+    autre classe est ignoré."""
+    order = [label for label, _ in ANSWERS]
+    chosen = sorted(dict.fromkeys(classes), key=lambda c: order.index(c) if c in order else 99)
+    if len(chosen) > 1:
+        chosen = [c for c in chosen if c != "background"]
+    if not chosen:
+        return "background", []
+    return chosen[0], chosen[1:]
 
 
 # --- Écoute ---------------------------------------------------------------------------------------
@@ -395,18 +447,51 @@ def clip_spectrogram(
     return freqs[keep], times, 10 * np.log10(power[keep] + 1e-12)
 
 
+def spectrogram_png(
+    wav: np.ndarray, sr: int, fmax_hz: float = 12_000.0, max_columns: int = 4000
+) -> tuple[bytes, float]:
+    """(image PNG, fréquence du haut de l'image en Hz) : spectrogramme pour le visualiseur
+    zoomable, basses fréquences en bas, 60 dB de dynamique. Au-delà de `max_columns` pas de
+    temps, les colonnes voisines sont réunies par leur maximum (un chant bref reste visible)."""
+    from matplotlib import colormaps
+    from PIL import Image
+
+    freqs, _, db = clip_spectrogram(wav, sr, fmax_hz=min(fmax_hz, sr / 2))
+    if db.shape[1] > max_columns:
+        step = int(np.ceil(db.shape[1] / max_columns))
+        pad = (-db.shape[1]) % step
+        db = np.pad(db, ((0, 0), (0, pad)), mode="edge")
+        db = db.reshape(db.shape[0], -1, step).max(axis=2)
+    vmax = float(db.max())
+    norm = np.clip((db - (vmax - 60)) / 60, 0, 1)
+    rgb = (colormaps["magma"](norm[::-1])[..., :3] * 255).astype(np.uint8)
+    buffer = io.BytesIO()
+    Image.fromarray(rgb).save(buffer, format="PNG")
+    return buffer.getvalue(), float(freqs[-1]) if len(freqs) else fmax_hz
+
+
 def wav_bytes(
     wav: np.ndarray,
     sr: int,
     gain_db: float = 0.0,
     band_hz: tuple[float, float] | None = None,
+    max_sr: int | None = None,
 ) -> bytes:
     """WAV 16 bits en mémoire pour le lecteur ; `gain_db` et `band_hz` (passe-bande : on
-    n'entend que cette bande) n'agissent que sur l'écoute."""
+    n'entend que cette bande) n'agissent que sur l'écoute. `max_sr` : rééchantillonné plus
+    bas au-delà, pour qu'un enregistrement entier reste léger dans la page."""
     if band_hz is not None:
         from blanci.heads.signal_processing import bandpass
 
         wav = bandpass(wav, sr, band_hz)
+    if max_sr is not None and sr > max_sr:
+        from math import gcd
+
+        from scipy.signal import resample_poly
+
+        g = gcd(int(sr), int(max_sr))
+        wav = resample_poly(wav, int(max_sr) // g, int(sr) // g).astype(np.float32)
+        sr = int(max_sr)
     x = np.clip(wav * 10 ** (gain_db / 20), -1.0, 1.0)
     buffer = io.BytesIO()
     sf.write(buffer, x, sr, format="WAV", subtype="PCM_16")
@@ -436,16 +521,26 @@ def save_answer(
     comment: str | None = None,
     channel: int | None = None,
     species: str | None = None,
+    extra_labels: list[str] | None = None,
 ) -> int:
     """Enregistre la réponse de l'annotateur (label en ajout seul) ; renvoie label_id.
 
-    `species` : espèce entendue (faux ami, congénère), rangée dans `labels.species`."""
+    `species` : espèce entendue (faux ami, congénère), rangée dans `labels.species`.
+    `extra_labels` : autres classes entendues dans la même fenêtre (`ordered_classes`),
+    rangées dans `conditions.extra_labels`."""
+    from blanci.inputs.labels import LABELS
+
+    unknown = [c for c in extra_labels or () if c not in LABELS]
+    if unknown:
+        raise ValueError(f"classe inconnue : {', '.join(unknown)}")
     wid = ensure_window(con, candidate["recording_id"], candidate["offset_s"], candidate["dur_s"])
     conditions: dict[str, Any] = {"candidate_reason": candidate.get("reason") or None}
     if comment:
         # Le commentaire est gardé tel quel, et lu comme à l'import : « pluie » écrit ici
         # pose le drapeau pluie de l'enregistrement, une espèce citée est retrouvée.
         conditions |= comment_fields(comment) | {"comment": comment}
+    if extra_labels:
+        conditions["extra_labels"] = list(extra_labels)
     if channel is not None:
         conditions["channel_listened"] = channel
     score = candidate.get("score")

@@ -8,10 +8,18 @@
   60-20-20 à proportions réglables, similarité, couverture, groupes, audit, hasard, negative
   mining, phénologie, suspects, congénères), ou la **carte des embeddings** (YAPAT fait
   maison) : on entoure une zone de points, on l'écoute.
-- **Écoute** : deux canaux, volume, et « N'écouter que la bande » (passe-bande sur
-  `signal.band_hz`, les pointillés du spectrogramme) ; rien de cela ne touche l'audio d'origine.
-- **Réponse** : classe, qualité, espèce, commentaire, puis « Envoyer ▶ » (ou Entrée dans un
-  champ) : le label est ajouté (jamais écrasé) et la fenêtre suivante s'affiche.
+- **Navigation** : sous la file, la liste de ses candidats (numérotés dans la file entière,
+  ✓ et label pour ceux déjà écoutés) ; on peut revenir sur n'importe lequel et le
+  réécouter, une nouvelle réponse s'ajoute à l'ancienne (correction, jamais écrasée).
+- **Écoute** : spectrogramme zoomable (`viewer.py` : molette, glisser, barre de lecture qui
+  suit l'un ou l'autre micro), extrait autour du candidat ou enregistrement entier, volume, et
+  bande d'écoute réglable (position et largeur) avec « N'écouter que la bande » ; rien de cela
+  ne touche l'audio d'origine.
+- **Découpage** : l'extrait se découpe en fenêtres de longueur choisie, calées sur le
+  candidat ; on les annote une à une sans quitter l'enregistrement.
+- **Réponse** : une ou plusieurs classes, qualité, espèce, commentaire, puis « Envoyer ▶ »
+  (ou Entrée dans un champ) : le label est ajouté (jamais écrasé) et la fenêtre suivante
+  s'affiche (fenêtre suivante du découpage, sinon candidat suivant).
 - **Groupes** : une file tirée par groupes montre, groupe par groupe, ce qui a été entendu ; un
   groupe homogène s'étiquette en entier d'un clic (source « bulk »).
 
@@ -21,32 +29,39 @@ Toute la logique est dans `workbench.py` et `selection.py` ; ce fichier ne fait 
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
-import matplotlib
+import streamlit as st
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import streamlit as st  # noqa: E402
-
-from blanci.annotation.workbench import (  # noqa: E402
+from blanci.annotation.viewer import viewer_html
+from blanci.annotation.workbench import (
     ANSWERS,
-    clip_spectrogram,
+    latest_labels,
     load_candidates,
     local_time,
+    next_position,
+    ordered_classes,
     progress,
     read_clip,
     save_answer,
+    spectrogram_png,
+    split_windows,
     wav_bytes,
 )
-from blanci.core.config import config_path, load_config  # noqa: E402
-from blanci.core.db import connect  # noqa: E402
-from blanci.inputs.labels import QUALITIES  # noqa: E402
+from blanci.core.config import config_path, load_config
+from blanci.core.db import connect, window_id_for
+from blanci.inputs.labels import QUALITIES
 
 CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
+NAMES = dict(ANSWERS)
+CONTEXT, WHOLE = "context", "whole"
+EXTENTS = {CONTEXT: "candidat et contexte", WHOLE: "enregistrement entier"}
+# Au-delà, l'écoute est rééchantillonnée : un enregistrement entier reste léger dans la page.
+LONG_EXTRACT_S, LISTEN_MAX_SR = 20.0, 24_000
 EXISTING, MAP = "existing", "map"
 MODES = {
     EXISTING: "File déjà écrite",
@@ -100,24 +115,6 @@ def _encoders(con) -> list[str]:
         r[0]
         for r in con.execute("SELECT model_id FROM models WHERE kind = 'encoder' ORDER BY model_id")
     ]
-
-
-def _figure(wav, sr, start_s, offset_s, dur_s, band_hz):
-    freqs, times, db = clip_spectrogram(wav, sr)
-    fig, ax = plt.subplots(figsize=(11, 3.4))
-    vmax = float(db.max())
-    ax.pcolormesh(
-        times + start_s, freqs / 1000, db, shading="auto", cmap="magma", vmin=vmax - 60, vmax=vmax
-    )
-    ax.axvspan(offset_s, offset_s + dur_s, color="cyan", alpha=0.12)
-    for edge in (offset_s, offset_s + dur_s):
-        ax.axvline(edge, color="cyan", lw=1)
-    for f in band_hz:
-        ax.axhline(f / 1000, color="white", lw=0.6, ls="--", alpha=0.6)
-    ax.set_xlabel("temps dans l'enregistrement (s)")
-    ax.set_ylabel("kHz")
-    fig.tight_layout()
-    return fig
 
 
 def _open_queue(path: Path) -> None:
@@ -314,39 +311,128 @@ def _cluster_panel(cfg, con, queue) -> None:
 # --- Écoute et réponse ---------------------------------------------------------------------------
 
 
-def _answer_form(con, candidate, chosen, pos, annotator, channel, skip_done, key) -> None:
-    labels = [label for label, _ in ANSWERS]
-    names = dict(ANSWERS)
-    with st.form(key=f"form::{chosen}::{pos}", clear_on_submit=True):
-        columns = st.columns([2, 1])
-        label = columns[0].radio(
-            "Classe",
-            labels,
-            format_func=names.get,
-            horizontal=True,
-            index=labels.index("background"),
+def _goto(key: str, value: int) -> None:
+    """Rappel de bouton ou de liste : la position change avant le prochain affichage."""
+    st.session_state[key] = value
+
+
+def _follow(key: str, widget: str) -> None:
+    st.session_state[key] = st.session_state[widget]
+
+
+def _candidate_strip(queue, done, chosen, key, offset_h) -> None:
+    """Liste déroulante des candidats de la file ouverte, sous la liste des files : numéro dans
+    la file entière, site, micro, heure, et ✓ label s'il a déjà été écouté."""
+    rows = [
+        f"{i + 1}. {site} · {mic} · {local_time(start, offset_h)} · {offset:.0f} s"
+        + (f" · ✓ {NAMES.get(heard, heard)}" if heard else "")
+        for i, (site, mic, start, offset, heard) in enumerate(
+            zip(
+                queue["site"],
+                queue["mic_id"],
+                queue["start_utc"],
+                queue["offset_s"],
+                done,
+                strict=True,
+            )
         )
-        quality = columns[1].radio("Qualité (si A. blanci)", ["—", *QUALITIES], horizontal=True)
+    ]
+    widget = f"strip::{chosen}"
+    st.session_state[widget] = st.session_state[key]
+    st.selectbox(
+        f"Candidats de la file ({int(done.notna().sum())} / {len(queue)} écoutés)",
+        range(len(queue)),
+        format_func=rows.__getitem__,
+        key=widget,
+        on_change=_follow,
+        args=(key, widget),
+    )
+
+
+@st.cache_data(max_entries=6, show_spinner="Lecture de l'enregistrement…")
+def _media(
+    raw: str,
+    path: str,
+    offset_s: float,
+    dur_s: float,
+    context_s: float | None,
+    spectro_channel: int,
+    gain_db: float,
+    band_hz: tuple[float, float] | None,
+) -> dict:
+    """Spectrogramme et écoute des deux micros, gardés en cache : changer de fenêtre dans le
+    découpage ne relit pas le disque. `context_s` None : l'enregistrement entier."""
+    clips = {
+        c: read_clip(
+            Path(raw),
+            path,
+            0.0 if context_s is None else offset_s,
+            math.inf if context_s is None else dur_s,
+            context_s or 0.0,
+            c,
+        )
+        for c in CHANNELS
+    }
+    wav, sr, start = clips[spectro_channel]
+    stop = start + len(wav) / sr
+    max_sr = LISTEN_MAX_SR if stop - start > LONG_EXTRACT_S else None
+    png, fmax = spectrogram_png(wav, sr)
+    return {
+        "png": png,
+        "fmax": fmax,
+        "t0": start,
+        "t1": stop,
+        "audios": [
+            (CHANNELS[c], wav_bytes(w, rate, gain_db, band_hz, max_sr), s0)
+            for c, (w, rate, s0) in clips.items()
+        ],
+    }
+
+
+def _iframe(html: str, height: int) -> None:
+    """Page HTML avec scripts : `st.iframe` (Streamlit ≥ 1.5x), sinon l'ancien
+    `components.html`, retiré des versions récentes."""
+    if hasattr(st, "iframe"):
+        st.iframe(html, height=height)
+    else:
+        import streamlit.components.v1 as components
+
+        components.html(html, height=height)
+
+
+def _answer_form(con, target, form_key, annotator, channel) -> bool:
+    """Classes (plusieurs possibles), qualité, espèce, commentaire ; vrai si un label a été
+    enregistré."""
+    with st.form(key=form_key, clear_on_submit=True):
+        st.markdown("**Classes entendues** (plusieurs possibles ; aucune cochée : rien)")
+        columns = st.columns(5)
+        ticked = [
+            label
+            for i, (label, name) in enumerate(ANSWERS)
+            if columns[i % 5].checkbox(name, key=f"{form_key}::{label}")
+        ]
+        quality = st.radio("Qualité (si A. blanci)", ["—", *QUALITIES], horizontal=True)
         species = st.text_input("Espèce entendue (faux ami, congénère…)")
         comment = st.text_input("Commentaire (conditions, chant lointain, pluie…)")
         sent = st.form_submit_button("Envoyer ▶", type="primary", use_container_width=True)
-    if sent:
-        if not annotator.strip():
-            st.error("Indiquer l'annotateur dans le panneau de gauche.")
-            return
-        save_answer(
-            con,
-            candidate,
-            label,
-            annotator.strip(),
-            quality=None if quality == "—" else quality,
-            comment=comment.strip() or None,
-            channel=channel,
-            species=species.strip() or None,
-        )
-        if not skip_done:
-            st.session_state[key] = pos + 1
-        st.rerun()
+    if not sent:
+        return False
+    if not annotator.strip():
+        st.error("Indiquer l'annotateur dans le panneau de gauche.")
+        return False
+    label, extra = ordered_classes(ticked)
+    save_answer(
+        con,
+        target,
+        label,
+        annotator.strip(),
+        quality=None if quality == "—" else quality,
+        comment=comment.strip() or None,
+        channel=channel,
+        species=species.strip() or None,
+        extra_labels=extra,
+    )
+    return True
 
 
 def main() -> None:
@@ -355,16 +441,22 @@ def main() -> None:
     cfg, con = _setup(config)
     _apply_pending_queue()
     raw, reports = config_path(cfg, "raw"), config_path(cfg, "reports")
+    band_default = tuple(f / 1000 for f in cfg["signal"]["band_hz"])
 
     with st.sidebar:
         st.header("Session")
         annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
         st.session_state["annotator"] = annotator
         mode, chosen, encoder = _selection_panel(cfg, con, reports)
+        candidate_slot = st.container()
         st.header("Écoute")
-        skip_done = st.checkbox("Masquer les candidats déjà écoutés", value=True)
+        skip_done = st.checkbox(
+            "Après une réponse, sauter les candidats déjà écoutés",
+            value=True,
+            help="Les candidats déjà écoutés restent accessibles par la liste et ◀ ▶.",
+        )
         calibration = st.checkbox(
-            "Calibration : ne masquer que mes réponses",
+            "Calibration : ne compter que mes réponses",
             value=False,
             help="Deux annotateurs écoutent la même file sans voir les réponses de l'autre (§5).",
         )
@@ -374,11 +466,33 @@ def main() -> None:
             format_func=CHANNELS.get,
             index=int(cfg["audio"]["channel"] == 1),
         )
-        context_s = st.slider("Contexte autour de la fenêtre (s)", 0.0, 10.0, 3.0, 0.5)
+        extent = st.radio(
+            "Étendue affichée", list(EXTENTS), format_func=EXTENTS.get, horizontal=True
+        )
+        context_s = (
+            st.slider("Contexte autour de la fenêtre (s)", 0.0, 30.0, 3.0, 0.5)
+            if extent == CONTEXT
+            else None
+        )
+        split = st.checkbox(
+            "Découper en fenêtres",
+            help="Fenêtres calées sur le candidat, annotées une à une sur la même page.",
+        )
+        split_s = st.number_input(
+            "Longueur des fenêtres (s)", 0.5, 60.0, 3.0, 0.5, disabled=not split
+        )
         gain_db = st.slider("Volume d'écoute (dB, n'agit que sur l'écoute)", 0, 30, 0, 3)
-        band_hz = tuple(cfg["signal"]["band_hz"])
+        band_khz = st.slider(
+            "Bande d'écoute (kHz)",
+            0.1,
+            12.0,
+            band_default,
+            0.1,
+            help="Position et largeur de la bande : pointillés du spectrogramme.",
+        )
+        band_hz = (band_khz[0] * 1000, band_khz[1] * 1000)
         band_only = st.checkbox(
-            f"N'écouter que la bande ({band_hz[0] / 1000:g}–{band_hz[1] / 1000:g} kHz)",
+            "N'écouter que la bande",
             value=False,
             help="Passe-bande entre les pointillés du spectrogramme ; n'agit que sur l'écoute.",
         )
@@ -391,65 +505,152 @@ def main() -> None:
         return
 
     queue = load_candidates(chosen, con)
+    if queue.empty:
+        st.warning("File vide.")
+        return
     if "cluster" in queue.columns and "encoder_id" in queue.columns:
         _cluster_panel(cfg, con, queue)
-    done = progress(con, queue, (annotator.strip() or None) if calibration else None)
-    st.sidebar.metric("Écoutés", f"{int(done.notna().sum())} / {len(queue)}")
-    todo = queue[done.isna()] if skip_done else queue
-    if todo.empty:
-        st.success("File terminée.")
-        return
+    who = (annotator.strip() or None) if calibration else None
+    done = progress(con, queue, who)
+    n = len(queue)
+    offset_h = cfg["recorder"]["filename_utc_offset_h"]
 
     key = f"pos::{chosen}"
-    pos = min(st.session_state.get(key, 0), len(todo) - 1)
-    candidate = todo.iloc[pos].to_dict()
+    if key not in st.session_state:  # ouverture de la file : premier candidat pas écouté
+        st.session_state[key] = max(next_position(done, -1, True), 0)
+    pos = min(max(int(st.session_state[key]), 0), n - 1)
+    st.session_state[key] = pos
+    with candidate_slot:
+        _candidate_strip(queue, done, chosen, key, offset_h)
+    if done.notna().all():
+        st.success("File terminée : tous les candidats ont été écoutés.")
 
-    offset_h = cfg["recorder"]["filename_utc_offset_h"]
+    candidate = queue.iloc[pos].to_dict()
     st.subheader(
         f"{candidate['site']} · {candidate['mic_id']} · "
         f"{local_time(candidate['start_utc'], offset_h)} (heure locale)"
     )
     score = candidate.get("score")
+    heard = done.iloc[pos]
     st.caption(
-        f"Candidat {pos + 1} / {len(todo)} · {Path(str(candidate['path'])).name} · fenêtre "
+        f"Candidat {pos + 1} / {n} · {Path(str(candidate['path'])).name} · fenêtre "
         f"{candidate['offset_s']:.1f}–{candidate['offset_s'] + candidate['dur_s']:.1f} s · "
         f"{candidate.get('reason') or ''}"
         + (f" · score précédent {score:.2f}" if score == score and score is not None else "")
-        + (
-            f" · déjà écouté : {done.loc[todo.index[pos]]}"
-            if not skip_done and done.loc[todo.index[pos]]
-            else ""
-        )
+        + (f" · déjà écouté : {NAMES.get(heard, heard)}" if heard else "")
     )
 
     try:
-        clips = {
-            c: read_clip(
-                raw, candidate["path"], candidate["offset_s"], candidate["dur_s"], context_s, c
-            )
-            for c in CHANNELS
-        }
+        media = _media(
+            str(raw),
+            str(candidate["path"]),
+            float(candidate["offset_s"]),
+            float(candidate["dur_s"]),
+            context_s,
+            channel,
+            gain_db,
+            band_hz if band_only else None,
+        )
     except Exception as exc:  # disque débranché, fichier déplacé
         st.error(f"Lecture impossible : {exc}")
-        return
-    wav, sr, start = clips[channel]
-    st.pyplot(_figure(wav, sr, start, candidate["offset_s"], candidate["dur_s"], band_hz))
-    players = st.columns(2)
-    for column, (c, (w, rate, _)) in zip(players, clips.items(), strict=True):
-        column.markdown(f"**{CHANNELS[c]}**")
-        column.audio(
-            wav_bytes(w, rate, gain_db, band_hz if band_only else None), format="audio/wav"
+        media = None
+
+    # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait.
+    cand_offset, cand_dur = float(candidate["offset_s"]), float(candidate["dur_s"])
+    windows = [(cand_offset, cand_dur)]
+    if split and media is not None:
+        offsets = split_windows(media["t0"], media["t1"], cand_offset, float(split_s))
+        windows = [(o, float(split_s)) for o in offsets] or windows
+    wkey = f"win::{chosen}::{pos}::{len(windows)}"
+    if wkey not in st.session_state:
+        st.session_state[wkey] = min(
+            range(len(windows)), key=lambda i: abs(windows[i][0] - cand_offset)
+        )
+    w = min(int(st.session_state[wkey]), len(windows) - 1)
+    ids = [window_id_for(candidate["recording_id"], o, d) for o, d in windows]
+    window_labels = latest_labels(con, ids, who)
+
+    if media is not None:
+        shown = [
+            {
+                "t0": o,
+                "t1": o + d,
+                "label": NAMES.get(window_labels.get(i), window_labels.get(i)),
+                "current": j == w,
+                "candidate": abs(o - cand_offset) < 0.005 and abs(d - cand_dur) < 0.005,
+            }
+            for j, ((o, d), i) in enumerate(zip(windows, ids, strict=True))
+        ]
+        _iframe(
+            viewer_html(
+                media["png"],
+                media["t0"],
+                media["t1"],
+                media["fmax"],
+                media["audios"],
+                shown,
+                band_hz,
+                key=f"{candidate['path']}:{media['t0']:.2f}:{media['t1']:.2f}",
+            ),
+            410,
         )
 
-    _answer_form(con, candidate, chosen, pos, annotator, channel, skip_done, key)
+    offset, dur = windows[w]
+    if len(windows) > 1:
+        cols = st.columns([1, 6, 1])
+        cols[0].button("◀ Fenêtre", disabled=w == 0, on_click=_goto, args=(wkey, w - 1))
+        widget = f"{wkey}::select"
+        st.session_state[widget] = w
+        cols[1].selectbox(
+            "Fenêtre",
+            range(len(windows)),
+            format_func=lambda j: (
+                f"Fenêtre {j + 1} / {len(windows)} : "
+                f"{windows[j][0]:.1f}–{windows[j][0] + windows[j][1]:.1f} s"
+                + (
+                    f" · ✓ {NAMES.get(window_labels[ids[j]], window_labels[ids[j]])}"
+                    if ids[j] in window_labels
+                    else ""
+                )
+            ),
+            key=widget,
+            on_change=_follow,
+            args=(wkey, widget),
+            label_visibility="collapsed",
+        )
+        cols[2].button(
+            "Fenêtre ▶", disabled=w >= len(windows) - 1, on_click=_goto, args=(wkey, w + 1)
+        )
+    else:
+        st.caption(
+            f"Fenêtre annotée : {offset:.1f}–{offset + dur:.1f} s"
+            + (
+                f" · ✓ {NAMES.get(window_labels[ids[w]], window_labels[ids[w]])}"
+                if ids[w] in window_labels
+                else ""
+            )
+        )
 
-    nav = st.columns(2)
-    if nav[0].button("◀ Précédent", disabled=pos == 0):
-        st.session_state[key] = pos - 1
+    target = dict(candidate, offset_s=offset, dur_s=dur)
+    if (offset, dur) != (cand_offset, cand_dur):
+        target["score"] = None  # le score précédent est celui de la fenêtre du candidat
+    if _answer_form(con, target, f"form::{chosen}::{pos}::{w}", annotator, channel):
+        if w < len(windows) - 1:
+            st.session_state[wkey] = w + 1
+        else:
+            st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
         st.rerun()
-    if nav[1].button("Passer ▶", disabled=pos >= len(todo) - 1):
-        st.session_state[key] = pos + 1
-        st.rerun()
+
+    nav = st.columns(3)
+    nav[0].button("◀ Candidat précédent", disabled=pos == 0, on_click=_goto, args=(key, pos - 1))
+    nav[1].button("Candidat suivant ▶", disabled=pos >= n - 1, on_click=_goto, args=(key, pos + 1))
+    following = next_position(done, pos, True)
+    nav[2].button(
+        "Prochain jamais écouté ⏭",
+        disabled=following == pos,
+        on_click=_goto,
+        args=(key, following),
+    )
 
 
 main()
