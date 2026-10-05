@@ -175,6 +175,13 @@ chaine:
       installateur .exe, guide de réentraînement pour l'ONF.
     chiffre: 1 h d'audio en moins de 10 min visé
 
+# Commandes de recherche ou d'outillage, volontairement hors du schéma de la chaîne. Une
+# commande de la CLI absente d'ici et de la chaîne est signalée comme nouvelle.
+commandes_hors_chaine: [agreement, anuraset benchmark, anuraset campaign, anuraset heads,
+  anuraset prepare, anuraset profile, baselines, benchmark-all, check-grid, cluster,
+  cluster-label, cluster-status, detector-bench, export-labels, import-detections,
+  import-labels, pca, prevalence, qc-calibrate, sources, throughput, upstream-bench]
+
 # Débit de l'encodage perch_v2 sur l'i5, secondes par enregistrement de 2 min.
 debit:
   - [Origine, 8.0]

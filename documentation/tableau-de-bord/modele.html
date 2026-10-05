@@ -77,7 +77,7 @@ h1, h2, h3, h4 { font-family: var(--f-display); text-wrap: balance; line-height:
 .side .pied { margin-top: auto; color: var(--deep-muted); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
 .side .pied a { color: var(--deep-ink); }
 
-main { padding-inline: clamp(16px, 4vw, 48px); padding-block: 0 64px; min-width: 0; }
+main { padding-inline: clamp(16px, 4vw, 48px); padding-block: 0 64px; min-width: 0; overflow-x: clip; }
 .bande { margin-inline: calc(-1 * clamp(16px, 4vw, 48px)); background: var(--deep); color: var(--deep-ink); padding-inline: clamp(16px, 4vw, 48px); padding-block: 26px 18px; display: grid; gap: 14px; }
 .bande h1 { font-size: clamp(24px, 3.2vw, 34px); font-weight: 650; }
 .bande h1 i { font-weight: 650; }
@@ -225,7 +225,7 @@ code { font-family: var(--f-mono); font-size: .86em; background: var(--surface-2
 #visionneuse p { color: #E4EEE8; margin: 10px 0 0; font-size: 13px; text-align: center; }
 
 .commits { display: grid; gap: 0; }
-.commits div { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.commits div { display: grid; grid-template-columns: minmax(0, 136px) minmax(0, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
 .commits div:last-child { border-bottom: 0; }
 .commits time { color: var(--muted); font-family: var(--f-mono); font-size: 12px; }
 .progres { display: grid; gap: 10px; }
@@ -534,12 +534,12 @@ $("#pied").append(
       el("tbody", {}, A.sites.map(([site, jeu, n, p]) => el("tr", {}, el("td", {}, site), el("td", {}, jeu === "evaluation" ? "évaluation" : "entraînement"), el("td", { class: "n" }, entier(n)), el("td", { class: "n" }, entier(p))))))));
     ann.append(el("p", { class: "sous" }, `Compté le ${dateFr(A.compte_le)} (${A.source}). Labels de l'import Blancinet et des enregistrements écartés non comptés.`));
   }
-  const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg]) =>
-    el("div", {}, el("time", { title: h }, d.split("-").reverse().join("/")), el("span", {}, msg))));
+  const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg, n]) =>
+    el("div", {}, el("time", { title: h }, (n ? `n° ${n} · ` : "") + d.split("-").reverse().join("/")), el("span", {}, msg))));
   s.append(el("div", { class: "grille-2" },
     carte("Encodage plus rapide", "perch_v2 sur l'i5 de l'ONF, secondes par enregistrement de 2 min, étape après étape.", svg),
     carte("Plan d'annotation v1", "Avancement vers les cibles ; aucun benchmark sur les données ONF avant le go des experts.", ann)));
-  s.append(carte("Derniers changements du dépôt", null, commits));
+  s.append(carte("Derniers changements du dépôt", "Numérotés le long de la branche principale : ce sont les numéros à donner à /audit-n-from.", commits));
 }
 
 /* ======================================================================

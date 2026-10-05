@@ -1,57 +1,83 @@
 ---
 name: tableau-de-bord
-description: Met à jour et republie le tableau de bord claude.ai du projet Grenouille (reconstruction depuis le dépôt, compteur d'annotations, structure de la chaîne, publication à la même URL avec les images). Argument facultatif — texte libre sur les chantiers en cours à reporter dans en_cours.yaml. À utiliser quand Léonard dit « mets à jour le tableau de bord », « republie le dashboard », « /tableau-de-bord », ou après un benchmark, un audit ou un changement notable du code.
+description: Met à jour et republie le tableau de bord claude.ai du projet Grenouille en un seul appel — repère ce qui a été ajouté, modifié ou supprimé dans le dépôt depuis la dernière publication, met la page en accord (structure, chantiers, nouvelles sections si besoin), recompte les annotations, republie à la même URL. Argument facultatif — texte libre sur les chantiers. À utiliser pour « /tableau-de-bord », « mets à jour le tableau de bord », ou après un benchmark, un audit ou un changement notable.
 ---
 
 # Mettre à jour le tableau de bord
 
-Dossier : `documentation/tableau-de-bord/` (voir son `LISEZMOI.md`). URL fixe :
+Dossier : `documentation/tableau-de-bord/` (voir `LISEZMOI.md`). URL fixe :
 <https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8>. Ne jamais publier ailleurs.
 
-## 1. Travail en cours (`en_cours.yaml`)
+But : **un seul appel suffit**. Ne poser de question que pour ce qu'on ne peut pas déduire
+du dépôt, toutes les questions en un seul message, avec une proposition par question.
 
-C'est le seul fichier que Léonard tient à la main.
-- Si l'argument décrit des chantiers (nouveau, fini, bloqué, prochaine action), les reporter
-  dans `en_cours.yaml` au format du fichier (titre, etat, detail, suite) ; retirer ceux qu'il dit
-  finis. Montrer le résultat en trois lignes au plus.
-- Sinon, ne pas y toucher.
-- Pas de date future ni d'échéance dans ce fichier.
+## 1. Ce qui a changé depuis la dernière publication
 
-## 2. Structure (`structure.yaml`)
+```sh
+uv run python documentation/tableau-de-bord/construire.py --changements
+```
 
-Tenue par Claude. Lire `git log` depuis le dernier commit qui a touché
-`documentation/tableau-de-bord/`. Si un commit change l'état réel d'une étape de la chaîne
-(module écrit, commande ajoutée ou renommée, étape finie, nouveau repère chiffré comme le débit
-de l'encodage), mettre à jour l'entrée de `chaine:` ou `debit:` correspondante. Ne rien inventer :
-un chiffre vient d'un commit, d'un rapport ou d'un CSV.
+Le rapport range tout ce qui a changé depuis le commit noté dans `publication.json` :
 
-## 3. Construire
+| Rubrique du rapport | Quoi faire |
+|---|---|
+| Commits | les lire : ils disent ce que Léonard a fait (sert aux étapes 2 et 3) |
+| Pris en compte tout seul | rien : benchmarks, tableaux, biblio, glossaire, inventaire, tests sont relus par `construire.py`. Vérifier seulement qu'un fichier supprimé ou renommé ne casse pas la construction |
+| À reporter dans structure.yaml | modules de `blanci/` ajoutés, supprimés, renommés ; commandes nouvelles ou disparues. Mettre à jour l'étape de `chaine:` concernée (module, commandes, état, résumé, repère chiffré), ou `commandes_hors_chaine:` pour un outil de recherche. Une étape nouvelle : l'ajouter avec sa position dans `POS` de `modele.html` |
+| Sans place dans le tableau de bord | un ajout que la page ne montre pas (nouveau dossier de documentation, nouveau type de résultat, notebook…) : proposer une carte ou une section ; une suppression : retirer ce qui s'y rapportait |
+
+Un chiffre de la page (débit, repère d'étape) ne change que s'il vient d'un commit, d'un
+rapport ou d'un CSV. Ne rien inventer.
+
+## 2. Chantiers (`en_cours.yaml`)
+
+C'est le seul fichier de Léonard. Le mettre à jour :
+- d'après l'argument du skill s'il y en a un (nouveau chantier, fini, bloqué, prochaine
+  action) : l'appliquer directement ;
+- d'après les commits : si un commit termine visiblement un chantier ou en ouvre un, le
+  **proposer** (« Le chantier X semble fini (commit n° 72) : je le retire ? ») sans
+  l'appliquer avant sa réponse ; le reste de la mise à jour continue en attendant.
+
+Pas de date future ni d'échéance.
+
+## 3. Ce qu'on ne peut pas déduire : demander
+
+Si une rubrique « Sans place… » ou un changement de structure laisse un doute (où ranger,
+faut-il le montrer, une section disparue doit-elle partir), poser les questions en un seul
+message court, chacune avec la proposition par défaut. Appliquer les réponses, puis
+continuer. Si Léonard ne répond pas sur un point, ne pas le bloquer : publier sans ce point
+et le rappeler en une ligne.
+
+## 4. Modifier la page si besoin
+
+Une nouvelle section ou carte : `construire.py` (lire la donnée) et `modele.html` (l'afficher,
+en reprenant les composants existants : `section`, `carte`, `boutonCommenter`, tokens de
+couleur). Puis vérifier une fois le rendu (Chromium : `/opt/pw-browsers`, Playwright),
+clair, sombre et 400 px de large : aucune erreur de script, pas de défilement horizontal.
+
+## 5. Construire et publier
 
 ```sh
 uv run python documentation/tableau-de-bord/construire.py
 ```
 
-(`--config <fichier>` si la configuration locale n'est pas `config/local.yaml`.)
+- Le script compte les annotations dans `data/db/blanci.sqlite`. Sans base (session cloud),
+  il garde le dernier comptage : le dire en une ligne, avec sa date.
+- En cas d'erreur, corriger avant de publier ; ne jamais publier une page cassée.
 
-Le script compte les annotations dans la base locale (`data/db/blanci.sqlite`) et écrit
-`annotations.json`. Sans base (session cloud), il relit le dernier `annotations.json` : le
-dire en une ligne à Léonard, avec la date du comptage, et lui rappeler qu'il suffit de lancer
-le skill une fois sur sa machine pour rafraîchir le compteur.
+Publication avec l'outil Artifact : `file_path` = chemin absolu de `index.html`, `url` =
+l'URL ci-dessus (la lire d'abord avec `action: "read"` si cette session ne l'a ni lue ni
+publiée), `files` = contenu de `fichiers.json` avec chaque source en chemin absolu. Ne pas
+passer `icon` ni `capabilities`.
 
-En cas d'erreur du script, la corriger avant de publier ; ne jamais publier une page cassée.
+Puis noter la publication :
 
-## 4. Publier
+```sh
+uv run python documentation/tableau-de-bord/construire.py --publie
+```
 
-Outil Artifact, action publish :
-- `file_path` : chemin absolu de `documentation/tableau-de-bord/index.html` ;
-- `url` : l'URL ci-dessus (si cette session n'a encore ni lu ni publié l'artifact, le lire
-  d'abord avec `action: "read"`, comme l'exige l'outil) ;
-- `files` : le contenu de `fichiers.json`, chaque source préfixée par la racine du dépôt
-  (chemin absolu) ;
-- ne pas passer `icon` ni `capabilities` (ils sont gardés).
+## 6. Rendre compte et committer
 
-## 5. Rendre compte et committer
-
-En deux à quatre lignes : ce qui a changé sur la page (chantiers, étapes, compteur, nouveaux
-rapports) et le lien. Committer `en_cours.yaml`, `structure.yaml` et `annotations.json` s'ils
-ont changé (message : « Tableau de bord : … »), puis pousser sur la branche de travail.
+En trois à cinq lignes : ce qui a changé sur la page, ce qui attend une réponse, le lien.
+Committer `structure.yaml`, `en_cours.yaml`, `annotations.json`, `publication.json` et les
+fichiers de la page modifiés (« Tableau de bord : … »), puis pousser sur la branche de travail.

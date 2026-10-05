@@ -74,22 +74,31 @@ def compter_tests() -> dict[str, int]:
     return compte
 
 
-def historique(n: int = 20) -> list[list[str]]:
+def git(*args: str) -> str:
+    """Sortie d'une commande git à la racine du dépôt ; chaîne vide si git échoue."""
     try:
-        sortie = subprocess.run(
-            ["git", "log", f"-{n}", "--date=short", "--pretty=format:%h\t%ad\t%s"],
-            cwd=RACINE,
-            capture_output=True,
-            text=True,
-            check=True,
+        return subprocess.run(
+            ["git", *args], cwd=RACINE, capture_output=True, text=True, check=True
         ).stdout
     except (OSError, subprocess.CalledProcessError):
-        return []
+        return ""
+
+
+def numeros() -> dict[str, int]:
+    """Numéro de chaque commit le long de la branche courante (premier parent) : n° 1 = le
+    premier commit du dépôt. Ce sont les numéros qu'accepte le skill audit-n-from."""
+    hashes = git("rev-list", "--reverse", "--first-parent", "--abbrev-commit", "HEAD").split()
+    return {h: i for i, h in enumerate(hashes, start=1)}
+
+
+def historique(n: int = 20) -> list[list]:
+    sortie = git("log", "--first-parent", f"-{n}", "--date=short", "--pretty=format:%h\t%ad\t%s")
+    num = numeros()
     out = []
     for ligne in sortie.splitlines():
         h, d, s = ligne.split("\t", 2)
         s = re.sub(r"\s*\((DECISIONS )?n° [^)]*\)", "", s)  # renvois au journal retirés
-        out.append([h, d, s.split(" - ")[0].strip()])
+        out.append([h, d, s.split(" - ")[0].strip(), num.get(h)])
     return out
 
 
@@ -356,10 +365,123 @@ def annotations(config: Path | None) -> dict:
     return resultat
 
 
+PUBLICATION = ICI / "publication.json"
+# Ce que construire.py lit tout seul : rien à faire à la main quand ces chemins changent.
+AUTOMATIQUE = (
+    "documentation/benchmarks/",
+    "documentation/tableaux/",
+    "documentation/biblio/biblio.md",
+    "documentation/glossaire-bioacoustique.md",
+    "documentation/commandes.md",
+    "tests/",
+    "documentation/tableau-de-bord/",
+)
+# Ce que le tableau de bord ne montre pas, volontairement.
+IGNORE = ("DECISIONS.md", "uv.lock", ".gitignore", ".python-version", ".claude/", "config/")
+
+
+def commandes_cli() -> set[str]:
+    """Commandes de `blanci` lues dans cli.py (décorateurs @app.command et sous-commandes)."""
+    texte = (RACINE / "blanci" / "cli.py").read_text(encoding="utf-8")
+    noms = set()
+    for m in re.finditer(r"@(\w+)\.command\((?:\"([\w-]+)\")?[^)]*\)\s*\ndef (\w+)", texte):
+        nom = m.group(2) or m.group(3).replace("_", "-")
+        noms.add(f"anuraset {nom}" if m.group(1) == "anuraset_app" else nom)
+    return noms
+
+
+def changements() -> str:
+    """Rapport en Markdown : ce qui a changé dans le dépôt depuis la dernière publication du
+    tableau de bord, rangé selon ce qu'il faut en faire. Lu par le skill tableau-de-bord."""
+    structure = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
+    base = ""
+    if PUBLICATION.exists():
+        base = json.loads(PUBLICATION.read_text(encoding="utf-8")).get("commit", "")
+    if not base or not git("rev-parse", "--verify", "--quiet", base + "^{commit}").strip():
+        base = git("log", "-1", "--format=%h", "--", "documentation/tableau-de-bord/").strip()
+    num = numeros()
+    lignes = [f"# Changements depuis la dernière publication ({base}, n° {num.get(base, '?')})", ""]
+    commits = git("log", "--first-parent", "--format=%h\t%ad\t%s", "--date=short", f"{base}..HEAD")
+    lignes += ["## Commits", ""]
+    lignes += [
+        f"- n° {num.get(c.split(chr(9))[0], '?')} · {c.replace(chr(9), ' · ')}"
+        for c in commits.splitlines()
+    ] or ["- aucun"]
+
+    auto, structure_l, discuter = [], [], []
+    for ligne in git("diff", "--name-status", "--find-renames", f"{base}..HEAD").splitlines():
+        etat, *chemins = ligne.split("\t")
+        chemin = chemins[-1]
+        texte = f"{etat[0]} {' → '.join(chemins)}"
+        if chemin.startswith(IGNORE):
+            continue
+        if chemin.startswith(AUTOMATIQUE):
+            auto.append(texte)
+        elif chemin.startswith("blanci/"):
+            if etat[0] in "ADR" or chemin.endswith("cli.py"):
+                structure_l.append(texte)
+        else:
+            discuter.append(texte)
+
+    cli = commandes_cli()
+    declarees = {c for e in structure["chaine"] for c in e.get("commandes", [])}
+    declarees |= set(structure.get("commandes_hors_chaine", []))
+    for e in structure["chaine"]:
+        if not (RACINE / e["module"]).exists():
+            structure_l.append(f"module disparu : {e['module']} (étape {e['etape']})")
+        for c in e.get("commandes", []):
+            if c not in cli:
+                structure_l.append(f"commande disparue : blanci {c} (étape {e['etape']})")
+    nouvelles = sorted(cli - declarees)
+    if nouvelles:
+        structure_l.append(
+            "commandes absentes de la chaîne (à placer dans une étape, ou à laisser si ce sont "
+            "des outils de recherche) : " + ", ".join(nouvelles)
+        )
+
+    def bloc(titre: str, items: list[str], aide: str) -> list[str]:
+        return [f"## {titre}", "", aide, ""] + ([f"- {i}" for i in items] or ["- rien"]) + [""]
+
+    lignes.append("")
+    lignes += bloc("Pris en compte tout seul", auto, "Relu par construire.py, rien à faire.")
+    lignes += bloc(
+        "À reporter dans structure.yaml",
+        structure_l,
+        "Fichiers de blanci/ ajoutés, supprimés ou renommés, et écarts entre la chaîne et la CLI.",
+    )
+    lignes += bloc(
+        "Sans place dans le tableau de bord",
+        discuter,
+        "Ajout ou suppression que la page ne montre pas encore : proposer une carte ou une "
+        "section, ou demander à Léonard.",
+    )
+    return "\n".join(lignes)
+
+
 def main() -> None:
     args = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     args.add_argument("--config", type=Path, default=None, help="config/local.yaml par défaut")
-    config = args.parse_args().config
+    args.add_argument(
+        "--changements", action="store_true", help="rapport des changements, sans construire"
+    )
+    args.add_argument("--publie", action="store_true", help="noter HEAD comme dernière publication")
+    opts = args.parse_args()
+    if opts.changements:
+        print(changements())
+        return
+    if opts.publie:
+        PUBLICATION.write_text(
+            json.dumps(
+                {
+                    "commit": git("rev-parse", "--short", "HEAD").strip(),
+                    "date": date.today().isoformat(),
+                },
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
+        return
+    config = opts.config
     contenu = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
     contenu.update(yaml.safe_load((ICI / "en_cours.yaml").read_text(encoding="utf-8")))
     fichiers: dict[str, str] = {}

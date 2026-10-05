@@ -16,6 +16,7 @@ depuis son menu « Partager » sur claude.ai.
 | `en_cours.yaml` | les chantiers en cours | **Léonard, à la main** (le seul) |
 | `structure.yaml` | objectif, critères, étapes de la chaîne et leur état, débit, cibles d'annotation | Claude, skill `tableau-de-bord` |
 | `annotations.json` | avancement des annotations, compté dans `data/db/blanci.sqlite` | `construire.py` |
+| `publication.json` | commit de la dernière publication, point de départ du repérage des changements | `construire.py --publie` |
 | `modele.html` | la page, sans données | — |
 | `construire.py` | lit le dépôt et écrit `index.html` et `fichiers.json` (ignorés par git) | — |
 
@@ -23,7 +24,9 @@ depuis son menu « Partager » sur claude.ai.
 
 `/tableau-de-bord` dans Claude Code, éventuellement suivi de ce qui a changé dans les
 chantiers (« /tableau-de-bord le plan de tirage est validé, je commence l'annotation »).
-Le skill reporte les chantiers, reconstruit la page et la republie à la même URL.
+Le skill repère ce qui a été ajouté, modifié ou supprimé depuis la dernière publication
+(`construire.py --changements`), met la page en accord, pose les questions qu'il ne peut pas
+trancher seul, reconstruit la page et la republie à la même URL.
 
 Le compteur d'annotations ne se rafraîchit que sur une machine qui a la base locale ; ailleurs,
 la page garde le dernier comptage (`annotations.json`, versionné).
