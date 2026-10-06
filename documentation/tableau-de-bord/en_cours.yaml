@@ -37,5 +37,4 @@ en_cours:
   - titre: Fabrication de notebooks
     etat: a_venir
     detail: >-
-      Il existe déjà des notebooks, mais le travail autour des notebooks est à recommencer à zéro, en utilisant Claude Science.
-    suite: Définir ce que les nouveaux notebooks doivent montrer, puis les fabriquer avec Claude Science
+      Il existe déjà des notebooks, mais le travail autour des notebooks est à recommencer à zéro.
