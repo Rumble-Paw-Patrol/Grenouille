@@ -496,6 +496,24 @@ NO_GREY = """<style>
 </style>"""
 
 
+def _read_error(raw: Path, path: str, exc: Exception) -> str:
+    """Message de lecture impossible : libsndfile dit « System error » pour un fichier absent,
+    on dit plutôt où il était attendu et quoi vérifier."""
+    full = Path(raw) / path
+    if not Path(raw).is_dir():
+        return (
+            f"Dossier des enregistrements introuvable : {raw}. Disque débranché, ou "
+            "`paths.raw` à corriger dans la config locale (lancer avec `--config "
+            "config/local.yaml`)."
+        )
+    if not full.is_file():
+        return (
+            f"Enregistrement introuvable : {full}. Fichier déplacé ou renommé, ou `paths.raw` "
+            "ne pointe pas sur la racine utilisée à l'inventaire."
+        )
+    return f"Lecture impossible : {full} ({exc}). Fichier ouvert ailleurs ou abîmé ?"
+
+
 def main() -> None:
     st.set_page_config(page_title="Annotation blanci", layout="wide")
     st.markdown(NO_GREY, unsafe_allow_html=True)
@@ -602,7 +620,7 @@ def main() -> None:
             str(candidate["path"]),
         )
     except Exception as exc:  # disque débranché, fichier déplacé
-        st.error(f"Lecture impossible : {exc}")
+        st.error(_read_error(raw, str(candidate["path"]), exc))
         media = None
 
     # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait (mode fenêtres).
