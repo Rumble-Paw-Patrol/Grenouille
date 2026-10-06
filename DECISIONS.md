@@ -3275,9 +3275,17 @@ de Léonard, 01/10/2026.
      annotate` suffit. `--config autre.yaml` le remplace (AnuraSet). Les tests l'ignorent
      toujours (fixture de `tests/conftest.py`), pour ne jamais toucher la vraie base.
 
+193. **`uv run` ne synchronise plus rien : `UV_NO_SYNC=1` sur le poste** (Léonard, 06/10).
+     `uv run` remet `.venv` à l'identique du verrou avant chaque commande ; torch, TensorFlow
+     et bacpipe installés autrement (roues CPU, `uv pip install`, n° 64, n° 179) étaient
+     réinstallés à chaque appel, parfois sous un encodage en cours. uv n'a pas de réglage de
+     projet pour l'empêcher (`no-sync` n'existe qu'en option et en variable d'environnement) :
+     `setx UV_NO_SYNC 1` une fois, et l'environnement ne change que par un `uv sync
+     --inexact` voulu (`--inexact` : garde ce qui a été ajouté à la main). README à jour.
+
 ## 2026-10-06 — « Micro dans sac » : une suite d'enregistrements, plus un seuil seul
 
-190. **`in_bag` demande une suite** (Léonard, 06/10). Le seuil de `hf_ratio` (0,02 → 0,2,
+194. **`in_bag` demande une suite** (Léonard, 06/10). Le seuil de `hf_ratio` (0,02 → 0,2,
      n° 81) reposait sur 8 exemples seulement et ne regardait aucune durée : il signalait des
      enregistrements isolés (131 en 2023, au milieu de séries de plus de 8 000) et un micro
      RNRT (2LA04525) toute la semaine à un ratio de 0,14. Nouvelle règle (`in_bag_runs`,

@@ -99,13 +99,16 @@ d'encodage et de benchmark de `cli.py` appellent directement leurs modules.
 Python 3.11 et [uv](https://docs.astral.sh/uv/).
 
 ```sh
-uv sync                       # dépendances de base et outils de développement
-uv sync --group research      # + bacpipe, torch, onnx : encodeurs, têtes apprises, export
-uv sync --group app           # + streamlit : poste d'annotation
-uv sync --inexact --group notebook   # + matplotlib, ipykernel : notebooks (--inexact garde le reste)
-uv run pytest                 # ≈ 850 tests, ~2 min (torch et onnx sautés sans le groupe research)
+uv sync --inexact             # tout : base, dev, research (torch, bacpipe…), app, notebook
+uv run pytest                 # ≈ 850 tests, ~2 min
 uv run blanci --help
 ```
+
+**`uv run` ne touche plus à l'environnement** (DECISIONS n° 193) : une fois pour toutes, sous
+Windows, `setx UV_NO_SYNC 1` (puis rouvrir le terminal). Sans cela, chaque `uv run` remet
+`.venv` à l'identique du verrou et réinstalle torch ou TensorFlow dès qu'ils diffèrent d'un
+cheveu (roue CPU, `uv pip install` à la main), y compris sous un encodage en cours. Les
+paquets ne changent alors que par un `uv sync --inexact` lancé exprès, quand rien ne tourne.
 
 Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`,
 ignorée par git) : racine du disque externe, jamais modifié.
