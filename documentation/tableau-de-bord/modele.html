@@ -702,7 +702,7 @@ $("#pied").append(
   sc.append(sv("text", { x: (g + W) / 2, y: H - 4, "text-anchor": "middle" }, "fenêtres de 5 s encodées par seconde (échelle log ; temps réel = 0,2)"));
   sc.append(sv("text", { x: 4, y: 10 }, "AP par site"));
   const libres = E.filter((e) => e.fenetres_par_s);
-  const etiq = new Set(["perch_v2", "naturebeats", "convnext_birdset", "birdnet_v3", "rcl_fs_bsed", "birdmae_base", "perch_bird", "insect66"]);
+  const etiq = new Set(["perch_v2", "naturebeats", "audioprotopnet", "convnext_birdset", "birdnet_v3", "rcl_fs_bsed", "birdmae_base", "perch_bird", "insect66"]);
   for (const e of libres) {
     const oui = e.libre === "oui";
     const c = sv("circle", { cx: xs(e.fenetres_par_s), cy: ys(e.ap_site_best), r: 6, fill: oui ? "var(--accent)" : "var(--surface)", stroke: oui ? "var(--surface)" : "var(--muted)", "stroke-width": 2 });
