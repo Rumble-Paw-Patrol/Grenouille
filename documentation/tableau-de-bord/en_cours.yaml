@@ -4,33 +4,33 @@
 # tableau de bord »).
 
 en_cours:
-  - titre: Partition des points d'écoute et plan de tirage
+  - titre: Annotation de mes données
     etat: en_cours
     detail: >-
-      Répartir les points d'écoute entre entraînement et test avant toute écoute (aucun point
-      ne sert aux deux), puis tirer les extraits par point, heure et période.
-    suite: Plan à valider par Sylvain et Élodie.
-  - titre: Mode « extrait + intervalles » du poste d'annotation
+      Répartir les points d'écoute entre le training set et le test set avant toute écoute (pour éviter un data leakage), puis annoter les extraits par point d'écoute, heure, date.
+    suite: Préparer la validation par k-fold
+  - titre: Façonnement du poste d'annotation
     etat: en_cours
     detail: >-
-      Annoter un extrait de 30 s en marquant les intervalles où A. blanci chante, plutôt que
-      fenêtre par fenêtre.
-    suite: Essai chronométré sur 50 extraits.
-  - titre: Encodage du corpus avec perch_v2
+      Software d'annotation d'enregistrements audio à part entière, on labelise les intervalles ou A. Blanci chante au sein de l'enregistrement.
+    suite: Vérification de mes label par Élodie Courtois et Benoit Villette
+  - titre: Encodage du corpus sur modèles de fondation
     etat: en_cours
     detail: >-
-      De 8,0 à 2,05 s par enregistrement de 2 min sur l'i5 (graphe réduit, lecture en avance,
-      rééchantillonnage par enregistrement). Corpus entier : environ 54 h au lieu de 210 h.
-    suite: Vérifier le câble du SSD externe, lu à 40 Mo/s (USB 2).
-  - titre: Essai d'empaquetage .exe
+      Étape très longue : 61h pour Perch 2.0 sur CPU intel core i5, BirdNET encore en cours (estimé à 25h)
+    suite: Une fois l'encodage et l'annotation terminée, entraînement des heads
+  - titre: Benchmark des approches sur mon jeu de données
+    etat: en_cours
+    detail: >-
+      Les Benchmarks pré-existant ont été réalisés sur AnuraSet. Ici on va tester les encodeurs et têtes de  classification à disposition sur notre dataset pour voir lequel performe le mieux.
+  - titre: Création du module de traitement du signal
+    etat: en_cours
+    detail: >-
+      Filtre passe-bande, PCEN, log-mel, débruitage spectral, energy-based candidate window extraction.   
+    suite: Placement du module dans la pipeline, en amont ou en parallèle du couple foundation-model & head.
+  - titre: Test d'une application Windows
     etat: a_venir
     detail: >-
-      Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une
-      machine Windows propre.
-    suite: Repli prévu, Gradio à la place de Streamlit.
-  - titre: Vague 2 AnuraSet
-    etat: en_cours
-    detail: >-
-      audioprotopnet, avesecho_passt et biolingual restent à ajouter au benchmark des
-      encodeurs.
-    suite: Puis plus aucun benchmark AnuraSet.
+      Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une machine Windows propre. L'objectif étant à terme de fournir une appli no code pour naturalistes allergiques aux technologies.
+    suite: Création de l'application Windows
+  
