@@ -3274,3 +3274,11 @@ de Léonard, 01/10/2026.
      `blanci` et le poste d'annotation lisent `config/local.yaml` s'il existe ; `uv run blanci
      annotate` suffit. `--config autre.yaml` le remplace (AnuraSet). Les tests l'ignorent
      toujours (fixture de `tests/conftest.py`), pour ne jamais toucher la vraie base.
+
+193. **`uv run` ne synchronise plus rien : `UV_NO_SYNC=1` sur le poste** (Léonard, 06/10).
+     `uv run` remet `.venv` à l'identique du verrou avant chaque commande ; torch, TensorFlow
+     et bacpipe installés autrement (roues CPU, `uv pip install`, n° 64, n° 179) étaient
+     réinstallés à chaque appel, parfois sous un encodage en cours. uv n'a pas de réglage de
+     projet pour l'empêcher (`no-sync` n'existe qu'en option et en variable d'environnement) :
+     `setx UV_NO_SYNC 1` une fois, et l'environnement ne change que par un `uv sync
+     --inexact` voulu (`--inexact` : garde ce qui a été ajouté à la main). README à jour.
