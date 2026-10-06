@@ -34,3 +34,8 @@ en_cours:
       Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une machine Windows propre. L'objectif étant à terme de fournir une appli no code pour naturalistes allergiques aux technologies.
     suite: Création de l'application Windows
   
+  - titre: Fabrication de notebooks
+    etat: a_venir
+    detail: >-
+      Il existe déjà des notebooks, mais le travail autour des notebooks est à recommencer à zéro, en utilisant Claude Science.
+    suite: Définir ce que les nouveaux notebooks doivent montrer, puis les fabriquer avec Claude Science
