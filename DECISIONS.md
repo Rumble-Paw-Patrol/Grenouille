@@ -3285,7 +3285,7 @@ de Léonard, 01/10/2026.
 
 ## 2026-10-06 — « Micro dans sac » : une suite d'enregistrements, plus un seuil seul
 
-190. **`in_bag` demande une suite** (Léonard, 06/10). Le seuil de `hf_ratio` (0,02 → 0,2,
+194. **`in_bag` demande une suite** (Léonard, 06/10). Le seuil de `hf_ratio` (0,02 → 0,2,
      n° 81) reposait sur 8 exemples seulement et ne regardait aucune durée : il signalait des
      enregistrements isolés (131 en 2023, au milieu de séries de plus de 8 000) et un micro
      RNRT (2LA04525) toute la semaine à un ratio de 0,14. Nouvelle règle (`in_bag_runs`,

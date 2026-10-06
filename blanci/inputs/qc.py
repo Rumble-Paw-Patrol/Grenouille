@@ -113,7 +113,7 @@ def qc_flags(indices: dict[str, float], thresholds: dict[str, float]) -> dict[st
     rangés, y compris ceux qu'aucun drapeau ne lit (saturation, platitude du spectre).
 
     `in_bag` n'est ici qu'un candidat, jugé sur un seul enregistrement : `apply_audio_flags`
-    ne le garde que dans une suite d'enregistrements consécutifs du même micro (n° 190)."""
+    ne le garde que dans une suite d'enregistrements consécutifs du même micro (n° 194)."""
     silent = indices["rms_dbfs"] < thresholds["silent_dbfs"]
     return {
         "silent": silent,

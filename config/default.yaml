@@ -48,7 +48,7 @@ qc:
   # Micro dans sac ou étouffé (bonnette contre le sol…) : énergie > 2 kHz / énergie totale
   # sous `in_bag_hf_ratio` **et** au moins `in_bag_min_run` enregistrements consécutifs du même
   # micro (2 h au programme de 30 min), sans trou de plus de `in_bag_max_gap_min` minutes
-  # (DECISIONS n° 190). Un enregistrement grave isolé n'est pas un sac. Seuil calé sur trop
+  # (DECISIONS n° 194). Un enregistrement grave isolé n'est pas un sac. Seuil calé sur trop
   # peu d'exemples (n° 76, 81 : 0,02 → 0,2) ; abaissé à 0,05 avec la règle de durée.
   in_bag_hf_ratio: 0.05
   in_bag_min_run: 4
