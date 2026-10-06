@@ -167,7 +167,9 @@ svg .grille-l { stroke: var(--line); stroke-width: 1; }
 .chaine { position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: minmax(64px, auto); gap: 46px 34px; padding: 6px 0; }
 .chaine svg.liens { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .chaine svg.liens path { fill: none; stroke: var(--muted); stroke-width: 1.6; opacity: .85; }
-.chaine svg.liens path.boucle { stroke: var(--gold); stroke-dasharray: 5 4; opacity: 1; }
+.chaine svg.liens path.boucle { stroke: var(--gold); opacity: 1; }
+.chaine svg.liens marker path { stroke: none; fill: var(--muted); }
+.chaine svg.liens marker#flb path { fill: var(--gold); }
 .chaine svg.liens path.option { stroke-dasharray: 3 4; }
 .noeud.option { border-style: dashed; }
 .noeud { position: relative; z-index: 1; font: inherit; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 9px; cursor: pointer; display: grid; gap: 5px; align-content: start; color: var(--ink); }
@@ -259,6 +261,10 @@ tr.nouveau-groupe td { border-top: 2px solid var(--line); }
 .etapes-plan li.fort .rang { background: var(--gold); color: var(--deep); }
 .etapes-plan p { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
 .principes { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+.principes.deux-colonnes { list-style: none; padding: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+.principes.deux-colonnes li { background: var(--surface-2); border-radius: var(--radius); padding: 10px 12px; display: grid; gap: 2px; align-content: start; }
+.principes.deux-colonnes li strong { display: block; }
+@media (max-width: 700px) { .principes.deux-colonnes { grid-template-columns: 1fr; } }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
@@ -599,7 +605,7 @@ $("#pied").append(
    4. Chaîne de traitement
    ====================================================================== */
 {
-  const s = section("chaine", "Chaîne de traitement", "Du fichier audio au score par point d'écoute. Cliquer une étape pour son détail ; pointillés dorés : la boucle d'annotation et de réentraînement ; pointillés gris : la fusion, seulement si besoin.");
+  const s = section("chaine", "Chaîne de traitement", "Du fichier audio au score par point d'écoute. Cliquer une étape pour son détail ; en doré : la boucle d'annotation et de réentraînement ; pointillés gris : la fusion, seulement si besoin.");
   // Le chemin principal sur une ligne ; dessous, la boucle d'annotation qui revient aux têtes.
   const POS = { inventaire: [1, 1], qc: [2, 1], signal: [3, 1], encodage: [4, 1],
     tetes: [5, 1], fusion: [6, 1], score: [7, 1], evaluation: [8, 1],
@@ -657,7 +663,7 @@ $("#pied").append(
   }
   s.append(carte(null, null, box, el("div", { class: "legende" },
     el("span", {}, el("i", { style: "background:var(--ok)" }), "écrit et testé"), el("span", {}, el("i", { style: "background:var(--warn)" }), "en cours"),
-    el("span", {}, el("i", { style: "background:var(--idle)" }), "à venir"), el("span", {}, el("i", { class: "tirets" }), "boucle d'annotation"),
+    el("span", {}, el("i", { style: "background:var(--idle)" }), "à venir"), el("span", {}, el("i", { class: "trait", style: "background:var(--gold)" }), "boucle d'annotation"),
     el("span", {}, el("i", { class: "tirets gris" }), "si besoin (ensemble, signal en parallèle)"))), detail);
   choisir("encodage");
   requestAnimationFrame(tracer);
@@ -718,7 +724,8 @@ function camemberts() {
     el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Trois principes"), puces(P.principes)));
   s.append(carte("Apprentissage actif", A.contexte, etapesEl(A.boucle, -1),
     el("p", { class: "sous" }, "La boucle recommence : les nouveaux labels donnent une nouvelle tête, qui choisit les écoutes suivantes."),
-    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Méthodes de sélection et contrôles"), puces(A.methodes)));
+    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Méthodes de sélection et contrôles"),
+    el("ul", { class: "principes deux-colonnes" }, A.methodes.map(([titre, d]) => el("li", {}, el("strong", {}, titre), el("span", { class: "sous" }, d.charAt(0).toUpperCase() + d.slice(1)))))));
   s.append(carte("Annotations par site et par micro", "Enregistrements annotés avec et sans A. blanci, recomptés dans la base à chaque mise à jour du tableau de bord. Cliquer un site pour voir ses micros.", camemberts()));
   if (D.poste) {
     const img = el("img", { src: D.poste, alt: "Capture du poste d'annotation Streamlit", class: "capture", loading: "lazy" });
@@ -832,7 +839,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    6. Explorateur des têtes
    ====================================================================== */
 {
-  const s = section("explorateur", "Explorateur des têtes", "Choisir ce qu'on compare : encodeurs, têtes, espèces, unité et lecture de l'AP. Les têtes sont rangées sous leur encodeur ; chaque point est une espèce, le trait la moyenne des espèces choisies.", "Comparaison à la carte");
+  const s = section("explorateur", "Explorateur des têtes (AnuraSet)", "Choisir ce qu'on compare : encodeurs, têtes, espèces, unité et lecture de l'AP. Les têtes sont rangées sous leur encodeur ; chaque point est une espèce, le trait la moyenne des espèces choisies.", "Comparaison à la carte");
   const SOURCES = {
     adaptees: { nom: "Encodeurs × têtes (benchmark global)", rows: D.encodeurs.transfert.map((r) => ({ enc: r[0], sp: r[1], head: r[2], lvl: r[3], ap: r[4], aps: r[5] })),
       ref: ["perch_v2", "logistic"], encs: ["perch_v2", "birdnet_v3", "audioprotopnet"], heads: ["logistic", "simple_prototype", "proto_probe"] },
@@ -974,7 +981,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    8. Amorcer un site neuf : les têtes comparées, sur un ou plusieurs encodeurs
    ====================================================================== */
 {
-  const s = section("amorcage", "Amorcer un site neuf", "AP sur le site tenu à l'écart selon le nombre d'enregistrements positifs de ce site déjà annotés (benchmark global AnuraSet, moyenne des espèces et des sites). Une couleur par tête, un trait par encodeur.", "Pré-benchmark AnuraSet");
+  const s = section("amorcage", "Amorcer un site neuf (AnuraSet)", "Pour observer comment se comportent les têtes sur un site nouveau, selon le nombre d'annotations qu'il a déjà reçues : AP sur le site tenu à l'écart en fonction du nombre de ses enregistrements positifs annotés (moyenne des espèces et des sites). Une couleur par tête, un trait par encodeur.", "Pré-benchmark AnuraSet");
   const COURBE = D.encodeurs.courbe; // [enc, head, k, apw, apm]
   const K = [0, 1, 2, 5, 10, 20, -1], KN = ["0", "1", "2", "5", "10", "20", "tout"];
   const encs = [...new Set(COURBE.map((r) => r[0]))].sort();
@@ -1011,12 +1018,11 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
       if (v.some((x) => x != null)) series.push({ e, hd, v, trait: TRAITS[ie] });
     }));
     if (!series.length) { zone.replaceChildren(el("p", { class: "vide" }, "Choisir au moins un encodeur et une tête.")); return; }
-    const toutes = series.flatMap((x) => x.v).filter((x) => x != null);
-    const lo = Math.max(0, Math.floor(Math.min(...toutes) * 20) / 20), hi = Math.min(1, Math.ceil(Math.max(...toutes) * 20) / 20);
+    const lo = 0, hi = 1; // échelle fixe : les courbes se comparent d'un choix à l'autre
     const xk = (i) => g + (i / (K.length - 1)) * (W - g - d);
     const yv = (v) => h + (1 - (v - lo) / (hi - lo || 1)) * (H - h - b);
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", role: "img", "aria-label": "Courbe d'amorçage par tête" });
-    for (let v = lo; v <= hi + 1e-9; v += 0.05) svg.append(sv("line", { x1: g, x2: W - d, y1: yv(v), y2: yv(v), class: "grille-l" }), sv("text", { x: g - 8, y: yv(v) + 4, "text-anchor": "end" }, fr(v, 2)));
+    for (let v = lo; v <= hi + 1e-9; v += 0.1) svg.append(sv("line", { x1: g, x2: W - d, y1: yv(v), y2: yv(v), class: "grille-l" }), sv("text", { x: g - 8, y: yv(v) + 4, "text-anchor": "end" }, fr(v, 1)));
     K.forEach((k, i) => svg.append(sv("text", { x: xk(i), y: H - b + 18, "text-anchor": "middle" }, KN[i])));
     svg.append(sv("text", { x: (g + W - d) / 2, y: H - 4, "text-anchor": "middle" }, "enregistrements positifs du site neuf annotés (k)"));
     const fins = [];
