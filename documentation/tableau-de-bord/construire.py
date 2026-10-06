@@ -3,12 +3,14 @@
     uv run python documentation/tableau-de-bord/construire.py
 
 Lit les rapports et les CSV de documentation/benchmarks/, les tableaux PNG, la bibliographie,
-le glossaire, l'inventaire de documentation/commandes.md, les tests, l'historique git,
-structure.yaml (objectif, chaîne, débit), en_cours.yaml (le travail en cours, tenu à la main)
+l'inventaire de documentation/commandes.md, les tests, l'historique git,
+structure.yaml (objectif, chaîne, plan d'annotation), en_cours.yaml (le travail en cours, tenu à la main)
 et, si la base locale existe, l'avancement des annotations. Écrit :
 
 - index.html : modele.html avec toutes les données intégrées ;
-- fichiers.json : les images à publier à côté de la page (chemin publié → chemin du dépôt) ;
+- fichiers.json : les images à publier à côté de la page (chemin publié → chemin du dépôt),
+  dont le spectrogramme du bandeau (spectrogramme.jpg, fait par spectrogramme.py) et, s'il
+  existe, la capture du poste d'annotation (poste-annotation.png) ;
 - annotations.json : l'avancement des annotations, relu tel quel quand la base est absente
   (session sans les données) ; versionné.
 
@@ -165,15 +167,20 @@ def inventaire() -> dict:
         )
     fenetres = re.findall(r"\| (\d) s \| ([\d,]+) s \| (\d+) \| ([\d ]+) \|", bloc)
     drapeaux = re.search(r"Écartés par les drapeaux.*?encodables", bloc, flags=re.S)
+    drapeaux = re.sub(r"\s+", " ", drapeaux.group(0)) if drapeaux else ""
+    drapeaux = drapeaux.replace(
+        "Écartés par les drapeaux (jamais encodés)", "Enregistrements écartés du projet"
+    ).replace("micros dans le sac", "micros allumés dans le sac")
     return {
         "sites": sites,
         "fenetres": [
             [f"{a} s", f"{b} s", int(c), int(d.replace(" ", ""))] for a, b, c, d in fenetres
         ],
-        "drapeaux": re.sub(r"\s+", " ", drapeaux.group(0)) if drapeaux else "",
+        "drapeaux": drapeaux,
         "jeux": {
-            "2023": "Phénologie : 3 sites, 2 micros par site, décembre 2023 → novembre 2024",
-            "2026": "Campagne 2026 : 5 sites, un relevé d'environ une semaine par site",
+            "2023": "Phénologie 2023 : 3 sites, 2 micros par site, 1 an",
+            "2026": "Campagne 2026 : 3 sites, +100 micros, 1 semaine "
+            "(au pic d'activité annuel d'A. blanci)",
         },
     }
 
@@ -340,7 +347,7 @@ def annotations(config: Path | None) -> dict:
         con = sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)
         try:
             labels = current_labels(con)
-            recs = recordings_table(con)[["recording_id", "site"]]
+            recs = recordings_table(con)[["recording_id", "site", "mic_id"]]
         finally:
             con.close()
         try:
@@ -367,6 +374,12 @@ def annotations(config: Path | None) -> dict:
         .agg(["size", "sum"])
         .reset_index()
     )
+    micros = (
+        par_rec.assign(mic_id=par_rec["mic_id"].fillna("?"))
+        .groupby(["site", "mic_id"])["positif"]
+        .agg(["size", "sum"])
+        .reset_index()
+    )
     resultat = {
         "compte": {
             "entrainement": int(len(entr)),
@@ -377,11 +390,79 @@ def annotations(config: Path | None) -> dict:
         "sites": [
             [r.site or "?", r.jeu, int(r.size), int(r.sum)] for r in sites.itertuples(index=False)
         ],
+        "micros": [
+            [r.site or "?", r.mic_id, int(r.size), int(r.sum)]
+            for r in micros.itertuples(index=False)
+        ],
         "compte_le": date.today().isoformat(),
         "source": "base locale",
     }
     sauvegarde.write_text(json.dumps(resultat, ensure_ascii=False, indent=1), encoding="utf-8")
     return resultat
+
+
+def encodage(config: Path | None, structure: dict) -> dict:
+    """Temps d'encodage du corpus ONF par encodeur (`temps_encodage` de structure.yaml).
+
+    Lu dans la base locale : `models.params_json.totals` (cumul de tous les passages d'`embed`,
+    durée réelle) et le nombre d'enregistrements encodables (`select_recordings`). Un encodeur
+    est « fini » quand son stock couvre tous les encodables. Sans base, ou pour un stock encodé
+    avant le cumul, relit encodage.json, puis les valeurs connues de structure.yaml."""
+    cfg_t = structure.get("temps_encodage", {})
+    noms = [n for n, _ in cfg_t.get("encodeurs", [])]
+    sortie = {
+        n: dict(cfg_t.get("connus", {}).get(n, {}), nom=nom)
+        for n, nom in cfg_t.get("encodeurs", [])
+    }
+    sauvegarde = ICI / "encodage.json"
+    if sauvegarde.exists():
+        for n, v in json.loads(sauvegarde.read_text(encoding="utf-8")).items():
+            if n in sortie and v.get("statut"):
+                sortie[n].update(v)
+    try:
+        from blanci.core.config import config_path, load_config
+        from blanci.embedding.embed import select_recordings
+
+        if config is None and (RACINE / "config" / "local.yaml").exists():
+            config = RACINE / "config" / "local.yaml"
+        cfg = load_config(config)
+        base = config_path(cfg, "db")
+        if not base.exists():
+            raise FileNotFoundError(base)
+        con = sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)
+        try:
+            encodables = len(select_recordings(con))
+            lignes = con.execute(
+                "SELECT name, params_json FROM models WHERE kind = 'encoder'"
+            ).fetchall()
+        finally:
+            con.close()
+    except (ImportError, OSError, sqlite3.Error):
+        return {"encodeurs": sortie, "source": "dernier relevé connu"}
+    mesures = {}
+    for nom, params in lignes:
+        if nom not in noms or not params:
+            continue
+        tot = json.loads(params).get("totals")
+        if not tot or tot.get("recordings", 0) <= (mesures.get(nom, {}).get("enregistrements", 0)):
+            continue
+        fini = tot["recordings"] >= encodables
+        mesures[nom] = {
+            "statut": "fini" if fini else "en_cours",
+            "enregistrements": tot["recordings"],
+            "encodables": encodables,
+            "heures": round(tot["wall_s"] / 3600, 1),
+            "s_par_enregistrement": round(tot["wall_s"] / tot["recordings"], 2),
+            "source": f"base locale, {date.today().isoformat()}",
+        }
+    for nom, m in mesures.items():
+        if not (sortie[nom].get("statut") == "fini" and m["statut"] != "fini"):
+            sortie[nom].update(m)
+    sauvegarde.write_text(
+        json.dumps({n: v for n, v in sortie.items() if v.get("statut")}, ensure_ascii=False, indent=1),
+        encoding="utf-8",
+    )
+    return {"encodeurs": sortie, "source": "base locale"}
 
 
 PUBLICATION = ICI / "publication.json"
@@ -390,7 +471,6 @@ AUTOMATIQUE = (
     "documentation/benchmarks/",
     "documentation/tableaux/",
     "documentation/biblio/biblio.md",
-    "documentation/glossaire-bioacoustique.md",
     "documentation/commandes.md",
     "tests/",
     "documentation/tableau-de-bord/",
@@ -503,7 +583,11 @@ def main() -> None:
     config = opts.config
     contenu = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
     contenu.update(yaml.safe_load((ICI / "en_cours.yaml").read_text(encoding="utf-8")))
-    fichiers: dict[str, str] = {}
+    fichiers: dict[str, str] = {
+        nom: str((ICI / nom).relative_to(RACINE))
+        for nom in ("spectrogramme.jpg", "poste-annotation.png")
+        if (ICI / nom).exists()
+    }
     tests = compter_tests()
     for etape in contenu["chaine"]:
         etape["n_tests"] = tests.get(etape.get("tests", ""), 0)
@@ -511,6 +595,7 @@ def main() -> None:
         "genere": {"commit": commit_courant(), "date": date.today().isoformat()},
         "contenu": contenu,
         "annotations": annotations(config),
+        "encodage": encodage(config, contenu),
         "tests": {"total": sum(tests.values()), "par_dossier": tests},
         "historique": historique(ref_main()),
         "inventaire": inventaire(),
@@ -519,7 +604,7 @@ def main() -> None:
         "tetes": benchmark_tetes(),
         "tableaux": tableaux(fichiers),
         "biblio": (DOC / "biblio" / "biblio.md").read_text(encoding="utf-8"),
-        "glossaire": (DOC / "glossaire-bioacoustique.md").read_text(encoding="utf-8"),
+        "poste": "poste-annotation.png" if (ICI / "poste-annotation.png").exists() else None,
     }
     brut = json.dumps(donnees, ensure_ascii=False, separators=(",", ":"), default=str)
     brut = brut.replace("</", "<\\/")  # pas de </script> dans les données

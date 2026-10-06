@@ -3258,7 +3258,19 @@ de Léonard, 01/10/2026.
      qu'un encodage BirdNET tournait en tâche de fond, qui plantait. Le livrable n'est pas
      concerné : il ne passe pas par les groupes de uv.
 
-191. **`config/local.yaml` pris d'office** (Léonard, 06/10) : sans `--config`, la commande
+## 2026-10-06 — Horloge douteuse : les 1 521 de Molokoi SMA14636 reviennent dans le corpus
+
+191. **`clock_off` n'écarte plus rien** (Léonard, 06/10). Les 1 521 enregistrements de Molokoi
+     SMA14636 en avril 2024 (n° 153 et 154), jugés bons, sont réintégrés au projet : le
+     drapeau `clock_off` sort de `EXCLUDING_FLAGS` et reste calculé par `blanci flag` comme
+     simple remarque (inventaire, file `candidates --drapeau clock_off`). Les 78 déclenchements
+     de test qu'il levait aussi restent écartés pour leur durée. Encodables : 94 588 + 1 521 =
+     **96 109** enregistrements de 120 s (les 1 521 n'étaient écartés que par ce drapeau,
+     n° 154). Rien à relancer : l'exclusion se décide à la lecture des drapeaux, la prochaine
+     passe d'`embed` les encode. L'heure de ces enregistrements n'est pas corrigée (`start_utc`
+     garde l'en-tête GUANO, en avance d'une heure sur le nom de fichier, n° 153).
+
+192. **`config/local.yaml` pris d'office** (Léonard, 06/10) : sans `--config`, la commande
      `blanci` et le poste d'annotation lisent `config/local.yaml` s'il existe ; `uv run blanci
      annotate` suffit. `--config autre.yaml` le remplace (AnuraSet). Les tests l'ignorent
      toujours (fixture de `tests/conftest.py`), pour ne jamais toucher la vraie base.
