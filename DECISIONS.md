@@ -3269,3 +3269,8 @@ de Léonard, 01/10/2026.
      n° 154). Rien à relancer : l'exclusion se décide à la lecture des drapeaux, la prochaine
      passe d'`embed` les encode. L'heure de ces enregistrements n'est pas corrigée (`start_utc`
      garde l'en-tête GUANO, en avance d'une heure sur le nom de fichier, n° 153).
+
+192. **`config/local.yaml` pris d'office** (Léonard, 06/10) : sans `--config`, la commande
+     `blanci` et le poste d'annotation lisent `config/local.yaml` s'il existe ; `uv run blanci
+     annotate` suffit. `--config autre.yaml` le remplace (AnuraSet). Les tests l'ignorent
+     toujours (fixture de `tests/conftest.py`), pour ne jamais toucher la vraie base.
