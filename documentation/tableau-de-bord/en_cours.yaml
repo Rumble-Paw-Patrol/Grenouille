@@ -22,11 +22,11 @@ en_cours:
   - titre: Benchmark des approches sur mon jeu de données
     etat: en_cours
     detail: >-
-      Les Benchmarks pré-existant ont été réalisés sur AnuraSet. Ici on va tester les encodeurs et têtes de  classification à disposition sur notre dataset pour voir lequel performe le mieux.
+      Les Benchmarks pré-existant ont été réalisés sur AnuraSet. Nous allons par la suite tester les encodeurs (pas tous) et têtes de  classifications directement sur notre dataset quand ce dernier sera prêt.
   - titre: Création du module de traitement du signal
     etat: en_cours
     detail: >-
-      Filtre passe-bande, PCEN, log-mel, débruitage spectral, energy-based candidate window extraction.   
+      Filtre passe-bande, PCEN, log-mel, débruitage spectral, extraction de fenêtres candidates basée sur l'énergie, les chants faibles ne sont pas encore retenus : seuil à hystérésis à ajouter..   
     suite: Placement du module dans la pipeline, en amont ou en parallèle du couple foundation-model & head.
   - titre: Test d'une application Windows
     etat: a_venir
