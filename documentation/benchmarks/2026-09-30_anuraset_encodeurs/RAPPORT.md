@@ -6,24 +6,29 @@
 ## En bref
 
 - **En tête, sans écart significatif entre eux** (AP moyenne par site, minute, cinq espèces) :
+  - audioprotopnet + sonde à prototypes sur ses jetons : **0,86** (ajouté le 06/10 ; licence
+    CC BY-NC, non libre) ;
   - naturebeats + sonde à prototypes : **0,84** ;
   - perch_v2 + sonde à prototypes : **0,81** ;
   - convnext_birdset + logistique : **0,81** (ajouté le 30/09 au soir) ;
-  - audioprotopnet + logistique : **0,80** (ajouté le 06/10, sans ses jetons) ;
+  - audioprotopnet + logistique : 0,80 ;
   - perch_v2 + logistique (la référence) : 0,79 ;
   - aves2 sl_beats_bio : 0,79 ;
   - perch_bird : 0,78.
 
-  Après Holm, aucun autre encodeur ne bat la référence. Sans les deux sites presque vides,
+  Après Holm, un seul encodeur bat la référence sur une espèce : audioprotopnet + sonde à
+  prototypes sur DENMIN (+0,23) ; aucun autre. Sans les deux sites presque vides,
   naturebeats reste devant (0,88), suivi de convnext_birdset (0,87).
 - **La règle du n° 151 a tout changé** pour les transformers auto-supervisés. La sonde à
   prototypes sur les jetons bat la logistique sur les cinq espèces pour 7 des 10 transformers
   (eat_all : 4 sur 5) : Bird-MAE-Base passe de 0,51 à 0,74, naturebeats de 0,69 à 0,84. Elle
   n'aide pas les EAT affinés sur étiquettes (sl_eat), ni guère perch_v2 (2 espèces sur 5,
   +0,03 en moyenne). La sonde attentive n'aide presque jamais.
-- **Meilleur libre** (n° 156) : perch_v2 + sonde à prototypes (0,81). Aucun non libre ne le bat
-  sur une espèce après Holm (`comparaisons_meilleur_libre.csv`), ni naturebeats (licence non
-  commerciale), ni convnext_birdset (aucune licence déclarée).
+- **Meilleur libre** (n° 156) : perch_v2 + sonde à prototypes (0,81). **Un non libre le bat sur
+  une espèce après Holm** : audioprotopnet + sonde à prototypes sur DENMIN (+0,16 ; PHYCUV +0,03
+  et BOAFAB +0,01 non significatifs, PITAZU −0,01, LEPLAT +0,02 ; `comparaisons_meilleur_libre.csv`).
+  Ni naturebeats (licence non commerciale), ni convnext_birdset (aucune licence déclarée) ne le
+  battent.
 - **Site sans aucune annotation** (courbe d'amorçage, logistique) : convnext_birdset est le
   meilleur (0,83), devant perch_v2 (0,81) ; naturebeats part de 0,71 et ne rejoint perch_v2
   que vers 20 enregistrements annotés. convnext_birdset reste devant à tout k.
@@ -46,8 +51,8 @@ Mêmes enregistrements, espèces, sites et positifs que les benchmarks 01 à 07 
 
 - **24 encodeurs à cinq espèces complètes** : les six du benchmark 07, puis la vague 2
   (sessions 5 à 8, 10 à 14 ; fiches dans `../fiches/`). convnext_birdset (session 8) a été
-  ajouté le 30/09 au soir, audioprotopnet le 06/10 : **sans ses jetons** (têtes sur l'embedding
-  seulement ; sa sonde à prototypes sur jetons reste à mesurer).
+  ajouté le 30/09 au soir, audioprotopnet le 06/10 (avec ses jetons 19 × 8 : sonde à prototypes,
+  attentive, logistique:max).
 - **Manquent** : avesecho_passt et biolingual (session 9,
   relancée le 30/09) : à ajouter quand elles auront fini (Annexe) ; MetaPerch, seulement annoncé
   (article de juillet 2026 ; poids pas encore publiés au 30/09).
@@ -134,9 +139,10 @@ aves2 sl_beats 0,85, perch_v2 + prototypes 0,85 (en logistique, 0,84), birdnet_v
 - **Encodeur libre : perch_v2**, avec la sonde à prototypes sur ses jetons spatiaux comme
   candidate face à la logistique. L'écart est faible ici (+0,03), mais A. blanci émet des notes
   plus brèves encore (hypothèse 1).
-- **Non libres pour le benchmark ONF** (au plus deux, n° 156) : aucun ne bat le meilleur libre
-  après Holm. À proposer quand même, parce qu'ils sont au même niveau : naturebeats + sonde à
-  prototypes (meilleure moyenne), et convnext_birdset + logistique (meilleur départ sans
+- **Non libres pour le benchmark ONF** (au plus deux, n° 156) : audioprotopnet + sonde à
+  prototypes est le seul à battre le meilleur libre après Holm (une espèce sur cinq, DENMIN), et
+  il a la meilleure moyenne (0,86) : il est le premier candidat. Les autres au même niveau :
+  naturebeats + sonde à prototypes (0,84), et convnext_birdset + logistique (meilleur départ sans
   annotation, simple, sans jetons). Pour convnext_birdset, demander sa licence au laboratoire
   DBD : s'il en publie une libre, il change de camp. À décider avec Élodie.
 - **Site neuf, pas encore annoté** : convnext_birdset part le mieux (0,83), perch_v2 + logistique
@@ -157,9 +163,9 @@ aves2 sl_beats 0,85, perch_v2 + prototypes 0,85 (en logistique, 0,84), birdnet_v
 
 ## 8. Suites
 
-1. Ajouter les têtes sur jetons d'audioprotopnet (sa tête d'origine est à prototypes : sans elles,
-   il reste « en retrait en sondage linéaire », jamais « écarté », n° 151), puis avesecho_passt
-   et biolingual quand la session 9 aura fini, avant la clôture de la vague 2 le 09/10.
+1. Ajouter avesecho_passt et biolingual quand la session 9 aura fini, avant la clôture de la
+   vague 2 le 09/10. Pour audioprotopnet : courbe d'amorçage des têtes sur jetons, et licence CC BY-NC
+   à confirmer (usage non commercial : non livrable).
 2. Ajouter les têtes sur jetons à la courbe d'amorçage, pour perch_v2 et naturebeats.
 3. Benchmark ONF (après le go du n° 158) : perch_v2 (logistique et sonde à prototypes),
    birdnet_v3, et les deux non libres ci-dessus si Élodie les accepte.
@@ -180,7 +186,7 @@ uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_enco
 `donnees/encodeurs.csv` : fenêtre, dimension, débit et licence de chaque encodeur, relevés
 dans les fiches et les n° 141 à 156.
 
-**Ajouter la session 9** (avesecho_passt, biolingual ; convnext_birdset et audioprotopnet sans jetons : faits)
+**Ajouter la session 9** (avesecho_passt, biolingual ; convnext_birdset et audioprotopnet avec jetons : faits)
 quand leurs sorties seront sur une branche de résultats (`resultats-anuraset-audioprotopnet` porte les
 sorties de `resultats/global/`, `resultats-anuraset-07` ayant été supprimée au n° 164) : reporter leur débit (fiche) dans
 `donnees/encodeurs.csv`, puis

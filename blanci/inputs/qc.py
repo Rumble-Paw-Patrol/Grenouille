@@ -4,7 +4,7 @@ Un drapeau est une remarque sur un enregistrement, rangée dans `recordings.qc_f
 fichier n'est jamais touché). Trois origines :
 - inventaire, sans lire l'audio : durée anormale (`duration_off`), hors relevé
   (`off_campaign`), horloge douteuse (`clock_off`, une remarque : n'écarte plus rien,
-  DECISIONS n° 189) ;
+  DECISIONS n° 190) ;
 - audio, calculé sur le son (`blanci qc`, avant tout encodage) : silencieux, micro dans sac ;
   indices simples (numpy/scipy), seuils de config/default.yaml calibrés par
   `blanci qc-calibrate` ;
@@ -140,7 +140,7 @@ def metadata_flags(
       `utc_offset_h`) et celle de l'en-tête (`start_utc`, GUANO) diffèrent de plus de
       `clock_tolerance_min` (DECISIONS n° 154 : Molokoi SMA14636 en avril 2024, en-tête en
       avance d'une heure). Remarque seulement : ces enregistrements restent dans le corpus
-      (n° 189). Sans `path`, ou sans horodatage dans le nom, rien n'est signalé.
+      (n° 190). Sans `path`, ou sans horodatage dans le nom, rien n'est signalé.
 
     `recordings` : recording_id, dataset, site, mic_id, start_utc, duration_s ; path.
     """

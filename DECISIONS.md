@@ -3234,9 +3234,27 @@ de Léonard, 01/10/2026.
      l'analyse des commentaires du poste d'annotation (`comment_fields`) et la lecture des
      tableaux d'un outil d'écoute (`clips-import`).
 
+## 2026-10-06 — Poste d'annotation allégé
+
+189. **Plus de menus déroulants dans le visualiseur, plus de page grisée** (Léonard). Le
+     type d'intervalle (A. blanci, plusieurs, incertain, faux ami) se choisit par quatre
+     boutons colorés toujours visibles (ou les touches 1 à 4) : « faux ami » était caché dans
+     un menu, et les menus des pastilles se refermaient tout seuls (le clic sur le menu
+     reconstruisait la liste des pastilles). Une pastille se sélectionne d'un clic, un bouton
+     de type change alors son type ; un intervalle tout juste tracé n'est pas sélectionné,
+     pour que choisir le type du suivant ne change pas le précédent. La dynamique devient un
+     curseur, le micro du spectrogramme deux boutons. Les boutons de zoom (temps, fréquence),
+     « Candidat » et « Tout » sont retirés : la molette et Maj + molette restent, un seul
+     bouton « Vue de base » (comme le double-clic) remet tout l'extrait de 0 à 10 kHz. Ajout
+     d'un réglage **Contraste** (0 à 8 : puissance 1 + 0,35 × niveau sur l'échelle de
+     couleurs, le haut ne bouge pas, le bruit de fond s'assombrit). Le lecteur n'était pas
+     rechargé par les cases du panneau de gauche (vérifié dans Chromium : son état survit),
+     mais Streamlit grisait toute la page pendant chaque réexécution ; une feuille de style
+     garde la page à pleine opacité.
+
 ## 2026-10-06 — Horloge douteuse : les 1 521 de Molokoi SMA14636 reviennent dans le corpus
 
-189. **`clock_off` n'écarte plus rien** (Léonard, 06/10). Les 1 521 enregistrements de Molokoi
+190. **`clock_off` n'écarte plus rien** (Léonard, 06/10). Les 1 521 enregistrements de Molokoi
      SMA14636 en avril 2024 (n° 153 et 154), jugés bons, sont réintégrés au projet : le
      drapeau `clock_off` sort de `EXCLUDING_FLAGS` et reste calculé par `blanci flag` comme
      simple remarque (inventaire, file `candidates --drapeau clock_off`). Les 78 déclenchements
