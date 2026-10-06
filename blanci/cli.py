@@ -21,7 +21,7 @@ from blanci.annotation.workbench import (
     random_candidates,
     recording_candidates,
 )
-from blanci.core.config import config_path, load_config, project_path
+from blanci.core.config import config_path, default_user_config, load_config, project_path
 from blanci.core.db import connect
 from blanci.embedding.embed import embed_recordings, select_recordings
 from blanci.embedding.encoders import get_encoder
@@ -110,10 +110,15 @@ def _write_csv(frame: pd.DataFrame, path: Path, message: str) -> None:
 def main(
     ctx: typer.Context,
     config: Annotated[
-        Path | None, typer.Option("--config", "-c", help="Fichier YAML surchargeant la config.")
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Fichier YAML surchargeant la config (défaut : config/local.yaml).",
+        ),
     ] = None,
 ) -> None:
-    ctx.obj = load_config(config)
+    ctx.obj = load_config(config or default_user_config())
     from blanci.heads.regularization import configure
 
     configure(ctx.obj)  # R75 : règle de choix des réglages (head.selection_rule)

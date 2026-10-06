@@ -3257,3 +3257,8 @@ de Léonard, 01/10/2026.
      commande ; sans `--group research`, il désinstallait torch, TensorFlow et bacpipe pendant
      qu'un encodage BirdNET tournait en tâche de fond, qui plantait. Le livrable n'est pas
      concerné : il ne passe pas par les groupes de uv.
+
+191. **`config/local.yaml` pris d'office** (Léonard, 06/10) : sans `--config`, la commande
+     `blanci` et le poste d'annotation lisent `config/local.yaml` s'il existe ; `uv run blanci
+     annotate` suffit. `--config autre.yaml` le remplace (AnuraSet). Les tests l'ignorent
+     toujours (fixture de `tests/conftest.py`), pour ne jamais toucher la vraie base.

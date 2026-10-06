@@ -12,6 +12,12 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "default.yaml"
+LOCAL_CONFIG = PROJECT_ROOT / "config" / "local.yaml"
+
+
+def default_user_config() -> Path | None:
+    """config/local.yaml s'il existe : la commande et le poste le prennent sans `--config`."""
+    return LOCAL_CONFIG if LOCAL_CONFIG.is_file() else None
 
 
 def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

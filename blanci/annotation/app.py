@@ -57,7 +57,7 @@ from blanci.annotation.workbench import (
     split_windows,
     wav_bytes,
 )
-from blanci.core.config import config_path, load_config
+from blanci.core.config import config_path, default_user_config, load_config
 from blanci.core.db import connect, window_id_for
 from blanci.inputs.labels import QUALITIES
 
@@ -97,7 +97,7 @@ def _config_file() -> Path | None:
     parser.add_argument("--config", type=Path, default=None)
     args, _ = parser.parse_known_args(sys.argv[1:])
     env = os.environ.get("BLANCI_CONFIG")
-    return args.config or (Path(env) if env else None)
+    return args.config or (Path(env) if env else None) or default_user_config()
 
 
 def _setup(config: Path | None):
