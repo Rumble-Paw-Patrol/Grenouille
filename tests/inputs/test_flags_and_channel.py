@@ -202,7 +202,7 @@ def test_clock_off_when_file_name_and_header_disagree():
 
 
 def test_clock_off_needs_the_path_and_no_longer_excludes_the_recording():
-    """Les 1 521 de Molokoi SMA14636 sont réintégrés au corpus (DECISIONS n° 190)."""
+    """Les 1 521 de Molokoi SMA14636 sont réintégrés au corpus (DECISIONS n° 191)."""
     from blanci.inputs.qc import EXCLUDING_FLAGS, is_excluded
 
     assert not flags_of(campaign())["clock_off"].any()

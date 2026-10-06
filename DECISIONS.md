@@ -3252,9 +3252,15 @@ de Léonard, 01/10/2026.
      mais Streamlit grisait toute la page pendant chaque réexécution ; une feuille de style
      garde la page à pleine opacité.
 
+190. **Tous les groupes de dépendances installés par défaut** (`[tool.uv] default-groups =
+     "all"`, Léonard, 06/10). `uv run` synchronise l'environnement avant de lancer la
+     commande ; sans `--group research`, il désinstallait torch, TensorFlow et bacpipe pendant
+     qu'un encodage BirdNET tournait en tâche de fond, qui plantait. Le livrable n'est pas
+     concerné : il ne passe pas par les groupes de uv.
+
 ## 2026-10-06 — Horloge douteuse : les 1 521 de Molokoi SMA14636 reviennent dans le corpus
 
-190. **`clock_off` n'écarte plus rien** (Léonard, 06/10). Les 1 521 enregistrements de Molokoi
+191. **`clock_off` n'écarte plus rien** (Léonard, 06/10). Les 1 521 enregistrements de Molokoi
      SMA14636 en avril 2024 (n° 153 et 154), jugés bons, sont réintégrés au projet : le
      drapeau `clock_off` sort de `EXCLUDING_FLAGS` et reste calculé par `blanci flag` comme
      simple remarque (inventaire, file `candidates --drapeau clock_off`). Les 78 déclenchements
