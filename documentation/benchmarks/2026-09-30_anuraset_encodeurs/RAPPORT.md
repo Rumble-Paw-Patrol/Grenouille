@@ -1,4 +1,4 @@
-# Benchmark 08 — 23 encodeurs sur AnuraSet, chacun avec la tête qui lui correspond
+# Benchmark 08 — 24 encodeurs sur AnuraSet, chacun avec la tête qui lui correspond
 
 30/09/2026 · commit `93d8f03` · statut : **indicateur**, pré-benchmark avant les données ONF
 (anoures du Brésil, pas A. blanci ; 2 à 4 sites par espèce ; vague 2 incomplète).
@@ -9,6 +9,7 @@
   - naturebeats + sonde à prototypes : **0,84** ;
   - perch_v2 + sonde à prototypes : **0,81** ;
   - convnext_birdset + logistique : **0,81** (ajouté le 30/09 au soir) ;
+  - audioprotopnet + logistique : **0,80** (ajouté le 06/10, sans ses jetons) ;
   - perch_v2 + logistique (la référence) : 0,79 ;
   - aves2 sl_beats_bio : 0,79 ;
   - perch_bird : 0,78.
@@ -43,10 +44,11 @@ libres, et seulement s'ils font mieux que lui (n° 156).
 
 Mêmes enregistrements, espèces, sites et positifs que les benchmarks 01 à 07 (n° 141).
 
-- **23 encodeurs à cinq espèces complètes** : les six du benchmark 07, puis la vague 2
+- **24 encodeurs à cinq espèces complètes** : les six du benchmark 07, puis la vague 2
   (sessions 5 à 8, 10 à 14 ; fiches dans `../fiches/`). convnext_birdset (session 8) a été
-  ajouté le 30/09 au soir.
-- **Manquent** : audioprotopnet (session 8, en cours), avesecho_passt et biolingual (session 9,
+  ajouté le 30/09 au soir, audioprotopnet le 06/10 : **sans ses jetons** (têtes sur l'embedding
+  seulement ; sa sonde à prototypes sur jetons reste à mesurer).
+- **Manquent** : avesecho_passt et biolingual (session 9,
   relancée le 30/09) : à ajouter quand elles auront fini (Annexe) ; MetaPerch, seulement annoncé
   (article de juillet 2026 ; poids pas encore publiés au 30/09).
 - **naturelm-audio-v1-beats** d'esp-aves2 a les mêmes poids que naturebeats (cosinus 1,0000) :
@@ -149,14 +151,15 @@ aves2 sl_beats 0,85, perch_v2 + prototypes 0,85 (en logistique, 0,84), birdnet_v
 - **Têtes sur jetons en transfert seulement**, pas dans la courbe d'amorçage.
 - **Vague 2 incomplète** (sessions 8 et 9). rcl_fs_bsed : apprentissage plafonné à 60 000
   fenêtres et témoin non passé.
-- **Bootstrap optimiste** (2 à 4 sites) ; 23 encodeurs × 5 espèces comparés, Holm.
+- **Bootstrap optimiste** (2 à 4 sites) ; 24 encodeurs × 5 espèces comparés, Holm.
 - **Fuite possible** pour birdnet_v3 et naturebeats : leurs données d'entraînement ne sont pas
   publiées.
 
 ## 8. Suites
 
-1. Ajouter audioprotopnet (sa tête d'origine est à prototypes), avesecho_passt et biolingual
-   quand les sessions 8 et 9 auront fini, avant la clôture de la vague 2 le 09/10.
+1. Ajouter les têtes sur jetons d'audioprotopnet (sa tête d'origine est à prototypes : sans elles,
+   il reste « en retrait en sondage linéaire », jamais « écarté », n° 151), puis avesecho_passt
+   et biolingual quand la session 9 aura fini, avant la clôture de la vague 2 le 09/10.
 2. Ajouter les têtes sur jetons à la courbe d'amorçage, pour perch_v2 et naturebeats.
 3. Benchmark ONF (après le go du n° 158) : perch_v2 (logistique et sonde à prototypes),
    birdnet_v3, et les deux non libres ci-dessus si Élodie les accepte.
@@ -165,7 +168,7 @@ aves2 sl_beats 0,85, perch_v2 + prototypes 0,85 (en logistique, 0,84), birdnet_v
 
 ## Annexe — Reproduire
 
-Sorties brutes : branche `resultats-anuraset-07`, dossier `resultats/global/` (perch_v2 avec
+Sorties brutes : branche `resultats-anuraset-audioprotopnet` (ex-`resultats-anuraset-07`), dossier `resultats/global/` (perch_v2 avec
 jetons : refait ici, `global_bench.py perch_v2 <ESPECE> sorties --tokens`, jetons par
 `jetons.py perch_v2`, 45 min).
 
@@ -177,13 +180,14 @@ uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_enco
 `donnees/encodeurs.csv` : fenêtre, dimension, débit et licence de chaque encodeur, relevés
 dans les fiches et les n° 141 à 156.
 
-**Ajouter les sessions 8 et 9** (audioprotopnet, avesecho_passt, biolingual ; convnext_birdset : fait)
-quand leurs sorties seront sur `resultats-anuraset-07` : reporter leur débit (fiche) dans
+**Ajouter la session 9** (avesecho_passt, biolingual ; convnext_birdset et audioprotopnet sans jetons : faits)
+quand leurs sorties seront sur une branche de résultats (`resultats-anuraset-audioprotopnet` porte les
+sorties de `resultats/global/`, `resultats-anuraset-07` ayant été supprimée au n° 164) : reporter leur débit (fiche) dans
 `donnees/encodeurs.csv`, puis
 
 ```
-git fetch origin resultats-anuraset-07
-mkdir -p /tmp/g08 && git archive origin/resultats-anuraset-07 resultats/global | tar -x -C /tmp/g08
+git fetch origin resultats-anuraset-audioprotopnet
+mkdir -p /tmp/g08 && git archive origin/resultats-anuraset-audioprotopnet resultats/global | tar -x -C /tmp/g08
 uv run python anuraset/rassembler_08.py /tmp/g08/resultats/global documentation/benchmarks/2026-09-30_anuraset_encodeurs
 uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
 ```
