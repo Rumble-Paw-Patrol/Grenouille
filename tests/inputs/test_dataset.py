@@ -484,6 +484,35 @@ def test_a_later_span_corrects_the_intervals_it_covers(con):
     assert data.loc[69.0, "y"] == 1
 
 
+def test_false_friend_intervals_are_hard_negatives(con):
+    """Faux ami 10,0–10,4 s : `false_friend` (négatif) pour les fenêtres qui le contiennent,
+    le reste de l'extrait garde « rien » ; A. blanci l'emporte sur une fenêtre qui a les
+    deux."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    intervals = [(10.0, 10.4, "false_friend"), (20.0, 21.0, "blanci"), (21.5, 22.0, "false_friend")]
+    _span(con, rid, 0.0, 30.0, intervals)
+    data = _interval_labels(con, grid_frame([rid]))
+    assert data.loc[9.0, "label"] == "false_friend" and data.loc[9.0, "y"] == 0
+    assert data.loc[6.0, "label"] == "background"
+    assert data.loc[19.5, "y"] == 1  # 19,5–22,5 : A. blanci et le faux ami
+    assert data.loc[22.5, "label"] == "background"  # 22,5–25,5 ne touche pas le faux ami
+    training = training_set(con, grid_frame([rid])).set_index("offset_s")
+    assert training.loc[9.0, "y"] == 0
+
+
+def test_annotated_spans_export_one_row_per_extract_and_per_interval(con):
+    from blanci.inputs.dataset import annotated_spans
+
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    _span(con, rid, 0.0, 30.0, [(10.0, 10.4, "blanci"), (12.0, 13.0, "false_friend")])
+    _span(con, rid, 0.0, 30.0, [(10.0, 10.5, "blanci")])  # réécoute : corrige le premier
+    extracts, intervals = annotated_spans(con)
+    assert list(extracts["n_blanci"]) == [1, 1]
+    assert extracts.loc[0, "intervalles"] == "10.00-10.40 blanci; 12.00-13.00 false_friend"
+    assert extracts.loc[0, "path"] == "2026/mataroni/M1/a.wav"
+    assert list(intervals["valable"]) == [False, False, True]
+
+
 def test_interval_labels_follow_any_grid(con):
     """Mêmes intervalles, grille de 5 s jointive (perch) : les labels se déduisent aussi."""
     rid = add_recording(con, "2026/mataroni/M1/a.wav")

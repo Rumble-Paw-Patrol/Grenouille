@@ -12,6 +12,7 @@ CLASS_OF_LABEL = {
     "bird": "oiseau",
     "amphibian": "amphibien",
     "amphibian_contact_call": "amphibien",
+    "false_friend": "faux ami",
     "orthoptera": "orthoptère",
     "rain": "pluie",
     "background": "fond",

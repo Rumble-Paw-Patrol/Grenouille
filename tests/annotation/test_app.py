@@ -205,12 +205,20 @@ def test_without_multiclass_only_blanci_is_asked(app_config):
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.text_input[0].input("léonard").run()
     assert not any(c.label == "oiseau" for c in at.main.checkbox)
-    assert not any(t.label.startswith("Espèce") for t in at.text_input)
-    _draw(at, [[4.0, 5.5, "blanci"]])
+    assert not any(t.label.startswith("Espèce entendue") for t in at.text_input)
+    _draw(at, [[4.0, 5.5, "blanci"], [8.0, 9.0, "false_friend"]])
+    next(t for t in at.text_input if t.label.startswith("Espèce du faux ami")).input("Adenomera")
     _button(at, "Envoyer l'extrait ▶").click().run()
     con = connect(app_config["paths"]["db"])
-    [(other, conditions)] = con.execute("SELECT other_label, conditions FROM spans").fetchall()
-    assert other == "background" and json.loads(conditions)["multiclass"] is False
+    [(other, species, conditions)] = con.execute(
+        "SELECT other_label, species, conditions FROM spans"
+    ).fetchall()
+    assert (other, species) == ("background", "Adenomera")  # le faux ami a son intervalle
+    assert json.loads(conditions)["multiclass"] is False
+    assert [tuple(r) for r in con.execute("SELECT label FROM intervals")] == [
+        ("blanci",),
+        ("false_friend",),
+    ]
 
 
 @pytest.mark.parametrize("n_candidates", [3])

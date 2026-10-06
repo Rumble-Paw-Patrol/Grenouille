@@ -3181,3 +3181,29 @@ de Léonard, 01/10/2026.
        seul claquement suffisait à placer très haut, assombrissant tout le reste), et il est
        propre à chaque micro : jusqu'ici celui du micro 1 servait aussi au micro 2, plus fort
        de 12 dB, qui sortait saturé.
+
+186. **Faux amis en intervalles, et export de l'annotation par intervalles** (Léonard).
+     - **Pourquoi un faux ami n'est pas un simple « rien »** : pour la tête binaire, les deux
+       sont des négatifs (y = 0, poids R15 identique). Mais le faux ami sert ailleurs : le
+       negative mining « proches des faux amis » (`selection`, n° 99) cherche les voisins de
+       ces fenêtres, la tête multiclasse (R67) en fait une classe, et l'analyse des faux
+       positifs a besoin de savoir *quoi* trompe le modèle. Noté « rien », il est perdu, et
+       sans la case multi-classe (n° 185) il n'y avait plus d'autre moyen de le dire.
+     - **Un faux ami se trace comme A. blanci**, type « faux ami » dans la liste du
+       visualiseur (couleur turquoise) : label d'intervalle `false_friend`, ajouté aux labels
+       (`labels.LABELS`, `service.INTERVAL_LABELS`). Localisé, il ne marque que les fenêtres
+       qui le contiennent, pas les 2 min de l'extrait. Règle (`dataset.interval_labels`) :
+       fenêtre `false_friend` (y = 0) si r ≥ ½ et qu'aucun intervalle d'A. blanci ne la
+       touche (A. blanci l'emporte) ; une fenêtre qui ne fait que l'effleurer garde le label
+       du reste de l'extrait (ce n'est pas un bord : elle reste négative). Le reste de
+       l'extrait ne prend pas le label du faux ami. L'espèce, si on la connaît, va dans
+       « Espèce du faux ami » (`spans.species`), aussi hors multi-classe. Classe R67 « faux
+       ami ».
+     - **Export** : `blanci export-labels` écrit en plus `extraits_annotes.csv` (un extrait
+       écouté par ligne : fichier, site, micro, heure, début et fin, nombre d'intervalles
+       d'A. blanci, intervalles résumés « 30.20-30.40 blanci; 50.00-51.00 false_friend »,
+       classes, qualité, espèce, commentaire, annotateur, date) et `intervalles_annotes.csv`
+       (un intervalle par ligne, `valable` faux s'il a été remplacé par une réécoute). Une
+       colonne par intervalle a été écartée : leur nombre varie d'un enregistrement à
+       l'autre (0 à plusieurs dizaines), le tableau serait surtout vide et illisible.
+       Référence : la base SQLite (`spans`, `intervals`), les CSV n'en sont qu'une vue.

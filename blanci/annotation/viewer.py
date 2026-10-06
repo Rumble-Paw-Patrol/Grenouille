@@ -24,7 +24,7 @@ KEEP_ASSETS = 40  # fichiers d'écoute gardés (les plus récents)
 HELP = """\
 | Geste | Effet |
 |---|---|
-| **Glisser** sur le spectrogramme | tracer un intervalle (type choisi en haut à gauche) |
+| **Glisser** sur le spectrogramme | tracer un intervalle (type, dont faux ami : en haut) |
 | **Tirer le bord** d'un intervalle | l'ajuster (le curseur devient ↔) |
 | **Clic droit** sur un intervalle, ou le sélectionner puis **Suppr** | l'effacer |
 | **Clic** (sans glisser) | placer la lecture à cet instant (elle reprend de là) |
@@ -105,7 +105,7 @@ const ctx = canvas.getContext("2d");
 const M = {l: 44, r: 8, t: 8, b: 24};
 const PLAYHEAD = "#00e676";
 const COLORS = {blanci: [80, 170, 255], blanci_chorus: [200, 120, 255],
-                blanci_uncertain: [255, 170, 40]};
+                blanci_uncertain: [255, 170, 40], false_friend: [60, 230, 200]};
 const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
 let view = null, intervals = [], selected = -1, vmax = [], loading = 0;

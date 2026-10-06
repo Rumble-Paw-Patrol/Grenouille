@@ -16,8 +16,8 @@
 - **Écoute** : l'enregistrement entier sur un spectrogramme zoomable (`viewer.py` : molette,
   glisser, barre de lecture qui suit l'un ou l'autre micro), volume et bande d'écoute
   réglable (position et largeur) ; rien de cela ne touche l'audio d'origine.
-- **Multi-classe** (décoché par défaut) : on ne note qu'A. blanci ; coché, on dit aussi les
-  autres classes et l'espèce entendues.
+- **Multi-classe** (décoché par défaut) : on ne note qu'A. blanci et ses faux amis (en
+  intervalles, comme elle) ; coché, on dit aussi les autres classes entendues.
 - **Découpage** : l'extrait se découpe en fenêtres de longueur choisie, calées sur le
   candidat ; on les annote une à une sans quitter l'enregistrement.
 - **Réponse** : une ou plusieurs classes, qualité, espèce, commentaire, puis « Envoyer ▶ »
@@ -396,7 +396,9 @@ def _classes(form_key: str, answers) -> list[str]:
 
 def _details(multiclass: bool) -> tuple[str | None, str | None, str | None]:
     quality = st.radio("Qualité (si A. blanci)", ["—", *QUALITIES], horizontal=True)
-    species = st.text_input("Espèce entendue (faux ami, congénère…)") if multiclass else ""
+    species = st.text_input(
+        "Espèce entendue (faux ami, congénère…)" if multiclass else "Espèce du faux ami (si connue)"
+    )
     comment = st.text_input("Commentaire (conditions, chant lointain, pluie…)")
     return (
         None if quality == "—" else quality,
@@ -479,7 +481,8 @@ def _interval_caption(intervals) -> str:
     if not intervals:
         return (
             "Aucun intervalle tracé : tout l'extrait sera négatif. Glisser sur le "
-            "spectrogramme là où A. blanci chante."
+            "spectrogramme là où A. blanci chante (ou un faux ami : « faux ami » en haut à "
+            "gauche)."
         )
     return f"{len(intervals)} intervalle(s) : " + " · ".join(
         f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)})" for a, b, c in sorted(intervals)

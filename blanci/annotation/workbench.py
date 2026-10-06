@@ -64,6 +64,7 @@ ANSWERS = (
     ("blanci", "A. blanci"),
     ("blanci_chorus", "A. blanci, plusieurs"),
     ("blanci_uncertain", "A. blanci ?"),
+    ("false_friend", "faux ami"),
     ("amphibian", "autre amphibien"),
     ("amphibian_contact_call", "cri de contact"),
     ("bird", "oiseau"),
@@ -563,8 +564,8 @@ def save_span(
 ) -> int:
     """Enregistre un extrait écouté et ses intervalles d'A. blanci ; renvoie span_id.
 
-    `classes` : classes entendues dans l'extrait (cases cochées) ; celles d'A. blanci
-    s'ajoutent d'elles-mêmes d'après les intervalles. A. blanci coché sans aucun intervalle
+    `classes` : classes entendues dans l'extrait (cases cochées) ; celles des intervalles
+    (A. blanci, faux ami) s'ajoutent d'elles-mêmes. A. blanci coché sans aucun intervalle
     est refusé : toutes les fenêtres de l'extrait deviendraient négatives. Les fenêtres hors
     intervalles prennent la première des autres classes (`ordered_classes`), « rien » sinon.
     `multiclass` faux : seule A. blanci a été notée, les autres classes n'ont pas été
@@ -574,7 +575,8 @@ def save_span(
     if blanci & set(classes) and not intervals:
         raise ValueError("A. blanci coché sans intervalle : tracer où il chante")
     heard = list(dict.fromkeys([*classes, *(label for _, _, label in intervals)]))
-    other, _ = ordered_classes([c for c in heard if c not in blanci])
+    # Les faux amis ont leurs intervalles : ils ne donnent pas leur label au reste de l'extrait.
+    other, _ = ordered_classes([c for c in classes if c not in INTERVAL_LABELS])
     conditions: dict[str, Any] = {"candidate_reason": candidate.get("reason") or None}
     if comment:
         conditions |= comment_fields(comment) | {"comment": comment}

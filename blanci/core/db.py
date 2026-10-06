@@ -123,7 +123,8 @@ MIGRATIONS = [
         span_id     INTEGER NOT NULL REFERENCES spans(span_id),
         start_s     REAL NOT NULL,
         end_s       REAL NOT NULL,
-        label       TEXT NOT NULL            -- blanci, blanci_chorus, blanci_uncertain
+        label       TEXT NOT NULL            -- blanci, blanci_chorus, blanci_uncertain,
+                                             -- false_friend (n° 186)
     );
     CREATE INDEX intervals_span ON intervals(span_id);
 

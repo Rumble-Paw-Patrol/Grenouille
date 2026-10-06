@@ -31,6 +31,7 @@ LABELS = POSITIVE_LABELS + (
     "amphibian",
     "orthoptera",
     "amphibian_contact_call",
+    "false_friend",
     "rain",
     "artefact_in_bag",
     "background",
