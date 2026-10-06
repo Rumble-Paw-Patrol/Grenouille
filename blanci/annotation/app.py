@@ -481,16 +481,24 @@ def _interval_caption(intervals) -> str:
     if not intervals:
         return (
             "Aucun intervalle tracé : tout l'extrait sera négatif. Glisser sur le "
-            "spectrogramme là où A. blanci chante (ou un faux ami : « faux ami » en haut à "
-            "gauche)."
+            "spectrogramme là où A. blanci chante (ou un faux ami : bouton « faux ami » ou "
+            "touche 4 en haut à gauche, avant de tracer)."
         )
     return f"{len(intervals)} intervalle(s) : " + " · ".join(
         f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)})" for a, b, c in sorted(intervals)
     )
 
 
+# Pendant qu'une case ou un menu relance le script, Streamlit grise toute la page (éléments
+# « stale ») : on la laisse telle quelle, le visualiseur garde son état et l'audio.
+NO_GREY = """<style>
+[data-stale="true"], [data-stale="true"] * { opacity: 1 !important; transition: none !important; }
+</style>"""
+
+
 def main() -> None:
     st.set_page_config(page_title="Annotation blanci", layout="wide")
+    st.markdown(NO_GREY, unsafe_allow_html=True)
     config = _config_file()
     cfg, con = _setup(config)
     _apply_pending_queue()
@@ -529,8 +537,8 @@ def main() -> None:
             "l'espèce.",
         )
         st.caption(
-            "Bande d'écoute, volume, dynamique et micro du spectrogramme : dans la barre "
-            "au-dessus du spectrogramme."
+            "Type d'intervalle (dont faux ami), bande d'écoute, volume, dynamique, contraste "
+            "et micro du spectrogramme : dans la barre au-dessus du spectrogramme."
         )
         st.header("Méthode")
         window_mode = st.checkbox(
