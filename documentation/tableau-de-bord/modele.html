@@ -150,6 +150,8 @@ svg .fort { fill: var(--ink); font-weight: 600; }
 svg .grille-l { stroke: var(--line); stroke-width: 1; }
 .graphe { width: 100%; height: auto; display: block; overflow: visible; }
 .barres-sites text { font-size: 14.5px; }
+.barres-sites text.dans-barre { fill: #FFFFFF; font-size: 13px; font-weight: 600; }
+.barres-sites text.note { font-size: 12.5px; }
 .legende { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
 .legende span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .legende i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
@@ -162,7 +164,7 @@ svg .grille-l { stroke: var(--line); stroke-width: 1; }
 #bulle b { font-weight: 700; }
 
 /* Chaîne de traitement */
-.chaine { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(84px, auto); gap: 30px 22px; padding: 6px 0; }
+.chaine { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(84px, auto); gap: 30px 22px; padding: 6px 0; }
 .chaine svg.liens { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .chaine svg.liens path { fill: none; stroke: var(--muted); stroke-width: 1.4; opacity: .7; }
 .chaine svg.liens path.boucle { stroke: var(--gold); stroke-dasharray: 5 4; opacity: 1; }
@@ -264,7 +266,7 @@ code { font-family: var(--f-mono); font-size: .86em; background: var(--surface-2
 
 <div class="shell" lang="fr">
   <aside class="side">
-    <div class="brand"><b>Grenouille</b><span>Détection d'<i>A. blanci</i> · ONF Guyane</span></div>
+    <div class="brand"><b>Grenouille</b></div>
     <nav class="nav" id="nav" aria-label="Sections"></nav>
     <div class="pied" id="pied"></div>
   </aside>
@@ -477,9 +479,8 @@ $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
 const nav = $("#nav");
 for (const [id, nom] of SECTIONS) nav.append(el("a", { href: "#" + id, "data-id": id }, nom));
 $("#pied").append(
-  el("div", {}, C.projet.stage), el("div", {}, C.projet.auteur),
-  el("a", { href: C.projet.depot, target: "_blank", rel: "noopener" }, "Dépôt GitHub"),
-  el("div", {}, "Pour commenter : bouton « Commenter » sur chaque carte, ou mode commentaire de claude.ai."));
+  ...C.projet.stage.map((l) => el("div", {}, l)), el("div", {}, C.projet.auteur),
+  el("a", { href: C.projet.depot, target: "_blank", rel: "noopener" }, "Dépôt GitHub"));
 
 /* ======================================================================
    1. Vue d'ensemble
@@ -488,20 +489,20 @@ $("#pied").append(
   const s = section("accueil", "Vue d'ensemble", "État d'avancement du projet et critères de choix du détecteur.");
   const totalH = D.inventaire.sites.reduce((a, x) => a + x.heures, 0);
   const totalN = D.inventaire.sites.reduce((a, x) => a + x.enregistrements, 0);
-  const libre = D.encodeurs.encodeurs.filter((e) => e.libre === "oui" && e.ap_site_best != null).sort((a, b) => b.ap_site_best - a.ap_site_best)[0];
   const f5 = D.inventaire.fenetres.find((f) => f[0] === "5 s");
   const tuile = (b, span, em) => el("div", { class: "tuile" }, el("b", {}, b), el("span", {}, span), em ? el("em", {}, em) : null);
   const [enc, encSous, encNote] = C.meilleur_encodeur;
   s.append(el("div", { class: "tuiles" },
-    tuile(entier(totalH) + " h", `${entier(totalN)} enregistrements de 2 min`, `${C.projet.sites} sites`),
+    tuile(entier(totalH) + " h", `${entier(totalN)} enregistrements de 2 min`, `${new Set(D.inventaire.sites.map((x) => C.lieux[x.site] || x.site)).size} sites`),
     f5 ? tuile(fr(f5[3] / 1e6, 1) + " millions", "nombre de fenêtres de 5 secondes", `avec un overlapping de ${f5[1].replace(" s", " secondes")}`) : null,
-    tuile(fr(libre.ap_site_best), `meilleur encodeur libre : ${libre.encoder}`, "AP moyenne par site, AnuraSet"),
+    tuile(entier(C.annotation_cibles.entrainement + C.annotation_cibles.evaluation), "extraits et enregistrements à annoter", `${C.annotation_cibles.entrainement} pour l'entraînement · ${C.annotation_cibles.evaluation} pour le test`),
     tuile(enc, encSous, encNote)));
 
   const crit = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Rang"), el("th", {}, "Critère"), el("th", {}, "Mesure"))),
     el("tbody", {}, C.projet.criteres.map(([r, c, m]) => el("tr", {}, el("td", { class: "num" }, String(r)), el("td", {}, el("strong", {}, c)), el("td", {}, m)))));
   const etat = el("div", { class: "grille-2" },
-    carte("Critères de choix du détecteur", "Critères appliqués dans cet ordre.", el("div", { class: "defile" }, crit)),
+    carte("Critères de choix du détecteur", "Critères appliqués dans cet ordre.", el("div", { class: "defile" }, crit),
+      C.criteres_note ? el("p", { class: "sous" }, C.criteres_note) : null),
     carte("Chantiers en cours", null, el("ul", { style: "margin:0;padding:0;list-style:none;display:grid;gap:8px" },
       C.en_cours.map((t) => el("li", { style: "display:flex;gap:10px;align-items:baseline;justify-content:space-between" }, el("a", { href: "#en-cours" }, t.titre), puceEtat(t.etat))))));
   s.append(etat);
@@ -526,7 +527,7 @@ $("#pied").append(
 
   // plan d'annotation, étape par étape (présentation de suivi n° 2)
   const P = C.plan_annotation;
-  const etapes = el("ol", { class: "etapes-plan" }, P.etapes.map(([titre, d], k) => el("li", { class: k === 3 ? "fort" : null },
+  const etapes = el("ol", { class: "etapes-plan" }, P.etapes.map(([titre, d], k) => el("li", { class: k === P.etapes.length - 1 ? "fort" : null },
     el("span", { class: "rang" }, String(k + 1)), el("div", {}, el("strong", {}, titre), el("p", {}, d)))));
   const principes = el("ul", { class: "principes" }, P.principes.map(([titre, d]) => el("li", {}, el("strong", {}, titre), " : ", d)));
   const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg, n]) =>
@@ -542,18 +543,36 @@ $("#pied").append(
   const s = section("donnees", "Données", "Inventaire des enregistrements de l'ONF (2 min, toutes les 30 min de 5 h à 20 h, 48 kHz stéréo). L'audio reste sur les disques, jamais dans le dépôt.");
   const inv = D.inventaire; const sites = inv.sites;
   // Même graphique que la diapo « Le jeu de données » de la présentation de suivi n° 2 :
-  // heures d'audio par site, du plus grand au plus petit, une couleur par jeu.
+  // heures d'audio par lieu, les relevés 2026 rattachés à leur site (C.lieux), une couleur par jeu.
   const JEUX = { "2023": "var(--s2)", "2026": "var(--s1)" };
-  const tries = [...sites].sort((a, b) => b.heures - a.heures);
-  const W = 520, gauche = 104, rh = 34, H = tries.length * rh + 6;
-  const xs = (v) => gauche + (v / 800) * (W - gauche - 54);
+  const lieux = new Map();
+  for (const x of sites) {
+    const nom = C.lieux[x.site] || x.site;
+    if (!lieux.has(nom)) lieux.set(nom, { nom, parts: [], total: 0 });
+    const L = lieux.get(nom); L.parts.push(x); L.total += x.heures;
+  }
+  const rangs = [...lieux.values()].sort((a, b) => b.total - a.total);
+  rangs.forEach((L) => L.parts.sort((a, b) => a.jeu.localeCompare(b.jeu)));
+  const W = 560, gauche = 92, rh = 58, H = rangs.length * rh;
+  const xs = (v) => gauche + (v / 1150) * (W - gauche - 62);
   const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe barres-sites", role: "img", "aria-label": "Heures d'audio par site, enregistrements de 2 min" });
-  tries.forEach((x, k) => {
+  rangs.forEach((L, k) => {
     const y = k * rh;
-    svg.append(sv("text", { x: gauche - 10, y: y + 22, "text-anchor": "end", class: "fort" }, x.site));
-    const r = sv("rect", { x: xs(0), y: y + 7, width: xs(x.heures) - xs(0), height: rh - 12, rx: 3, fill: JEUX[x.jeu] });
-    survol(r, () => `<b>${esc(x.site)}</b> · jeu ${x.jeu}<br>${entier(x.enregistrements)} enregistrements<br>${fr(x.heures, 1)} h · ${fr(x.go, 1)} Go`);
-    svg.append(r, sv("text", { x: xs(x.heures) + 6, y: y + 22, class: "num" }, entier(x.heures) + " h"));
+    svg.append(sv("text", { x: gauche - 10, y: y + 22, "text-anchor": "end", class: "fort" }, L.nom));
+    let x0 = 0;
+    for (const jeu of ["2023", "2026"]) {
+      const parts = L.parts.filter((x) => x.jeu === jeu);
+      const h = parts.reduce((s, x) => s + x.heures, 0);
+      if (!h) continue;
+      const r = sv("rect", { x: xs(x0), y: y + 6, width: xs(x0 + h) - xs(x0) - 1, height: 22, fill: JEUX[jeu] });
+      survol(r, () => `<b>${esc(L.nom)}</b> · ${jeu}<br>` + parts.map((x) => `${esc(x.site)} : ${fr(x.heures, 1)} h, ${entier(x.enregistrements)} enregistrements`).join("<br>"));
+      svg.append(r);
+      if (xs(x0 + h) - xs(x0) > 44) svg.append(sv("text", { x: (xs(x0) + xs(x0 + h)) / 2, y: y + 22, "text-anchor": "middle", class: "dans-barre" }, entier(h) + " h"));
+      x0 += h;
+    }
+    svg.append(sv("text", { x: xs(L.total) + 7, y: y + 22, class: "fort num" }, entier(L.total) + " h"));
+    const releves = L.parts.filter((x) => x.jeu === "2026" && x.site !== L.nom).map((x) => x.site);
+    if (releves.length) svg.append(sv("text", { x: gauche, y: y + 45, class: "note" }, `2026 : relevé${releves.length > 1 ? "s" : ""} ${releves.join(", ")}`));
   });
   const tot = (j) => sites.filter((x) => x.jeu === j);
   const somme = (a, k) => a.reduce((s, x) => s + x[k], 0);
@@ -577,9 +596,12 @@ $("#pied").append(
    4. Chaîne de traitement
    ====================================================================== */
 {
-  const s = section("chaine", "Chaîne de traitement", "Du fichier audio au détecteur livré. Cliquer une étape pour son détail ; pointillés dorés : la boucle d'annotation et de réentraînement ; pointillés gris : la fusion, gardée si besoin.");
-  const POS = { recherche: [4, 1], fusion: [6, 1], inventaire: [1, 2], qc: [2, 2], signal: [3, 2], encodage: [4, 2], tetes: [5, 2], score: [6, 2], evaluation: [7, 2],
-    livrable: [7, 3], reentrainement: [5, 3], annotation: [5, 4], verification: [6, 4] };
+  const s = section("chaine", "Chaîne de traitement", "Du fichier audio au score par point d'écoute. Cliquer une étape pour son détail ; pointillés dorés : la boucle d'annotation et de réentraînement ; pointillés gris : la fusion, seulement si besoin.");
+  // En escargot : ligne 1 de gauche à droite, ligne 2 de droite à gauche, ligne 3 la boucle
+  // d'annotation qui revient aux têtes.
+  const POS = { inventaire: [1, 1], qc: [2, 1], signal: [3, 1], encodage: [4, 1],
+    tetes: [4, 2], fusion: [3, 2], score: [2, 2], evaluation: [1, 2],
+    verification: [2, 3], annotation: [3, 3], reentrainement: [4, 3] };
   const box = el("div", { class: "chaine" });
   const liens = sv("svg", { class: "liens", "aria-hidden": "true" });
   box.append(liens);
@@ -587,8 +609,6 @@ $("#pied").append(
   const noeuds = {};
   const byId = Object.fromEntries(C.chaine.map((e) => [e.id, e]));
   const coul = { fait: "var(--ok)", en_cours: "var(--warn)", a_venir: "var(--idle)", bloque: "var(--bad)" };
-  box.append(el("div", { class: "couloir", style: "grid-column:1/3;grid-row:1" }, "Recherche, fusion"));
-  box.append(el("div", { class: "couloir", style: "grid-column:1/3;grid-row:4" }, "Boucle d'annotation"));
   for (const e of C.chaine) {
     const [c, r] = POS[e.id] || [1, 5];
     const n = el("button", { type: "button", class: "noeud" + (e.optionnel ? " option" : ""), style: `grid-column:${c};grid-row:${r}`, "aria-pressed": "false" },
@@ -622,19 +642,17 @@ $("#pied").append(
     const R = (id) => { const r = noeuds[id].getBoundingClientRect(); return { l: r.left - B.left, r: r.right - B.left, t: r.top - B.top, b: r.bottom - B.top, cx: (r.left + r.right) / 2 - B.left, cy: (r.top + r.bottom) / 2 - B.top }; };
     const BOUCLE = new Set(["verification>annotation", "annotation>reentrainement", "reentrainement>tetes", "score>verification"]);
     for (const e of C.chaine) for (const t of e.suite || []) {
-      if (!noeuds[t] || (e.id === "recherche")) continue;
+      if (!noeuds[t]) continue;
       const a = R(e.id), b = R(t); let d;
       const [ca, ra] = POS[e.id], [cb, rb] = POS[t];
       const option = byId[e.id].optionnel || byId[t]?.optionnel;
-      if (option && rb < ra && ca !== cb) d = `M${a.cx} ${a.t} C${a.cx} ${b.cy} ${a.cx} ${b.cy} ${b.l - 2} ${b.cy}`;
-      else if (ra === rb) d = cb > ca ? `M${a.r} ${a.cy} L${b.l - 2} ${b.cy}` : `M${a.l} ${a.cy} L${b.r + 2} ${b.cy}`;
+      if (ra === rb) d = cb > ca ? `M${a.r} ${a.cy} L${b.l - 2} ${b.cy}` : `M${a.l} ${a.cy} L${b.r + 2} ${b.cy}`;
       else if (ca === cb) d = rb > ra ? `M${a.cx} ${a.b} L${b.cx} ${b.t - 2}` : `M${a.cx} ${a.t} L${b.cx} ${b.b + 2}`;
       else if (rb > ra) d = `M${a.cx} ${a.b} C${a.cx} ${(a.b + b.cy) / 2} ${a.cx} ${b.cy} ${b.l - 2} ${b.cy}`;
       else d = `M${a.r} ${a.cy} C${b.cx} ${a.cy} ${b.cx} ${a.cy} ${b.cx} ${b.b + 2}`;
       const boucle = BOUCLE.has(`${e.id}>${t}`);
       liens.append(sv("path", { d, class: boucle ? "boucle" : option ? "option" : null, "marker-end": boucle ? "url(#flb)" : "url(#fl)" }));
     }
-    { const a = R("encodage"), b = R("recherche"); liens.append(sv("path", { d: `M${a.cx} ${a.t} L${b.cx} ${b.b + 2}`, "marker-end": "url(#fl)" })); }
   }
   s.append(carte(null, null, box, el("div", { class: "legende" },
     el("span", {}, el("i", { style: "background:var(--ok)" }), "écrit et testé"), el("span", {}, el("i", { style: "background:var(--warn)" }), "en cours"),

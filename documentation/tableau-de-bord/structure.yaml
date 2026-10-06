@@ -7,21 +7,27 @@
 
 projet:
   titre: Outil de détection automatique d'Anomaloglossus blanci
-  stage: Stage ONF Guyane, 15/09/2026 → 14/03/2027
+  stage: [Stage de fin d'études, Office National des Forêts de Guyane, "6 mois, 15/09/2026 → 14/03/2027"]
   auteur: Léonard Laplace-Palette
   objectif: >-
     Développement d'un détecteur acoustique d'A. blanci en apprentissage continu capable de
     généraliser à de nouveaux points d'écoute jamais vus.
-  sites: 4
   depot: https://github.com/Rumble-Paw-Patrol/Grenouille
   criteres:
-    - [1, Droit d'utilisation, "poids publics et licence qui permet l'usage commercial par l'ONF"]
+    - [1, Droit d'utilisation, "poids publics et licence qui permet l'usage commercial* par l'ONF"]
     - [2, Performance, "AP et rappel"]
     - [3, Facilité d'utilisation, "Application de bureau Windows sans écriture de code par les naturalistes"]
     - [4, Durée d'encodage, "si possible en heures pour une campagne d'écoute d'une semaine sur CPU de l'ONF"]
 
 # Tuiles de la vue d'ensemble qui ne se lisent pas dans les CSV.
+criteres_note: >-
+  * Le caractère « usage commercial » est encore flou : reste à établir si l'utilisation du
+  détecteur par l'ONF, établissement public à caractère industriel et commercial, tombe sous
+  les clauses « non commerciales » de certaines licences de poids (CC BY-NC notamment).
 meilleur_encodeur: [Perch 2.0, "Se démarque a priori devant BirdNET 2.4", "BirdNET 3.0 en preview"]
+
+# Lieux : les relevés 2026 rattachés aux sites de la phénologie 2023 (présentation de suivi n° 2).
+lieux: {CDR: Kaw, Patawa Est: Kaw, Patawa Ouest: Kaw, RNRT: Trésor}
 
 # Chaîne de traitement. « etape » = nom affiché ; « module » = dossier ou fichier de blanci/ ;
 # « tests » = dossier de tests/ dont on compte les tests ; « suite » = étapes suivantes.
@@ -77,31 +83,21 @@ chaine:
       jetons pour les têtes qui les lisent. perch_v2 tourne sur le processeur de l'i5, graphe
       réduit aux sorties utiles.
     chiffre: 2,05 s par enregistrement de 2 min
-    suite: [tetes, recherche]
-  - id: recherche
-    etape: Recherche par similarité
-    groupe: modele
-    module: blanci/embedding/index.py
-    tests: tests/embedding
-    commandes: [search]
-    etat: fait
-    resume: >-
-      Retrouve les fenêtres les plus proches d'un exemple : sert à récolter des positifs pour
-      l'entraînement, jamais pour l'évaluation.
-    suite: [verification]
+    suite: [tetes]
   - id: tetes
     etape: Têtes de classification
     groupe: modele
     module: blanci/heads
     tests: tests/heads
-    commandes: [train, heads, heads-curve]
+    commandes: [train, heads, heads-curve, search]
     etat: fait
     resume: >-
       Une petite couche apprise sur les embeddings donne un score par fenêtre : logistique,
       prototypes, sonde attentive ou à prototypes sur les jetons, avec les régularisations
-      contre « apprendre le site ».
+      contre « apprendre le site ». La recherche par similarité (plus proches voisins d'un
+      exemple) est la référence à battre.
     chiffre: 14 têtes et régularisations comparées
-    suite: [score, fusion]
+    suite: [fusion]
   - id: fusion
     etape: Fusion (si besoin)
     groupe: modele
@@ -111,9 +107,9 @@ chaine:
     etat: fait
     optionnel: true
     resume: >-
-      Hors du chemin principal, gardée pour deux cas : combiner plusieurs modèles (approche par
-      ensemble), et/ou combiner le score de la tête avec le module de traitement du signal si
-      celui-ci est finalement placé en parallèle de l'encodeur plutôt qu'en amont.
+      Entre la classification et le score, seulement si besoin : combiner plusieurs modèles
+      (approche par ensemble), et/ou le score de la tête avec le module de traitement du
+      signal si celui-ci est finalement placé en parallèle de l'encodeur plutôt qu'en amont.
     suite: [score]
   - id: score
     etape: Score et agrégation
@@ -170,18 +166,6 @@ chaine:
       Une nouvelle tête est apprise sur tous les labels, jugée sur le jeu gelé, et adoptée
       seulement si elle n'est pas moins bonne.
     suite: [tetes]
-  - id: livrable
-    etape: Application Windows
-    groupe: sortie
-    module: blanci/embedding/encoders/export.py
-    tests: tests/embedding
-    commandes: []
-    etat: a_venir
-    resume: >-
-      Encodeur exporté en ONNX (int8), écrans pour analyser une campagne sans code,
-      installateur .exe, guide de réentraînement pour l'ONF.
-    chiffre: 1 h d'audio en moins de 10 min visé
-
 # Commandes de recherche ou d'outillage, volontairement hors du schéma de la chaîne. Une
 # commande de la CLI absente d'ici et de la chaîne est signalée comme nouvelle.
 commandes_hors_chaine: [agreement, anuraset benchmark, anuraset campaign, anuraset heads,
@@ -198,14 +182,14 @@ plan_annotation:
     sous-échantillon ; aucun benchmark sur ces données avant leur go.
   etapes:
     - [Répartir les points, "Avant toute écoute, chaque point d'écoute va à l'entraînement ou au test, jamais aux deux."]
-    - [Jeu d'entraînement, "≈ 450 extraits de 30 s, 3 par point (pic du matin, pic du soir, une autre tranche) ; la validation qui règle la tête se fait à l'intérieur, par validation croisée groupée par point."]
+    - [Jeu d'entraînement, "≈ 450 extraits de 30 s, 3 par point d'écoute : pic du matin, pic du soir et une autre tranche horaire."]
+    - [Validation, "Validation croisée en k plis groupés par point d'écoute, à l'intérieur du jeu d'entraînement : chaque pli tient à l'écart des points entiers, comme le fera une future campagne. Elle règle la tête (régularisation, seuil) sans jamais toucher au jeu de test."]
     - [Jeu de test, "≈ 250 enregistrements de 2 min écoutés en entier sur les points tenus à l'écart, avec au moins 60 positifs."]
     - [Vérification, "À l'aveugle, par Élodie et Benoît : mon label est caché et l'ordre mélangé ; ≈ 2 h 30 d'écoute chacun."]
-    - [Go écrit, "Zéro erreur sur 60 positifs, au plus un chant manqué sur 100 négatifs."]
   principes:
-    - [Aucun détecteur dans le tirage, "sinon le jeu hérite de ses angles morts."]
-    - ["Beaucoup de points, peu d'enregistrements par point", "40 enregistrements d'un même micro partagent le même fond : ils n'apprennent presque rien de plus qu'un seul."]
-    - [Positifs et négatifs dans les mêmes conditions, "même point, même tranche horaire ; sinon la tête apprend « matin » au lieu du chant."]
+    - [Annotations de l'ancien prestataire ignorées, "on repart de zéro, sans reprendre ses annotations, pour ne pas hériter de ses angles morts."]
+    - [Peu d'enregistrements sur beaucoup de points, "plutôt que beaucoup d'enregistrements sur peu de points : varier les paysages sonores pour que le détecteur généralise."]
+    - [Positifs et négatifs dans les mêmes conditions, "tirés aux mêmes heures et aux mêmes points : seule la présence du chant les distingue."]
 
 # Cibles du plan d'annotation v1 ; l'avancement est compté dans data/db/blanci.sqlite.
 annotation_cibles:
