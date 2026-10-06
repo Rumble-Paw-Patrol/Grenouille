@@ -3251,3 +3251,9 @@ de Léonard, 01/10/2026.
      rechargé par les cases du panneau de gauche (vérifié dans Chromium : son état survit),
      mais Streamlit grisait toute la page pendant chaque réexécution ; une feuille de style
      garde la page à pleine opacité.
+
+190. **Tous les groupes de dépendances installés par défaut** (`[tool.uv] default-groups =
+     "all"`, Léonard, 06/10). `uv run` synchronise l'environnement avant de lancer la
+     commande ; sans `--group research`, il désinstallait torch, TensorFlow et bacpipe pendant
+     qu'un encodage BirdNET tournait en tâche de fond, qui plantait. Le livrable n'est pas
+     concerné : il ne passe pas par les groupes de uv.
