@@ -24,7 +24,6 @@ from blanci.annotation.workbench import (
     read_clip,
     recording_candidates,
     save_answer,
-    spectrogram_png,
     split_windows,
     wav_bytes,
 )
@@ -322,6 +321,16 @@ def test_next_position_counts_in_the_whole_queue():
     assert next_position(done, 3, unheard_only=False) == 3
 
 
+def test_next_position_backwards_and_without_wrapping():
+    done = pd.Series([None, "bird", None, None], dtype=object)
+    assert next_position(done, 2, unheard_only=False, step=-1) == 1
+    assert next_position(done, 0, unheard_only=False, step=-1) == 0
+    assert next_position(done, 2, unheard_only=True, step=-1) == 0  # saute le 2e
+    assert next_position(done, 0, unheard_only=True, step=-1) == 3  # fait le tour
+    assert next_position(done, 0, unheard_only=True, step=-1, wrap=False) == 0
+    assert next_position(done, 3, unheard_only=True, wrap=False) == 3  # bout de la file
+
+
 def test_split_windows_are_anchored_on_the_candidate():
     assert split_windows(0.0, 12.0, 4.5, 3.0) == [1.5, 4.5, 7.5]
     assert split_windows(0.0, 12.0, 3.0, 3.0) == [0.0, 3.0, 6.0, 9.0]
@@ -352,42 +361,32 @@ def test_save_answer_keeps_the_other_classes(corpus):
     assert latest_labels(con, [wid], annotator="tuteur") == {}
 
 
-def test_spectrogram_png_and_resampled_listening():
-    from PIL import Image
-
-    wav = np.random.default_rng(0).normal(0, 0.1, 48_000 * 2).astype(np.float32)
-    png, fmax = spectrogram_png(wav, 48_000, fmax_hz=12_000, max_columns=50)
-    image = Image.open(io.BytesIO(png))
-    assert image.width <= 50 and image.height > 100
-    assert 11_900 < fmax <= 12_000
-    x, sr = sf.read(io.BytesIO(wav_bytes(wav, 48_000, max_sr=24_000)))
-    assert sr == 24_000 and len(x) == 48_000
-
-
 def test_viewer_serves_its_files_next_to_the_page(tmp_path, monkeypatch):
-    """Spectrogramme et écoute rangés à côté de la page du composant, nommés par leur
-    contenu : les arguments ne transportent que leurs chemins."""
+    """L'écoute est rangée à côté de la page du composant, nommée par son contenu : les
+    arguments ne transportent que son chemin ; la page embarque sa palette."""
     from blanci.annotation import viewer
 
     monkeypatch.setattr(viewer, "VIEWER_DIR", tmp_path / "viewer")
+    src = viewer.asset(b"wav", ".wav")
+    assert (tmp_path / "viewer" / src).read_bytes() == b"wav"
+    assert viewer.asset(b"wav", ".wav") == src
     args = viewer.viewer_args(
-        b"png",
         1.0,
         7.0,
-        8000.0,
-        [("micro 1", b"wav", 1.0)],
+        [("micro 1", src, 1.0)],
         [{"t0": 3.0, "t1": 6.0, "label": None, "current": True, "candidate": True}],
         (4400.0, 5500.0),
         key="a.wav:1.00:7.00",
         labels=[("blanci", "A. blanci")],
         intervals=[(2.0, 2.5, "blanci")],
         interval_mode=True,
+        channel=1,
     )
-    assert (tmp_path / "viewer" / "index.html").read_text().startswith("<!doctype html>")
-    assert (tmp_path / "viewer" / args["image"]).read_bytes() == b"png"
-    assert (tmp_path / "viewer" / args["audios"][0]["src"]).read_bytes() == b"wav"
-    assert args["extract"] == "a.wav:1.00:7.00"
+    assert args["extract"] == "a.wav:1.00:7.00" and args["channel"] == 1
     assert args["intervals"] == [[2.0, 2.5, "blanci"]]
+    assert args["audios"] == [{"name": "micro 1", "src": src, "start": 1.0}]
+    page = (viewer._prepare() / "index.html").read_text()
+    assert "__MAGMA__" not in page and "[0, 0, 4]" in page
 
 
 def test_save_span_derives_the_other_label(corpus):

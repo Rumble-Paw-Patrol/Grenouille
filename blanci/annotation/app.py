@@ -11,10 +11,13 @@
 - **Navigation** : sous la file, la liste de ses candidats (numérotés dans la file entière,
   ✓ et label pour ceux déjà écoutés) ; on peut revenir sur n'importe lequel et le
   réécouter, une nouvelle réponse s'ajoute à l'ancienne (correction, jamais écrasée).
-- **Écoute** : spectrogramme zoomable (`viewer.py` : molette, glisser, barre de lecture qui
-  suit l'un ou l'autre micro), extrait autour du candidat ou enregistrement entier, volume, et
-  bande d'écoute réglable (position et largeur) avec « N'écouter que la bande » ; rien de cela
-  ne touche l'audio d'origine.
+  « Sauter les candidats déjà écoutés » : ◀ ▶ et l'envoi d'une réponse vont au précédent ou
+  au prochain jamais écouté, sinon au voisin dans la file.
+- **Écoute** : l'enregistrement entier sur un spectrogramme zoomable (`viewer.py` : molette,
+  glisser, barre de lecture qui suit l'un ou l'autre micro), volume et bande d'écoute
+  réglable (position et largeur) ; rien de cela ne touche l'audio d'origine.
+- **Multi-classe** (décoché par défaut) : on ne note qu'A. blanci et ses faux amis (en
+  intervalles, comme elle) ; coché, on dit aussi les autres classes entendues.
 - **Découpage** : l'extrait se découpe en fenêtres de longueur choisie, calées sur le
   candidat ; on les annote une à une sans quitter l'enregistrement.
 - **Réponse** : une ou plusieurs classes, qualité, espèce, commentaire, puis « Envoyer ▶ »
@@ -37,7 +40,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from blanci.annotation.viewer import viewer, viewer_args
+from blanci.annotation.viewer import HELP, asset, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
     INTERVAL_ANSWERS,
@@ -51,7 +54,6 @@ from blanci.annotation.workbench import (
     save_answer,
     save_span,
     span_intervals,
-    spectrogram_png,
     split_windows,
     wav_bytes,
 )
@@ -63,10 +65,6 @@ CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
 NAMES = dict(ANSWERS) | {"edge": "bord d'un intervalle (écarté)"}
 # Classes de l'extrait hors A. blanci, dont la présence se dit par les intervalles.
 OTHER_ANSWERS = tuple(a for a in ANSWERS if a not in INTERVAL_ANSWERS)
-CONTEXT, WHOLE = "context", "whole"
-EXTENTS = {CONTEXT: "candidat et contexte", WHOLE: "enregistrement entier"}
-# Au-delà, l'écoute est rééchantillonnée : un enregistrement entier reste léger dans la page.
-LONG_EXTRACT_S, LISTEN_MAX_SR = 20.0, 24_000
 EXISTING, MAP = "existing", "map"
 MODES = {
     EXISTING: "File déjà écrite",
@@ -355,43 +353,36 @@ def _candidate_strip(queue, done, chosen, key, offset_h) -> None:
 
 
 @st.cache_data(max_entries=6, show_spinner="Lecture de l'enregistrement…")
-def _media(
-    raw: str,
-    path: str,
-    offset_s: float,
-    dur_s: float,
-    context_s: float | None,
-    spectro_channel: int,
-    gain_db: float,
-    band_hz: tuple[float, float] | None,
-) -> dict:
-    """Spectrogramme et écoute des deux micros, gardés en cache : changer de fenêtre dans le
-    découpage ne relit pas le disque. `context_s` None : l'enregistrement entier."""
-    clips = {
-        c: read_clip(
-            Path(raw),
-            path,
-            0.0 if context_s is None else offset_s,
-            math.inf if context_s is None else dur_s,
-            context_s or 0.0,
-            c,
-        )
-        for c in CHANNELS
-    }
-    wav, sr, start = clips[spectro_channel]
-    stop = start + len(wav) / sr
-    max_sr = LISTEN_MAX_SR if stop - start > LONG_EXTRACT_S else None
-    png, fmax = spectrogram_png(wav, sr)
+def _media(raw: str, path: str) -> dict:
+    """Enregistrement entier, des deux micros, rangé à côté du visualiseur et gardé en cache :
+    changer de fenêtre ou tracer un intervalle ne relit pas le disque. Le spectrogramme, le
+    volume et la bande d'écoute se font dans le navigateur."""
+    clips = {c: read_clip(Path(raw), path, 0.0, math.inf, 0.0, c) for c in CHANNELS}
+    wav, sr, start = clips[0]
     return {
-        "png": png,
-        "fmax": fmax,
         "t0": start,
-        "t1": stop,
+        "t1": start + len(wav) / sr,
         "audios": [
-            (CHANNELS[c], wav_bytes(w, rate, gain_db, band_hz, max_sr), s0)
+            (CHANNELS[c], asset(wav_bytes(w, rate), ".wav"), s0)
             for c, (w, rate, s0) in clips.items()
         ],
     }
+
+
+# Streamlit < 1.37 : sans fragment, toute la page se réaffiche.
+_fragment = getattr(st, "fragment", lambda f: f)
+
+
+@_fragment
+def _viewer_fragment(args: dict, extract: str, ikey: str, ckey: str, interval_mode: bool):
+    """Visualiseur et liste des intervalles : tracer, ajuster ou effacer un intervalle ne
+    réaffiche que ce fragment, pas toute la page."""
+    value = viewer(args)
+    if value and value.get("key") == extract:
+        st.session_state[ikey] = value["intervals"]
+        st.session_state[ckey] = int(value.get("channel", 0))
+    if interval_mode:
+        st.caption(_interval_caption(st.session_state[ikey]))
 
 
 def _classes(form_key: str, answers) -> list[str]:
@@ -403,9 +394,11 @@ def _classes(form_key: str, answers) -> list[str]:
     ]
 
 
-def _details() -> tuple[str | None, str | None, str | None]:
+def _details(multiclass: bool) -> tuple[str | None, str | None, str | None]:
     quality = st.radio("Qualité (si A. blanci)", ["—", *QUALITIES], horizontal=True)
-    species = st.text_input("Espèce entendue (faux ami, congénère…)")
+    species = st.text_input(
+        "Espèce entendue (faux ami, congénère…)" if multiclass else "Espèce du faux ami (si connue)"
+    )
     comment = st.text_input("Commentaire (conditions, chant lointain, pluie…)")
     return (
         None if quality == "—" else quality,
@@ -414,16 +407,19 @@ def _details() -> tuple[str | None, str | None, str | None]:
     )
 
 
-def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel) -> bool:
+def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel, multiclass) -> bool:
     """Annotation par intervalles : les intervalles viennent du spectrogramme, le formulaire
-    dit le reste de l'extrait. Vrai si l'extrait a été enregistré."""
+    dit le reste de l'extrait (les autres classes seulement en multi-classe). Vrai si
+    l'extrait a été enregistré."""
     with st.form(key=form_key, clear_on_submit=True):
-        st.markdown(
-            "**Autres classes entendues dans l'extrait** (A. blanci : par les intervalles ; "
-            "aucune cochée : rien)"
-        )
-        ticked = _classes(form_key, OTHER_ANSWERS)
-        quality, species, comment = _details()
+        ticked = []
+        if multiclass:
+            st.markdown(
+                "**Autres classes entendues dans l'extrait** (A. blanci : par les "
+                "intervalles ; aucune cochée : rien)"
+            )
+            ticked = _classes(form_key, OTHER_ANSWERS)
+        quality, species, comment = _details(multiclass)
         sent = st.form_submit_button(
             "Envoyer l'extrait ▶", type="primary", use_container_width=True
         )
@@ -445,6 +441,7 @@ def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel) 
             comment=comment,
             channel=channel,
             species=species,
+            multiclass=multiclass,
         )
     except ValueError as exc:
         st.error(str(exc))
@@ -452,13 +449,13 @@ def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel) 
     return True
 
 
-def _answer_form(con, target, form_key, annotator, channel) -> bool:
-    """Annotation par fenêtres (suspendue) : classes (plusieurs possibles), qualité, espèce,
-    commentaire ; vrai si un label a été enregistré."""
+def _answer_form(con, target, form_key, annotator, channel, multiclass) -> bool:
+    """Annotation par fenêtres (suspendue) : classes (plusieurs possibles ; A. blanci seul
+    hors multi-classe), qualité, espèce, commentaire ; vrai si un label a été enregistré."""
     with st.form(key=form_key, clear_on_submit=True):
         st.markdown("**Classes entendues** (plusieurs possibles ; aucune cochée : rien)")
-        ticked = _classes(form_key, ANSWERS)
-        quality, species, comment = _details()
+        ticked = _classes(form_key, ANSWERS if multiclass else INTERVAL_ANSWERS)
+        quality, species, comment = _details(multiclass)
         sent = st.form_submit_button("Envoyer ▶", type="primary", use_container_width=True)
     if not sent:
         return False
@@ -484,7 +481,8 @@ def _interval_caption(intervals) -> str:
     if not intervals:
         return (
             "Aucun intervalle tracé : tout l'extrait sera négatif. Glisser sur le "
-            "spectrogramme là où A. blanci chante."
+            "spectrogramme là où A. blanci chante (ou un faux ami : « faux ami » en haut à "
+            "gauche)."
         )
     return f"{len(intervals)} intervalle(s) : " + " · ".join(
         f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)})" for a, b, c in sorted(intervals)
@@ -497,7 +495,8 @@ def main() -> None:
     cfg, con = _setup(config)
     _apply_pending_queue()
     raw, reports = config_path(cfg, "raw"), config_path(cfg, "reports")
-    band_default = tuple(f / 1000 for f in cfg["signal"]["band_hz"])
+    band_hz = tuple(float(f) for f in cfg["signal"]["band_hz"])
+    spectro_default = int(cfg["audio"]["channel"] == 1)
 
     with st.sidebar:
         st.header("Session")
@@ -507,43 +506,31 @@ def main() -> None:
         candidate_slot = st.container()
         st.header("Écoute")
         skip_done = st.checkbox(
-            "Après une réponse, sauter les candidats déjà écoutés",
+            "Sauter les candidats déjà écoutés",
             value=True,
-            help="Les candidats déjà écoutés restent accessibles par la liste et ◀ ▶.",
+            key="skip_done",
+            help="◀ ▶ et l'envoi d'une réponse vont au précédent ou au prochain candidat jamais "
+            "écouté ; décoché, au voisin dans la file. La liste des candidats donne toujours "
+            "accès à tous.",
         )
         calibration = st.checkbox(
-            "Calibration : ne compter que mes réponses",
+            "Masquer les annotations d'autres personnes",
             value=False,
-            help="Deux annotateurs écoutent la même file sans voir les réponses de l'autre (§5).",
+            key="calibration",
+            help="Seules vos réponses comptent comme « déjà écouté » : deux annotateurs "
+            "écoutent la même file sans voir les réponses de l'autre (calibration, §5).",
         )
-        channel = st.radio(
-            "Spectrogramme",
-            list(CHANNELS),
-            format_func=CHANNELS.get,
-            index=int(cfg["audio"]["channel"] == 1),
-        )
-        extent = st.radio(
-            "Étendue affichée", list(EXTENTS), format_func=EXTENTS.get, index=1, horizontal=True
-        )
-        context_s = (
-            st.slider("Contexte autour de la fenêtre (s)", 0.0, 30.0, 13.5, 0.5)
-            if extent == CONTEXT
-            else None
-        )
-        gain_db = st.slider("Volume d'écoute (dB, n'agit que sur l'écoute)", 0, 30, 0, 3)
-        band_khz = st.slider(
-            "Bande d'écoute (kHz)",
-            0.1,
-            12.0,
-            band_default,
-            0.1,
-            help="Position et largeur de la bande : pointillés du spectrogramme.",
-        )
-        band_hz = (band_khz[0] * 1000, band_khz[1] * 1000)
-        band_only = st.checkbox(
-            "N'écouter que la bande",
+        multiclass = st.checkbox(
+            "Multi-classe : noter aussi les autres espèces",
             value=False,
-            help="Passe-bande entre les pointillés du spectrogramme ; n'agit que sur l'écoute.",
+            key="multiclass",
+            help="Décoché : on ne note qu'A. blanci (intervalles, qualité, commentaire). "
+            "Coché : on dit aussi les autres classes entendues (oiseau, insecte, pluie…) et "
+            "l'espèce.",
+        )
+        st.caption(
+            "Bande d'écoute, volume, dynamique et micro du spectrogramme : dans la barre "
+            "au-dessus du spectrogramme."
         )
         st.header("Méthode")
         window_mode = st.checkbox(
@@ -584,6 +571,8 @@ def main() -> None:
     if done.notna().all():
         st.success("File terminée : tous les candidats ont été écoutés.")
 
+    with st.expander("❓ Mode d'emploi : souris et clavier"):
+        st.markdown(HELP)
     candidate = queue.iloc[pos].to_dict()
     st.subheader(
         f"{candidate['site']} · {candidate['mic_id']} · "
@@ -603,12 +592,6 @@ def main() -> None:
         media = _media(
             str(raw),
             str(candidate["path"]),
-            float(candidate["offset_s"]),
-            float(candidate["dur_s"]),
-            context_s,
-            channel,
-            gain_db,
-            band_hz if band_only else None,
         )
     except Exception as exc:  # disque débranché, fichier déplacé
         st.error(f"Lecture impossible : {exc}")
@@ -630,6 +613,7 @@ def main() -> None:
     window_labels = latest_labels(con, ids, who) if window_mode else {}
 
     intervals: list = []
+    channel = spectro_default
     if media is not None:
         extract = f"{candidate['path']}:{media['t0']:.2f}:{media['t1']:.2f}"
         ikey = f"iv::{extract}"
@@ -646,12 +630,12 @@ def main() -> None:
             }
             for j, ((o, d), i) in enumerate(zip(windows, ids, strict=True))
         ]
-        value = viewer(
+        ckey = f"ch::{extract}"
+        st.session_state.setdefault(ckey, spectro_default)
+        _viewer_fragment(
             viewer_args(
-                media["png"],
                 media["t0"],
                 media["t1"],
-                media["fmax"],
                 media["audios"],
                 shown,
                 band_hz,
@@ -659,17 +643,28 @@ def main() -> None:
                 labels=list(INTERVAL_ANSWERS),
                 intervals=st.session_state[ikey],
                 interval_mode=not window_mode,
-            )
+                channel=spectro_default,
+            ),
+            extract,
+            ikey,
+            ckey,
+            not window_mode,
         )
-        if value and value.get("key") == extract:
-            st.session_state[ikey] = value["intervals"]
         intervals = st.session_state[ikey]
+        channel = st.session_state[ckey]
 
     if not window_mode:
-        st.caption(_interval_caption(intervals))
         form_key = f"span::{chosen}::{pos}"
         if media is not None and _span_form(
-            con, candidate, media["t0"], media["t1"], intervals, form_key, annotator, channel
+            con,
+            candidate,
+            media["t0"],
+            media["t1"],
+            intervals,
+            form_key,
+            annotator,
+            channel,
+            multiclass,
         ):
             st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
             st.rerun()
@@ -703,23 +698,21 @@ def main() -> None:
         target = dict(candidate, offset_s=offset, dur_s=dur)
         if (offset, dur) != (cand_offset, cand_dur):
             target["score"] = None  # le score précédent est celui de la fenêtre du candidat
-        if _answer_form(con, target, f"form::{chosen}::{pos}::{w}", annotator, channel):
+        if _answer_form(con, target, f"form::{chosen}::{pos}::{w}", annotator, channel, multiclass):
             if w < len(windows) - 1:
                 st.session_state[wkey] = w + 1
             else:
                 st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
             st.rerun()
 
-    nav = st.columns(3)
-    nav[0].button("◀ Candidat précédent", disabled=pos == 0, on_click=_goto, args=(key, pos - 1))
-    nav[1].button("Candidat suivant ▶", disabled=pos >= n - 1, on_click=_goto, args=(key, pos + 1))
-    following = next_position(done, pos, True)
-    nav[2].button(
-        "Prochain jamais écouté ⏭",
-        disabled=following == pos,
-        on_click=_goto,
-        args=(key, following),
+    # ◀ ▶ : voisin dans la file, ou précédent / prochain jamais écouté (sans faire le tour).
+    before = next_position(done, pos, skip_done, step=-1, wrap=False)
+    after = next_position(done, pos, skip_done, wrap=False)
+    nav = st.columns(2)
+    nav[0].button(
+        "◀ Candidat précédent", disabled=before == pos, on_click=_goto, args=(key, before)
     )
+    nav[1].button("Candidat suivant ▶", disabled=after == pos, on_click=_goto, args=(key, after))
 
 
 main()

@@ -14,7 +14,10 @@ Labels courants, transfert vers la grille, négatifs appariés.
   écoutée). Avec des fenêtres glissantes à moitié recouvrantes (`encoders.overlap: 0.5`),
   chaque intervalle a au moins une fenêtre positive, quelle que soit sa durée : écarter les
   bords ne perd aucun chant. Un intervalle « A. blanci ? » rend incertaine toute fenêtre non
-  positive qui le touche (`blanci_uncertain`, écartée). Valable pour toute grille (3, 5 s…).
+  positive qui le touche (`blanci_uncertain`, écartée). Un intervalle « faux ami » (un son
+  qui ressemble à A. blanci, n° 186) donne `false_friend` (négatif dur) aux fenêtres qu'il
+  remplit à moitié, si aucun intervalle d'A. blanci ne les touche ; une fenêtre qui ne fait
+  que l'effleurer garde le label du reste de l'extrait. Valable pour toute grille (3, 5 s…).
 - Négatifs appariés (§2) : fenêtres du même micro, dans des enregistrements sans label positif.
   Ce sont des négatifs *présumés* (colonne `presumed`) : jamais écrits dans la table labels.
   En saison, à l'heure de pic, une partie peut contenir A. blanci : bruit d'étiquette identique
@@ -112,6 +115,54 @@ def load_spans(
     return spans, intervals
 
 
+def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Export lisible de l'annotation par intervalles : (extraits, intervalles), avec le
+    fichier, le site, le micro et l'heure de chaque enregistrement. Un extrait par ligne
+    (intervalles résumés dans `intervalles`), un intervalle par ligne ; `valable` faux pour
+    ceux qu'une réécoute plus récente a remplacés."""
+    rec = pd.read_sql_query(
+        "SELECT recording_id, path, site, mic_id, start_utc FROM recordings", con
+    )
+    spans = pd.read_sql_query(
+        "SELECT span_id, recording_id, start_s, end_s, other_label, classes, quality, species, "
+        "conditions, annotator, source, created_at FROM spans ORDER BY span_id",
+        con,
+    )
+    _, intervals = load_spans(con)
+    valid = current_intervals(spans, intervals)
+    intervals = intervals.merge(
+        valid[["span_id", "start_s", "end_s", "label"]].assign(valable=True),
+        on=["span_id", "start_s", "end_s", "label"],
+        how="left",
+    )
+    intervals["valable"] = intervals["valable"].eq(True)
+    conditions = spans["conditions"].map(lambda c: json.loads(c) if c else {})
+    spans["comment"] = conditions.map(lambda c: c.get("comment"))
+    spans["multiclass"] = conditions.map(lambda c: c.get("multiclass", True))
+    spans["classes"] = spans["classes"].map(lambda c: ", ".join(json.loads(c)) if c else "")
+    summary = intervals.groupby("span_id").apply(
+        lambda g: "; ".join(
+            f"{a:.2f}-{b:.2f} {lab}"
+            for a, b, lab in zip(g["start_s"], g["end_s"], g["label"], strict=True)
+        ),
+        include_groups=False,
+    )
+    counts = intervals[intervals["label"] != "false_friend"].groupby("span_id").size()
+    spans["n_blanci"] = spans["span_id"].map(counts).fillna(0).astype(int)
+    spans["intervalles"] = spans["span_id"].map(summary).fillna("")
+    extracts = spans.drop(columns="conditions").merge(rec, on="recording_id", how="left")
+    extracts = extracts[
+        ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "n_blanci",
+         "intervalles", "other_label", "classes", "multiclass", "quality", "species",
+         "comment", "annotator", "source", "created_at"]
+    ]  # fmt: skip
+    intervals = intervals.merge(rec, on="recording_id", how="left")[
+        ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "label",
+         "valable"]
+    ]  # fmt: skip
+    return extracts, intervals
+
+
 def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFrame:
     """Intervalles encore valables : un extrait réécouté plus tard qui couvre entièrement un
     intervalle le remplace (correction en ajout seul, comme les labels)."""
@@ -161,10 +212,11 @@ def interval_labels(
         shorter = np.minimum((w1 - w0)[:, None], (i1 - i0)[None, :])
         enough = touch & (common >= min_overlap * shorter - eps)
         labels = iv["label"].to_numpy()
-        certain = labels != "blanci_uncertain"
+        friend = labels == "false_friend"
+        certain = ~friend & (labels != "blanci_uncertain")
         ids = iv["span_id"].to_numpy()
         for j, (wid, off) in enumerate(zip(g["window_id"], g["offset_s"], strict=True)):
-            hits = touch[j]
+            hits = touch[j] & ~friend
             if (enough[j] & certain).any():
                 k = enough[j] & certain
                 label = "blanci_chorus" if (labels[k] == "blanci_chorus").any() else "blanci"
@@ -176,6 +228,9 @@ def interval_labels(
             elif hits.any():
                 label, y = "edge", 0
                 info = span_info.loc[ids[hits].max()]
+            elif (enough[j] & friend).any():
+                label, y = "false_friend", 0
+                info = span_info.loc[ids[enough[j] & friend].max()]
             elif inside[j].any():
                 info = span_info.loc[sp["span_id"].to_numpy()[np.flatnonzero(inside[j])].max()]
                 label, y = info["other_label"], 0

@@ -41,7 +41,12 @@ from blanci.evaluation.throughput import (
 )
 from blanci.heads.baselines import run_baselines, write_baseline_report
 from blanci.heads.signal_processing import Upstream, compute_onsets, upstream_from_cfg
-from blanci.inputs.dataset import benchmark_subset, current_labels, recordings_table
+from blanci.inputs.dataset import (
+    annotated_spans,
+    benchmark_subset,
+    current_labels,
+    recordings_table,
+)
 from blanci.inputs.frozen import freeze as freeze_recordings
 from blanci.inputs.ingest import ingest as run_ingest
 from blanci.inputs.labels import POSITIVE_LABELS
@@ -248,9 +253,13 @@ def flag(ctx: typer.Context) -> None:
 
 @app.command("export-labels")
 def export_labels(ctx: typer.Context) -> None:
-    """Fenêtres annotées, une ligne chacune : label, qualité, espèce, commentaire.
+    """Annotations en CSV dans le dossier des rapports.
 
-    Le commentaire est celui de l'annotateur, tel qu'écrit (import ou poste d'annotation).
+    - fenetres_annotees.csv : fenêtres annotées une à une (méthode par fenêtres), une
+      ligne chacune : label, qualité, espèce, commentaire (tel qu'écrit par l'annotateur) ;
+    - extraits_annotes.csv : extraits écoutés dans le poste (méthode par intervalles), une
+      ligne chacun, ses intervalles résumés dans la colonne `intervalles` ;
+    - intervalles_annotes.csv : un intervalle (A. blanci, faux ami) par ligne.
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
@@ -266,6 +275,10 @@ def export_labels(ctx: typer.Context) -> None:
         config_path(cfg, "reports") / "fenetres_annotees.csv",
         f"{len(table)} fenêtres annotées",
     )
+    extracts, intervals = annotated_spans(con)
+    reports = config_path(cfg, "reports")
+    _write_csv(extracts, reports / "extraits_annotes.csv", f"{len(extracts)} extraits écoutés")
+    _write_csv(intervals, reports / "intervalles_annotes.csv", f"{len(intervals)} intervalles")
 
 
 @app.command("check-grid")

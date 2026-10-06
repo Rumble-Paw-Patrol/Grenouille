@@ -79,6 +79,18 @@ def _window_mode(at):
     at.run()
 
 
+def _one_window(at):
+    """Fenêtres plus longues que l'enregistrement : le découpage se réduit à la fenêtre du
+    candidat."""
+    next(n for n in at.sidebar.number_input if n.label.startswith("Longueur")).set_value(30.0)
+    at.run()
+
+
+def _multiclass(at):
+    next(c for c in at.sidebar.checkbox if c.label.startswith("Multi-classe")).check()
+    at.run()
+
+
 def _draw(at, intervals):
     """Intervalles « tracés » : la valeur que renverrait le spectrogramme."""
     key = next(k for k in at.session_state if k.startswith("iv::"))
@@ -109,6 +121,7 @@ def test_intervals_are_drawn_on_the_whole_recording_and_saved(app_config):
     assert "CDR" in at.subheader[0].value
     at.sidebar.text_input[0].input("léonard").run()
     assert any("Aucun intervalle" in c.value for c in at.caption)
+    _multiclass(at)
     _draw(at, [[4.0, 5.5, "blanci"], [8.0, 8.4, "blanci_uncertain"]])
     _tick(at, "oiseau")
     next(t for t in at.text_input if t.label.startswith("Espèce")).input("Fourmilier tacheté")
@@ -146,6 +159,7 @@ def test_window_mode_saves_a_label(app_config):
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.text_input[0].input("léonard").run()
     _window_mode(at)
+    _multiclass(at)
     _tick(at, "oiseau")
     next(t for t in at.text_input if t.label.startswith("Espèce")).input("Fourmilier tacheté")
     next(t for t in at.text_input if t.label.startswith("Commentaire")).input("chant lointain")
@@ -185,31 +199,63 @@ def test_modes_needing_an_encoder_say_so(app_config):
     assert any("encodeur" in i.value.lower() for i in at.info)
 
 
+def test_without_multiclass_only_blanci_is_asked(app_config):
+    """Multi-classe décoché (défaut) : ni autres classes ni espèce dans le formulaire, et
+    l'extrait dit que les autres classes n'ont pas été cherchées."""
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.sidebar.text_input[0].input("léonard").run()
+    assert not any(c.label == "oiseau" for c in at.main.checkbox)
+    assert not any(t.label.startswith("Espèce entendue") for t in at.text_input)
+    _draw(at, [[4.0, 5.5, "blanci"], [8.0, 9.0, "false_friend"]])
+    next(t for t in at.text_input if t.label.startswith("Espèce du faux ami")).input("Adenomera")
+    _button(at, "Envoyer l'extrait ▶").click().run()
+    con = connect(app_config["paths"]["db"])
+    [(other, species, conditions)] = con.execute(
+        "SELECT other_label, species, conditions FROM spans"
+    ).fetchall()
+    assert (other, species) == ("background", "Adenomera")  # le faux ami a son intervalle
+    assert json.loads(conditions)["multiclass"] is False
+    assert [tuple(r) for r in con.execute("SELECT label FROM intervals")] == [
+        ("blanci",),
+        ("false_friend",),
+    ]
+
+
 @pytest.mark.parametrize("n_candidates", [3])
 def test_numbering_follows_the_whole_queue_and_going_back_works(app_config):
-    """Après « 1 / 3 » vient « 2 / 3 » (et non « 1 / 2 ») ; on revient sur un candidat
-    déjà écouté, par ◀ ou par la liste des candidats, et on le corrige."""
+    """Après « 1 / 3 » vient « 2 / 3 » (et non « 1 / 2 ») ; ◀ ▶ sautent les candidats déjà
+    écoutés si la case est cochée, vont au voisin sinon ; on revient sur un candidat déjà
+    écouté et on le corrige."""
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.text_input[0].input("léonard").run()
     _window_mode(at)
+    _one_window(at)
     assert _caption(at).startswith("Candidat 1 / 3")
-    next(r for r in at.sidebar.radio if r.label == "Étendue affichée").set_value("context").run()
-    next(s for s in at.sidebar.slider if s.label.startswith("Contexte")).set_value(0.0).run()
+    assert not any(b.label.startswith("Prochain jamais") for b in at.button)
     _button(at, "Envoyer ▶").click().run()
     assert not at.exception
     assert _caption(at).startswith("Candidat 2 / 3")
+    assert _button(at, "◀ Candidat précédent").disabled  # rien de jamais écouté avant
+    next(c for c in at.sidebar.checkbox if c.label.startswith("Sauter")).uncheck().run()
     _button(at, "◀ Candidat précédent").click().run()
     assert _caption(at).startswith("Candidat 1 / 3")
     assert "déjà écouté : rien" in _caption(at)
-    _tick(at, "oiseau")
+    _tick(at, "A. blanci ?")
     _button(at, "Envoyer ▶").click().run()
-    assert _caption(at).startswith("Candidat 2 / 3")  # le prochain jamais écouté
-    strip = at.sidebar.selectbox(key=next(k for k in at.session_state if k.startswith("strip::")))
-    strip.set_value(2).run()
+    assert _caption(at).startswith("Candidat 2 / 3")  # le voisin
+    _button(at, "Envoyer ▶").click().run()
     assert _caption(at).startswith("Candidat 3 / 3")
+    next(c for c in at.sidebar.checkbox if c.label.startswith("Sauter")).check().run()
+    assert _button(at, "◀ Candidat précédent").disabled
+    strip = at.sidebar.selectbox(key=next(k for k in at.session_state if k.startswith("strip::")))
+    strip.set_value(0).run()
+    assert _caption(at).startswith("Candidat 1 / 3")
+    _button(at, "Candidat suivant ▶").click().run()
+    assert _caption(at).startswith("Candidat 3 / 3")  # le 2e est déjà écouté
     assert [(o, label) for o, label, _ in _labels(app_config)] == [
         (3.0, "background"),
-        (3.0, "bird"),
+        (3.0, "blanci_uncertain"),
+        (6.0, "background"),
     ]
 
 
@@ -219,8 +265,8 @@ def test_several_classes_are_saved_together(app_config):
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.sidebar.text_input[0].input("léonard").run()
     _window_mode(at)
-    next(r for r in at.sidebar.radio if r.label == "Étendue affichée").set_value("context").run()
-    next(s for s in at.sidebar.slider if s.label.startswith("Contexte")).set_value(0.0).run()
+    _one_window(at)
+    _multiclass(at)
     _tick(at, "pluie")
     _tick(at, "A. blanci")
     _button(at, "Envoyer ▶").click().run()
@@ -242,11 +288,11 @@ def test_a_recording_is_split_into_windows_annotated_on_the_same_page(app_config
     assert len(window.options) == 4
     assert window.value == 1
     _button(at, "Envoyer ▶").click().run()
-    _tick(at, "oiseau")
+    _tick(at, "A. blanci")
     _button(at, "Envoyer ▶").click().run()
     assert not at.exception
     assert _caption(at).startswith("Candidat 1 / 1")
     assert [(o, label) for o, label, _ in _labels(app_config)] == [
         (3.0, "background"),
-        (6.0, "bird"),
+        (6.0, "blanci"),
     ]

@@ -136,6 +136,7 @@ $B status                                                  # ce que contient la 
 uv run blanci embed --encoder birdmae --subset benchmark   # embeddings des fenêtres annotées
 uv run blanci heads --encoder perch_v2-bacpipe1.3.5        # toutes les têtes, mêmes plis
 $B annotate                                                # poste d'annotation (navigateur)
+$B export-labels                                            # annotations en CSV (rapports)
 ```
 
 Les benchmarks AnuraSet utilisent leur propre configuration (`anuraset/anuraset.yaml`) et leur

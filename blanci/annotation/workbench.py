@@ -52,6 +52,7 @@ ANSWERS = (
     ("blanci", "A. blanci"),
     ("blanci_chorus", "A. blanci, plusieurs"),
     ("blanci_uncertain", "A. blanci ?"),
+    ("false_friend", "faux ami"),
     ("amphibian", "autre amphibien"),
     ("amphibian_contact_call", "cri de contact"),
     ("bird", "oiseau"),
@@ -303,15 +304,20 @@ def progress(
     return pd.Series([latest.get(i) for i in ids], index=queue.index, dtype=object)
 
 
-def next_position(done: pd.Series, pos: int, unheard_only: bool) -> int:
-    """Candidat qui suit `pos` dans la file (position dans la file entière, jamais dans les
-    seuls candidats restants : « 2 / 1521 » suit « 1 / 1521 »). `unheard_only` : le prochain
-    jamais écouté, en repartant du début s'il n'y en a plus après ; `pos` si tout est écouté."""
+def next_position(
+    done: pd.Series, pos: int, unheard_only: bool, step: int = 1, wrap: bool = True
+) -> int:
+    """Candidat qui suit `pos` dans la file (`step` -1 : qui le précède), en position dans la
+    file entière, jamais dans les seuls candidats restants : « 2 / 1521 » suit « 1 / 1521 ».
+    `unheard_only` : le prochain jamais écouté, en faisant le tour de la file si `wrap`.
+    Renvoie `pos` s'il n'y en a pas (bout de la file, ou tout est écouté)."""
     n = len(done)
     if not unheard_only:
-        return min(pos + 1, n - 1)
+        return min(max(pos + step, 0), n - 1)
     heard = done.notna().to_numpy()
-    for i in [*range(pos + 1, n), *range(pos + 1)]:
+    ahead = range(pos + 1, n) if step > 0 else range(pos - 1, -1, -1)
+    behind = (range(pos + 1) if step > 0 else range(n - 1, pos - 1, -1)) if wrap else ()
+    for i in [*ahead, *behind]:
         if not heard[i]:
             return i
     return pos
@@ -382,51 +388,18 @@ def clip_spectrogram(
     return freqs[keep], times, 10 * np.log10(power[keep] + 1e-12)
 
 
-def spectrogram_png(
-    wav: np.ndarray, sr: int, fmax_hz: float = 12_000.0, max_columns: int = 4000
-) -> tuple[bytes, float]:
-    """(image PNG, fréquence du haut de l'image en Hz) : spectrogramme pour le visualiseur
-    zoomable, basses fréquences en bas, 60 dB de dynamique. Au-delà de `max_columns` pas de
-    temps, les colonnes voisines sont réunies par leur maximum (un chant bref reste visible)."""
-    from matplotlib import colormaps
-    from PIL import Image
-
-    freqs, _, db = clip_spectrogram(wav, sr, fmax_hz=min(fmax_hz, sr / 2))
-    if db.shape[1] > max_columns:
-        step = int(np.ceil(db.shape[1] / max_columns))
-        pad = (-db.shape[1]) % step
-        db = np.pad(db, ((0, 0), (0, pad)), mode="edge")
-        db = db.reshape(db.shape[0], -1, step).max(axis=2)
-    vmax = float(db.max())
-    norm = np.clip((db - (vmax - 60)) / 60, 0, 1)
-    rgb = (colormaps["magma"](norm[::-1])[..., :3] * 255).astype(np.uint8)
-    buffer = io.BytesIO()
-    Image.fromarray(rgb).save(buffer, format="PNG")
-    return buffer.getvalue(), float(freqs[-1]) if len(freqs) else fmax_hz
-
-
 def wav_bytes(
     wav: np.ndarray,
     sr: int,
     gain_db: float = 0.0,
     band_hz: tuple[float, float] | None = None,
-    max_sr: int | None = None,
 ) -> bytes:
     """WAV 16 bits en mémoire pour le lecteur ; `gain_db` et `band_hz` (passe-bande : on
-    n'entend que cette bande) n'agissent que sur l'écoute. `max_sr` : rééchantillonné plus
-    bas au-delà, pour qu'un enregistrement entier reste léger dans la page."""
+    n'entend que cette bande) n'agissent que sur l'écoute."""
     if band_hz is not None:
         from blanci.heads.signal_processing import bandpass
 
         wav = bandpass(wav, sr, band_hz)
-    if max_sr is not None and sr > max_sr:
-        from math import gcd
-
-        from scipy.signal import resample_poly
-
-        g = gcd(int(sr), int(max_sr))
-        wav = resample_poly(wav, int(max_sr) // g, int(sr) // g).astype(np.float32)
-        sr = int(max_sr)
     x = np.clip(wav * 10 ** (gain_db / 20), -1.0, 1.0)
     buffer = io.BytesIO()
     sf.write(buffer, x, sr, format="WAV", subtype="PCM_16")
@@ -509,24 +482,30 @@ def save_span(
     comment: str | None = None,
     channel: int | None = None,
     species: str | None = None,
+    multiclass: bool = True,
 ) -> int:
     """Enregistre un extrait écouté et ses intervalles d'A. blanci ; renvoie span_id.
 
-    `classes` : classes entendues dans l'extrait (cases cochées) ; celles d'A. blanci
-    s'ajoutent d'elles-mêmes d'après les intervalles. A. blanci coché sans aucun intervalle
+    `classes` : classes entendues dans l'extrait (cases cochées) ; celles des intervalles
+    (A. blanci, faux ami) s'ajoutent d'elles-mêmes. A. blanci coché sans aucun intervalle
     est refusé : toutes les fenêtres de l'extrait deviendraient négatives. Les fenêtres hors
     intervalles prennent la première des autres classes (`ordered_classes`), « rien » sinon.
+    `multiclass` faux : seule A. blanci a été notée, les autres classes n'ont pas été
+    cherchées (`conditions.multiclass` = false) ; « rien » veut alors dire « pas d'A. blanci ».
     """
     blanci = {"blanci", "blanci_chorus", "blanci_uncertain"}
     if blanci & set(classes) and not intervals:
         raise ValueError("A. blanci coché sans intervalle : tracer où il chante")
     heard = list(dict.fromkeys([*classes, *(label for _, _, label in intervals)]))
-    other, _ = ordered_classes([c for c in heard if c not in blanci])
+    # Les faux amis ont leurs intervalles : ils ne donnent pas leur label au reste de l'extrait.
+    other, _ = ordered_classes([c for c in classes if c not in INTERVAL_LABELS])
     conditions: dict[str, Any] = {"candidate_reason": candidate.get("reason") or None}
     if comment:
         conditions |= comment_fields(comment) | {"comment": comment}
     if channel is not None:
         conditions["channel_listened"] = channel
+    if not multiclass:
+        conditions["multiclass"] = False
     conditions = {k: v for k, v in conditions.items() if v is not None}
     return append_span(
         con,

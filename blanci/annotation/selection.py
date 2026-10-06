@@ -350,7 +350,7 @@ def negative_mining_candidates(
             exclude_recordings=frozen_recordings(cfg),
         )
         friends = (data["y"] == 0) & data["label"].isin(
-            ["bird", "amphibian", "orthoptera", "amphibian_contact_call", "other"]
+            ["bird", "amphibian", "orthoptera", "amphibian_contact_call", "false_friend", "other"]
         )
         if not friends.any():
             raise ValueError("aucun faux ami annoté (oiseau, amphibien, insecte…) : pas de requête")

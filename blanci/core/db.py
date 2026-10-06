@@ -123,7 +123,8 @@ MIGRATIONS = [
         span_id     INTEGER NOT NULL REFERENCES spans(span_id),
         start_s     REAL NOT NULL,
         end_s       REAL NOT NULL,
-        label       TEXT NOT NULL            -- blanci, blanci_chorus, blanci_uncertain
+        label       TEXT NOT NULL            -- blanci, blanci_chorus, blanci_uncertain,
+                                             -- false_friend (n° 186)
     );
     CREATE INDEX intervals_span ON intervals(span_id);
 
@@ -136,7 +137,7 @@ MIGRATIONS = [
     CREATE TRIGGER intervals_no_delete BEFORE DELETE ON intervals
     BEGIN SELECT RAISE(ABORT, 'intervals are append-only'); END;
     """,
-    # 4 — l'import de tableaux d'annotations reçus est retiré (DECISIONS n° 185).
+    # 4 — l'import de tableaux d'annotations reçus est retiré (DECISIONS n° 188).
     """
     DROP TABLE IF EXISTS imports;
     """,

@@ -3137,9 +3137,80 @@ de Léonard, 01/10/2026.
      - Une fenêtre positive pour un intervalle sûr le reste même si elle touche aussi un
        intervalle « A. blanci ? » ; sinon, toucher un intervalle incertain la rend incertaine.
 
+184. **Poste d'annotation plus léger** (retours de Léonard après la première séance).
+     - **Spectrogramme calculé dans le navigateur, à la résolution de la vue** : une colonne
+       de transformée de Fourier par pixel, fenêtre de 512 à 8192 échantillons selon le zoom
+       (plus longue quand on zoome en fréquence). Zoomer affine l'image au lieu d'agrandir des
+       pixels. Python n'en calcule plus : c'était ≈ 3 s par enregistrement de 2 min, l'essentiel
+       du temps d'ouverture. Échelle de couleurs fixe pour l'extrait, dynamique réglable (40
+       à 80 dB).
+     - **Bande d'écoute, « n'écouter qu'elle », volume et micro du spectrogramme dans la barre
+       du visualiseur**, appliqués aussitôt par Web Audio (passe-haut et passe-bas d'ordre 4) :
+       plus d'aller-retour avec Python ni de relecture. Les pointillés se tirent à la souris.
+       Réglages gardés dans le navigateur d'une séance à l'autre.
+     - **L'audio est chargé en mémoire** : le serveur de fichiers des composants ne sert pas
+       les requêtes partielles, le lecteur ne pouvait pas se déplacer et repartait du début.
+       Un clic sur le spectrogramme place la lecture à cet instant, sans la lancer.
+     - **Tracer, ajuster ou effacer un intervalle ne réaffiche plus que le visualiseur**
+       (`st.fragment`) : la page ne se recharge pas, la lecture continue.
+     - Barre de lecture verte cerclée de noir (le rouge se perdait dans la palette magma) ;
+       intervalles d'A. blanci en bleu ; graduations intermédiaires sur les deux axes ;
+       mode d'emploi (souris, clavier) dépliable en haut de la page (`viewer.HELP`).
+
+185. **Poste d'annotation : navigation et formulaire simplifiés** (retours de Léonard).
+     - Cases renommées : « Sauter les candidats déjà écoutés » et « Masquer les annotations
+       d'autres personnes » (la case de calibration du n° 69 : seules mes réponses
+       comptent comme écoutées). Le bouton « Prochain jamais écouté ⏭ » disparaît, il
+       doublait la première case : **◀ ▶ vont au précédent ou au prochain jamais écouté si
+       elle est cochée, au voisin dans la file sinon** (`next_position(step=-1, wrap=False)`,
+       sans faire le tour de la file ; bouton grisé s'il n'y en a pas). La liste des
+       candidats donne toujours accès à tous.
+     - **Section « Étendue affichée » retirée** : le poste montre toujours l'enregistrement
+       entier, le candidat est marqué dessus et « Candidat » y zoome. Le contexte réglable
+       autour de la fenêtre ne servait plus depuis les intervalles (n° 182).
+     - **Case « Multi-classe »**, décochée par défaut : on ne note qu'A. blanci (intervalles,
+       qualité, commentaire) ; cochée, les autres classes et l'espèce reviennent dans le
+       formulaire. Un extrait noté sans multi-classe porte `conditions.multiclass = false` :
+       son « rien » veut dire « pas d'A. blanci », pas « rien d'autre », et ne doit pas
+       servir de négatif à une autre classe.
+     - **Zoom fluide** : pendant la molette ou le glisser, l'image déjà calculée est
+       seulement étirée ; le calcul à pleine résolution attend 250 ms de repos (ou le
+       relâchement de la souris), comme dans les logiciels d'analyse sonore.
+     - **Échelle de couleurs comme les figures de la présentation** : le haut de l'échelle
+       est le centile 99,5 des niveaux entre 500 Hz et 10 kHz (au lieu du maximum, qu'un
+       seul claquement suffisait à placer très haut, assombrissant tout le reste), et il est
+       propre à chaque micro : jusqu'ici celui du micro 1 servait aussi au micro 2, plus fort
+       de 12 dB, qui sortait saturé.
+
+186. **Faux amis en intervalles, et export de l'annotation par intervalles** (Léonard).
+     - **Pourquoi un faux ami n'est pas un simple « rien »** : pour la tête binaire, les deux
+       sont des négatifs (y = 0, poids R15 identique). Mais le faux ami sert ailleurs : le
+       negative mining « proches des faux amis » (`selection`, n° 99) cherche les voisins de
+       ces fenêtres, la tête multiclasse (R67) en fait une classe, et l'analyse des faux
+       positifs a besoin de savoir *quoi* trompe le modèle. Noté « rien », il est perdu, et
+       sans la case multi-classe (n° 185) il n'y avait plus d'autre moyen de le dire.
+     - **Un faux ami se trace comme A. blanci**, type « faux ami » dans la liste du
+       visualiseur (couleur turquoise) : label d'intervalle `false_friend`, ajouté aux labels
+       (`labels.LABELS`, `service.INTERVAL_LABELS`). Localisé, il ne marque que les fenêtres
+       qui le contiennent, pas les 2 min de l'extrait. Règle (`dataset.interval_labels`) :
+       fenêtre `false_friend` (y = 0) si r ≥ ½ et qu'aucun intervalle d'A. blanci ne la
+       touche (A. blanci l'emporte) ; une fenêtre qui ne fait que l'effleurer garde le label
+       du reste de l'extrait (ce n'est pas un bord : elle reste négative). Le reste de
+       l'extrait ne prend pas le label du faux ami. L'espèce, si on la connaît, va dans
+       « Espèce du faux ami » (`spans.species`), aussi hors multi-classe. Classe R67 « faux
+       ami ».
+     - **Export** : `blanci export-labels` écrit en plus `extraits_annotes.csv` (un extrait
+       écouté par ligne : fichier, site, micro, heure, début et fin, nombre d'intervalles
+       d'A. blanci, intervalles résumés « 30.20-30.40 blanci; 50.00-51.00 false_friend »,
+       classes, qualité, espèce, commentaire, annotateur, date) et `intervalles_annotes.csv`
+       (un intervalle par ligne, `valable` faux s'il a été remplacé par une réécoute). Une
+       colonne par intervalle a été écartée : leur nombre varie d'un enregistrement à
+       l'autre (0 à plusieurs dizaines), le tableau serait surtout vide et illisible.
+       Référence : la base SQLite (`spans`, `intervals`), les CSV n'en sont qu'une vue.
+
 ## 2026-10-05 — Le détecteur externe et ses annotations sortent du projet
 
-184. **Plus aucune annotation ni détection du détecteur externe dans le dépôt ni dans la base**
+187. **Plus aucune annotation ni détection du détecteur externe dans le dépôt ni dans la base**
      (Léonard). Ses labels (source `import`) et ses scores sont extraits une fois de la base
      locale par un script hors dépôt et rangés dans `grenouille-local/` (à côté du dépôt, hors
      git), pour comparer plus tard les scores de nos modèles à ses annotations ; ils sont
@@ -3151,7 +3222,7 @@ de Léonard, 01/10/2026.
      retiré des fichiers du dépôt, archives et présentations comprises ; il reste dans
      l'historique git, qu'on ne réécrit pas.
 
-185. **`import-labels` et `import-detections` sortent aussi** (Léonard, 06/10) : ils ne
+188. **`import-labels` et `import-detections` sortent aussi** (Léonard, 06/10) : ils ne
      servaient qu'aux tableaux reçus du détecteur externe. Retirés : les deux commandes, leur
      lecture des tableaux (colonnes `labels.import`, verdicts, décalages, clés S3), la table
      `imports` (migration 4), la source de label `import`, la source `external/<nom>` du

@@ -626,7 +626,8 @@ def _in_chunks(con: sqlite3.Connection, sql: str, ids: list[str], size: int = 50
     return rows
 
 
-INTERVAL_LABELS = ("blanci", "blanci_chorus", "blanci_uncertain")
+# « false_friend » : un son qui ressemble à A. blanci (négatif dur localisé, DECISIONS n° 186).
+INTERVAL_LABELS = ("blanci", "blanci_chorus", "blanci_uncertain", "false_friend")
 
 
 def append_span(
