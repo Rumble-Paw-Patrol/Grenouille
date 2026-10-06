@@ -80,8 +80,11 @@ chaine:
     etat: en_cours
     resume: >-
       L'encodeur gelé transforme chaque fenêtre de 5 s en un vecteur (embedding), et en
-      jetons pour les têtes qui les lisent. perch_v2 tourne sur le processeur de l'i5, graphe
-      réduit aux sorties utiles.
+      jetons pour les têtes qui les lisent. perch_v2 tourne sur le processeur du portable i5,
+      sans carte graphique. Son modèle calcule aussi les scores de ses 14 795 espèces, dont on
+      n'a pas besoin : on n'en garde que la partie qui produit l'embedding et les jetons, à
+      résultat identique. Avec les autres optimisations, l'encodage passe de 8,0 à 2,05 s par
+      enregistrement de 2 min.
     chiffre: 2,05 s par enregistrement de 2 min
     suite: [tetes]
   - id: tetes
@@ -141,8 +144,9 @@ chaine:
     commandes: [queue, select, candidates]
     etat: fait
     resume: >-
-      Choisit quoi faire écouter : 60 % de candidats sûrs, 20 % d'incertains, 20 % au hasard ;
-      ou des extraits tirés selon le plan d'annotation.
+      Choisit quoi faire écouter : des extraits tirés selon le plan d'annotation pour le
+      premier lot, puis la file d'apprentissage actif (60 % d'incertains, 20 % des meilleurs
+      scores, 20 % au hasard).
     suite: [annotation]
   - id: annotation
     etape: Poste d'annotation
@@ -173,23 +177,40 @@ commandes_hors_chaine: [agreement, anuraset benchmark, anuraset campaign, anuras
   cluster-label, cluster-status, detector-bench, export-labels, pca, prevalence,
   qc-calibrate, sources, throughput, upstream-bench]
 
-# Plan d'annotation (présentation de suivi n° 2, décision avec Élodie du 29/09/2026).
+# Plan d'annotation (présentation de suivi n° 2, décision avec Élodie du 29/09/2026, DECISIONS §5).
+# Pas de point-virgule dans ces textes (demande de Léonard).
 plan_annotation:
   contexte: >-
-    Les prochaines campagnes seront toutes d'une semaine, en saison des pluies, à Mataroni, sur
-    de nouveaux points d'écoute. Le jeu de test les imite : des points de Mataroni jamais vus à
-    l'entraînement, en saison des pluies. J'annote seul ; Élodie et Benoît vérifient un
-    sous-échantillon ; aucun benchmark sur ces données avant leur go.
+    Les prochaines campagnes dureront toutes une semaine, en saison des pluies, à Mataroni, sur
+    de nouveaux points d'écoute. Le jeu de test imite cette situation avec des points de
+    Mataroni jamais vus à l'entraînement. J'annote seul, puis Élodie et Benoît vérifient un
+    sous-échantillon. Aucun benchmark n'est lancé sur ces données avant leur accord.
   etapes:
-    - [Répartir les points, "Avant toute écoute, chaque point d'écoute va à l'entraînement ou au test, jamais aux deux."]
-    - [Jeu d'entraînement, "≈ 450 extraits de 30 s, 3 par point d'écoute : pic du matin, pic du soir et une autre tranche horaire."]
-    - [Validation, "Validation croisée en k plis groupés par point d'écoute, à l'intérieur du jeu d'entraînement : chaque pli tient à l'écart des points entiers, comme le fera une future campagne. Elle règle la tête (régularisation, seuil) sans jamais toucher au jeu de test."]
-    - [Jeu de test, "≈ 250 enregistrements de 2 min écoutés en entier sur les points tenus à l'écart, avec au moins 60 positifs."]
-    - [Vérification, "À l'aveugle, par Élodie et Benoît : mon label est caché et l'ordre mélangé ; ≈ 2 h 30 d'écoute chacun."]
+    - [Répartir les points, "Avant toute écoute, chaque point d'écoute est attribué soit à l'entraînement, soit au test, jamais aux deux."]
+    - [Jeu d'entraînement, "Environ 450 extraits de 30 s, 3 par point d'écoute : un au pic du matin, un au pic du soir, un dans une autre tranche horaire."]
+    - [Validation, "Validation croisée inter-micros et non intra-micros. Chaque pli met de côté des micros entiers, jamais quelques enregistrements d'un micro déjà vu. On mesure ainsi la généralisation à des paysages sonores jamais entendus. Elle sert à régler la tête sans jamais toucher au jeu de test."]
+    - [Jeu de test, "Environ 250 enregistrements de 2 min écoutés en entier, sur les points tenus à l'écart, avec au moins 60 positifs pour mesurer le rappel avec une précision suffisante."]
+    - [Vérification, "À l'aveugle, par Élodie et Benoît. Mon label est caché et l'ordre mélangé. Environ 2 h 30 d'écoute chacun."]
   principes:
     - [Annotations de l'ancien prestataire ignorées, "on repart de zéro, sans reprendre ses annotations, pour ne pas hériter de ses angles morts."]
-    - [Peu d'enregistrements sur beaucoup de points, "plutôt que beaucoup d'enregistrements sur peu de points : varier les paysages sonores pour que le détecteur généralise."]
-    - [Positifs et négatifs dans les mêmes conditions, "tirés aux mêmes heures et aux mêmes points : seule la présence du chant les distingue."]
+    - [Peu d'enregistrements sur beaucoup de points, "plutôt que beaucoup d'enregistrements sur peu de points. Varier les paysages sonores aide le détecteur à généraliser."]
+    - [Un tirage stratifié par point et par heure, "fait avant toute écoute. Chaque point et chaque tranche horaire fournit des extraits avec et sans chant, si bien que la tête apprend le chant et pas l'heure ni le lieu. Ensuite, à l'entraînement, chaque positif reçoit des négatifs tirés au même point et à la même heure (négatifs appariés)."]
+
+# Apprentissage actif : les lots d'annotation suivants, après l'accord des experts (DECISIONS §5.9).
+apprentissage_actif:
+  contexte: >-
+    Une fois le premier lot validé, le modèle aide à choisir quoi écouter ensuite. Ces lots ne
+    servent qu'à l'entraînement, jamais au test.
+  boucle:
+    - [Score, "La tête en place note toutes les fenêtres encodées."]
+    - [File de vérification, "60 % de fenêtres incertaines (les plus proches du seuil), 20 % des meilleurs scores, 20 % tirées au hasard par micro et par heure."]
+    - [Poste d'annotation, "Logiciel d'écoute dans le navigateur : spectrogramme zoomable, écoute de la seule bande du chant, intervalles tracés à la souris, faux amis notés. Passerelle vers Raven ou Audacity."]
+    - [Réentraînement, "Une nouvelle tête apprend sur tous les labels. Elle n'est adoptée que si elle fait au moins aussi bien sur le jeu de test gelé."]
+  methodes:
+    - [Récolte par similarité, "sur les points encore peu annotés, on cherche les fenêtres les plus proches d'un chant connu."]
+    - [Négatifs difficiles, "on fait écouter les faux positifs les mieux classés, ceux qui trompent le plus la tête."]
+    - [Contrôle des experts, "10 % de chaque lot, tirés au hasard, plus tout ce qui est noté incertain."]
+    - [Seuil d'un nouveau site, "5 à 10 enregistrements positifs vérifiés sur place, car le seuil ne se transpose pas d'un site à l'autre."]
 
 # Cibles du plan d'annotation v1 ; l'avancement est compté dans data/db/blanci.sqlite.
 annotation_cibles:

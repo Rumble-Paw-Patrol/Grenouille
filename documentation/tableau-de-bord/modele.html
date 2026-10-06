@@ -164,18 +164,18 @@ svg .grille-l { stroke: var(--line); stroke-width: 1; }
 #bulle b { font-weight: 700; }
 
 /* Chaîne de traitement */
-.chaine { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(84px, auto); gap: 30px 22px; padding: 6px 0; }
+.chaine { position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: minmax(64px, auto); gap: 46px 34px; padding: 6px 0; }
 .chaine svg.liens { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-.chaine svg.liens path { fill: none; stroke: var(--muted); stroke-width: 1.4; opacity: .7; }
+.chaine svg.liens path { fill: none; stroke: var(--muted); stroke-width: 1.6; opacity: .85; }
 .chaine svg.liens path.boucle { stroke: var(--gold); stroke-dasharray: 5 4; opacity: 1; }
 .chaine svg.liens path.option { stroke-dasharray: 3 4; }
 .noeud.option { border-style: dashed; }
-.noeud { position: relative; z-index: 1; font: inherit; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; cursor: pointer; display: grid; gap: 5px; align-content: start; color: var(--ink); }
+.noeud { position: relative; z-index: 1; font: inherit; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 9px; cursor: pointer; display: grid; gap: 5px; align-content: start; color: var(--ink); }
 .noeud:hover { border-color: var(--accent); }
 .noeud[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.noeud b { font-size: 13.5px; line-height: 1.25; padding-right: 14px; hyphens: auto; -webkit-hyphens: auto; }
-.noeud .etat { width: 8px; height: 8px; border-radius: 50%; position: absolute; top: 10px; right: 10px; }
-.noeud small { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+.noeud b { font-size: 13px; line-height: 1.25; hyphens: auto; -webkit-hyphens: auto; }
+.noeud .etat { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: 1px; }
+.noeud small { color: var(--muted); font-size: 11px; line-height: 1.3; }
 .couloir { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; align-self: end; }
 .suites-mobile { display: none; }
 @media (max-width: 900px) {
@@ -449,7 +449,7 @@ const nomEnc = (e) => e.replace(/^esp_aves2_/, "aves2 ");
 /* ---------- squelette des sections ---------- */
 const SECTIONS = [
   ["accueil", "Vue d'ensemble"], ["en-cours", "Travail en cours"], ["donnees", "Données"],
-  ["chaine", "Chaîne de traitement"], ["encodeurs", "Encodeurs"], ["explorateur", "Explorateur des têtes"],
+  ["chaine", "Chaîne de traitement"], ["annotation", "Annotation"], ["encodeurs", "Encodeurs"], ["explorateur", "Explorateur des têtes"],
   ["rapports", "Rapports"], ["tableaux", "Tableaux"], ["biblio", "Bibliographie"], ["glossaire", "Glossaire"],
 ];
 const vues = $("#vues");
@@ -495,7 +495,7 @@ $("#pied").append(
   s.append(el("div", { class: "tuiles" },
     tuile(entier(totalH) + " h", `${entier(totalN)} enregistrements de 2 min`, `${new Set(D.inventaire.sites.map((x) => C.lieux[x.site] || x.site)).size} sites`),
     f5 ? tuile(fr(f5[3] / 1e6, 1) + " millions", "nombre de fenêtres de 5 secondes", `avec un overlapping de ${f5[1].replace(" s", " secondes")}`) : null,
-    tuile(entier(C.annotation_cibles.entrainement + C.annotation_cibles.evaluation), "extraits et enregistrements à annoter", `${C.annotation_cibles.entrainement} pour l'entraînement · ${C.annotation_cibles.evaluation} pour le test`),
+    tuile("≈ " + entier(C.annotation_cibles.entrainement + C.annotation_cibles.evaluation), "écoutes prévues pour le premier lot d'annotation", `${C.annotation_cibles.entrainement} extraits de 30 s (entraînement) · ${C.annotation_cibles.evaluation} enregistrements entiers de 2 min (test)`),
     tuile(enc, encSous, encNote)));
 
   const crit = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Rang"), el("th", {}, "Critère"), el("th", {}, "Mesure"))),
@@ -525,14 +525,8 @@ $("#pied").append(
   }
   s.append(g);
 
-  // plan d'annotation, étape par étape (présentation de suivi n° 2)
-  const P = C.plan_annotation;
-  const etapes = el("ol", { class: "etapes-plan" }, P.etapes.map(([titre, d], k) => el("li", { class: k === P.etapes.length - 1 ? "fort" : null },
-    el("span", { class: "rang" }, String(k + 1)), el("div", {}, el("strong", {}, titre), el("p", {}, d)))));
-  const principes = el("ul", { class: "principes" }, P.principes.map(([titre, d]) => el("li", {}, el("strong", {}, titre), " : ", d)));
   const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg, n]) =>
     el("div", {}, el("time", { title: h }, (n ? `n° ${n} · ` : "") + d.split("-").reverse().join("/")), el("span", {}, msg))));
-  s.append(carte("Plan d'annotation", P.contexte, etapes, el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Trois principes"), principes));
   s.append(carte("Derniers changements du dépôt", "Commits poussés sur main, numérotés depuis le premier : ce sont les numéros à donner à /audit-n-from.", commits));
 }
 
@@ -597,11 +591,10 @@ $("#pied").append(
    ====================================================================== */
 {
   const s = section("chaine", "Chaîne de traitement", "Du fichier audio au score par point d'écoute. Cliquer une étape pour son détail ; pointillés dorés : la boucle d'annotation et de réentraînement ; pointillés gris : la fusion, seulement si besoin.");
-  // En escargot : ligne 1 de gauche à droite, ligne 2 de droite à gauche, ligne 3 la boucle
-  // d'annotation qui revient aux têtes.
+  // Le chemin principal sur une ligne ; dessous, la boucle d'annotation qui revient aux têtes.
   const POS = { inventaire: [1, 1], qc: [2, 1], signal: [3, 1], encodage: [4, 1],
-    tetes: [4, 2], fusion: [3, 2], score: [2, 2], evaluation: [1, 2],
-    verification: [2, 3], annotation: [3, 3], reentrainement: [4, 3] };
+    tetes: [5, 1], fusion: [6, 1], score: [7, 1], evaluation: [8, 1],
+    reentrainement: [5, 2], annotation: [6, 2], verification: [7, 2] };
   const box = el("div", { class: "chaine" });
   const liens = sv("svg", { class: "liens", "aria-hidden": "true" });
   box.append(liens);
@@ -612,8 +605,7 @@ $("#pied").append(
   for (const e of C.chaine) {
     const [c, r] = POS[e.id] || [1, 5];
     const n = el("button", { type: "button", class: "noeud" + (e.optionnel ? " option" : ""), style: `grid-column:${c};grid-row:${r}`, "aria-pressed": "false" },
-      el("span", { class: "etat", style: `background:${coul[e.etat]}`, title: ETATS[e.etat] }),
-      el("b", {}, e.etape), e.chiffre ? el("small", {}, e.chiffre) : null,
+      el("b", {}, el("span", { class: "etat", style: `background:${coul[e.etat]}`, title: ETATS[e.etat] }), e.etape), e.chiffre ? el("small", {}, e.chiffre) : null,
       el("small", { class: "suites-mobile" }, e.suite?.length ? "→ " + e.suite.map((x) => byId[x]?.etape || x).join(", ") : ""));
     n.addEventListener("click", () => choisir(e.id));
     noeuds[e.id] = n; box.append(n);
@@ -665,7 +657,23 @@ $("#pied").append(
 }
 
 /* ======================================================================
-   5. Encodeurs
+   5. Annotation : plan du premier lot, puis apprentissage actif
+   ====================================================================== */
+{
+  const s = section("annotation", "Annotation", "Le premier lot, tiré sans aucun modèle, puis les lots suivants choisis par apprentissage actif.");
+  const etapesEl = (liste, chaud) => el("ol", { class: "etapes-plan" }, liste.map(([titre, d], k) => el("li", { class: k === chaud ? "fort" : null },
+    el("span", { class: "rang" }, String(k + 1)), el("div", {}, el("strong", {}, titre), el("p", {}, d)))));
+  const puces = (liste) => el("ul", { class: "principes" }, liste.map(([titre, d]) => el("li", {}, el("strong", {}, titre), " : ", d)));
+  const P = C.plan_annotation, A = C.apprentissage_actif;
+  s.append(carte("Plan d'annotation", P.contexte, etapesEl(P.etapes, P.etapes.length - 1),
+    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Trois principes"), puces(P.principes)));
+  s.append(carte("Apprentissage actif", A.contexte, etapesEl(A.boucle, -1),
+    el("p", { class: "sous" }, "La boucle recommence : les nouveaux labels donnent une nouvelle tête, qui choisit les écoutes suivantes."),
+    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Pour choisir intelligemment quoi écouter"), puces(A.methodes)));
+}
+
+/* ======================================================================
+   6. Encodeurs
    ====================================================================== */
 {
   const s = section("encodeurs", "Encodeurs", "Benchmark 08 sur AnuraSet (anoures du Brésil) : chaque encodeur jugé avec la tête adaptée à sa sortie, un site tenu à l'écart à la fois. Indicateur, pas verdict : le choix se fera sur les données de l'ONF le 20/11.", "Pré-benchmark AnuraSet");
