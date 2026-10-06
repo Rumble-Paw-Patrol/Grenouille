@@ -58,6 +58,9 @@ requires = ["uv_build>=0.11,<0.13"]
 build-backend = "uv_build"
 
 [tool.uv]
+# Tous les groupes par défaut : un `uv run` ou `uv sync` sans `--group` désinstallait research
+# (torch, TensorFlow…) et faisait planter un encodage lancé en tâche de fond (DECISIONS n° 190).
+default-groups = "all"
 # bacpipe tire TensorFlow, dont tensorflow-io-gcs-filesystem n'a plus de roue Windows depuis
 # la 0.32 : la 0.31 suffit (lecture de fichiers sur Google Cloud, jamais utilisée ici).
 constraint-dependencies = [

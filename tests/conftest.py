@@ -8,6 +8,12 @@ from blanci.core.config import load_config
 from blanci.embedding.encoders.base import BaseEncoder
 
 
+@pytest.fixture(autouse=True)
+def _no_local_config(monkeypatch, tmp_path):
+    """Les tests ne lisent jamais config/local.yaml (vraie base, vrai disque)."""
+    monkeypatch.setattr("blanci.core.config.LOCAL_CONFIG", tmp_path / "absent.yaml")
+
+
 def write_wav(
     path: Path,
     sr: int = 16000,

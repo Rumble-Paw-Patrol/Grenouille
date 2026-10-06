@@ -51,7 +51,7 @@ enregistrements de 120 s :
 Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 8 micros
 dans le sac ; 96 109 enregistrements de 120 s restent encodables. Les 1 521 à l'horloge
 douteuse (Molokoi SMA14636, avril 2024) sont réintégrés : `clock_off` n'est plus qu'une
-remarque. Détail et anomalies : DECISIONS n° 153, 154 et 189.
+remarque. Détail et anomalies : DECISIONS n° 153, 154 et 191.
 
 Hors git, sous `data/` : `db/blanci.sqlite` (inventaire, fenêtres, labels en ajout seul),
 `embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet`, `models/`, `reports/`.
@@ -75,7 +75,7 @@ $B export-labels     # fenêtres annotées : label, qualité, espèce, commentai
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid
 # Drapeaux (remarques sur un enregistrement, DECISIONS n° 79) : écartent du corpus
-# silencieux, micro dans sac, durée anormale, hors relevé (horloge douteuse : remarque, n° 189).
+# silencieux, micro dans sac, durée anormale, hors relevé (horloge douteuse : remarque, n° 191).
 # Recalcule inventaire, audio (seuils actuels, sans relire l'audio) et drapeaux d'écoute.
 $B flag
 $B status

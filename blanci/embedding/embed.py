@@ -61,6 +61,7 @@ class EmbedReport:
     qc_checked: int = 0  # contrôle audio fait pendant ce passage
     qc_excluded: int = 0  # écartés par ce contrôle (silencieux, micro dans sac)
     gated: int = 0  # fenêtres arrêtées par les portes du seuillage en amont (non encodées)
+    wall_s: float = 0.0  # durée réelle du passage, lecture et écriture comprises
 
     @property
     def windows_per_s(self) -> float:
@@ -225,6 +226,7 @@ def embed_recordings(
     window_s = round(encoder.window_s, 2)
     hop_s = hop_for_overlap(window_s, overlap)
     report = EmbedReport(eid)
+    began = perf_counter()
     recordings = recordings.assign(month=recordings["start_utc"].map(month_of))
 
     def prepare(rec: Any) -> _Audio:
@@ -322,6 +324,7 @@ def embed_recordings(
         _flush(store, con, metas, embs, dataset, site, month)
         store.consolidate(dataset, site, month)
 
+    report.wall_s = perf_counter() - began
     register_encoder(con, encoder, hop_s, report, channel, gates, mode)
     return report
 
@@ -368,6 +371,22 @@ def check_stock_identity(con: sqlite3.Connection, eid: str, identity: dict[str, 
             )
 
 
+def _add_totals(con: sqlite3.Connection, report: EmbedReport) -> dict[str, float]:
+    """Cumul de tous les passages sur ce stock (durée réelle, enregistrements, fenêtres) :
+    `last_run` ne garde que le dernier, et un encodage du corpus se fait en plusieurs passages.
+    Sert au temps d'encodage du corpus affiché par le tableau de bord."""
+    row = con.execute(
+        "SELECT params_json FROM models WHERE model_id = ?", (report.encoder_id,)
+    ).fetchone()
+    old = json.loads(row[0]).get("totals", {}) if row and row[0] else {}
+    return {
+        "wall_s": round(old.get("wall_s", 0.0) + report.wall_s, 1),
+        "recordings": int(old.get("recordings", 0) + report.recordings),
+        "windows": int(old.get("windows", 0) + report.windows),
+        "runs": int(old.get("runs", 0) + 1),
+    }
+
+
 def register_encoder(
     con: sqlite3.Connection,
     encoder: Encoder,
@@ -388,6 +407,7 @@ def register_encoder(
         "gates": {"thresholds": gates.gates, "combine": gates.combine} if gates else None,
         "last_run": asdict(report)
         | {"windows_per_s": report.windows_per_s, "realtime_factor": report.realtime_factor},
+        "totals": _add_totals(con, report),
     }
     con.execute(
         "INSERT INTO models (model_id, kind, name, version, params_json, created_at) "
