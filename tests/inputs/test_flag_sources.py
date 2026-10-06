@@ -184,5 +184,53 @@ def test_new_threshold_is_applied_without_reading_audio(workspace):
     embed_recordings(con, FakeEncoder(), select_recordings(con), raw, store, qc_thresholds=QC)
     (raw / "2026/mataroni/M1/loud.wav").unlink()  # plus d'audio : seuls les indices servent
     assert flags(con, rid)["in_bag"] is False
-    counts = apply_audio_flags(con, QC | {"in_bag_hf_ratio": 2.0})
+    counts = apply_audio_flags(con, QC | {"in_bag_hf_ratio": 2.0, "in_bag_min_run": 1})
     assert counts["in_bag"] == 1 and flags(con, rid)["in_bag"] is True
+
+
+def _series(con, mic, minutes, ratios, dataset="2026"):
+    """Une série d'enregistrements d'un micro, aux minutes données, de ratio hf donné."""
+    ids = []
+    for i, (minute, hf) in enumerate(zip(minutes, ratios, strict=True)):
+        rid = f"{dataset}{mic}{i}"
+        qc = {"indices": {"rms_dbfs": -30.0, "peak": 0.5, "clip_fraction": 0.0,
+                          "hf_ratio": hf, "flatness_1_10k": 0.3}}
+        con.execute(
+            "INSERT INTO recordings (recording_id, path, dataset, site, mic_id, start_utc, "
+            "duration_s, sample_rate, channels, qc_flags) "
+            "VALUES (?, ?, ?, 'S', ?, ?, 120.0, 48000, 1, ?)",
+            (rid, f"{rid}.wav", dataset, mic,
+             f"2026-02-10T{minute // 60:02d}:{minute % 60:02d}:00Z", json.dumps(qc)),
+        )
+        ids.append(rid)
+    con.commit()
+    return ids
+
+
+def test_in_bag_needs_a_run_of_low_ratio_recordings_of_the_same_mic(workspace):
+    con = workspace[0]
+    low, high = 0.005, 0.3
+    steps = [0, 30, 60, 90, 120, 150, 180, 210]
+    run = _series(con, "A", steps, [high, low, low, low, low, high, low, high])
+    isolated = _series(con, "B", steps, [high, high, low, high, high, high, high, high])
+    counts = apply_audio_flags(con, QC)
+    assert counts["in_bag"] == 4
+    assert [flags(con, r)["in_bag"] for r in run] == [False, True, True, True, True] + [False] * 3
+    assert not any(flags(con, r)["in_bag"] for r in isolated)  # 0,005 isolé : pas un sac
+
+
+def test_in_bag_run_is_broken_by_a_gap_and_stops_at_the_threshold(workspace):
+    con = workspace[0]
+    gap = _series(con, "A", [0, 30, 60, 300, 330, 360], [0.005] * 6)  # 3 + 3, trou de 4 h
+    near = _series(con, "B", [0, 30, 60, 90], [0.06] * 4)  # sous 0,2 mais pas sous 0,05
+    assert apply_audio_flags(con, QC)["in_bag"] == 0
+    assert not any(flags(con, r)["in_bag"] for r in gap + near)
+    # Le seuil de durée se règle sans relire l'audio.
+    assert apply_audio_flags(con, QC | {"in_bag_min_run": 3})["in_bag"] == 6
+
+
+def test_in_bag_runs_do_not_mix_micros(workspace):
+    con = workspace[0]
+    _series(con, "A", [0, 30], [0.005] * 2)
+    _series(con, "B", [60, 90], [0.005] * 2)  # 4 candidats au total, mais 2 par micro
+    assert apply_audio_flags(con, QC)["in_bag"] == 0

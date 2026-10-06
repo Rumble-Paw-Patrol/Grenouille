@@ -45,9 +45,14 @@ qc:
   # `blanci qc`, avant tout encodage (n° 173) ; `embed` ne contrôle que ce qui ne l'a pas été.
   during_embed: true
   silent_dbfs: -70.0               # RMS en dessous : enregistrement muet
-  # Énergie > 2 kHz / énergie totale en dessous : micro dans sac. Calibré (DECISIONS n° 76,
-  # 81) : sac 0,001–0,30, enregistrements à A. blanci ≥ 0,265 ; 0,2 en signale 6 sur 8.
-  in_bag_hf_ratio: 0.2
+  # Micro dans sac ou étouffé (bonnette contre le sol…) : énergie > 2 kHz / énergie totale
+  # sous `in_bag_hf_ratio` **et** au moins `in_bag_min_run` enregistrements consécutifs du même
+  # micro (2 h au programme de 30 min), sans trou de plus de `in_bag_max_gap_min` minutes
+  # (DECISIONS n° 190). Un enregistrement grave isolé n'est pas un sac. Seuil calé sur trop
+  # peu d'exemples (n° 76, 81 : 0,02 → 0,2) ; abaissé à 0,05 avec la règle de durée.
+  in_bag_hf_ratio: 0.05
+  in_bag_min_run: 4
+  in_bag_max_gap_min: 60
   # Drapeaux calculés sur l'inventaire seul (sans lire l'audio), recalculés après chaque
   # inventaire ou par `blanci flag`. Un enregistrement signalé n'est jamais encodé.
   expected_duration_s: 120.0       # programme des Song Meter : 2 min toutes les 30 min

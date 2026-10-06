@@ -4,6 +4,10 @@
 # tableau de bord »).
 
 en_cours:
+  - titre: Benchmark des encodeurs et des têtes sur AnuraSet, dans le tableau de bord
+    etat: en_cours
+    detail: >-
+      Confection des sections de benchmark sur AnuraSet du tableau de bord : encodeurs et têtes à la carte, amorçage d'un site neuf. Plus le temps d'encodage du corpus ONF.
   - titre: Annotation de mes données
     etat: en_cours
     detail: >-
