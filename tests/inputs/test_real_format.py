@@ -1,25 +1,20 @@
-"""Le format réel des données ONF : enregistrements de 2 min + Excel d'une ligne par fenêtre.
+"""Le format réel des données ONF : enregistrements de 2 min, arborescence des disques.
 
 Nom de fichier : `2la04530_20260106_103000` — micro 2LA04530, 6 janvier 2026 à 10 h 30.
-Colonnes reçues : nom de l'enregistrement, timecode, score de l'ancien prestataire,
-vérification manuelle.
-
-Le disque contient des `.wav`, mais l'Excel les cite en `.flac` : l'appariement se fait sur
-le nom sans extension, et les deux formats peuvent coexister dans la base.
+Un même nom en `.wav` et en `.flac` est un seul enregistrement.
 """
 
 import datetime as dt
 import json
 
 import numpy as np
-import pandas as pd
 import pytest
 import soundfile as sf
 
-from blanci.core.db import connect
+from blanci.core.db import connect, window_id_for
 from blanci.inputs.ingest import ingest as run_ingest
 from blanci.inputs.ingest import iter_audio_files, parse_songmeter_name, start_utc
-from blanci.inputs.labels import import_label_file, parse_offset, parse_verdict
+from blanci.service import append_label
 
 SR = 32000
 DURATION_S = 120.0
@@ -41,7 +36,6 @@ def write_recording(path, seed=0, tone_hz=None):
     return path
 
 
-# Sur le disque : des .wav. Dans l'Excel : les mêmes, cités en .flac.
 STEMS = [
     "2la04530_20260106_103000",
     "2la04530_20260106_110000",
@@ -56,7 +50,7 @@ def onf_corpus(tmp_path, cfg):
     for seed, stem in enumerate(STEMS):
         write_recording(raw / "2026" / "mataroni" / f"{stem}.wav", seed=seed, tone_hz=4750.0)
     cfg["paths"]["raw"] = str(raw)
-    return raw, [f"{stem}.flac" for stem in STEMS]  # les noms tels que l'Excel les cite
+    return raw, [f"{stem}.flac" for stem in STEMS]
 
 
 # --- Nommage et inventaire ---------------------------------------------------------------
@@ -146,281 +140,7 @@ def test_ingest_separates_the_two_mics(tmp_path, cfg, onf_corpus):
     assert mics == {"2la04530", "2la04531"}
 
 
-# --- Verdict de la colonne « vérif manuelle » -----------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value", ["oui", "OUI", "Oui", "o", "yes", "x", "ok", "vrai", "confirmé", "valide", 1, True]
-)
-def test_verdict_yes(value):
-    assert parse_verdict(value) is True
-
-
-@pytest.mark.parametrize(
-    "value", ["non", "NON", "n", "no", "faux", "ko", "rejeté", "invalide", 0, False]
-)
-def test_verdict_no(value):
-    assert parse_verdict(value) is False
-
-
-@pytest.mark.parametrize(
-    "value, expected",
-    [
-        ("blanci", True),
-        ("blanci lointain", True),
-        ("blanci malgré la pluie", True),
-        ("pas blanci", False),
-        ("non blanci", False),
-        ("aucun blanci", False),
-    ],
-)
-def test_verdict_reads_a_written_answer(value, expected):
-    assert parse_verdict(value) is expected
-
-
-@pytest.mark.parametrize("value", [None, float("nan"), "", "à revoir", "?", 0.7])
-def test_verdict_refuses_to_guess(value):
-    """Mieux vaut signaler la ligne que de la ranger en négatif sans le dire."""
-    assert parse_verdict(value) is None
-
-
-def test_verdict_alone_does_not_read_a_species():
-    """Nommer un faux ami n'est pas un oui/non : c'est l'import qui en tire un négatif."""
-    assert parse_verdict("fourmilier tacheté") is None
-
-
-# --- Timecode ---------------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value, expected",
-    [
-        (36, 36.0),
-        (36.5, 36.5),
-        ("36", 36.0),
-        ("36,5", 36.5),
-        ("1:30", 90.0),
-        ("00:01:30", 90.0),
-        (dt.time(0, 1, 30), 90.0),
-        (dt.timedelta(seconds=90), 90.0),
-        (pd.Timedelta(seconds=90), 90.0),
-        (dt.datetime(1900, 1, 1, 0, 1, 30), 90.0),
-    ],
-)
-def test_parse_offset_handles_excel_shapes(value, expected):
-    assert parse_offset(value, "seconds", WINDOW_S) == pytest.approx(expected)
-
-
-def test_parse_offset_window_index():
-    assert parse_offset(12, "window_index", WINDOW_S) == 36.0
-
-
-# --- Import de la feuille réelle ------------------------------------------------------------
-
-
-def write_sheet(path, rows):
-    """Feuille au format reçu : nom, timecode, score du prestataire, vérif manuelle."""
-    pd.DataFrame(
-        rows, columns=["Nom de l'enregistrement", "Timecode", "Score", "Vérif manuelle"]
-    ).to_excel(path, index=False)
-    return path
-
-
-@pytest.fixture
-def ingested(tmp_path, cfg, onf_corpus):
-    raw, names = onf_corpus
-    con = connect(cfg["paths"]["db"])
-    run_ingest(con, raw, "2026", cfg, hash_file=False)
-    return con, names
-
-
-def test_import_real_sheet(tmp_path, cfg, ingested):
-    con, names = ingested
-    sheet = write_sheet(
-        tmp_path / "annotations.xlsx",
-        [
-            (names[0], 36, 0.91, "oui"),
-            (names[0], 78, 0.44, "oui"),
-            (names[1], 12, 0.83, "non"),
-            (names[2], 105, 0.62, "fourmilier tacheté"),
-        ],
-    )
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.columns["file"].startswith("Nom")
-    assert report.columns["offset_s"] == "Timecode"
-    assert report.columns["verdict"] == "Vérif manuelle"
-    assert report.columns["score"] == "Score"
-    assert report.inserted == 4
-
-    rows = con.execute(
-        "SELECT l.label, l.species, l.quality, l.conditions, w.offset_s, w.dur_s "
-        "FROM labels l JOIN windows w USING (window_id) ORDER BY w.offset_s"
-    ).fetchall()
-    assert [r["offset_s"] for r in rows] == [12.0, 36.0, 78.0, 105.0]
-    assert all(r["dur_s"] == WINDOW_S for r in rows)
-
-
-def test_import_keeps_the_previous_model_score(tmp_path, cfg, ingested):
-    """Le score de l'ancien prestataire est le repère chiffré du §6 : on le garde."""
-    con, names = ingested
-    sheet = write_sheet(tmp_path / "a.xlsx", [(names[0], 36, 0.91, "oui")])
-    import_label_file(con, sheet, cfg, kind=None)
-    conditions = con.execute("SELECT conditions FROM labels").fetchone()["conditions"]
-    assert json.loads(conditions)["previous_model_score"] == pytest.approx(0.91)
-
-
-def test_import_labels_positives_and_negatives(tmp_path, cfg, ingested):
-    con, names = ingested
-    sheet = write_sheet(
-        tmp_path / "a.xlsx",
-        [(names[0], 36, 0.91, "oui"), (names[1], 12, 0.83, "non")],
-    )
-    import_label_file(con, sheet, cfg, kind=None)
-    labels = [r["label"] for r in con.execute("SELECT label FROM labels ORDER BY label_id")]
-    assert labels[0] in ("blanci", "blanci_solo", "blanci_chorus")
-    assert labels[1] not in ("blanci", "blanci_solo", "blanci_chorus")
-
-
-def test_verification_text_names_the_false_friend(tmp_path, cfg, ingested):
-    """« fourmilier tacheté » dans la vérif : l'espèce doit ressortir en base."""
-    con, names = ingested
-    sheet = write_sheet(tmp_path / "a.xlsx", [(names[2], 105, 0.62, "fourmilier tacheté")])
-    import_label_file(con, sheet, cfg, kind=None)
-    row = con.execute("SELECT label, species FROM labels").fetchone()
-    assert row["label"] == "bird"
-    assert row["species"] and "ourmilier" in row["species"]
-
-
-@pytest.mark.parametrize(
-    "doubtful", ["peut-être", "blanci ?", "blanci sans doute", "blanci pas sûr"]
-)
-def test_unreadable_verdict_blocks_the_import(tmp_path, cfg, ingested, doubtful):
-    """Un « peut-être » ne doit pas devenir un négatif en silence, ni un « blanci ? » un
-    positif ferme (DECISIONS n° 142)."""
-    con, names = ingested
-    sheet = write_sheet(
-        tmp_path / "a.xlsx",
-        [(names[0], 36, 0.91, "oui"), (names[1], 12, 0.83, doubtful)],
-    )
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 0
-    assert len(report.unresolved) == 1
-    assert "vérification illisible" in report.unresolved[0][1]
-    assert con.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == 0
-
-
-@pytest.mark.parametrize("pending", ["à vérif", "à conf", "à revoir", "À vérifier écouteurs"])
-def test_pending_verdict_is_set_aside_without_blocking(tmp_path, cfg, ingested, pending):
-    """« à vérif » : l'expert n'a pas tranché. Pas de label inventé, pas de blocage."""
-    con, names = ingested
-    sheet = write_sheet(
-        tmp_path / "a.xlsx",
-        [(names[0], 36, 0.91, "oui"), (names[1], 12, 0.83, pending)],
-    )
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 1 and not report.unresolved
-    assert len(report.pending) == 1 and report.pending[0][0] == 3
-    assert "attente" in report.summary()
-
-
-def test_unverified_detections_are_not_labels(tmp_path, cfg, ingested):
-    """Le fichier de l'ancien prestataire liste toutes ses détections ; seules les vérifiées
-    sont des labels. Une cellule de vérification vide n'est ni positive ni négative."""
-    con, names = ingested
-    sheet = write_sheet(
-        tmp_path / "a.xlsx",
-        [
-            (names[0], 36, 0.91, True),
-            (names[0], 39, 0.35, None),
-            (names[1], 12, 0.12, None),
-            (names[2], 3, 0.83, False),
-        ],
-    )
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 2 and report.unverified == 2 and not report.unresolved
-    assert "jamais écoutées" in report.summary()
-
-
-def test_boolean_verdicts_from_excel(tmp_path, cfg, ingested):
-    """Le vrai fichier range True / False en booléens Excel."""
-    con, names = ingested
-    sheet = write_sheet(
-        tmp_path / "a.xlsx", [(names[0], 36, 0.91, True), (names[1], 12, 0.83, False)]
-    )
-    import_label_file(con, sheet, cfg, kind=None)
-    labels = [r["label"] for r in con.execute("SELECT label FROM labels ORDER BY label_id")]
-    assert labels[0].startswith("blanci") and not labels[1].startswith("blanci")
-
-
-def test_kind_option_bypasses_the_verdict_column(tmp_path, cfg, ingested):
-    """Fichier sans vérif exploitable : --kind positive tranche pour tout le fichier."""
-    con, names = ingested
-    sheet = write_sheet(tmp_path / "a.xlsx", [(names[0], 36, 0.91, "à revoir")])
-    report = import_label_file(con, sheet, cfg, kind="positive")
-    assert report.inserted == 1
-    assert con.execute("SELECT label FROM labels").fetchone()["label"].startswith("blanci")
-
-
-def test_timecode_beyond_the_recording_is_reported(tmp_path, cfg, ingested):
-    con, names = ingested
-    sheet = write_sheet(tmp_path / "a.xlsx", [(names[0], 119.5, 0.9, "oui")])
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 0
-    assert "hors de l'enregistrement" in report.unresolved[0][1]
-
-
-def test_dry_run_reports_the_score_range(tmp_path, cfg, ingested):
-    con, names = ingested
-    sheet = write_sheet(
-        tmp_path / "a.xlsx",
-        [(names[0], 36, 0.91, "oui"), (names[0], 78, 0.44, "oui"), (names[1], 12, 0.6, "oui")],
-    )
-    report = import_label_file(con, sheet, cfg, kind=None, dry_run=True)
-    summary = report.summary()
-    assert "score de l'ancien modèle" in summary
-    assert "0.440" in summary and "0.910" in summary
-    assert con.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == 0
-
-
-def test_unknown_recording_is_reported(tmp_path, cfg, ingested):
-    con, _ = ingested
-    sheet = write_sheet(tmp_path / "a.xlsx", [("2la99999_20260106_103000.flac", 36, 0.9, "oui")])
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 0
-    assert "introuvable" in report.unresolved[0][1]
-
-
-# --- Extension citée ≠ extension sur le disque -------------------------------------------
-
-
-def test_flac_in_the_sheet_matches_a_wav_on_disk(tmp_path, cfg, ingested):
-    """Le cas réel : le disque contient des .wav, l'Excel les cite en .flac."""
-    con, names = ingested
-    assert names[0].endswith(".flac")
-    stored = con.execute("SELECT path FROM recordings LIMIT 1").fetchone()["path"]
-    assert stored.endswith(".wav")
-
-    report = import_label_file(
-        con, write_sheet(tmp_path / "a.xlsx", [(names[0], 36, 0.9, "oui")]), cfg, kind=None
-    )
-    assert report.inserted == 1 and not report.unresolved
-
-
-def test_a_bare_name_without_extension_also_matches(tmp_path, cfg, ingested):
-    con, _ = ingested
-    sheet = write_sheet(tmp_path / "a.xlsx", [(STEMS[0], 36, 0.9, "oui")])
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 1 and not report.unresolved
-
-
-def test_a_full_path_in_the_sheet_also_matches(tmp_path, cfg, ingested):
-    """Certains tableurs collent le chemin complet du disque externe."""
-    con, _ = ingested
-    sheet = write_sheet(
-        tmp_path / "a.xlsx", [(f"E:\\audio\\2026\\{STEMS[0]}.flac", 36, 0.9, "oui")]
-    )
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 1 and not report.unresolved
+# --- Un même nom en deux formats -----------------------------------------------------------
 
 
 def test_same_recording_in_two_formats_is_inventoried_once(tmp_path, cfg):
@@ -433,126 +153,8 @@ def test_same_recording_in_two_formats_is_inventoried_once(tmp_path, cfg):
     report = run_ingest(con, raw, "2026", cfg, hash_file=False)
     assert report.added == 1 and len(report.duplicates) == 1
 
-    # L'extension citée n'a alors plus d'importance : il n'y a qu'un candidat.
-    for cited in (f"{STEMS[0]}.wav", f"{STEMS[0]}.flac", STEMS[0]):
-        sheet = write_sheet(tmp_path / f"{cited}.xlsx", [(cited, 36, 0.9, "oui")])
-        imported = import_label_file(con, sheet, cfg, kind=None, dry_run=True)
-        assert len(imported.rows) == 1 and not imported.unresolved, cited
 
-
-def test_cited_extension_breaks_a_tie_in_an_older_database(tmp_path, cfg, ingested):
-    """Base constituée avant la détection des doublons : deux formats pour un même nom.
-    L'extension citée départage ; sans elle, la ligne est ambiguë et signalée."""
-    con, _ = ingested
-    original = con.execute(
-        "SELECT * FROM recordings WHERE path LIKE ?", (f"%{STEMS[0]}.wav",)
-    ).fetchone()
-    flac_path = original["path"][: -len(".wav")] + ".flac"
-    con.execute(
-        "INSERT INTO recordings (recording_id, path, dataset, site, mic_id, start_utc, "
-        "duration_s, sample_rate, channels) VALUES ('copie', ?, '2026', ?, ?, ?, ?, ?, 1)",
-        (
-            flac_path,
-            original["site"],
-            original["mic_id"],
-            original["start_utc"],
-            original["duration_s"],
-            original["sample_rate"],
-        ),
-    )
-    con.commit()
-
-    cited = write_sheet(tmp_path / "a.xlsx", [(f"{STEMS[0]}.flac", 36, 0.9, "oui")])
-    report = import_label_file(con, cited, cfg, kind=None, dry_run=True)
-    assert len(report.rows) == 1 and report.rows[0]["recording_id"] == "copie"
-
-    bare = write_sheet(tmp_path / "b.xlsx", [(STEMS[0], 36, 0.9, "oui")])
-    report = import_label_file(con, bare, cfg, kind=None, dry_run=True)
-    assert "ambigu" in report.unresolved[0][1]
-
-
-# --- Fichier de l'ancien prestataire : clés S3, commentaires, doublons de relevés --------
-
-
-def test_s3_key_matches_the_file_on_disk(tmp_path, cfg, ingested):
-    """« 2353462-2la04530_20260106_103000.flac » désigne 2la04530_20260106_103000.wav."""
-    con, names = ingested
-    sheet = write_sheet(tmp_path / "a.xlsx", [(f"2353462-{names[0]}", 36, 0.9, True)])
-    report = import_label_file(con, sheet, cfg, kind=None)
-    assert report.inserted == 1 and not report.unresolved
-
-
-def test_file_key_strips_only_an_s3_prefix():
-    from blanci.inputs.labels import file_key
-
-    assert file_key("2353462-2la03550_20260108_143000.flac") == "2la03550_20260108_143000"
-    assert file_key("D:/x/2LA03550_20260108_143000.wav") == "2la03550_20260108_143000"
-    assert file_key("12-notes.wav") == "12-notes"  # pas un nom Song Meter : intact
-
-
-def provider_sheet(path, rows):
-    """Colonnes d'un fichier d'annotations réel, commentaires dans des colonnes sans nom."""
-    pd.DataFrame(
-        rows,
-        columns=[
-            "file_s3_key",
-            "station",
-            "label_name",
-            "start_time",
-            "end_time",
-            "score",
-            "vérification",
-            "Colonne1",
-            "Unnamed: 12",
-        ],
-    ).to_excel(path, index=False)
-    return path
-
-
-def test_provider_sheet_columns_are_detected(tmp_path, cfg, ingested):
-    con, names = ingested
-    sheet = provider_sheet(
-        tmp_path / "annotations.xlsx",
-        [(f"1-{names[0]}", "Mataroni_crique2_RB04", "ANOBLA", 36, 39, 0.9, True, None, None)],
-    )
-    report = import_label_file(con, sheet, cfg, kind=None, dry_run=True)
-    assert report.columns["file"] == "file_s3_key"
-    assert report.columns["offset_s"] == "start_time"
-    assert report.columns["verdict"] == "vérification"
-    assert report.columns["score"] == "score"
-    assert len(report.rows) == 1 and report.rows[0]["offset_s"] == 36.0
-
-
-def test_anonymous_columns_feed_the_comment(tmp_path, cfg, ingested):
-    """Les commentaires du vrai fichier sont dans « Colonne1 » et « Unnamed: 12 »."""
-    con, names = ingested
-    sheet = provider_sheet(
-        tmp_path / "annotations.xlsx",
-        [
-            (f"1-{names[2]}", "st", "ANOBLA", 3, 6, 0.8, False, "oiseau Fourmilier tacheté", None),
-            (f"2-{names[1]}", "st", "ANOBLA", 9, 12, 0.7, False, None, "A. andreae"),
-            (
-                f"3-{names[0]}",
-                "st",
-                "ANOBLA",
-                36,
-                39,
-                0.9,
-                True,
-                "chants audibles en second plan",
-                "Colonne1",
-            ),
-        ],
-    )
-    report = import_label_file(con, sheet, cfg, kind=None, dry_run=True)
-    by_offset = {r["offset_s"]: r for r in report.rows}
-    assert by_offset[3.0]["label"] == "bird" and "ourmilier" in by_offset[3.0]["species"]
-    assert by_offset[9.0]["label"] == "amphibian" and by_offset[9.0]["species"] == (
-        "Adenomera andreae"
-    )
-    positive = by_offset[36.0]
-    assert positive["quality"] == "C"  # « second plan »
-    assert "Colonne1" not in positive["comment"]  # en-tête recopié dans une cellule, écarté
+# --- Doublons de relevés -------------------------------------------------------------------
 
 
 def test_sd_card_leftovers_are_inventoried_once(tmp_path, cfg):
@@ -658,8 +260,13 @@ def test_moving_to_a_new_disk_keeps_labels(tmp_path, cfg):
     write_recording(old / f"{STEMS[0].upper()}.wav", seed=0)
     con = connect(cfg["paths"]["db"])
     run_ingest(con, old_disk, "2026", cfg, hash_file=False, scan=old_disk, site="Mataroni")
-    sheet = write_sheet(tmp_path / "a.xlsx", [(f"{STEMS[0]}.flac", 36, 0.9, True)])
-    assert import_label_file(con, sheet, cfg, kind=None).inserted == 1
+    (rid,) = con.execute("SELECT recording_id FROM recordings").fetchone()
+    wid = window_id_for(rid, 36.0, WINDOW_S)
+    con.execute(
+        "INSERT INTO windows (window_id, recording_id, offset_s, dur_s) VALUES (?, ?, 36, ?)",
+        (wid, rid, WINDOW_S),
+    )
+    append_label(con, wid, "blanci", "random")
     before = con.execute("SELECT recording_id, qc_flags FROM recordings").fetchone()
 
     # Nouveau disque, arborescence <jeu>/<site>/<micro>/ ; l'ancien n'est plus branché.
@@ -671,9 +278,7 @@ def test_moving_to_a_new_disk_keeps_labels(tmp_path, cfg):
     row = con.execute("SELECT * FROM recordings").fetchone()
     assert row["recording_id"] == before["recording_id"]
     assert row["path"] == f"2026/Mataroni/2LA04530/{STEMS[0].upper()}.wav"
-    after = json.loads(row["qc_flags"])
-    assert after.pop("annotated") == []  # annoté à l'écoute, rien de signalé
-    assert after == json.loads(before["qc_flags"])  # QC déjà calculé : pas effacé
+    assert json.loads(row["qc_flags"]) == json.loads(before["qc_flags"])  # QC gardé
     labelled = con.execute(
         "SELECT COUNT(*) FROM labels l JOIN windows w USING (window_id) "
         "JOIN recordings r USING (recording_id)"

@@ -67,7 +67,6 @@ def workspace(tmp_path, monkeypatch):
                     "db": str(tmp_path / "db" / "blanci.sqlite"),
                     "embeddings": str(tmp_path / "embeddings"),
                     "tokens": str(tmp_path / "tokens"),
-                    "label_imports": str(tmp_path / "imports"),
                     "models": str(tmp_path / "models"),
                     "frozen_test": str(tmp_path / "frozen"),
                     "reports": str(tmp_path / "reports"),
@@ -103,7 +102,7 @@ def label_positives(config, tmp_path):
     ).fetchall()
     assert rows, "aucune fenêtre du jour positif"
     for row in rows:
-        run(config, "label", row["window_id"], "--label", "blanci_solo", "--source", "import")
+        run(config, "label", row["window_id"], "--label", "blanci_solo", "--source", "similarity")
     return len(rows)
 
 

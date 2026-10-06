@@ -52,19 +52,6 @@ from blanci.inputs.labels import POSITIVE_LABELS
 from blanci.inputs.qc import is_excluded
 
 PAIRING_ORDER = {"same_recording": 0, "same_day": 1, "other_day": 2}
-# Colonnes de `recording_windows` ; les autres sont les scores des détecteurs importés.
-WINDOW_COLUMNS = (
-    "window_id",
-    "recording_id",
-    "offset_s",
-    "dur_s",
-    "center_s",
-    "label",
-    "y",
-    "overlaps_positive",
-    "distance_to_positive_s",
-    "suspect_fn",
-)
 
 
 def open_readonly(path: Path) -> sqlite3.Connection:
@@ -82,8 +69,7 @@ def open_readonly(path: Path) -> sqlite3.Connection:
 
 def recordings_overview(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
     """Un enregistrement par ligne, avec de quoi choisir : heure locale, fenêtres annotées
-    (positives, négatives), détections des détecteurs importés (nombre, score max), exclusion
-    par les drapeaux QC, jeu gelé. Les positifs d'abord."""
+    (positives, négatives), exclusion par les drapeaux QC, jeu gelé. Les positifs d'abord."""
     rec = recordings_table(con)
     rec = rec[~rec["recording_id"].duplicated()].copy()
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
@@ -99,16 +85,6 @@ def recordings_overview(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
     rec = rec.join(counts, on="recording_id")
     rec[["n_positive", "n_labelled"]] = rec[["n_positive", "n_labelled"]].fillna(0).astype(int)
     rec["n_negative"] = rec["n_labelled"] - rec["n_positive"]
-    detected = pd.read_sql_query(
-        """SELECT w.recording_id, s.model_id, COUNT(*) AS n, MAX(s.score) AS best
-           FROM scores s JOIN windows w USING (window_id) JOIN models m USING (model_id)
-           WHERE m.kind = 'detector' GROUP BY w.recording_id, s.model_id""",
-        con,
-    )
-    for model, group in detected.groupby("model_id"):
-        per = group.set_index("recording_id")
-        rec[f"n_{model}"] = rec["recording_id"].map(per["n"]).fillna(0).astype(int)
-        rec[f"max_{model}"] = rec["recording_id"].map(per["best"])
     rec["excluded"] = rec["qc_flags"].map(is_excluded)
     rec["frozen"] = rec["recording_id"].isin(frozen_recordings(cfg))
     return rec.sort_values(["n_positive", "path"], ascending=[False, True]).reset_index(drop=True)
@@ -180,8 +156,7 @@ def recording_windows(
     Colonnes : window_id, recording_id, offset_s, dur_s, center_s ; label et y (annotation
     transférée à la grille, vide sinon) ; overlaps_positive, distance_to_positive_s (écart à
     l'annotation positive la plus proche, 0 si chevauchement) ; suspect_fn (encadrée de
-    positives, DECISIONS n° 102) ; une colonne par détecteur importé (score max des détections qui
-    couvrent au moins la moitié de la fenêtre ; vide = pas de détection).
+    positives, DECISIONS n° 102).
     `overlap` (0–0,99) remplace le pas de la grille de la config.
     """
     rec = recordings_table(con).drop_duplicates("recording_id").set_index("recording_id")
@@ -217,63 +192,13 @@ def recording_windows(
     out["overlaps_positive"] = overlaps
     out["distance_to_positive_s"] = distance
     out["suspect_fn"] = ~overlaps & surrounded_by_positives(out["center_s"], (p0 + p1) / 2, radius)
-    return out.join(detector_scores(con, out))
-
-
-def detections(con: sqlite3.Connection, recording_ids: list[str]) -> pd.DataFrame:
-    """Détections des détecteurs importés (modèles de type detector) : recording_id, model_id,
-    offset_s, dur_s, score."""
-    ids = list(dict.fromkeys(recording_ids))
-    parts = [
-        pd.read_sql_query(
-            f"""SELECT w.recording_id, s.model_id, w.offset_s, w.dur_s, s.score
-                FROM scores s JOIN windows w USING (window_id) JOIN models m USING (model_id)
-                WHERE m.kind = 'detector' AND w.recording_id IN ({", ".join("?" * len(chunk))})
-                ORDER BY w.recording_id, w.offset_s""",
-            con,
-            params=chunk,
-        )
-        for chunk in (ids[i : i + 500] for i in range(0, len(ids), 500))
-    ]
-    columns = ["recording_id", "model_id", "offset_s", "dur_s", "score"]
-    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=columns)
-
-
-def detector_models(con: sqlite3.Connection) -> list[str]:
-    """Détecteurs importés (modèles de type detector)."""
-    rows = con.execute("SELECT model_id FROM models WHERE kind = 'detector' ORDER BY model_id")
-    return [row[0] for row in rows]
-
-
-def detector_scores(con: sqlite3.Connection, windows: pd.DataFrame) -> pd.DataFrame:
-    """Score de chaque détecteur importé sur des fenêtres (recording_id, offset_s, dur_s) : le
-    plus haut des détections qui couvrent au moins la moitié de la fenêtre, vide sans
-    détection. Une colonne par détecteur, alignée sur `windows`."""
-    found = detections(con, windows["recording_id"].tolist())
-    models = sorted(found["model_id"].unique())
-    out = pd.DataFrame(np.nan, index=windows.index, columns=models)
-    by_recording = dict(tuple(found.groupby("recording_id")))
-    for rid, rows in windows.groupby("recording_id").groups.items():
-        if rid not in by_recording:
-            continue
-        w0 = windows.loc[rows, "offset_s"].to_numpy(dtype=float)
-        dur = windows.loc[rows, "dur_s"].to_numpy(dtype=float)
-        for model, group in by_recording[rid].groupby("model_id"):
-            d0 = group["offset_s"].to_numpy(dtype=float)
-            d1 = d0 + group["dur_s"].to_numpy(dtype=float)
-            shared = np.minimum((w0 + dur)[:, None], d1[None, :]) - np.maximum(w0[:, None], d0)
-            covered = shared >= dur[:, None] / 2 - 1e-6
-            best = np.where(covered, group["score"].to_numpy()[None, :], -np.inf).max(axis=1)
-            out.loc[rows, model] = np.where(np.isfinite(best), best, np.nan)
     return out
 
 
 def annotation_coverage(con: sqlite3.Connection) -> pd.DataFrame:
     """Pour chaque enregistrement à annotation positive : fenêtres annotées positives,
-    secondes couvertes (union des annotations), détections des détecteurs importés hors de
-    toute annotation positive (nombre, score médian) — du chant probable, non annoté."""
+    secondes couvertes (union des annotations), durée de l'enregistrement."""
     positives = positive_annotations(current_labels(con))
-    found = detections(con, positives["recording_id"].tolist())
     durations = recordings_table(con).drop_duplicates("recording_id").set_index("recording_id")
     rows = []
     for rid, group in positives.sort_values("offset_s").groupby("recording_id"):
@@ -283,20 +208,12 @@ def annotation_coverage(con: sqlite3.Connection) -> pd.DataFrame:
         for a, b in zip(p0, p1, strict=True):
             covered += max(0.0, b - max(a, end))
             end = max(end, b)
-        mine = found[found["recording_id"] == rid]
-        d0 = mine["offset_s"].to_numpy(dtype=float)
-        d1 = d0 + mine["dur_s"].to_numpy(dtype=float)
-        inside = (d0[:, None] < p1[None, :] - 1e-6) & (d1[:, None] > p0[None, :] + 1e-6)
-        outside = ~inside.any(axis=1)
-        scores = mine["score"].to_numpy(dtype=float)[outside]
         rows.append(
             {
                 "recording_id": rid,
                 "n_positive": len(group),
                 "covered_s": covered,
                 "duration_s": durations.at[rid, "duration_s"],
-                "detections_outside": int(outside.sum()),
-                "median_score_outside": float(np.median(scores)) if len(scores) else np.nan,
             }
         )
     return pd.DataFrame(rows).sort_values("n_positive", ascending=False).reset_index(drop=True)

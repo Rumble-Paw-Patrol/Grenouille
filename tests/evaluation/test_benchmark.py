@@ -87,7 +87,7 @@ def build_recordings(con, n_mics=4, days=4):
             if positive:
                 con.executemany(
                     "INSERT INTO labels (window_id, label, source, created_at) "
-                    "VALUES (?, 'blanci_solo', 'import', ?)",
+                    "VALUES (?, 'blanci_solo', 'similarity', ?)",
                     [(w, utc_now()) for w in ids],
                 )
             layout.append((rid, ids, offsets, positive))

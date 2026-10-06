@@ -179,8 +179,8 @@ chaine:
 # commande de la CLI absente d'ici et de la chaîne est signalée comme nouvelle.
 commandes_hors_chaine: [agreement, anuraset benchmark, anuraset campaign, anuraset heads,
   anuraset prepare, anuraset profile, baselines, benchmark-all, check-grid, cluster,
-  cluster-label, cluster-status, detector-bench, export-labels, import-detections,
-  import-labels, pca, prevalence, qc-calibrate, sources, throughput, upstream-bench]
+  cluster-label, cluster-status, detector-bench, export-labels, pca, prevalence,
+  qc-calibrate, sources, throughput, upstream-bench]
 
 # Débit de l'encodage perch_v2 sur l'i5, secondes par enregistrement de 2 min.
 debit:

@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 import soundfile as sf
 
-from blanci.core.db import connect, register_model, window_id_for
+from blanci.core.db import connect, window_id_for
 from blanci.embedding.embed import month_of
 from blanci.embedding.store import EmbeddingStore
 from blanci.exploration import explore as ex
@@ -34,8 +34,7 @@ def soundscape(seed: int, song_until_s: float = 0.0) -> np.ndarray:
 @pytest.fixture
 def corpus(tmp_path, cfg):
     """2 micros × 3 jours à 10 h, stéréo. Premier jour : chant de 0 à 9 s, annoté à 0, 3 et 6 s
-    sur M1, à 0 et 6 s sur M2 (la fenêtre à 3 s est un trou). Détecteur importé : une détection
-    à 0 s et une à 9 s (hors annotation) sur M1."""
+    sur M1, à 0 et 6 s sur M2 (la fenêtre à 3 s est un trou)."""
     raw = tmp_path / "raw"
     cfg["paths"]["raw"] = str(raw)
     cfg["qc"]["expected_duration_s"] = DURATION_S
@@ -63,16 +62,7 @@ def corpus(tmp_path, cfg):
                 "INSERT INTO windows (window_id, recording_id, offset_s, dur_s) VALUES (?,?,?,3.0)",
                 (wid, rids[mic], offset),
             )
-            append_label(con, wid, "blanci", "import")
-    register_model(con, "externe", "detector", "externe", "v0", {"source": "test"})
-    for offset, score in ((0.0, 0.9), (9.0, 0.7)):
-        wid = window_id_for(rids["M1"], offset)
-        con.execute(
-            "INSERT OR IGNORE INTO windows (window_id, recording_id, offset_s, dur_s) "
-            "VALUES (?,?,?,3.0)",
-            (wid, rids["M1"], offset),
-        )
-        con.execute("INSERT INTO scores VALUES (?, 'externe', ?)", (wid, score))
+            append_label(con, wid, "blanci", "similarity")
     con.commit()
     readonly = ex.open_readonly(tmp_path / "db.sqlite")
     yield readonly, cfg, rids, raw
@@ -86,26 +76,22 @@ def test_the_database_is_opened_read_only(corpus):
         con.execute("CREATE TABLE x (a INTEGER)")
 
 
-def test_overview_lists_positives_first_with_detections(corpus):
+def test_overview_lists_positives_first(corpus):
     con, cfg, rids, _ = corpus
     overview = ex.recordings_overview(con, cfg)
     assert len(overview) == 6
     assert overview["n_positive"].head(2).tolist() == [3, 2]
     m1 = overview.set_index("recording_id").loc[rids["M1"]]
-    assert m1["n_externe"] == 2 and m1["max_externe"] == pytest.approx(0.9)
     assert str(m1["local"]) == "2026-02-10 10:00:00"
 
 
-def test_recording_windows_know_labels_gaps_and_detections(corpus):
+def test_recording_windows_know_labels_and_gaps(corpus):
     con, cfg, rids, _ = corpus
     windows = ex.recording_windows(con, cfg, rids["M1"])
     assert windows["offset_s"].tolist() == [0.0, 1.5, 3.0, 4.5, 6.0, 7.5, 9.0]
     assert windows.loc[windows["y"] == 1, "offset_s"].tolist() == [0.0, 3.0, 6.0]
     assert windows["overlaps_positive"].tolist() == [True] * 6 + [False]
     assert windows["distance_to_positive_s"].iloc[-1] == 0.0
-    # Une détection couvre une fenêtre dont elle occupe au moins la moitié.
-    expected = [0.9, 0.9, np.nan, np.nan, np.nan, 0.7, 0.7]
-    np.testing.assert_allclose(windows["externe"], expected)
 
     gap = ex.recording_windows(con, cfg, rids["M2"]).set_index("offset_s")
     assert gap.at[3.0, "suspect_fn"] and not gap.at[3.0, "overlaps_positive"]
@@ -188,14 +174,11 @@ def test_a_window_without_annotation_gets_hypothetical_negatives(corpus):
     assert set(negatives["offset_s"]) == {0.0, 1.5, 7.5, 9.0}
 
 
-def test_annotation_coverage_counts_detections_outside_annotations(corpus):
+def test_annotation_coverage_counts_annotated_seconds(corpus):
     con, _, rids, _ = corpus
     coverage = ex.annotation_coverage(con).set_index("recording_id")
     assert coverage.at[rids["M1"], "covered_s"] == 9.0
     assert coverage.at[rids["M2"], "covered_s"] == 6.0
-    assert coverage.at[rids["M1"], "detections_outside"] == 1
-    assert coverage.at[rids["M1"], "median_score_outside"] == pytest.approx(0.7)
-    assert coverage.at[rids["M2"], "detections_outside"] == 0
 
 
 def test_onset_sweep_finds_notes_when_the_threshold_is_low_enough(corpus):

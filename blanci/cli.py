@@ -44,7 +44,7 @@ from blanci.heads.signal_processing import Upstream, compute_onsets, upstream_fr
 from blanci.inputs.dataset import benchmark_subset, current_labels, recordings_table
 from blanci.inputs.frozen import freeze as freeze_recordings
 from blanci.inputs.ingest import ingest as run_ingest
-from blanci.inputs.labels import POSITIVE_LABELS, import_detections, import_label_file
+from blanci.inputs.labels import POSITIVE_LABELS
 from blanci.inputs.qc import (
     AUDIO_FLAGS,
     apply_annotation_flags,
@@ -244,58 +244,6 @@ def flag(ctx: typer.Context) -> None:
         + ", ".join(f"{k} {audio[k]}" for k in AUDIO_FLAGS)
     )
     _echo_annotated(apply_annotation_flags(con))
-
-
-@app.command("import-labels")
-def import_labels(
-    ctx: typer.Context,
-    files: Annotated[list[Path], typer.Argument(help="Fichiers CSV ou Excel reçus.")],
-    kind: Annotated[
-        str | None,
-        typer.Option(help="positive | negative, si le fichier n'a pas de colonne label."),
-    ] = None,
-    annotator: Annotated[str | None, typer.Option(help="Défaut : labels.import.annotator.")] = None,
-    dry_run: Annotated[bool, typer.Option(help="Analyser sans rien écrire.")] = False,
-    allow_partial: Annotated[
-        bool, typer.Option(help="Importer les lignes résolues même si d'autres ne le sont pas.")
-    ] = False,
-) -> None:
-    """Import des annotations (345 positifs + 158 faux amis) avec analyse des commentaires."""
-    if kind not in (None, "positive", "negative"):
-        raise typer.BadParameter("--kind attend positive ou negative")
-    cfg = _cfg(ctx)
-    con = connect(config_path(cfg, "db"))
-    failed = False
-    for path in files:
-        report = import_label_file(con, path, cfg, kind, annotator, dry_run, allow_partial)
-        typer.echo(report.summary())
-        if report.inserted:
-            typer.echo(f"  {report.inserted} labels ajoutés")
-            _echo_annotated(apply_annotation_flags(con))
-        elif report.unresolved and not dry_run:
-            typer.echo("  rien n'est importé (--allow-partial pour importer les lignes résolues)")
-            failed = True
-    if failed:
-        raise typer.Exit(1)
-
-
-@app.command("import-detections")
-def import_detections_command(
-    ctx: typer.Context,
-    table: Annotated[Path, typer.Argument(help="Export des détections du détecteur.")],
-    model: Annotated[str, typer.Option(help="Nom du détecteur dans la base.")] = "externe",
-) -> None:
-    """Range les détections d'un détecteur indépendant comme scores (pas comme labels),
-    pour les comparer à celles de nos têtes sur les mêmes fenêtres."""
-    cfg = _cfg(ctx)
-    con = connect(config_path(cfg, "db"))
-    report = import_detections(con, table, cfg, model)
-    typer.echo(
-        f"{report.stored} détections rangées sous « {model} » sur {report.rows} lignes "
-        f"({report.unverified} jamais écoutées) ; {report.not_found} fichiers hors inventaire, "
-        f"{report.ambiguous} ambigus, {report.unreadable} illisibles, "
-        f"{report.out_of_range} hors de l'enregistrement"
-    )
 
 
 @app.command("export-labels")
@@ -1225,23 +1173,17 @@ def benchmark_all(
             "signalée comme choisie après coup)."
         ),
     ] = None,
-    external: Annotated[
-        str | None,
-        typer.Option(help="Détecteurs importés à ranger d'abord (noms dans la base)."),
-    ] = None,
     own: Annotated[
         bool, typer.Option(help="Chaque source sur ses enregistrements (défaut : communs).")
     ] = False,
 ) -> None:
     """Benchmark complet des modèles (DECISIONS n° 98) : encodeurs × têtes, baselines,
-    fusions, ensembles, détecteurs importés, sur les mêmes enregistrements."""
+    fusions, ensembles, détecteurs, sur les mêmes enregistrements."""
     from blanci.evaluation.benchmark import to_markdown
-    from blanci.evaluation.full_benchmark import external_source, run_full_benchmark
+    from blanci.evaluation.full_benchmark import run_full_benchmark
 
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
-    for model in _split(external):
-        typer.echo(f"source externe rangée : {external_source(con, cfg, model)}")
     out = run_full_benchmark(con, cfg, _split(sources) or None, reference, common=not own)
     reports = config_path(cfg, "reports")
     out["table"].to_csv(reports / "benchmark_complet.csv", index=False)

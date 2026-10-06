@@ -11,7 +11,7 @@ import pandas as pd
 from IPython.display import Audio
 
 from blanci.core.audio import resample
-from blanci.exploration.explore import WINDOW_COLUMNS, mean_spectrum_db, spectrogram_db
+from blanci.exploration.explore import mean_spectrum_db, spectrogram_db
 from blanci.heads.signal_processing import GATES, band_envelope_db, detect_onsets, gate_threshold
 
 LISTEN_SR = 24_000  # A. blanci chante sous 6 kHz : 24 kHz suffisent et allègent le notebook
@@ -99,11 +99,11 @@ def plot_recording(
     """Enregistrement entier : spectrogramme (débuts de notes en traits cyan, fenêtre choisie
     en cadre blanc) ; en dessous, une piste par sorte de fenêtre (annotées positives et
     négatives, faux négatifs suspects, négatifs appariés tirés dans l'enregistrement, fenêtre
-    choisie), puis les scores des détecteurs importés."""
+    choisie)."""
     band = tuple(cfg["signal"]["band_hz"])
     dur = float(windows["dur_s"].iloc[0])
-    fig, (top, middle, bottom) = plt.subplots(
-        3, 1, figsize=(15, 7.5), sharex=True, gridspec_kw={"height_ratios": [3, 1.1, 1]}
+    fig, (top, middle) = plt.subplots(
+        2, 1, figsize=(15, 6.5), sharex=True, gridspec_kw={"height_ratios": [3, 1.1]}
     )
     show_spectrogram(top, wav, sr, band, title, nperseg=1024)
     if onsets is not None and len(onsets):
@@ -131,16 +131,7 @@ def plot_recording(
     middle.set_yticks(range(len(tracks)), list(tracks), fontsize=8)
     middle.set_ylim(len(tracks) - 0.5, -0.5)
     middle.grid(axis="x", alpha=0.3)
-    detectors = [c for c in windows.columns if c not in WINDOW_COLUMNS]
-    for name in detectors:
-        bottom.step(windows["center_s"], windows[name].fillna(0), where="mid", label=name)
-    bottom.set_ylim(0, 1.05)
-    bottom.set_ylabel("score")
-    bottom.set_xlabel("s")
-    if detectors:
-        bottom.legend(loc="upper right", fontsize=8)
-    else:
-        bottom.text(0.5, 0.5, "aucun détecteur importé", ha="center", transform=bottom.transAxes)
+    middle.set_xlabel("s")
     fig.tight_layout()
     return fig
 

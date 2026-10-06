@@ -3150,3 +3150,15 @@ de Léonard, 01/10/2026.
      source `external/<nom>` du benchmark complet, pour tout détecteur importé. Son nom est
      retiré des fichiers du dépôt, archives et présentations comprises ; il reste dans
      l'historique git, qu'on ne réécrit pas.
+
+185. **`import-labels` et `import-detections` sortent aussi** (Léonard, 06/10) : ils ne
+     servaient qu'aux tableaux reçus du détecteur externe. Retirés : les deux commandes, leur
+     lecture des tableaux (colonnes `labels.import`, verdicts, décalages, clés S3), la table
+     `imports` (migration 4), la source de label `import`, la source `external/<nom>` du
+     benchmark complet (`benchmark-all --external`), et dans l'exploration (`explore.py`,
+     notebooks 01 et 02) tout ce qui lisait les scores d'un détecteur importé (colonnes par
+     détecteur, piste des scores, persistance en aval sur ces scores, détections hors
+     annotations). Le code retiré est rangé dans `grenouille-local/` avec un correctif qui le
+     remet, pour comparer plus tard nos scores aux annotations gardées là. Restent :
+     l'analyse des commentaires du poste d'annotation (`comment_fields`) et la lecture des
+     tableaux d'un outil d'écoute (`clips-import`).

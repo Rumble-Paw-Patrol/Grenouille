@@ -150,7 +150,7 @@ def corpus(tmp_path, cfg):
                 "INSERT INTO windows (window_id, recording_id, offset_s, dur_s) VALUES (?,?,?,3.0)",
                 (wid, rid, offset),
             )
-            append_label(con, wid, "blanci", "import")
+            append_label(con, wid, "blanci", "similarity")
     con.commit()
     return con, cfg, raw
 

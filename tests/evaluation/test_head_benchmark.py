@@ -180,7 +180,7 @@ def corpus(tmp_path, cfg):
                 )
                 con.executemany(
                     "INSERT INTO labels (window_id, label, source, created_at) "
-                    "VALUES (?, 'blanci_solo', 'import', ?)",
+                    "VALUES (?, 'blanci_solo', 'similarity', ?)",
                     [(w, utc_now()) for w in ids],
                 )
             metas.append(pd.DataFrame({"window_id": ids, "recording_id": rid, "offset_s": offsets}))

@@ -631,8 +631,8 @@ PERTES = Tableau(
     ],
     [
         "Pourquoi les pertes bornées : les négatifs présumés sont contaminés (n° 106 : 80 % des"
-        " négatifs nearest détectés par un détecteur externe). Avec la logistique, un vrai chant étiqueté"
-        " négatif et noté haut coûte sans limite et tire la frontière vers lui.",
+        " négatifs nearest détectés par un détecteur externe). Avec la logistique, un vrai"
+        " chant étiqueté négatif et noté haut coûte sans limite et tire la frontière vers lui.",
         "hinge et focal se ressemblent : toutes deux négligent les exemples faciles et se"
         " concentrent sur les difficiles, et aucune ne plafonne le coût d'une étiquette fausse."
         " Seules gce, sce et sigmoid le font.",
@@ -1372,7 +1372,8 @@ NEGATIFS = Tableau(
     "negatifs-apparies",
     "Négatifs appariés présumés",
     "benchmark.pairing : comment tirer les ~20 négatifs par positif, toujours sur le même micro"
-    " (n° 88, 101). Contamination mesurée : fenêtres détectées ≥ 0,5 par un détecteur externe (n° 106).",
+    " (n° 88, 101). Contamination mesurée : fenêtres détectées ≥ 0,5 par un détecteur externe"
+    " (n° 106).",
     [
         Section(
             [

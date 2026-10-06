@@ -80,7 +80,7 @@ MIGRATIONS = [
         created_at   TEXT NOT NULL
     );
 
-    -- Fichiers d'annotation déjà importés (idempotence de import-labels).
+    -- Fichiers d'annotation déjà importés (supprimée par la migration 4).
     CREATE TABLE imports (
         file_sha256 TEXT PRIMARY KEY,
         path        TEXT NOT NULL,
@@ -135,6 +135,10 @@ MIGRATIONS = [
     BEGIN SELECT RAISE(ABORT, 'intervals are append-only'); END;
     CREATE TRIGGER intervals_no_delete BEFORE DELETE ON intervals
     BEGIN SELECT RAISE(ABORT, 'intervals are append-only'); END;
+    """,
+    # 4 — l'import de tableaux d'annotations reçus est retiré (DECISIONS n° 185).
+    """
+    DROP TABLE IF EXISTS imports;
     """,
 ]
 

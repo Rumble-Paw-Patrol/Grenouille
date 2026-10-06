@@ -1,5 +1,5 @@
-"""Détections d'un détecteur importé (scores, pas labels), négatifs annotés négatifs quel que
-soit le voisinage (DECISIONS n° 85, 87), commentaires accolés aux fenêtres annotées (n° 82)."""
+"""Négatifs annotés négatifs quel que soit le voisinage d'un score (DECISIONS n° 85, 87),
+commentaires accolés aux fenêtres annotées (n° 82)."""
 
 import json
 
@@ -11,7 +11,7 @@ from blanci.annotation.workbench import save_answer
 from blanci.core.config import load_config
 from blanci.core.db import connect, recording_id_for, window_id_for
 from blanci.inputs.dataset import current_labels, training_set
-from blanci.inputs.labels import comment_fields, import_detections
+from blanci.inputs.labels import comment_fields
 from blanci.service import append_label
 
 CFG = load_config()
@@ -46,7 +46,7 @@ def window(con, rid, offset, dur=3.0):
 
 def label(con, rid, offset, value, comment=None, dur=3.0):
     conditions = {"comment": comment} if comment else None
-    return append_label(con, window(con, rid, offset, dur), value, "import", conditions=conditions)
+    return append_label(con, window(con, rid, offset, dur), value, "random", conditions=conditions)
 
 
 def detection(con, rid, offset, score):
@@ -78,47 +78,6 @@ def test_annotated_negative_stays_negative_next_to_a_detection(con):
     assert data["label"].tolist() == ["bird"] and data["y"].tolist() == [0]
 
 
-# --- Import des détections ------------------------------------------------------------------
-
-
-def test_detections_are_scores_not_labels(con, tmp_path):
-    rid = add_recording(con, "2LA03550_20260108_143000")
-    table = tmp_path / "detections.csv"
-    pd.DataFrame(
-        {
-            "file_s3_key": ["2353462-2la03550_20260108_143000.flac"] * 3 + ["inconnu.flac"],
-            "start_time": [87, 90, 30, 0],
-            "score": [0.94, 0.2, 0.8, 0.5],
-            "vérification": [None, None, "True", None],
-        }
-    ).to_csv(table, index=False)
-    report = import_detections(con, table, CFG)
-    assert report.stored == 3 and report.not_found == 1 and report.unverified == 2
-    assert con.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == 0
-    scores = dict(con.execute("SELECT window_id, score FROM scores").fetchall())
-    assert scores[window_id_for(rid, 87.0)] == pytest.approx(0.94)
-    # Réimporter remplace, ne duplique pas.
-    assert import_detections(con, table, CFG).stored == 3
-    assert con.execute("SELECT COUNT(*) FROM scores").fetchone()[0] == 3
-
-
-def test_detections_outside_the_recording_or_unreadable_are_counted_not_stored(con, tmp_path):
-    rid = add_recording(con, "2LA03550_20260108_143000")  # 120 s
-    table = tmp_path / "detections.csv"
-    key = "2la03550_20260108_143000.flac"
-    pd.DataFrame(
-        {
-            "file_s3_key": [key] * 5,
-            "start_time": ["30", "", "200", "-3", "60"],
-            "score": ["0,87", "0.5", "0.5", "0.5", "abc"],
-        }
-    ).to_csv(table, index=False, sep=";")  # export français : point-virgule, virgule décimale
-    report = import_detections(con, table, CFG)
-    assert report.stored == 1 and report.out_of_range == 2 and report.unreadable == 2
-    scores = dict(con.execute("SELECT window_id, score FROM scores").fetchall())
-    assert scores == {window_id_for(rid, 30.0): pytest.approx(0.87)}  # virgule décimale
-
-
 # --- Commentaires accolés -------------------------------------------------------------------
 
 
@@ -133,7 +92,7 @@ def test_comment_follows_the_window(con):
     assert data["comment"].tolist() == ["Fourmilier tacheté, pluie légère"]
 
 
-def test_station_comment_is_read_like_an_import(con):
+def test_station_comment_is_parsed(con):
     rid = add_recording(con, "a")
     candidate = {"recording_id": rid, "offset_s": 12.0, "dur_s": 3.0, "reason": "lot1"}
     save_answer(con, candidate, "bird", "leonard", comment="Fourmilier tacheté sous la pluie")

@@ -1,9 +1,9 @@
 import pandas as pd
 import pytest
 
-from blanci.inputs.labels import LABELS, column_key, detect_columns, parse_comment, parse_offset
+from blanci.inputs.labels import column_key, comment_fields, detect_columns
 
-# Commentaires des faux amis relevés à l'annotation (notes, H14) → label et espèce attendus.
+# Commentaires des faux amis relevés à l'annotation (notes, H14) → famille et espèce citée.
 NEGATIVES = [
     ("chants d'oiseau (Fourmilier tacheté) au moment des détections", "bird", "Fourmilier tacheté"),
     ('"cris" d\'amphibien de contact', "amphibian_contact_call", None),
@@ -64,90 +64,25 @@ NEGATIVES = [
 ]
 
 
-@pytest.mark.parametrize("comment, label, species", NEGATIVES)
-def test_false_friend_comments(comment, label, species):
-    parsed = parse_comment(comment, "negative")
-    assert (parsed.label, parsed.species) == (label, species)
-    assert parsed.label in LABELS
-    assert parsed.conditions["comment"] == comment
+@pytest.mark.parametrize("comment, family, species", NEGATIVES)
+def test_false_friend_species_are_found(comment, family, species):
+    assert "; ".join(comment_fields(comment).get("co_occurring", [])) == (species or "")
 
 
 @pytest.mark.parametrize(
-    "comment, quality, tags, co_occurring",
+    "comment, tags, co_occurring",
     [
-        ("chants audibles en second plan", "C", ["second_plan"], None),
-        ("chant lointain", "C", ["distant"], None),
-        ("chants audibles malgré la pluie", "B", ["rain"], None),
-        ("chant audible ET présence du fourmilier tacheté", "B", [], ["Fourmilier tacheté"]),
-        ("chant régulier et audible", "A", [], None),
+        ("chants audibles en second plan", ["second_plan"], None),
+        ("chant lointain", ["distant"], None),
+        ("chants audibles malgré la pluie", ["rain"], None),
+        ("chant audible ET présence du fourmilier tacheté", [], ["Fourmilier tacheté"]),
+        ("chant régulier et audible", [], None),
     ],
 )
-def test_positive_comments(comment, quality, tags, co_occurring):
-    parsed = parse_comment(comment, "positive")
-    assert parsed.label == "blanci" and parsed.species == "Anomaloglossus blanci"
-    assert parsed.quality == quality and parsed.conditions["quality_inferred"]
-    assert parsed.conditions["tags"] == tags
-    assert parsed.conditions.get("co_occurring") == co_occurring
-
-
-@pytest.mark.parametrize("comment", ["", None, float("nan")])
-def test_positive_without_comment_has_unknown_quality(comment):
-    """345 positifs dont 339 sans commentaire : un A par défaut serait une fausse certitude."""
-    parsed = parse_comment(comment, "positive")
-    assert parsed.label == "blanci" and parsed.quality is None
-    assert "quality_inferred" not in parsed.conditions
-
-
-def test_explicit_quality_wins_over_inference():
-    parsed = parse_comment("chant lointain", "positive", quality="A")
-    assert parsed.quality == "A" and "quality_inferred" not in parsed.conditions
-
-
-def test_missing_comment_is_other_for_negatives():
-    assert parse_comment(None, "negative").label == "other"
-    assert parse_comment(float("nan"), "negative").label == "other"
-
-
-@pytest.mark.parametrize(
-    "value, unit, expected",
-    [
-        (36, "seconds", 36.0),
-        ("1,5", "seconds", 1.5),
-        ("01:30", "seconds", 90.0),
-        ("0:01:30.5", "seconds", 90.5),
-        (12, "window_index", 36.0),
-    ],
-)
-def test_parse_offset(value, unit, expected):
-    assert parse_offset(value, unit, 3.0) == expected
-
-
-@pytest.mark.parametrize("value", [float("nan"), None, "", "  ", "nan", "inf"])
-def test_parse_offset_refuses_an_empty_or_infinite_cell(value):
-    """Un décalage NaN passait tous les contrôles de bornes, puis faisait échouer tout
-    l'import sur la contrainte NOT NULL : il doit être « illisible », ligne par ligne."""
-    with pytest.raises(ValueError):
-        parse_offset(value, "seconds", 3.0)
-
-
-@pytest.mark.parametrize(
-    "text, expected",
-    [
-        ("blanci", True),
-        ("Blanci lointain", True),
-        ("pas blanci", False),
-        ("non", False),
-        ("blanci ?", None),  # l'expert hésite : ni positif ni négatif ferme
-        ("blanci sans doute", None),  # « sans doute » = probablement, pas une négation
-        ("Blanci pas sûr", None),
-        ("peut-être blanci", None),
-        ("?", None),
-    ],
-)
-def test_parse_verdict_keeps_doubt_out_of_the_labels(text, expected):
-    from blanci.inputs.labels import parse_verdict
-
-    assert parse_verdict(text) is expected
+def test_comment_conditions(comment, tags, co_occurring):
+    fields = comment_fields(comment)
+    assert fields["tags"] == tags
+    assert fields.get("co_occurring") == co_occurring
 
 
 def test_detect_columns_ignores_case_accents_and_units():

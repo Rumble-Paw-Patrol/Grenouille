@@ -2,9 +2,7 @@
 
 Sources : tout ce que le stock de scores hors-pli contient (`blanci sources`) — encodeurs ×
 têtes (`benchmark`, `heads`), baselines (`baselines`), fusions (`fusion-bench`), ensembles
-(`ensemble`), détecteurs (`detector-bench`) — plus des sources externes sans apprentissage,
-rangées à la demande sur les fenêtres des baselines (`external_source`) : détecteurs importés
-(`import-detections`).
+(`ensemble`), détecteurs (`detector-bench`).
 
 Tout se compare au niveau enregistrement (score maximal de ses fenêtres) : une fenêtre de 3 s
 et une de 5 s ne se comparent pas, deux enregistrements si. Par défaut, sur les seuls
@@ -21,8 +19,7 @@ seulement si la p-valeur corrigée de Holm sur toutes les comparaisons est sous 
 (`significant_holm`, DECISIONS n° 139, 140). Une source dont l'empreinte des labels n'est plus
 celle d'aujourd'hui est signalée (`up_to_date`) : à relancer.
 
-Réserve : un détecteur importé a pu être entraîné sur ces mêmes enregistrements ; son score
-est alors optimiste. Licence et prise en main : colonnes à remplir à la main (§2).
+Licence et prise en main : colonnes à remplir à la main (§2).
 """
 
 from __future__ import annotations
@@ -33,7 +30,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from blanci.combination.fusion import project_scores
 from blanci.evaluation.evaluate import (
     average_precision,
     bootstrap_ci,
@@ -47,39 +43,8 @@ from blanci.evaluation.evaluate import (
 from blanci.evaluation.oof import (
     labels_fingerprint,
     load_oof,
-    oof_frame,
     recording_scores,
-    save_oof,
 )
-
-
-def external_source(con: sqlite3.Connection, cfg: dict, model: str, name: str | None = None) -> str:
-    """Range un détecteur externe ou sans apprentissage dans le stock hors-pli, sur les fenêtres
-    des baselines (`model` = nom du détecteur importé, scores de ses détections). Une fenêtre
-    sans détection qui la recouvre reçoit le score le plus bas du modèle (il ne l'a pas
-    remontée)."""
-    from blanci.heads.baselines import evaluation_windows
-    from blanci.inputs.dataset import folds_for
-
-    windows = evaluation_windows(con, cfg).reset_index(drop=True)
-    scores = pd.read_sql_query(
-        "SELECT w.recording_id, w.offset_s, w.dur_s, MAX(s.score) AS score FROM scores s "
-        "JOIN windows w USING (window_id) WHERE s.model_id = ? GROUP BY s.window_id",
-        con,
-        params=(model,),
-    )
-    if scores.empty:
-        raise ValueError(f"aucun score pour {model!r} dans la base")
-    values = project_scores(windows, scores)
-    values = np.where(np.isnan(values), float(scores["score"].min()) - 1.0, values)
-    source = name or f"external/{model}"
-    save_oof(
-        cfg,
-        oof_frame(
-            source, "external", windows, values, folds_for(con, cfg), labels_fingerprint(con, cfg)
-        ),
-    )
-    return source
 
 
 def _encoder_costs(con: sqlite3.Connection) -> dict[str, dict[str, Any]]:

@@ -42,7 +42,7 @@ def add_window(con, recording_id, offset_s, dur_s=WINDOW_S):
     return wid
 
 
-def add_label(con, window_id, label, source="import", quality=None):
+def add_label(con, window_id, label, source="similarity", quality=None):
     con.execute(
         "INSERT INTO labels (window_id, label, quality, source, created_at) VALUES (?, ?, ?, ?, ?)",
         (window_id, label, quality, source, utc_now()),

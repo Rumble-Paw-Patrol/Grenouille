@@ -369,7 +369,7 @@ def multi_site_corpus(con, tmp_path, encoder_id="good-1", separation=4.0, seed=0
                     emb += direction
                     con.executemany(
                         "INSERT INTO labels (window_id, label, source, created_at) "
-                        "VALUES (?, 'blanci_solo', 'import', ?)",
+                        "VALUES (?, 'blanci_solo', 'similarity', ?)",
                         [(w, utc_now()) for w in ids],
                     )
                 metas.append(

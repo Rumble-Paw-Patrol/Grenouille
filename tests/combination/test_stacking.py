@@ -253,7 +253,7 @@ def corpus(tmp_path, cfg):
                     )
                     con.execute(
                         "INSERT INTO labels (window_id, label, source, created_at) "
-                        "VALUES (?, 'blanci_solo', 'import', ?)",
+                        "VALUES (?, 'blanci_solo', 'similarity', ?)",
                         (wid, utc_now()),
                     )
                 notes = np.arange(0.4, 20, 1.414)
@@ -418,27 +418,13 @@ def test_concatenation_of_two_same_grid_stocks(corpus, cfg):
 
 def test_full_benchmark_ranks_every_source_on_common_recordings(corpus, cfg):
     from blanci.evaluation.benchmark import benchmark_encoder
-    from blanci.evaluation.full_benchmark import external_source, run_full_benchmark
+    from blanci.evaluation.full_benchmark import run_full_benchmark
 
     for eid in ("main-1", "other-1"):
         benchmark_encoder(corpus, eid, cfg["paths"]["embeddings"], cfg)
-    # Détecteur importé : une détection forte sur chaque enregistrement positif
-    positives = [
-        r[0]
-        for r in corpus.execute(
-            "SELECT DISTINCT w.recording_id FROM labels l JOIN windows w USING (window_id)"
-        )
-    ]
-    for rid in positives:
-        wid = window_id_for(rid, 6.0)
-        corpus.execute(
-            "INSERT INTO scores (window_id, model_id, score) VALUES (?, 'externe', 0.9)", (wid,)
-        )
-    corpus.commit()
-    assert external_source(corpus, cfg, "externe") == "external/externe"
     out = run_full_benchmark(corpus, cfg)
     table = out["table"]
-    assert {"main-1/logistic", "other-1/prototype", "external/externe"} <= set(table["source"])
+    assert {"main-1/logistic", "other-1/prototype"} <= set(table["source"])
     assert table["n_recordings"].nunique() == 1  # enregistrements communs
     assert table["up_to_date"].all()
     assert set(out["comparisons"]["reference"]) == {out["reference"]}

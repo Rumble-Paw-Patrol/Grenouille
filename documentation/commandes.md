@@ -70,12 +70,6 @@ B="uv run blanci --config config/local.yaml"
 $B ingest --dataset 2026 --site CDR --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025"
 $B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026"
 
-# Import d'un tableau d'annotations ; --dry-run d'abord pour relire verdicts, espèces et lignes
-# signalées
-$B import-labels annotations.xlsx --dry-run
-$B import-labels annotations.xlsx
-# Détections d'un autre détecteur, comme scores (pas comme labels) : comparables aux nôtres
-$B import-detections detections.xlsx --model externe
 $B export-labels     # fenêtres annotées : label, qualité, espèce, commentaire
 
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
@@ -160,7 +154,7 @@ $B fusion-bench --encoder birdmae-bacpipe1.3.5         # dont logistic+R50+R54, 
 $B ensemble --sources birdmae-bacpipe1.3.5/logistic,perch_v2-bacpipe1.3.5/logistic
 $B detector-bench --detector band_contrast           # distilled, homemade : réservés
 $B sources                                           # ce que le stock hors-pli contient
-$B benchmark-all --external externe                  # tout, mêmes enregistrements
+$B benchmark-all                                     # tout, mêmes enregistrements
 
 # --- Sélection des candidats (DECISIONS n° 99–100) -------------------------
 $B select --method active --encoder birdmae-bacpipe1.3.5 --n 40 --mix 0.4,0.2,0.4
@@ -183,14 +177,3 @@ $B evaluate --encoder birdmae-1 --frozen last            # la tête jugée sur l
 $B activity --encoder birdmae-1 --dataset 2023 --reference-hours ref_heures.csv
 ```
 
-Les colonnes du fichier d'annotations sont reconnues automatiquement, y compris sous forme
-de libellé composé (« Nom de l'enregistrement ») : fichier, timecode, vérification manuelle,
-score, commentaire, qualité, site, micro. Si une colonne n'est pas trouvée, ajouter son nom
-dans `labels.import.columns` de la config.
-
-La colonne de vérification tranche positif/négatif : `True` / `False`, oui/non et leurs
-variantes, réponses rédigées mentionnant *blanci*, ou nom d'un faux ami connu (qui donne
-aussi l'espèce). Une cellule vide est une détection jamais écoutée : ignorée, ce n'est pas un
-label. « à vérif » / « à conf » sont mises de côté et listées. Toute autre valeur non reconnue
-**bloque l'import** au lieu d'être rangée en négatif ; `--dry-run` les liste toutes. Chaque
-ligne doit désigner un enregistrement déjà inventorié.

@@ -53,7 +53,7 @@ def label(con, rid, value, offset=0.0, conditions=None):
         "VALUES (?, ?, ?, 3.0)",
         (wid, rid, offset),
     )
-    append_label(con, wid, value, "import", conditions=conditions)
+    append_label(con, wid, value, "similarity", conditions=conditions)
     return wid
 
 
