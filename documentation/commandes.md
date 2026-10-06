@@ -49,9 +49,9 @@ enregistrements de 120 s :
 | 6 s | 3 s | 39 | 3 748 641 |
 
 Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 8 micros
-dans le sac, 1 521 à l'horloge douteuse (Molokoi SMA14636, avril 2024, en file d'écoute) ;
-94 588 enregistrements de 120 s restent encodables. Détail et anomalies : DECISIONS n° 153
-et 154.
+dans le sac ; 96 109 enregistrements de 120 s restent encodables. Les 1 521 à l'horloge
+douteuse (Molokoi SMA14636, avril 2024) sont réintégrés : `clock_off` n'est plus qu'une
+remarque. Détail et anomalies : DECISIONS n° 153, 154 et 189.
 
 Hors git, sous `data/` : `db/blanci.sqlite` (inventaire, fenêtres, labels en ajout seul),
 `embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet`, `models/`, `reports/`.
@@ -75,7 +75,7 @@ $B export-labels     # fenêtres annotées : label, qualité, espèce, commentai
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid
 # Drapeaux (remarques sur un enregistrement, DECISIONS n° 79) : écartent du corpus
-# silencieux, micro dans sac, durée anormale, hors relevé.
+# silencieux, micro dans sac, durée anormale, hors relevé (horloge douteuse : remarque, n° 189).
 # Recalcule inventaire, audio (seuils actuels, sans relire l'audio) et drapeaux d'écoute.
 $B flag
 $B status
@@ -89,7 +89,7 @@ $B annotate                                          # poste d'écoute dans le n
 
 # Enregistrements entiers (audit aléatoire, jeu gelé) ; accord entre deux annotateurs
 $B candidates --entiers 300 --sites Mataroni --reason audit_aleatoire --random 0 --name audit
-# Écartés par un drapeau, à écouter en entier pour juger ce qu'ils valent (source « flag »)
+# Signalés par un drapeau, à écouter en entier pour juger ce qu'ils valent (source « flag »)
 $B candidates --drapeau clock_off --random 0 --name horloge_SMA14636
 $B agreement --annotators léonard,tuteur
 

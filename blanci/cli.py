@@ -180,8 +180,8 @@ def ingest(
 def _echo_flags(flagged: dict[str, int]) -> None:
     typer.echo(
         f"signalés (jamais encodés) : {flagged.get('duration_off', 0)} de durée anormale, "
-        f"{flagged.get('off_campaign', 0)} hors relevé, "
-        f"{flagged.get('clock_off', 0)} à l'horloge douteuse"
+        f"{flagged.get('off_campaign', 0)} hors relevé ; "
+        f"remarque : {flagged.get('clock_off', 0)} à l'horloge douteuse (encodés)"
     )
 
 

@@ -3,7 +3,7 @@
 Page claude.ai privée, pour Léonard et ses encadrants :
 <https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8>
 
-Sections : vue d'ensemble, travail en cours, chaîne de traitement, données,
+Sections : vue d'ensemble, travail en cours (avec le plan d'annotation), données, chaîne de traitement,
 encodeurs, explorateur des têtes (comparaison à la carte), rapports de benchmark, tableaux,
 bibliographie, glossaire. Chaque carte a un bouton « Commenter » ; les commentaires sont
 partagés entre tous ceux qui ont accès à la page. La page n'est visible qu'une fois partagée
@@ -14,7 +14,8 @@ depuis son menu « Partager » sur claude.ai.
 | Fichier | Rôle | Qui le tient |
 |---|---|---|
 | `en_cours.yaml` | les chantiers en cours | **Léonard, à la main** (le seul) |
-| `structure.yaml` | objectif, critères, étapes de la chaîne et leur état, débit, cibles d'annotation | Claude, skill `tableau-de-bord` |
+| `structure.yaml` | titre, objectif, critères, étapes de la chaîne et leur état, plan d'annotation | Claude, skill `tableau-de-bord` |
+| `spectrogramme.jpg` | bandeau : un vrai chant d'A. blanci (Mataroni), 3,5–6,3 kHz | `spectrogramme.py` |
 | `annotations.json` | avancement des annotations, compté dans `data/db/blanci.sqlite` | `construire.py` |
 | `publication.json` | commit de la dernière publication, point de départ du repérage des changements | `construire.py --publie` |
 | `modele.html` | la page, sans données | — |

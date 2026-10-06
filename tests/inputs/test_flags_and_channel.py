@@ -201,8 +201,9 @@ def test_clock_off_when_file_name_and_header_disagree():
     assert flags["clock_off"].sum() == 1  # sans horodatage dans le nom : rien
 
 
-def test_clock_off_needs_the_path_and_excludes_the_recording():
+def test_clock_off_needs_the_path_and_no_longer_excludes_the_recording():
+    """Les 1 521 de Molokoi SMA14636 sont réintégrés au corpus (DECISIONS n° 189)."""
     from blanci.inputs.qc import EXCLUDING_FLAGS, is_excluded
 
     assert not flags_of(campaign())["clock_off"].any()
-    assert "clock_off" in EXCLUDING_FLAGS and is_excluded({"clock_off": True})
+    assert "clock_off" not in EXCLUDING_FLAGS and not is_excluded({"clock_off": True})

@@ -3233,3 +3233,15 @@ de Léonard, 01/10/2026.
      remet, pour comparer plus tard nos scores aux annotations gardées là. Restent :
      l'analyse des commentaires du poste d'annotation (`comment_fields`) et la lecture des
      tableaux d'un outil d'écoute (`clips-import`).
+
+## 2026-10-06 — Horloge douteuse : les 1 521 de Molokoi SMA14636 reviennent dans le corpus
+
+189. **`clock_off` n'écarte plus rien** (Léonard, 06/10). Les 1 521 enregistrements de Molokoi
+     SMA14636 en avril 2024 (n° 153 et 154), jugés bons, sont réintégrés au projet : le
+     drapeau `clock_off` sort de `EXCLUDING_FLAGS` et reste calculé par `blanci flag` comme
+     simple remarque (inventaire, file `candidates --drapeau clock_off`). Les 78 déclenchements
+     de test qu'il levait aussi restent écartés pour leur durée. Encodables : 94 588 + 1 521 =
+     **96 109** enregistrements de 120 s (les 1 521 n'étaient écartés que par ce drapeau,
+     n° 154). Rien à relancer : l'exclusion se décide à la lecture des drapeaux, la prochaine
+     passe d'`embed` les encode. L'heure de ces enregistrements n'est pas corrigée (`start_utc`
+     garde l'en-tête GUANO, en avance d'une heure sur le nom de fichier, n° 153).

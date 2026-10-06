@@ -3,7 +3,8 @@
 Un drapeau est une remarque sur un enregistrement, rangée dans `recordings.qc_flags` (le
 fichier n'est jamais touché). Trois origines :
 - inventaire, sans lire l'audio : durée anormale (`duration_off`), hors relevé
-  (`off_campaign`), horloge douteuse (`clock_off`) ;
+  (`off_campaign`), horloge douteuse (`clock_off`, une remarque : n'écarte plus rien,
+  DECISIONS n° 189) ;
 - audio, calculé sur le son (`blanci qc`, avant tout encodage) : silencieux, micro dans sac ;
   indices simples (numpy/scipy), seuils de config/default.yaml calibrés par
   `blanci qc-calibrate` ;
@@ -34,7 +35,7 @@ from blanci.inputs.labels import POSITIVE_LABELS
 
 # Drapeaux qui écartent un enregistrement du corpus : jamais encodé, donc ni négatif apparié,
 # ni candidat à écouter, ni score. La pluie notée à l'écoute est une remarque.
-EXCLUDING_FLAGS = ("in_bag", "silent", "duration_off", "off_campaign", "clock_off")
+EXCLUDING_FLAGS = ("in_bag", "silent", "duration_off", "off_campaign")
 AUDIO_FLAGS = ("silent", "in_bag")
 
 
@@ -137,9 +138,9 @@ def metadata_flags(
       plusieurs relevés d'un même site reste un seul bloc.
     - clock_off : l'heure du nom de fichier (heure locale de l'enregistreur, à
       `utc_offset_h`) et celle de l'en-tête (`start_utc`, GUANO) diffèrent de plus de
-      `clock_tolerance_min` : on ne sait pas laquelle croire (DECISIONS n° 154 : Molokoi
-      SMA14636 en avril 2024, en-tête en avance d'une heure). Sans `path`, ou sans
-      horodatage dans le nom, rien n'est signalé.
+      `clock_tolerance_min` (DECISIONS n° 154 : Molokoi SMA14636 en avril 2024, en-tête en
+      avance d'une heure). Remarque seulement : ces enregistrements restent dans le corpus
+      (n° 189). Sans `path`, ou sans horodatage dans le nom, rien n'est signalé.
 
     `recordings` : recording_id, dataset, site, mic_id, start_utc, duration_s ; path.
     """

@@ -4,11 +4,12 @@
 
 Lit les rapports et les CSV de documentation/benchmarks/, les tableaux PNG, la bibliographie,
 le glossaire, l'inventaire de documentation/commandes.md, les tests, l'historique git,
-structure.yaml (objectif, chaîne, débit), en_cours.yaml (le travail en cours, tenu à la main)
+structure.yaml (objectif, chaîne, plan d'annotation), en_cours.yaml (le travail en cours, tenu à la main)
 et, si la base locale existe, l'avancement des annotations. Écrit :
 
 - index.html : modele.html avec toutes les données intégrées ;
-- fichiers.json : les images à publier à côté de la page (chemin publié → chemin du dépôt) ;
+- fichiers.json : les images à publier à côté de la page (chemin publié → chemin du dépôt),
+  dont le spectrogramme du bandeau (spectrogramme.jpg, fait par spectrogramme.py) ;
 - annotations.json : l'avancement des annotations, relu tel quel quand la base est absente
   (session sans les données) ; versionné.
 
@@ -165,15 +166,20 @@ def inventaire() -> dict:
         )
     fenetres = re.findall(r"\| (\d) s \| ([\d,]+) s \| (\d+) \| ([\d ]+) \|", bloc)
     drapeaux = re.search(r"Écartés par les drapeaux.*?encodables", bloc, flags=re.S)
+    drapeaux = re.sub(r"\s+", " ", drapeaux.group(0)) if drapeaux else ""
+    drapeaux = drapeaux.replace(
+        "Écartés par les drapeaux (jamais encodés)", "Enregistrements écartés du projet"
+    ).replace("micros dans le sac", "micros allumés dans le sac")
     return {
         "sites": sites,
         "fenetres": [
             [f"{a} s", f"{b} s", int(c), int(d.replace(" ", ""))] for a, b, c, d in fenetres
         ],
-        "drapeaux": re.sub(r"\s+", " ", drapeaux.group(0)) if drapeaux else "",
+        "drapeaux": drapeaux,
         "jeux": {
-            "2023": "Phénologie : 3 sites, 2 micros par site, décembre 2023 → novembre 2024",
-            "2026": "Campagne 2026 : 5 sites, un relevé d'environ une semaine par site",
+            "2023": "Phénologie 2023 : 3 sites, 2 micros par site, 1 an",
+            "2026": "Campagne 2026 : 3 sites, +100 micros, 1 semaine "
+            "(au pic d'activité annuel d'A. blanci)",
         },
     }
 
@@ -503,7 +509,9 @@ def main() -> None:
     config = opts.config
     contenu = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
     contenu.update(yaml.safe_load((ICI / "en_cours.yaml").read_text(encoding="utf-8")))
-    fichiers: dict[str, str] = {}
+    fichiers: dict[str, str] = {
+        "spectrogramme.jpg": str((ICI / "spectrogramme.jpg").relative_to(RACINE))
+    }
     tests = compter_tests()
     for etape in contenu["chaine"]:
         etape["n_tests"] = tests.get(etape.get("tests", ""), 0)

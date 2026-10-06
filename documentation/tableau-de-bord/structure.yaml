@@ -1,24 +1,27 @@
 # Structure du projet pour le tableau de bord : ce que le code ne dit pas de lui-même (objectif,
-# critères, étapes de la chaîne et leur état, débit de l'encodage). Tenu à jour par Claude
+# critères, étapes de la chaîne et leur état, plan d'annotation). Tenu à jour par Claude
 # (skill tableau-de-bord) quand le code change ; le travail en cours est dans en_cours.yaml et
 # le compteur d'annotations est lu dans la base locale.
 #
 # État d'une étape : fait | en_cours | a_venir | bloque
 
 projet:
-  titre: Détection acoustique d'Anomaloglossus blanci
+  titre: Outil de détection automatique d'Anomaloglossus blanci
   stage: Stage ONF Guyane, 15/09/2026 → 14/03/2027
   auteur: Léonard Laplace-Palette
   objectif: >-
-    Un détecteur d'A. blanci qui fonctionne sur les points d'écoute des futures campagnes
-    (couples micro + site jamais vus), qu'un naturaliste utilise sans écrire de code et que
-    l'ONF réentraîne seul après le stage.
+    Développement d'un détecteur acoustique d'A. blanci en apprentissage continu capable de
+    généraliser à de nouveaux points d'écoute jamais vus.
+  sites: 4
   depot: https://github.com/Rumble-Paw-Patrol/Grenouille
   criteres:
-    - [Filtre, Encodeur libre d'accès, "poids publics et licence qui permet l'usage par l'ONF"]
-    - [1, Performance, "AP et rappel par enregistrement sur des points tenus à l'écart"]
-    - [2, Facilité d'utilisation, "installation et usage sans code"]
-    - [3, Durée d'encodage, "heures pour une campagne d'une semaine sur l'i5 de l'ONF"]
+    - [1, Droit d'utilisation, "poids publics et licence qui permet l'usage commercial par l'ONF"]
+    - [2, Performance, "AP et rappel"]
+    - [3, Facilité d'utilisation, "Application de bureau Windows sans écriture de code par les naturalistes"]
+    - [4, Durée d'encodage, "si possible en heures pour une campagne d'écoute d'une semaine sur CPU de l'ONF"]
+
+# Tuiles de la vue d'ensemble qui ne se lisent pas dans les CSV.
+meilleur_encodeur: [Perch 2.0, "Se démarque a priori devant BirdNET 2.4", "BirdNET 3.0 en preview"]
 
 # Chaîne de traitement. « etape » = nom affiché ; « module » = dossier ou fichier de blanci/ ;
 # « tests » = dossier de tests/ dont on compte les tests ; « suite » = étapes suivantes.
@@ -32,7 +35,8 @@ chaine:
     etat: fait
     resume: >-
       Chaque enregistrement est rangé en base avec son jeu, son site, son micro et son heure.
-      Les drapeaux écartent les fichiers de durée anormale, hors relevé ou à l'horloge douteuse.
+      Les drapeaux écartent les fichiers de durée anormale ou hors relevé ; l'horloge douteuse
+      n'est plus qu'une remarque.
     chiffre: 96 292 enregistrements, 3 204 h
     suite: [qc]
   - id: qc
@@ -45,8 +49,8 @@ chaine:
     resume: >-
       Une seule lecture de tout le corpus avant l'encodage, pour sortir les fichiers cassés ou
       sans rapport avec le projet (silencieux, micro resté dans le sac).
-    chiffre: 94 588 enregistrements encodables
-    suite: [signal, encodage]
+    chiffre: 96 109 enregistrements encodables
+    suite: [signal]
   - id: signal
     etape: Traitement du signal
     groupe: signal
@@ -55,11 +59,12 @@ chaine:
     commandes: [onsets]
     etat: en_cours
     resume: >-
-      Détecte les débuts de notes dans la bande 4,4–5,5 kHz et mesure le rythme (une note de
-      0,09 s toutes les 1,2 à 1,9 s), sans apprentissage. Les chants faibles ne sont pas
-      encore retenus : seuil à hystérésis à ajouter.
+      En amont de l'encodeur : filtre passe-bande, PCEN, log-mel, débruitage spectral et
+      extraction des fenêtres candidates par l'énergie dans la bande 4,4–5,5 kHz. Mesure aussi
+      le rythme (une note de 0,09 s toutes les 1,2 à 1,9 s), sans apprentissage. Les chants
+      faibles ne sont pas encore retenus : seuil à hystérésis à ajouter.
     chiffre: bande 4,4–5,5 kHz
-    suite: [fusion]
+    suite: [encodage]
   - id: encodage
     etape: Encodage
     groupe: modele
@@ -96,17 +101,19 @@ chaine:
       prototypes, sonde attentive ou à prototypes sur les jetons, avec les régularisations
       contre « apprendre le site ».
     chiffre: 14 têtes et régularisations comparées
-    suite: [fusion]
+    suite: [score, fusion]
   - id: fusion
-    etape: Fusion
+    etape: Fusion (si besoin)
     groupe: modele
     module: blanci/combination
     tests: tests/interfaces
     commandes: [fusion, fusion-bench, ensemble]
     etat: fait
+    optionnel: true
     resume: >-
-      Combine le score de la tête, le rythme mesuré et la persistance dans le temps en un seul
-      score.
+      Hors du chemin principal, gardée pour deux cas : combiner plusieurs modèles (approche par
+      ensemble), et/ou combiner le score de la tête avec le module de traitement du signal si
+      celui-ci est finalement placé en parallèle de l'encodeur plutôt qu'en amont.
     suite: [score]
   - id: score
     etape: Score et agrégation
@@ -117,7 +124,7 @@ chaine:
     etat: fait
     resume: >-
       Passe de la fenêtre à l'enregistrement puis au point d'écoute, avec un seuil par site ;
-      produit les courbes d'activité.
+      produit les courbes d'activité pour une étude phénologique future.
     suite: [evaluation, verification]
   - id: evaluation
     etape: Évaluation
@@ -182,15 +189,23 @@ commandes_hors_chaine: [agreement, anuraset benchmark, anuraset campaign, anuras
   cluster-label, cluster-status, detector-bench, export-labels, pca, prevalence,
   qc-calibrate, sources, throughput, upstream-bench]
 
-# Débit de l'encodage perch_v2 sur l'i5, secondes par enregistrement de 2 min.
-debit:
-  - [Origine, 8.0]
-  - [Lot de 1, 7.3]
-  - [Lecture en avance, 6.2]
-  - [Calculs du signal allégés, 5.7]
-  - [Rééchantillonnage par enregistrement, 4.9]
-  - [Iris Xe (OpenVINO), 3.25]
-  - ["Graphe réduit, CPU", 2.05]
+# Plan d'annotation (présentation de suivi n° 2, décision avec Élodie du 29/09/2026).
+plan_annotation:
+  contexte: >-
+    Les prochaines campagnes seront toutes d'une semaine, en saison des pluies, à Mataroni, sur
+    de nouveaux points d'écoute. Le jeu de test les imite : des points de Mataroni jamais vus à
+    l'entraînement, en saison des pluies. J'annote seul ; Élodie et Benoît vérifient un
+    sous-échantillon ; aucun benchmark sur ces données avant leur go.
+  etapes:
+    - [Répartir les points, "Avant toute écoute, chaque point d'écoute va à l'entraînement ou au test, jamais aux deux."]
+    - [Jeu d'entraînement, "≈ 450 extraits de 30 s, 3 par point (pic du matin, pic du soir, une autre tranche) ; la validation qui règle la tête se fait à l'intérieur, par validation croisée groupée par point."]
+    - [Jeu de test, "≈ 250 enregistrements de 2 min écoutés en entier sur les points tenus à l'écart, avec au moins 60 positifs."]
+    - [Vérification, "À l'aveugle, par Élodie et Benoît : mon label est caché et l'ordre mélangé ; ≈ 2 h 30 d'écoute chacun."]
+    - [Go écrit, "Zéro erreur sur 60 positifs, au plus un chant manqué sur 100 négatifs."]
+  principes:
+    - [Aucun détecteur dans le tirage, "sinon le jeu hérite de ses angles morts."]
+    - ["Beaucoup de points, peu d'enregistrements par point", "40 enregistrements d'un même micro partagent le même fond : ils n'apprennent presque rien de plus qu'un seul."]
+    - [Positifs et négatifs dans les mêmes conditions, "même point, même tranche horaire ; sinon la tête apprend « matin » au lieu du chant."]
 
 # Cibles du plan d'annotation v1 ; l'avancement est compté dans data/db/blanci.sqlite.
 annotation_cibles:
