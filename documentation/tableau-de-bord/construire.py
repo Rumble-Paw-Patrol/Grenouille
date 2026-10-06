@@ -347,7 +347,7 @@ def annotations(config: Path | None) -> dict:
         con = sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)
         try:
             labels = current_labels(con)
-            recs = recordings_table(con)[["recording_id", "site"]]
+            recs = recordings_table(con)[["recording_id", "site", "mic_id"]]
         finally:
             con.close()
         try:
@@ -374,6 +374,12 @@ def annotations(config: Path | None) -> dict:
         .agg(["size", "sum"])
         .reset_index()
     )
+    micros = (
+        par_rec.assign(mic_id=par_rec["mic_id"].fillna("?"))
+        .groupby(["site", "mic_id"])["positif"]
+        .agg(["size", "sum"])
+        .reset_index()
+    )
     resultat = {
         "compte": {
             "entrainement": int(len(entr)),
@@ -384,11 +390,79 @@ def annotations(config: Path | None) -> dict:
         "sites": [
             [r.site or "?", r.jeu, int(r.size), int(r.sum)] for r in sites.itertuples(index=False)
         ],
+        "micros": [
+            [r.site or "?", r.mic_id, int(r.size), int(r.sum)]
+            for r in micros.itertuples(index=False)
+        ],
         "compte_le": date.today().isoformat(),
         "source": "base locale",
     }
     sauvegarde.write_text(json.dumps(resultat, ensure_ascii=False, indent=1), encoding="utf-8")
     return resultat
+
+
+def encodage(config: Path | None, structure: dict) -> dict:
+    """Temps d'encodage du corpus ONF par encodeur (`temps_encodage` de structure.yaml).
+
+    Lu dans la base locale : `models.params_json.totals` (cumul de tous les passages d'`embed`,
+    durée réelle) et le nombre d'enregistrements encodables (`select_recordings`). Un encodeur
+    est « fini » quand son stock couvre tous les encodables. Sans base, ou pour un stock encodé
+    avant le cumul, relit encodage.json, puis les valeurs connues de structure.yaml."""
+    cfg_t = structure.get("temps_encodage", {})
+    noms = [n for n, _ in cfg_t.get("encodeurs", [])]
+    sortie = {
+        n: dict(cfg_t.get("connus", {}).get(n, {}), nom=nom)
+        for n, nom in cfg_t.get("encodeurs", [])
+    }
+    sauvegarde = ICI / "encodage.json"
+    if sauvegarde.exists():
+        for n, v in json.loads(sauvegarde.read_text(encoding="utf-8")).items():
+            if n in sortie and v.get("statut"):
+                sortie[n].update(v)
+    try:
+        from blanci.core.config import config_path, load_config
+        from blanci.embedding.embed import select_recordings
+
+        if config is None and (RACINE / "config" / "local.yaml").exists():
+            config = RACINE / "config" / "local.yaml"
+        cfg = load_config(config)
+        base = config_path(cfg, "db")
+        if not base.exists():
+            raise FileNotFoundError(base)
+        con = sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)
+        try:
+            encodables = len(select_recordings(con))
+            lignes = con.execute(
+                "SELECT name, params_json FROM models WHERE kind = 'encoder'"
+            ).fetchall()
+        finally:
+            con.close()
+    except (ImportError, OSError, sqlite3.Error):
+        return {"encodeurs": sortie, "source": "dernier relevé connu"}
+    mesures = {}
+    for nom, params in lignes:
+        if nom not in noms or not params:
+            continue
+        tot = json.loads(params).get("totals")
+        if not tot or tot.get("recordings", 0) <= (mesures.get(nom, {}).get("enregistrements", 0)):
+            continue
+        fini = tot["recordings"] >= encodables
+        mesures[nom] = {
+            "statut": "fini" if fini else "en_cours",
+            "enregistrements": tot["recordings"],
+            "encodables": encodables,
+            "heures": round(tot["wall_s"] / 3600, 1),
+            "s_par_enregistrement": round(tot["wall_s"] / tot["recordings"], 2),
+            "source": f"base locale, {date.today().isoformat()}",
+        }
+    for nom, m in mesures.items():
+        if not (sortie[nom].get("statut") == "fini" and m["statut"] != "fini"):
+            sortie[nom].update(m)
+    sauvegarde.write_text(
+        json.dumps({n: v for n, v in sortie.items() if v.get("statut")}, ensure_ascii=False, indent=1),
+        encoding="utf-8",
+    )
+    return {"encodeurs": sortie, "source": "base locale"}
 
 
 PUBLICATION = ICI / "publication.json"
@@ -521,6 +595,7 @@ def main() -> None:
         "genere": {"commit": commit_courant(), "date": date.today().isoformat()},
         "contenu": contenu,
         "annotations": annotations(config),
+        "encodage": encodage(config, contenu),
         "tests": {"total": sum(tests.values()), "par_dossier": tests},
         "historique": historique(ref_main()),
         "inventaire": inventaire(),

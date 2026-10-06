@@ -4,8 +4,8 @@ Page claude.ai privée, pour Léonard et ses encadrants :
 <https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8>
 
 Sections : vue d'ensemble, travail en cours, données, chaîne de traitement, annotation,
-encodeurs, explorateur des têtes (comparaison à la carte), rapports de benchmark, tableaux,
-bibliographie. Chaque carte a un bouton « Commenter » ; les commentaires sont
+temps d'encodage, benchmark des encodeurs sur AnuraSet, explorateur des têtes, amorcer un
+site, rapports de benchmark, tableaux, bibliographie. Chaque carte a un bouton « Commenter » ; les commentaires sont
 partagés entre tous ceux qui ont accès à la page. La page n'est visible qu'une fois partagée
 depuis son menu « Partager » sur claude.ai.
 
@@ -18,6 +18,7 @@ depuis son menu « Partager » sur claude.ai.
 | `spectrogramme.jpg` | bandeau : un vrai chant d'A. blanci (Mataroni), 3,5–6,3 kHz | `spectrogramme.py` |
 | `poste-annotation.png` | capture du poste d'annotation Streamlit, affichée en fin de section Annotation si elle existe | Léonard (capture d'écran) |
 | `annotations.json` | avancement des annotations, compté dans `data/db/blanci.sqlite` | `construire.py` |
+| `encodage.json` | temps d'encodage du corpus par encodeur, relu dans `models.params_json.totals` (cumul des passages d'`embed`) | `construire.py` |
 | `publication.json` | commit de la dernière publication, point de départ du repérage des changements | `construire.py --publie` |
 | `modele.html` | la page, sans données | — |
 | `construire.py` | lit le dépôt et écrit `index.html` et `fichiers.json` (ignorés par git) | — |

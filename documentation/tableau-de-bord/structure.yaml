@@ -82,9 +82,8 @@ chaine:
     resume: >-
       L'encodeur gelé transforme chaque fenêtre de 5 s en un embedding, et en tokens pour
       les têtes qui les lisent. perch_v2 tourne sur le processeur du portable i5, sans
-      carte graphique. Secondes gagnées par enregistrement de 2 min : 0,7 (lot de 1), 1,1
-      (lecture en avance), 0,5 (calculs du signal allégés), 0,8 (rééchantillonnage par
-      enregistrement), 2,85 (modèle réduit aux sorties utiles). Soit 8,0 → 2,05 s.
+      carte graphique. Suite aux optimisations, l'encodage est passé de 8,0 à 2,05 s par
+      enregistrement de 2 min.
     chiffre: 2,05 s par enregistrement de 2 min
     suite: [tetes]
   - id: tetes
@@ -219,6 +218,14 @@ apprentissage_actif:
     - [Détections isolées et trous dans un chant, "faux positifs probables d'un côté, chants manqués par le modèle de l'autre."]
     - [Contrôle des experts, "10 % de chaque lot tirés au hasard, plus tout ce que j'ai noté « A. blanci ? »."]
     - [Seuil d'un nouveau site, "le score à partir duquel on décide « A. blanci présent » change d'un site à l'autre (fond sonore, densité de chant). Sur un nouveau site, on le recale en faisant confirmer à l'oreille 5 à 10 enregistrements avec chant."]
+
+# Temps d'encodage du corpus ONF : les encodeurs suivis par le tableau de bord. La durée se lit
+# dans la base (models.params_json.totals, cumul de tous les passages d'embed) dès qu'un
+# encodeur a fini ; « connus » : relevés faits avant ce cumul.
+temps_encodage:
+  encodeurs: [[perch_v2, Perch 2.0], [birdnet, BirdNET 2.4], [birdnet_v3, BirdNET 3.0], [audioprotopnet, AudioProtoPNet]]
+  connus:
+    perch_v2: {statut: fini, heures: 61, source: "mesure de Léonard sur l'i5 (en_cours.yaml)"}
 
 # Cibles du plan d'annotation v1 ; l'avancement est compté dans data/db/blanci.sqlite.
 annotation_cibles:

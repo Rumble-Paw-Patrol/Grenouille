@@ -243,6 +243,13 @@ code { font-family: var(--f-mono); font-size: .86em; background: var(--surface-2
 .progres .rail i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .progres .lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; }
 .vide { color: var(--muted); font-size: 13.5px; padding: 14px 0; }
+tr.nouveau-groupe td { border-top: 2px solid var(--line); }
+.camemberts { display: flex; flex-wrap: wrap; gap: 12px; }
+.camembert { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; display: grid; justify-items: center; gap: 2px; min-width: 130px; text-align: center; }
+.camembert.cliquable { cursor: pointer; }
+.camembert.cliquable:hover, .camembert[aria-pressed="true"] { border-color: var(--accent); }
+.camembert small { color: var(--muted); font-size: 12px; }
+.camemberts.petits .camembert { min-width: 110px; padding: 8px; }
 .capture { width: 100%; border: 1px solid var(--line); border-radius: 6px; cursor: zoom-in; background: #FFFFFF; }
 .etapes-plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
 .etapes-plan li { background: var(--surface-2); border-radius: var(--radius); padding: 12px; display: grid; gap: 8px; align-content: start; }
@@ -450,7 +457,8 @@ const nomEnc = (e) => e.replace(/^esp_aves2_/, "aves2 ");
 /* ---------- squelette des sections ---------- */
 const SECTIONS = [
   ["accueil", "Vue d'ensemble"], ["en-cours", "Travail en cours"], ["donnees", "Données"],
-  ["chaine", "Chaîne de traitement"], ["annotation", "Annotation"], ["encodeurs", "Encodeurs"], ["explorateur", "Explorateur des têtes"],
+  ["chaine", "Chaîne de traitement"], ["annotation", "Annotation"], ["encodage", "Temps d'encodage"],
+  ["encodeurs", "Benchmark des encodeurs"], ["explorateur", "Explorateur des têtes"], ["amorcage", "Amorcer un site"],
   ["rapports", "Rapports"], ["tableaux", "Tableaux"], ["biblio", "Bibliographie"],
 ];
 const vues = $("#vues");
@@ -657,6 +665,46 @@ $("#pied").append(
   document.fonts?.ready.then(tracer);
 }
 
+/* ---------- camemberts des annotations (positifs / négatifs) ---------- */
+function donut(pos, n, taille = 92) {
+  const r = taille / 2 - 6, c = taille / 2, L = 2 * Math.PI * r, part = n ? pos / n : 0;
+  return sv("svg", { viewBox: `0 0 ${taille} ${taille}`, width: taille, height: taille, role: "img", "aria-label": `${pos} positifs sur ${n}` },
+    sv("circle", { cx: c, cy: c, r, fill: "none", stroke: "var(--idle-soft)", "stroke-width": 12 }),
+    part > 0 ? sv("circle", { cx: c, cy: c, r, fill: "none", stroke: "var(--gold)", "stroke-width": 12, "stroke-dasharray": `${part * L} ${L}`, transform: `rotate(-90 ${c} ${c})` }) : null,
+    sv("text", { x: c, y: c + 5, "text-anchor": "middle", class: "fort num", style: "font-size:15px" }, entier(n)));
+}
+function camemberts() {
+  const A = D.annotations || {};
+  const boite = el("div", { style: "display:grid;gap:14px" });
+  if (!A.compte || !A.sites?.length) {
+    boite.append(el("p", { class: "vide" }, "Pas encore d'annotation comptée. Le comptage se fait à la construction du tableau de bord, sur la machine qui a la base."));
+    return boite;
+  }
+  const parSite = new Map();
+  for (const [site, , n, p] of A.sites) { const x = parSite.get(site) || { n: 0, p: 0 }; x.n += n; x.p += p; parSite.set(site, x); }
+  const micros = A.micros || [];
+  const detail = el("div");
+  const tuile = (titre, x, sous, onclick) => {
+    const b = el(onclick ? "button" : "div", { type: onclick ? "button" : null, class: "camembert" + (onclick ? " cliquable" : "") },
+      donut(x.p, x.n), el("strong", {}, titre), el("small", {}, `${entier(x.p)} avec chant · ${entier(x.n - x.p)} sans`), sous ? el("small", {}, sous) : null);
+    if (onclick) b.addEventListener("click", onclick);
+    return b;
+  };
+  const sites = [...parSite.entries()].sort((a, b) => b[1].n - a[1].n);
+  const rangee = el("div", { class: "camemberts" });
+  const choisir = (site, bouton) => {
+    rangee.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === bouton)));
+    const ms = micros.filter((m) => m[0] === site).sort((a, b) => b[2] - a[2]);
+    detail.replaceChildren(ms.length
+      ? el("div", { style: "display:grid;gap:8px" }, el("h4", { class: "eyebrow" }, `Micros de ${site}`),
+          el("div", { class: "camemberts petits" }, ms.map(([, mic, n, p]) => tuile(mic, { n, p }))))
+      : el("p", { class: "sous" }, "Détail par micro disponible au prochain comptage."));
+  };
+  sites.forEach(([site, x]) => { const b = tuile(site, x, null, () => choisir(site, b)); b.setAttribute("aria-pressed", "false"); rangee.append(b); });
+  boite.append(rangee, el("div", { class: "legende" }, el("span", {}, el("i", { style: "background:var(--gold)" }), "avec A. blanci"), el("span", {}, el("i", { style: "background:var(--idle-soft);border:1px solid var(--line)" }), "sans"), el("span", {}, `compté le ${dateFr(A.compte_le)}`)), detail);
+  return boite;
+}
+
 /* ======================================================================
    5. Annotation : plan du premier lot, puis apprentissage actif
    ====================================================================== */
@@ -671,6 +719,7 @@ $("#pied").append(
   s.append(carte("Apprentissage actif", A.contexte, etapesEl(A.boucle, -1),
     el("p", { class: "sous" }, "La boucle recommence : les nouveaux labels donnent une nouvelle tête, qui choisit les écoutes suivantes."),
     el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Méthodes de sélection et contrôles"), puces(A.methodes)));
+  s.append(carte("Annotations par site et par micro", "Enregistrements annotés avec et sans A. blanci, recomptés dans la base à chaque mise à jour du tableau de bord. Cliquer un site pour voir ses micros.", camemberts()));
   if (D.poste) {
     const img = el("img", { src: D.poste, alt: "Capture du poste d'annotation Streamlit", class: "capture", loading: "lazy" });
     img.addEventListener("click", () => ouvrirImage(img.src, "Poste d'annotation (Streamlit)"));
@@ -679,24 +728,62 @@ $("#pied").append(
 }
 
 /* ======================================================================
-   6. Encodeurs
+   6. Temps d'encodage du corpus ONF
    ====================================================================== */
 {
-  const s = section("encodeurs", "Encodeurs", "Benchmark 08 sur AnuraSet (anoures du Brésil) : chaque encodeur jugé avec la tête adaptée à sa sortie, un site tenu à l'écart à la fois. Indicateur, pas verdict : le choix se fera sur les données de l'ONF le 20/11.", "Pré-benchmark AnuraSet");
+  const s = section("encodage", "Temps d'encodage", "Durée réelle pour encoder tout le corpus de l'ONF sur le processeur du portable i5. Une barre apparaît dès qu'un encodeur a fini, lue dans la base à la mise à jour du tableau de bord.");
+  const E = Object.entries(D.encodage?.encodeurs || {});
+  const finis = E.filter(([, v]) => v.statut === "fini" && v.heures);
+  const max = Math.max(1, ...finis.map(([, v]) => v.heures));
+  const W = 640, gauche = 150, rh = 40, H = E.length * rh + 4;
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe barres-sites", role: "img", "aria-label": "Temps d'encodage du corpus par encodeur" });
+  E.forEach(([id, v], k) => {
+    const y = k * rh;
+    svg.append(sv("text", { x: gauche - 12, y: y + 25, "text-anchor": "end", class: "fort" }, v.nom || id));
+    if (v.statut === "fini" && v.heures) {
+      const w = (v.heures / max) * (W - gauche - 120);
+      const r = sv("rect", { x: gauche, y: y + 9, width: w, height: 22, rx: 3, fill: "var(--accent)" });
+      survol(r, () => `<b>${esc(v.nom || id)}</b><br>${fr(v.heures, 1)} h pour le corpus` + (v.s_par_enregistrement ? `<br>${fr(v.s_par_enregistrement)} s par enregistrement de 2 min` : "") + (v.source ? `<br><span style="opacity:.75">${esc(v.source)}</span>` : ""));
+      svg.append(r, sv("text", { x: gauche + w + 8, y: y + 25, class: "fort num" }, `${fr(v.heures, v.heures % 1 ? 1 : 0)} h`));
+    } else {
+      const txt = v.statut === "en_cours" && v.encodables ? `en cours : ${entier(v.enregistrements)} / ${entier(v.encodables)} enregistrements` : "pas encore encodé";
+      svg.append(sv("rect", { x: gauche, y: y + 9, width: W - gauche - 120, height: 22, rx: 3, fill: "none", stroke: "var(--line)", "stroke-dasharray": "4 4" }),
+        sv("text", { x: gauche + 10, y: y + 25 }, txt));
+    }
+  });
+  s.append(carte("Encodage du corpus par encodeur", null, svg));
+}
+
+/* ======================================================================
+   7. Benchmark des encodeurs sur AnuraSet
+   ====================================================================== */
+const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "naturebeats", "convnext_birdset"];
+{
+  const s = section("encodeurs", "Benchmark des encodeurs sur AnuraSet", "Benchmark global sur AnuraSet (anoures du Brésil) : chaque encodeur jugé avec la tête adaptée à sa sortie, un site tenu à l'écart à la fois. Indicateur, pas verdict : le choix se fera sur les données de l'ONF.", "Pré-benchmark AnuraSet");
   const E = D.encodeurs.encodeurs.filter((e) => e.ap_site_best != null);
   const lic = (e) => e.libre === "oui" ? ["libre", "lic-oui"] : e.libre === "non" ? ["non libre", "lic-non"] : [e.libre, "lic-autre"];
-  let filtreLibre = false, tri = "ap_site_best", sens = -1, recherche = "";
+  const choisis = new Set(ENC_DEFAUT.filter((x) => E.some((e) => e.encoder === x)));
+  let tri = "ap_site_best", sens = -1;
   const corps = el("tbody");
   const COLS = [["encoder", "Encodeur"], ["famille", "Famille"], ["libre", "Licence"], ["fenetres_par_s", "Débit (fen./s)"], ["best_head", "Meilleure tête"], ["ap_site_best", "AP par site"], ["ap_site_logistic", "AP logistique"]];
   const thead = el("thead", {}, el("tr", {}, COLS.map(([k, n]) => {
     const b = el("button", { type: "button" }, n);
     b.addEventListener("click", () => { if (tri === k) sens = -sens; else { tri = k; sens = typeof E[0][k] === "number" ? -1 : 1; } rendre(); });
-    return el("th", { class: ["fenetres_par_s", "ap_site_best", "ap_site_logistic"].includes(k) ? "n" : null, "aria-sort": "none" }, b);
+    return el("th", { class: ["fenetres_par_s", "ap_site_best", "ap_site_logistic"].includes(k) ? "n" : null }, b);
   })));
+  const puces = el("div", { class: "puces" });
+  const raccourci = (nom, f) => { const b = el("button", { type: "button", class: "lien-btn" }, nom); b.addEventListener("click", () => { f(); rendre(); }); return b; };
+  const zoneSc = el("div");
   function rendre() {
-    let rows = E.filter((e) => (!filtreLibre || e.libre === "oui") && (!recherche || (e.encoder + " " + e.famille).toLowerCase().includes(recherche)));
+    puces.replaceChildren(...[...E].sort((a, b) => b.ap_site_best - a.ap_site_best).map((e) => {
+      const on = choisis.has(e.encoder);
+      const bt = el("button", { type: "button", class: "choix", "aria-pressed": String(on), title: `${e.famille} · ${lic(e)[0]}` }, el("i", { style: `background:${e.libre === "oui" ? "var(--accent)" : "var(--muted)"}` }), nomEnc(e.encoder));
+      bt.addEventListener("click", () => { on ? choisis.delete(e.encoder) : choisis.add(e.encoder); rendre(); });
+      return bt;
+    }));
+    const rows = E.filter((e) => choisis.has(e.encoder));
     rows.sort((a, b) => { const x = a[tri], y = b[tri]; if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * sens; });
-    corps.replaceChildren(...rows.map((e) => {
+    corps.replaceChildren(...(rows.length ? rows.map((e) => {
       const [l, c] = lic(e);
       return el("tr", {},
         el("td", {}, el("strong", {}, nomEnc(e.encoder))),
@@ -706,116 +793,49 @@ $("#pied").append(
         el("td", {}, tete(e.best_head)),
         el("td", { class: "n" }, el("span", { class: "barre-cell" }, el("i", { style: `width:${Math.max(0, (e.ap_site_best - 0.3) * 120)}px` }), fr(e.ap_site_best))),
         el("td", { class: "n" }, fr(e.ap_site_logistic)));
-    }));
+    }) : [el("tr", {}, el("td", { colspan: 7, class: "vide" }, "Aucun encodeur choisi."))]));
+    zoneSc.replaceChildren(nuage(rows));
   }
-  const fl = el("div", { class: "seg", role: "group", "aria-label": "Licence" },
-    el("button", { type: "button", "aria-pressed": "true" }, "Tous"), el("button", { type: "button", "aria-pressed": "false" }, "Libres seulement"));
-  fl.querySelectorAll("button").forEach((b, i) => b.addEventListener("click", () => { filtreLibre = i === 1; fl.querySelectorAll("button").forEach((x, j) => x.setAttribute("aria-pressed", String(j === i))); rendre(); }));
-  const rech = el("input", { type: "search", id: "rech-enc", placeholder: "perch, transformer…", "aria-label": "Chercher un encodeur" });
-  rech.addEventListener("input", () => { recherche = rech.value.trim().toLowerCase(); rendre(); });
-  rendre();
-  s.append(carte("Classement des encodeurs", "AP moyenne par site tenu à l'écart (minute, cinq espèces), avec la meilleure tête de chaque encodeur, choisie après coup. Cliquer un en-tête pour trier.",
-    el("div", { class: "controles" }, el("label", { class: "champ" }, el("span", {}, "Licence"), fl), el("label", { class: "champ" }, el("span", {}, "Chercher"), rech)),
-    el("div", { class: "defile" }, el("table", {}, thead, corps))));
-
-  // coût contre qualité
-  const W = 900, H = 380, g = 48, d = 16, h = 16, b = 40;
-  const xs = (v) => g + ((Math.log10(v) - Math.log10(1)) / (Math.log10(100) - Math.log10(1))) * (W - g - d);
-  const ys = (v) => h + (1 - (v - 0.35) / (0.9 - 0.35)) * (H - h - b);
-  const sc = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", role: "img", "aria-label": "Débit contre qualité" });
-  for (const v of [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]) sc.append(sv("line", { x1: g, x2: W - d, y1: ys(v), y2: ys(v), class: "grille-l" }), sv("text", { x: g - 8, y: ys(v) + 4, "text-anchor": "end" }, fr(v, 1)));
-  for (const v of [1, 2, 5, 10, 20, 50, 100]) sc.append(sv("text", { x: xs(v), y: H - b + 18, "text-anchor": "middle" }, String(v)));
-  sc.append(sv("text", { x: (g + W) / 2, y: H - 4, "text-anchor": "middle" }, "fenêtres de 5 s encodées par seconde (échelle log ; temps réel = 0,2)"));
-  sc.append(sv("text", { x: 4, y: 10 }, "AP par site"));
-  const libres = E.filter((e) => e.fenetres_par_s);
-  const etiq = new Set(["perch_v2", "naturebeats", "audioprotopnet", "convnext_birdset", "birdnet_v3", "rcl_fs_bsed", "birdmae_base", "perch_bird", "insect66"]);
-  for (const e of libres) {
-    const oui = e.libre === "oui";
-    const c = sv("circle", { cx: xs(e.fenetres_par_s), cy: ys(e.ap_site_best), r: 6, fill: oui ? "var(--accent)" : "var(--surface)", stroke: oui ? "var(--surface)" : "var(--muted)", "stroke-width": 2 });
-    survol(c, () => `<b>${esc(nomEnc(e.encoder))}</b> · ${esc(lic(e)[0])}<br>${esc(e.famille)}<br>AP par site ${fr(e.ap_site_best)} (${esc(tete(e.best_head))})<br>${fr(e.fenetres_par_s, 1)} fenêtres/s`);
-    sc.append(c);
-    if (etiq.has(e.encoder)) sc.append(sv("text", { x: xs(e.fenetres_par_s) + 9, y: ys(e.ap_site_best) + 4, class: e.encoder === "perch_v2" ? "fort" : null }, nomEnc(e.encoder)));
-  }
-
-  // courbe d'amorçage
-  const COURBE = D.encodeurs.courbe; // [enc, head, k, apw, apm]
-  const K = [0, 1, 2, 5, 10, 20, -1], KN = ["0", "1", "2", "5", "10", "20", "tout"];
-  const encsC = [...new Set(COURBE.map((r) => r[0]))].sort();
-  const tetesC = [...new Set(COURBE.map((r) => r[1]))];
-  let selC = ["convnext_birdset", "perch_v2", "naturebeats", "birdnet_v3", "perch_bird"].filter((e) => encsC.includes(e)), teteC = "logistic", nivC = 3;
-  const slots = {}; // couleur attachée à l'encodeur tant qu'il est choisi
-  const libresSlots = () => [1, 2, 3, 4, 5].filter((k) => !Object.values(slots).includes(k));
-  selC.forEach((e) => (slots[e] = libresSlots()[0]));
-  const zone = el("div");
-  const chips = el("div", { class: "puces" });
-  const selT = el("select", { id: "courbe-tete", "aria-label": "Tête" }, tetesC.map((t) => el("option", { value: t, selected: t === teteC }, tete(t))));
-  selT.addEventListener("change", () => { teteC = selT.value; dessinerC(); });
-  const selN = el("div", { class: "seg" }, el("button", { type: "button", "aria-pressed": "true" }, "fenêtre"), el("button", { type: "button", "aria-pressed": "false" }, "minute"));
-  selN.querySelectorAll("button").forEach((bt, i) => bt.addEventListener("click", () => { nivC = i === 0 ? 3 : 4; selN.querySelectorAll("button").forEach((x, j) => x.setAttribute("aria-pressed", String(i === j))); dessinerC(); }));
-  function puces() {
-    chips.replaceChildren(...encsC.map((e) => {
-      const on = selC.includes(e);
-      const bt = el("button", { type: "button", class: "choix", "aria-pressed": String(on) }, on ? el("i", { style: `background:var(--s${slots[e]})` }) : null, nomEnc(e));
-      bt.addEventListener("click", () => {
-        if (on) { selC = selC.filter((x) => x !== e); delete slots[e]; }
-        else { if (selC.length >= 5) return; selC.push(e); slots[e] = libresSlots()[0]; }
-        puces(); dessinerC();
-      });
-      return bt;
-    }));
-  }
-  function dessinerC() {
-    const W2 = 900, H2 = 320, g2 = 44, d2 = 140, h2 = 12, b2 = 40;
-    const toutes = selC.flatMap((e) => COURBE.filter((r) => r[0] === e && r[1] === teteC).map((r) => r[nivC])).filter((v) => v != null);
-    const lo = toutes.length ? Math.max(0, Math.floor(Math.min(...toutes) * 10) / 10) : 0.3;
-    const xk = (i) => g2 + (i / (K.length - 1)) * (W2 - g2 - d2);
-    const yv = (v) => h2 + (1 - (v - lo) / (1 - lo)) * (H2 - h2 - b2);
-    const svg = sv("svg", { viewBox: `0 0 ${W2} ${H2}`, class: "graphe", role: "img", "aria-label": "Courbe d'amorçage" });
-    for (let v = lo; v <= 1.0001; v += 0.1) svg.append(sv("line", { x1: g2, x2: W2 - d2, y1: yv(v), y2: yv(v), class: "grille-l" }), sv("text", { x: g2 - 8, y: yv(v) + 4, "text-anchor": "end" }, fr(v, 1)));
-    K.forEach((k, i) => svg.append(sv("text", { x: xk(i), y: H2 - b2 + 18, "text-anchor": "middle" }, KN[i])));
-    svg.append(sv("text", { x: (g2 + W2 - d2) / 2, y: H2 - 4, "text-anchor": "middle" }, "enregistrements positifs du site neuf annotés (k)"));
-    const series = selC.map((e) => ({ e, v: K.map((k) => { const r = COURBE.find((r) => r[0] === e && r[1] === teteC && r[2] === k); return r ? r[nivC] : null; }) }));
-    const fins = [];
-    for (const { e, v } of series) {
-      const pts = v.map((y, i) => (y == null ? null : [xk(i), yv(y)])).filter(Boolean);
-      if (!pts.length) continue;
-      svg.append(sv("path", { d: "M" + pts.map((p) => p.join(" ")).join(" L"), fill: "none", stroke: `var(--s${slots[e]})`, "stroke-width": 2 }));
-      pts.forEach((p) => svg.append(sv("circle", { cx: p[0], cy: p[1], r: 4, fill: `var(--s${slots[e]})`, stroke: "var(--surface)", "stroke-width": 2 })));
-      const last = v.map((y, i) => [y, i]).filter((x) => x[0] != null).pop();
-      fins.push({ y: yv(last[0]), e, x: xk(last[1]) });
+  function nuage(rows) {
+    const W = 900, H = 380, g = 48, d = 16, h = 16, b = 40;
+    const xs = (v) => g + (Math.log10(v) / 2) * (W - g - d);
+    const ys = (v) => h + (1 - (v - 0.35) / (0.9 - 0.35)) * (H - h - b);
+    const sc = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", role: "img", "aria-label": "Débit contre qualité" });
+    for (const v of [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]) sc.append(sv("line", { x1: g, x2: W - d, y1: ys(v), y2: ys(v), class: "grille-l" }), sv("text", { x: g - 8, y: ys(v) + 4, "text-anchor": "end" }, fr(v, 1)));
+    for (const v of [1, 2, 5, 10, 20, 50, 100]) sc.append(sv("text", { x: xs(v), y: H - b + 18, "text-anchor": "middle" }, String(v)));
+    sc.append(sv("text", { x: (g + W) / 2, y: H - 4, "text-anchor": "middle" }, "fenêtres de 5 s encodées par seconde (échelle log ; temps réel = 0,2)"));
+    sc.append(sv("text", { x: 4, y: 10 }, "AP par site"));
+    const poses = []; // étiquettes déjà placées : on descend celles qui chevauchent
+    for (const e of rows.filter((e) => e.fenetres_par_s).sort((a, b) => b.ap_site_best - a.ap_site_best)) {
+      const oui = e.libre === "oui", x = xs(e.fenetres_par_s), y = ys(e.ap_site_best);
+      const c = sv("circle", { cx: x, cy: y, r: 6, fill: oui ? "var(--accent)" : "var(--surface)", stroke: oui ? "var(--surface)" : "var(--muted)", "stroke-width": 2 });
+      survol(c, () => `<b>${esc(nomEnc(e.encoder))}</b> · ${esc(lic(e)[0])}<br>${esc(e.famille)}<br>AP par site ${fr(e.ap_site_best)} (${esc(tete(e.best_head))})<br>${fr(e.fenetres_par_s, 1)} fenêtres/s`);
+      const larg = nomEnc(e.encoder).length * 6.6;
+      let ly = y + 4;
+      while (poses.some((p) => Math.abs(p.y - ly) < 13 && x + 9 < p.x + p.w && p.x < x + 9 + larg)) ly += 13;
+      poses.push({ x: x + 9, y: ly, w: larg });
+      sc.append(c, sv("text", { x: x + 9, y: ly, class: e.encoder === "perch_v2" ? "fort" : null }, nomEnc(e.encoder)));
     }
-    fins.sort((a, b) => a.y - b.y); for (let i = 1; i < fins.length; i++) if (fins[i].y - fins[i - 1].y < 13) fins[i].y = fins[i - 1].y + 13;
-    fins.forEach((f) => svg.append(sv("text", { x: W2 - d2 + 8, y: f.y + 4, class: "fort" }, nomEnc(f.e))));
-    const curseur = sv("line", { y1: h2, y2: H2 - b2, stroke: "var(--muted)", "stroke-dasharray": "3 3", opacity: 0 });
-    svg.append(curseur);
-    const cible = sv("rect", { x: g2 - 20, y: 0, width: W2 - g2 - d2 + 40, height: H2 - b2, fill: "transparent" });
-    cible.addEventListener("pointermove", (ev) => {
-      const r = svg.getBoundingClientRect(); const px = ((ev.clientX - r.left) / r.width) * W2;
-      const i = Math.max(0, Math.min(K.length - 1, Math.round(((px - g2) / (W2 - g2 - d2)) * (K.length - 1))));
-      curseur.setAttribute("x1", xk(i)); curseur.setAttribute("x2", xk(i)); curseur.setAttribute("opacity", 1);
-      const lignes = series.map(({ e, v }) => [e, v[i]]).filter((x) => x[1] != null).sort((a, b) => b[1] - a[1]);
-      montrer(ev, `<b>k = ${KN[i]}</b> · ${esc(tete(teteC))}<br>` + lignes.map(([e, y]) => `${esc(nomEnc(e))} : ${fr(y)}`).join("<br>"));
-    });
-    cible.addEventListener("pointerleave", () => { cacher(); curseur.setAttribute("opacity", 0); });
-    svg.append(cible);
-    zone.replaceChildren(svg);
+    return sc;
   }
-  puces(); dessinerC();
-  s.append(el("div", { style: "display:grid;gap:14px" },
-    carte("Débit contre qualité", "Plein : libre d'accès. Le meilleur libre, perch_v2, encode 43 fois plus vite que le temps réel.", sc,
-      el("div", { class: "legende" }, el("span", {}, el("i", { style: "background:var(--accent)" }), "libre"), el("span", {}, el("i", { class: "anneau", style: "border-color:var(--muted)" }), "non libre ou non relevé"))),
-    carte("Amorcer un site neuf", "AP sur le site tenu à l'écart selon le nombre d'enregistrements positifs de ce site déjà annotés, moyenne des espèces et des sites. Cinq encodeurs au plus.",
-      el("div", { class: "controles" }, el("label", { class: "champ" }, el("span", {}, "Tête"), selT), el("div", { class: "champ" }, el("span", {}, "Unité"), selN)), chips, zone)));
+  rendre();
+  s.append(carte("Choisir les encodeurs à comparer", "Ils s'affichent dans le classement et sur le graphique. Pastille verte : libre d'accès.",
+    el("div", { class: "controles" }, raccourci("tous", () => E.forEach((e) => choisis.add(e.encoder))), raccourci("libres seulement", () => { choisis.clear(); E.filter((e) => e.libre === "oui").forEach((e) => choisis.add(e.encoder)); }), raccourci("aucun", () => choisis.clear())),
+    puces));
+  s.append(carte("Classement des encodeurs", "AP moyenne par site tenu à l'écart (minute, cinq espèces), avec la meilleure tête de chaque encodeur, choisie après coup. Cliquer un en-tête pour trier.",
+    el("div", { class: "defile" }, el("table", {}, thead, corps))));
+  s.append(carte("Débit contre qualité", "Plein : libre d'accès.", zoneSc,
+    el("div", { class: "legende" }, el("span", {}, el("i", { style: "background:var(--accent)" }), "libre"), el("span", {}, el("i", { class: "anneau", style: "border-color:var(--muted)" }), "non libre ou non relevé"))));
 }
 
 /* ======================================================================
    6. Explorateur des têtes
    ====================================================================== */
 {
-  const s = section("explorateur", "Explorateur des têtes", "Choisir ce qu'on compare : encodeurs, têtes, espèces, unité et lecture de l'AP. Chaque ligne est un couple encodeur · tête ; chaque point une espèce ; le trait, la moyenne des espèces choisies.", "Comparaison à la carte");
+  const s = section("explorateur", "Explorateur des têtes", "Choisir ce qu'on compare : encodeurs, têtes, espèces, unité et lecture de l'AP. Les têtes sont rangées sous leur encodeur ; chaque point est une espèce, le trait la moyenne des espèces choisies.", "Comparaison à la carte");
   const SOURCES = {
-    adaptees: { nom: "Encodeurs × têtes adaptées (benchmark 08)", rows: D.encodeurs.transfert.map((r) => ({ enc: r[0], sp: r[1], head: r[2], lvl: r[3], ap: r[4], aps: r[5] })),
-      ref: ["perch_v2", "logistic"], encs: ["perch_v2", "naturebeats", "convnext_birdset", "birdmae_base", "perch_bird", "birdnet_v3"], heads: ["logistic", "proto_probe", "attentive"] },
+    adaptees: { nom: "Encodeurs × têtes (benchmark global)", rows: D.encodeurs.transfert.map((r) => ({ enc: r[0], sp: r[1], head: r[2], lvl: r[3], ap: r[4], aps: r[5] })),
+      ref: ["perch_v2", "logistic"], encs: ["perch_v2", "birdnet_v3", "audioprotopnet"], heads: ["logistic", "simple_prototype", "proto_probe"] },
     regul: { nom: "Têtes et régularisations (benchmarks 01–06)", rows: D.tetes.map((r) => ({ enc: r[0], sp: r[1], head: r[2], lvl: r[3], ap: r[4], aps: r[5], diff: r[6], sig: r[7] })),
       ref: ["perch_v2", "logistic"], encs: ["perch_v2"], heads: null },
   };
@@ -886,7 +906,11 @@ $("#pied").append(
     const lignes = [...groupes.values()].map((g) => {
       const vals = sps.map((x) => g.v[x]).filter((x) => x != null);
       return { ...g, moy: vals.length === sps.length && vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null, n: vals.length };
-    }).sort((a, b) => (b.moy ?? -1) - (a.moy ?? -1));
+    });
+    // Un bloc par encodeur (le meilleur bloc d'abord), les têtes triées à l'intérieur.
+    const meilleur = new Map();
+    for (const l of lignes) meilleur.set(l.enc, Math.max(meilleur.get(l.enc) ?? -1, l.moy ?? -1));
+    lignes.sort((a, b) => a.enc === b.enc ? (b.moy ?? -1) - (a.moy ?? -1) : (meilleur.get(b.enc) - meilleur.get(a.enc)) || a.enc.localeCompare(b.enc));
     const ref = lignes.find((l) => l.enc === S.ref[0] && l.head === S.ref[1]);
     return { lignes, sps, met, note, ref };
   }
@@ -899,22 +923,29 @@ $("#pied").append(
     if (etat.vue === "table") {
       zone.replaceChildren(el("div", { class: "defile" }, el("table", {},
         el("thead", {}, el("tr", {}, el("th", {}, "Encodeur"), el("th", {}, "Tête"), sps.map((x) => el("th", { class: "n" }, x)), el("th", { class: "n" }, "Moyenne"))),
-        el("tbody", {}, lignes.map((l) => el("tr", {}, el("td", {}, nomEnc(l.enc)), el("td", {}, tete(l.head)),
+        el("tbody", {}, lignes.map((l, i) => el("tr", { class: i && lignes[i - 1].enc !== l.enc ? "nouveau-groupe" : null }, el("td", {}, i && lignes[i - 1].enc === l.enc ? "" : el("strong", {}, nomEnc(l.enc))), el("td", {}, tete(l.head)),
           sps.map((x) => el("td", { class: "n", title: l.sig[x] ? `écart ${fr(l.sig[x].diff)}${l.sig[x].sig ? ", significatif (Holm)" : ""}` : null }, fr(l.v[x]) + (l.sig[x]?.sig ? " *" : ""))),
           el("td", { class: "n" }, el("strong", {}, fr(l.moy)))))))),
         el("p", { class: "sous" }, "* écart significatif après Holm."));
       return;
     }
-    const W = 760, g = 300, d = 56, rh = 24, h = 26, H = h + lignes.length * rh + 30;
+    const blocs = []; lignes.forEach((l, i) => { if (!i || lignes[i - 1].enc !== l.enc) blocs.push({ entete: l.enc }); blocs.push(l); });
+    const W = 760, g = 260, d = 56, rh = 24, h = 26, H = h + blocs.length * rh + 30;
     const xs = (v) => g + v * (W - g - d);
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", style: "min-width:600px", role: "img", "aria-label": "Comparaison des têtes" });
     for (const v of [0, 0.2, 0.4, 0.6, 0.8, 1]) svg.append(sv("line", { x1: xs(v), x2: xs(v), y1: h - 6, y2: H - 26, class: "grille-l" }), sv("text", { x: xs(v), y: H - 10, "text-anchor": "middle" }, fr(v, 1)), sv("text", { x: xs(v), y: h - 12, "text-anchor": "middle" }, fr(v, 1)));
     if (ref?.moy != null) svg.append(sv("line", { x1: xs(ref.moy), x2: xs(ref.moy), y1: h - 4, y2: H - 28, stroke: "var(--gold)", "stroke-width": 1.5, "stroke-dasharray": "5 4" }));
-    lignes.forEach((l, i) => {
+    blocs.forEach((l, i) => {
       const y = h + i * rh + rh / 2;
-      if (i % 2 === 0) svg.append(sv("rect", { x: 0, y: y - rh / 2, width: W, height: rh, fill: "var(--surface-2)", opacity: 0.5 }));
+      if (l.entete) {
+        svg.append(sv("rect", { x: 0, y: y - rh / 2 + 2, width: W, height: rh - 2, fill: "var(--surface-2)" }),
+          sv("rect", { x: 0, y: y - rh / 2 + 2, width: 4, height: rh - 2, fill: "var(--accent)" }),
+          sv("text", { x: 12, y: y + 5, class: "fort", style: "font-size:13px" }, nomEnc(l.entete)));
+        return;
+      }
       const estRef = ref && l === ref;
-      svg.append(sv("text", { x: g - 12, y: y + 4, "text-anchor": "end", class: estRef ? "fort" : null }, `${nomEnc(l.enc)} · ${tete(l.head)}`.slice(0, 52)));
+      svg.append(sv("rect", { x: 0, y: y - rh / 2, width: 4, height: rh, fill: "var(--accent)", opacity: 0.35 }));
+      svg.append(sv("text", { x: g - 12, y: y + 4, "text-anchor": "end", class: estRef ? "fort" : null }, tete(l.head).slice(0, 40)));
       const vals = sps.map((x) => l.v[x]).filter((v) => v != null);
       if (vals.length > 1) svg.append(sv("line", { x1: xs(Math.min(...vals)), x2: xs(Math.max(...vals)), y1: y, y2: y, stroke: "var(--line)", "stroke-width": 2 }));
       sps.forEach((x) => {
@@ -940,7 +971,85 @@ $("#pied").append(
 }
 
 /* ======================================================================
-   7. Rapports
+   8. Amorcer un site neuf : les têtes comparées, sur un ou plusieurs encodeurs
+   ====================================================================== */
+{
+  const s = section("amorcage", "Amorcer un site neuf", "AP sur le site tenu à l'écart selon le nombre d'enregistrements positifs de ce site déjà annotés (benchmark global AnuraSet, moyenne des espèces et des sites). Une couleur par tête, un trait par encodeur.", "Pré-benchmark AnuraSet");
+  const COURBE = D.encodeurs.courbe; // [enc, head, k, apw, apm]
+  const K = [0, 1, 2, 5, 10, 20, -1], KN = ["0", "1", "2", "5", "10", "20", "tout"];
+  const encs = [...new Set(COURBE.map((r) => r[0]))].sort();
+  const heads = [...new Set(COURBE.map((r) => r[1]))];
+  const ORDRE = ["logistic", "prototype", "lda_shrunk", "logistic+R37=glmm", "logistic+R20"];
+  heads.sort((a, b) => (ORDRE.indexOf(a) + 1 || 99) - (ORDRE.indexOf(b) + 1 || 99));
+  const coulH = (h) => `var(--s${(heads.indexOf(h) % 5) + 1})`;
+  const TRAITS = [null, "7 4", "2 4"];
+  const selE = ["perch_v2"].filter((e) => encs.includes(e)), selH = new Set(["logistic", "prototype", "lda_shrunk"].filter((h) => heads.includes(h)));
+  let niv = 4;
+  const zone = el("div"), pucesE = el("div", { class: "puces" }), pucesH = el("div", { class: "puces" });
+  const selN = el("div", { class: "seg" }, el("button", { type: "button", "aria-pressed": "false" }, "fenêtre"), el("button", { type: "button", "aria-pressed": "true" }, "minute"));
+  selN.querySelectorAll("button").forEach((bt, i) => bt.addEventListener("click", () => { niv = i === 0 ? 3 : 4; selN.querySelectorAll("button").forEach((x, j) => x.setAttribute("aria-pressed", String(i === j))); dessiner(); }));
+  function puces() {
+    pucesE.replaceChildren(...encs.map((e) => {
+      const i = selE.indexOf(e), on = i >= 0;
+      const bt = el("button", { type: "button", class: "choix", "aria-pressed": String(on) },
+        on ? sv("svg", { width: 22, height: 8 }, sv("line", { x1: 1, x2: 21, y1: 4, y2: 4, stroke: "var(--ink)", "stroke-width": 2, "stroke-dasharray": TRAITS[i] })) : null, nomEnc(e));
+      bt.addEventListener("click", () => { if (on) selE.splice(i, 1); else { if (selE.length >= 3) return; selE.push(e); } puces(); dessiner(); });
+      return bt;
+    }));
+    pucesH.replaceChildren(...heads.map((h) => {
+      const on = selH.has(h);
+      const bt = el("button", { type: "button", class: "choix", "aria-pressed": String(on) }, el("i", { style: `background:${coulH(h)}` }), tete(h));
+      bt.addEventListener("click", () => { on ? selH.delete(h) : selH.add(h); puces(); dessiner(); });
+      return bt;
+    }));
+  }
+  function dessiner() {
+    const W = 900, H = 340, g = 44, d = 230, h = 12, b = 40;
+    const series = [];
+    selE.forEach((e, ie) => heads.filter((x) => selH.has(x)).forEach((hd) => {
+      const v = K.map((k) => { const r = COURBE.find((r) => r[0] === e && r[1] === hd && r[2] === k); return r ? r[niv] : null; });
+      if (v.some((x) => x != null)) series.push({ e, hd, v, trait: TRAITS[ie] });
+    }));
+    if (!series.length) { zone.replaceChildren(el("p", { class: "vide" }, "Choisir au moins un encodeur et une tête.")); return; }
+    const toutes = series.flatMap((x) => x.v).filter((x) => x != null);
+    const lo = Math.max(0, Math.floor(Math.min(...toutes) * 20) / 20), hi = Math.min(1, Math.ceil(Math.max(...toutes) * 20) / 20);
+    const xk = (i) => g + (i / (K.length - 1)) * (W - g - d);
+    const yv = (v) => h + (1 - (v - lo) / (hi - lo || 1)) * (H - h - b);
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", role: "img", "aria-label": "Courbe d'amorçage par tête" });
+    for (let v = lo; v <= hi + 1e-9; v += 0.05) svg.append(sv("line", { x1: g, x2: W - d, y1: yv(v), y2: yv(v), class: "grille-l" }), sv("text", { x: g - 8, y: yv(v) + 4, "text-anchor": "end" }, fr(v, 2)));
+    K.forEach((k, i) => svg.append(sv("text", { x: xk(i), y: H - b + 18, "text-anchor": "middle" }, KN[i])));
+    svg.append(sv("text", { x: (g + W - d) / 2, y: H - 4, "text-anchor": "middle" }, "enregistrements positifs du site neuf annotés (k)"));
+    const fins = [];
+    for (const x of series) {
+      const pts = x.v.map((y, i) => (y == null ? null : [xk(i), yv(y)])).filter(Boolean);
+      svg.append(sv("path", { d: "M" + pts.map((p) => p.join(" ")).join(" L"), fill: "none", stroke: coulH(x.hd), "stroke-width": 2.2, "stroke-dasharray": x.trait }));
+      pts.forEach((p) => svg.append(sv("circle", { cx: p[0], cy: p[1], r: 3.5, fill: coulH(x.hd), stroke: "var(--surface)", "stroke-width": 1.5 })));
+      fins.push({ y: pts[pts.length - 1][1], txt: selE.length > 1 ? `${tete(x.hd)} · ${nomEnc(x.e)}` : tete(x.hd), c: coulH(x.hd) });
+    }
+    fins.sort((a, b) => a.y - b.y); for (let i = 1; i < fins.length; i++) if (fins[i].y - fins[i - 1].y < 13) fins[i].y = fins[i - 1].y + 13;
+    fins.forEach((f) => svg.append(sv("text", { x: W - d + 8, y: f.y + 4, class: "fort", style: `fill:${f.c}` }, f.txt.slice(0, 34))));
+    const curseur = sv("line", { y1: h, y2: H - b, stroke: "var(--muted)", "stroke-dasharray": "3 3", opacity: 0 });
+    const cible = sv("rect", { x: g - 20, y: 0, width: W - g - d + 40, height: H - b, fill: "transparent" });
+    cible.addEventListener("pointermove", (ev) => {
+      const r = svg.getBoundingClientRect(); const px = ((ev.clientX - r.left) / r.width) * W;
+      const i = Math.max(0, Math.min(K.length - 1, Math.round(((px - g) / (W - g - d)) * (K.length - 1))));
+      curseur.setAttribute("x1", xk(i)); curseur.setAttribute("x2", xk(i)); curseur.setAttribute("opacity", 1);
+      const lignes = series.map((x) => [x, x.v[i]]).filter((z) => z[1] != null).sort((a, b) => b[1] - a[1]);
+      montrer(ev, `<b>k = ${KN[i]}</b><br>` + lignes.map(([x, y]) => `${esc(tete(x.hd))}${selE.length > 1 ? " · " + esc(nomEnc(x.e)) : ""} : ${fr(y)}`).join("<br>"));
+    });
+    cible.addEventListener("pointerleave", () => { cacher(); curseur.setAttribute("opacity", 0); });
+    svg.append(curseur, cible);
+    zone.replaceChildren(svg);
+  }
+  puces(); dessiner();
+  s.append(carte("Les têtes face au peu d'annotations", "k = 0 : le site neuf n'a encore aucune annotation, la tête n'a appris que sur les autres sites. « tout » : toutes ses annotations. Trois encodeurs au plus.",
+    el("div", { class: "controles" }, el("div", { class: "champ" }, el("span", {}, "Unité"), selN)),
+    el("div", { class: "champ" }, el("span", {}, "Encodeurs (un style de trait chacun)"), pucesE),
+    el("div", { class: "champ" }, el("span", {}, "Têtes"), pucesH), zone));
+}
+
+/* ======================================================================
+   9. Rapports
    ====================================================================== */
 {
   const s = section("rapports", "Rapports de benchmark", "Les huit rapports complets, avec leurs figures. Chacun a ses données (CSV) et le script qui les redessine dans le dépôt.");
@@ -970,7 +1079,7 @@ $("#pied").append(
 }
 
 /* ======================================================================
-   8. Tableaux
+   10. Tableaux
    ====================================================================== */
 {
   const s = section("tableaux", "Tableaux de référence", "Un tableau par famille de méthodes : protocole, encodeurs, têtes, régularisations, fusion… Cliquer pour agrandir.");
@@ -987,7 +1096,7 @@ $("#pied").append(
 }
 
 /* ======================================================================
-   10. Bibliographie (avec recherche)
+   11. Bibliographie (avec recherche)
    ====================================================================== */
 function lecture(id, titre, sous, texte, eyebrow) {
   const s = section(id, titre, sous, eyebrow);

@@ -408,6 +408,20 @@ def test_encoder_and_throughput_are_registered(workspace):
     assert report.realtime_factor > 0
 
 
+def test_totals_add_up_across_runs(workspace):
+    """Le temps d'encodage du corpus se lit dans `totals`, cumulé sur tous les passages."""
+    con, raw, store_root = workspace
+    add_recording(con, raw, "a.wav")
+    first = embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root)
+    add_recording(con, raw, "b.wav")
+    second = embed_recordings(con, FakeEncoder(), recordings_of(con), raw, store_root)
+    row = con.execute("SELECT params_json FROM models WHERE model_id = 'fake-1'").fetchone()
+    totals = json.loads(row["params_json"])["totals"]
+    assert first.recordings == 1 and second.recordings == 1  # « a » n'est pas réencodé
+    assert totals["recordings"] == 2 and totals["runs"] == 2
+    assert totals["wall_s"] == pytest.approx(first.wall_s + second.wall_s, abs=0.2)
+
+
 def test_rerunning_updates_the_throughput_without_duplicating_the_model(workspace):
     con, raw, store_root = workspace
     add_recording(con, raw, "a.wav")
