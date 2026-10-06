@@ -3245,3 +3245,24 @@ de Léonard, 01/10/2026.
      n° 154). Rien à relancer : l'exclusion se décide à la lecture des drapeaux, la prochaine
      passe d'`embed` les encode. L'heure de ces enregistrements n'est pas corrigée (`start_utc`
      garde l'en-tête GUANO, en avance d'une heure sur le nom de fichier, n° 153).
+
+## 2026-10-06 — « Micro dans sac » : une suite d'enregistrements, plus un seuil seul
+
+190. **`in_bag` demande une suite** (Léonard, 06/10). Le seuil de `hf_ratio` (0,02 → 0,2,
+     n° 81) reposait sur 8 exemples seulement et ne regardait aucune durée : il signalait des
+     enregistrements isolés (131 en 2023, au milieu de séries de plus de 8 000) et un micro
+     RNRT (2LA04525) toute la semaine à un ratio de 0,14. Nouvelle règle (`in_bag_runs`,
+     appliquée par `apply_audio_flags`, donc par `blanci flag` et `blanci qc`, sans relire
+     l'audio) : ratio **< 0,05** (`in_bag_hf_ratio`) et au moins **4 enregistrements
+     consécutifs** du même micro (`in_bag_min_run`, 2 h), sans trou de plus de 60 min
+     (`in_bag_max_gap_min`). `qc_flags` ne produit plus qu'un candidat par enregistrement. Le
+     drapeau se lit désormais « micro dans sac ou étouffé » : à l'écoute, un enregistrement du
+     bloc de CDR (24–28/12/2025) est étouffé avec des parasites de type glitch, donc micro
+     défaillant, bonnette contre le sol ou sac, et inutilisable dans tous les cas. Les
+     annotations `artefact_in_bag` posées à l'écoute ne changent pas.
+     Essai sur une copie de la base, rien d'appliqué : 1 961 → **895** `in_bag` (CDR 880,
+     PatawaOuest 15) ; RNRT, Mataroni et 2023 n'en gardent plus ; encodables 94 148 →
+     **95 214**. Les 423 de CDR entre 0,05 et 0,2 sortent aussi du drapeau : à vérifier à
+     l'écoute avant de relancer `blanci flag`. L'exclusion de 2LA04525 se décide à part,
+     après écoute. Le n° 189 se trompait sur le nombre d'encodables (96 109, compté avant le
+     passage `blanci qc`, n° 173–174) ; le bon chiffre se fixe après `blanci flag`.

@@ -92,12 +92,15 @@ NEEDS_ENCODER = (
 
 
 def _config_file() -> Path | None:
-    """`--config` après `--` sur la ligne de commande streamlit, sinon $BLANCI_CONFIG."""
+    """`--config` après `--` sur la ligne de commande streamlit, sinon $BLANCI_CONFIG, sinon
+    `config/local.yaml` s'il existe (racine du disque externe) : sans lui, `paths.raw` pointe
+    sur `data/raw`, absent, et toutes les lectures échouent."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=None)
     args, _ = parser.parse_known_args(sys.argv[1:])
     env = os.environ.get("BLANCI_CONFIG")
-    return args.config or (Path(env) if env else None)
+    local = Path(__file__).resolve().parents[2] / "config" / "local.yaml"
+    return args.config or (Path(env) if env else None) or (local if local.is_file() else None)
 
 
 def _setup(config: Path | None):

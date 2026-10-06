@@ -110,7 +110,10 @@ def qc_indices(wav: np.ndarray, sr: int) -> dict[str, float]:
 def qc_flags(indices: dict[str, float], thresholds: dict[str, float]) -> dict[str, Any]:
     """Drapeaux audio d'après les indices. Les indices sont gardés avec eux : un seuil changé
     se réapplique sans relire l'audio (`apply_audio_flags`). Tous les indices mesurés sont
-    rangés, y compris ceux qu'aucun drapeau ne lit (saturation, platitude du spectre)."""
+    rangés, y compris ceux qu'aucun drapeau ne lit (saturation, platitude du spectre).
+
+    `in_bag` n'est ici qu'un candidat, jugé sur un seul enregistrement : `apply_audio_flags`
+    ne le garde que dans une suite d'enregistrements consécutifs du même micro (n° 190)."""
     silent = indices["rms_dbfs"] < thresholds["silent_dbfs"]
     return {
         "silent": silent,
@@ -277,18 +280,62 @@ def check_recordings(
     return report
 
 
+def in_bag_runs(
+    series: pd.DataFrame, min_run: int = 4, max_gap_min: float = 60.0
+) -> set[str]:
+    """Enregistrements `in_bag` retenus : candidats d'une suite d'au moins `min_run`
+    enregistrements consécutifs du même micro (jeu, site, micro), sans trou de plus de
+    `max_gap_min` minutes entre deux voisins. Un micro dans un sac donne une série continue ;
+    un enregistrement grave isolé (singes hurleurs, chœur, orage) n'en est pas une.
+
+    `series` : recording_id, dataset, site, mic_id, start_utc, candidate (bool).
+    """
+    t = pd.to_datetime(series["start_utc"], utc=True, errors="coerce")
+    ordered = series.assign(t=t).dropna(subset=["t"]).sort_values("t")
+    keys = [ordered[c].fillna("?") for c in ("dataset", "site", "mic_id")]
+    gap = pd.Timedelta(minutes=max_gap_min)
+    kept: set[str] = set()
+    for _, mic in ordered.groupby(keys, sort=False):
+        broken = ~mic["candidate"] | (mic["t"].diff() > gap)
+        run = broken.cumsum()
+        runs = mic[mic["candidate"]].groupby(run[mic["candidate"]])["recording_id"]
+        for _, ids in runs:
+            if len(ids) >= min_run:
+                kept.update(ids)
+    return kept
+
+
 def apply_audio_flags(con: sqlite3.Connection, thresholds: dict[str, Any]) -> dict[str, int]:
     """Recalcule les drapeaux audio depuis les indices déjà rangés, aux seuils actuels.
 
     Sans relire l'audio : sert après un changement de seuil. Les enregistrements sans indices
-    (contrôle audio jamais fait) ne changent pas.
+    (contrôle audio jamais fait) ne changent pas. `in_bag` : ratio sous le seuil **et** suite
+    d'au moins `in_bag_min_run` enregistrements consécutifs du même micro (`in_bag_runs`).
     """
-    updates, counts = [], Counter()
-    for rid, qc in con.execute("SELECT recording_id, qc_flags FROM recordings"):
+    rows = con.execute(
+        "SELECT recording_id, dataset, site, mic_id, start_utc, qc_flags FROM recordings"
+    ).fetchall()
+    audio_by_id, candidates = {}, []
+    for rid, dataset, site, mic, start, qc in rows:
         flags = parse_flags(qc)
         if "indices" not in flags:
             continue
-        audio = qc_flags(flags["indices"], thresholds)
+        audio_by_id[rid] = qc_flags(flags["indices"], thresholds)
+        candidates.append((rid, dataset, site, mic, start, audio_by_id[rid]["in_bag"]))
+    series = pd.DataFrame(
+        candidates, columns=["recording_id", "dataset", "site", "mic_id", "start_utc", "candidate"]
+    )
+    bagged = in_bag_runs(
+        series,
+        int(thresholds.get("in_bag_min_run", 4)),
+        float(thresholds.get("in_bag_max_gap_min", 60.0)),
+    )
+    updates, counts = [], Counter()
+    for rid, qc in ((r[0], r[5]) for r in rows):
+        if rid not in audio_by_id:
+            continue
+        flags = parse_flags(qc)
+        audio = audio_by_id[rid] | {"in_bag": rid in bagged}
         counts.update(k for k in AUDIO_FLAGS if audio[k])
         if any(flags.get(k) != audio[k] for k in AUDIO_FLAGS):
             updates.append((json.dumps(flags | audio), rid))
