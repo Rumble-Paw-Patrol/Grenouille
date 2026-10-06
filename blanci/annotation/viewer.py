@@ -24,8 +24,11 @@ KEEP_ASSETS = 40  # fichiers d'écoute gardés (les plus récents)
 HELP = """\
 | Geste | Effet |
 |---|---|
-| **Glisser** sur le spectrogramme | tracer un intervalle (type, dont faux ami : en haut) |
+| **Glisser** sur le spectrogramme | tracer un intervalle du type choisi en haut |
+| **1** à **4**, ou un bouton de type | type des prochains intervalles (dont faux ami), et \
+de l'intervalle sélectionné |
 | **Tirer le bord** d'un intervalle | l'ajuster (le curseur devient ↔) |
+| **Clic** sur un intervalle (ou sa pastille sous le spectrogramme) | le sélectionner |
 | **Clic droit** sur un intervalle, ou le sélectionner puis **Suppr** | l'effacer |
 | **Clic** (sans glisser) | placer la lecture à cet instant (elle reprend de là) |
 | **Espace** | lecture / pause |
@@ -33,13 +36,20 @@ HELP = """\
 | **Maj + molette** | zoom en fréquence |
 | **Maj + glisser** | se déplacer (temps et fréquence) |
 | **← →** | se déplacer dans le temps |
-| **Double-clic**, ou « Tout » | revoir tout l'extrait |
+| **Double-clic**, ou « Vue de base » | revoir tout l'extrait, bande de 0 à 10 kHz |
 | **Tirer un pointillé** (curseur ↕) | déplacer une limite de la bande d'écoute |
 
-La bande d'écoute, « N'écouter que la bande », le volume, la dynamique et le micro du
-spectrogramme se règlent dans la barre au-dessus du spectrogramme et s'appliquent
+La bande d'écoute, « N'écouter que la bande », le volume, la dynamique, le contraste et le
+micro du spectrogramme se règlent dans la barre au-dessus du spectrogramme et s'appliquent
 aussitôt ; ils sont gardés d'une séance à l'autre. Les touches agissent quand le
 spectrogramme a la main : cliquer dessus d'abord.
+
+**Dynamique** : écart en dB entre le haut et le bas de l'échelle de couleurs. Le haut est
+fixé pour l'extrait (niveau dépassé par 0,5 % du spectrogramme, par micro) ; tout ce qui est
+plus faible que le haut moins la dynamique est noir. 40 dB : seuls les sons forts
+ressortent, le bruit de fond disparaît ; 80 dB : les sons faibles apparaissent, mais le
+fond s'éclaircit. **Contraste** : assombrit les niveaux moyens (le bruit de fond) sans
+toucher aux plus forts, pour faire ressortir les notes ; 0 : échelle linéaire.
 """
 
 INDEX = r"""<!doctype html>
@@ -67,17 +77,15 @@ INDEX = r"""<!doctype html>
   .chip { border: 1px solid #555; border-radius: 12px; padding: 2px 4px 2px 8px;
           display: flex; gap: 4px; align-items: center; cursor: pointer; }
   .chip.sel { border-color: #fff; }
-  .chip select, .chip button { padding: 0 4px; }
+  .chip button { padding: 0 4px; }
+  .types button { border-width: 2px; }
+  .types button.on, .seg button.on { color: #000; font-weight: 600; }
+  .seg button.on { background: #ddd; }
 </style></head><body>
 <div class="bar">
-  <span class="group" id="ivbar">Nouvel intervalle : <select id="newlabel"></select></span>
+  <span class="group types" id="ivbar">Type :</span>
   <span class="group">
-    <button id="zin" title="Zoom avant en temps">＋ temps</button>
-    <button id="zout" title="Zoom arrière en temps">－ temps</button>
-    <button id="fin" title="Zoom avant en fréquence">＋ fréq.</button>
-    <button id="fout" title="Zoom arrière en fréquence">－ fréq.</button>
-    <button id="win" title="Cadrer le candidat">Candidat</button>
-    <button id="all" title="Tout voir (double-clic)">Tout</button>
+    <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
     <label><input type="checkbox" id="follow" checked> Suivre</label>
   </span>
   <span id="status"></span>
@@ -89,11 +97,12 @@ INDEX = r"""<!doctype html>
     <label><input type="checkbox" id="bandonly"> n'écouter qu'elle</label></span>
   <span class="group">Volume <input type="range" id="gain" min="0" max="30" step="1">
     <span id="gainv"></span></span>
-  <span class="group">Dynamique <select id="range">
-    <option value="40">40 dB</option><option value="50">50 dB</option>
-    <option value="60">60 dB</option><option value="70">70 dB</option>
-    <option value="80">80 dB</option></select></span>
-  <span class="group">Spectrogramme <select id="chan"></select></span>
+  <span class="group" title="Écart entre le haut et le bas de l'échelle de couleurs">Dynamique
+    <input type="range" id="range" min="30" max="90" step="10"> <span id="rangev"></span></span>
+  <span class="group" title="Assombrit le bruit de fond, garde les sons forts">Contraste
+    <button id="cless">－</button> <span id="contrastv"></span>
+    <button id="cmore">＋</button></span>
+  <span class="group seg" id="chan">Spectrogramme</span>
 </div>
 <canvas id="c" tabindex="0"></canvas>
 <div id="list"></div>
@@ -108,7 +117,7 @@ const COLORS = {blanci: [80, 170, 255], blanci_chorus: [200, 120, 255],
                 blanci_uncertain: [255, 170, 40], false_friend: [60, 230, 200]};
 const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
-let view = null, intervals = [], selected = -1, vmax = [], loading = 0;
+let view = null, intervals = [], selected = -1, vmax = [], loading = 0, newLabel = null;
 const spec = document.createElement("canvas"); let specKey = "", specView = null;
 // Pendant un zoom ou un déplacement, l'image déjà calculée est seulement étirée ; le calcul à
 // pleine résolution attend que l'on ait lâché la molette ou la souris.
@@ -126,7 +135,10 @@ function showSettings() {
   $("lo").value = (S.band[0] / 1000).toFixed(1); $("hi").value = (S.band[1] / 1000).toFixed(1);
   $("bandonly").checked = !!S.bandOnly; $("gain").value = S.gain;
   $("gainv").textContent = `+${S.gain} dB`; $("range").value = String(S.range);
-  $("chan").value = String(S.channel);
+  $("rangev").textContent = `${S.range} dB`; $("contrastv").textContent = String(S.contrast);
+  $("cless").disabled = S.contrast <= 0; $("cmore").disabled = S.contrast >= 8;
+  $("chan").querySelectorAll("button")
+    .forEach(b => b.classList.toggle("on", +b.value === S.channel));
 }
 function applyAudio() {
   graphs.forEach(g => {
@@ -151,8 +163,31 @@ $("bandonly").onchange = () => {
 $("gain").oninput = () => {
   S.gain = +$("gain").value; showSettings(); applyAudio(); saveSettings();
 };
-$("range").onchange = () => { S.range = +$("range").value; saveSettings(); draw(); };
-$("chan").onchange = () => { S.channel = +$("chan").value; saveSettings(); draw(); };
+$("range").oninput = () => { S.range = +$("range").value; showSettings(); saveSettings(); draw(); };
+function setContrast(c) {
+  S.contrast = Math.max(0, Math.min(8, c)); showSettings(); saveSettings(); draw();
+}
+$("cless").onclick = () => setContrast(S.contrast - 1);
+$("cmore").onclick = () => setContrast(S.contrast + 1);
+function setChannel(c) { S.channel = c; showSettings(); saveSettings(); draw(); }
+
+// --- Type des intervalles : un bouton par type, toujours visibles -------------------------
+const rgb = label => COLORS[label] || [200, 200, 200];
+const labelName = code => (D.labels.find(([c]) => c === code) || [code, code])[1];
+function showTypes() {
+  const current = selected >= 0 ? intervals[selected].label : newLabel;
+  [...$("ivbar").querySelectorAll("button")].forEach(b => {
+    const on = b.value === current;
+    b.classList.toggle("on", on);
+    b.style.background = on ? `rgb(${rgb(b.value)})` : `rgba(${rgb(b.value)}, 0.15)`;
+  });
+}
+function setType(code) {  // type des prochains intervalles, et de l'intervalle sélectionné
+  newLabel = code;
+  if (selected >= 0 && intervals[selected].label !== code) {
+    intervals[selected].label = code; changed();
+  } else showTypes();
+}
 
 // --- Échanges avec Streamlit ----------------------------------------------------------------
 function send(type, data) {
@@ -173,10 +208,22 @@ function render(args) {
   if (S.band === undefined) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
   }
+  if (S.contrast === undefined) S.contrast = 0;
   $("ivbar").style.display = D.interval_mode ? "" : "none";
-  if (!$("newlabel").options.length) {
-    D.labels.forEach(([code, name]) => $("newlabel").add(new Option(name, code)));
-    D.audios.forEach((a, i) => $("chan").add(new Option(a.name, String(i))));
+  if (newLabel === null) {
+    newLabel = D.labels[0][0];
+    D.labels.forEach(([code, name], k) => {
+      const b = document.createElement("button");
+      b.value = code; b.textContent = name; b.title = `Touche ${k + 1}`;
+      b.style.borderColor = `rgb(${rgb(code)})`;
+      b.onclick = () => setType(code);
+      $("ivbar").appendChild(b);
+    });
+    D.audios.forEach((a, i) => {
+      const b = document.createElement("button");
+      b.value = String(i); b.textContent = a.name; b.onclick = () => setChannel(i);
+      $("chan").appendChild(b);
+    });
   }
   showSettings();
   if (fresh) {
@@ -301,12 +348,16 @@ function renderSpectrogram(cols, rows) {
   const ch = buffers[S.channel] ? S.channel : 0, x = buffers[ch];  // micro 2 pas encore décodé
   const n = fftSize(), rate = buffers.rate;
   const start = D.audios[ch] ? D.audios[ch].start : D.t0;
-  const key = [view.t0, view.t1, view.f0, view.f1, cols, rows, n, S.range, ch].join();
+  const key = [view.t0, view.t1, view.f0, view.f1, cols, rows, n, S.range, S.contrast, ch].join();
   if (key === specKey) return;
   specKey = key; specView = {...view};
   spec.width = cols; spec.height = rows;
   const sctx = spec.getContext("2d"), image = sctx.createImageData(cols, rows), px = image.data;
   const binHz = rate / n, top = vmax[ch], range = S.range;
+  // Contraste : courbe en puissance sur l'échelle (0 = linéaire) ; le haut ne bouge pas, les
+  // niveaux moyens (bruit de fond) s'assombrissent.
+  const gamma = 1 + 0.35 * S.contrast, lut = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) lut[i] = Math.round(255 * Math.pow(i / 255, gamma));
   const binOf = new Float32Array(rows);
   for (let r = 0; r < rows; r++) {
     binOf[r] = (view.f1 - (r + 0.5) / rows * (view.f1 - view.f0)) / binHz;
@@ -318,8 +369,8 @@ function renderSpectrogram(cols, rows) {
       const b = binOf[r], k = Math.floor(b), f = b - k;
       const v = k + 1 < db.length ? db[k] * (1 - f) + db[k + 1] * f : db[db.length - 1];
       const i = Math.max(0, Math.min(255, Math.round((v - (top - range)) / range * 255)));
-      const o = (r * cols + c) * 4, rgb = MAGMA[i];
-      px[o] = rgb[0]; px[o + 1] = rgb[1]; px[o + 2] = rgb[2]; px[o + 3] = 255;
+      const o = (r * cols + c) * 4, color = MAGMA[lut[i]];
+      px[o] = color[0]; px[o + 1] = color[1]; px[o + 2] = color[2]; px[o + 3] = 255;
     }
   }
   sctx.putImageData(image, 0, 0);
@@ -411,7 +462,7 @@ function draw() {
   });
   const shown = drag && drag.mode === "draw" && drag.moved
     ? [...intervals, {t0: Math.min(drag.t, drag.t2), t1: Math.max(drag.t, drag.t2),
-                      label: $("newlabel").value}]
+                      label: newLabel}]
     : intervals;
   shown.forEach((iv, i) => {
     const x0 = xOf(iv.t0), x1 = xOf(iv.t1), c = COLORS[iv.label] || [200, 200, 200];
@@ -480,18 +531,18 @@ function zoomFreq(factor, at) {
 }
 
 // --- Intervalles -------------------------------------------------------------------------
+// Pastilles sous le spectrogramme, sans menu déroulant : le type se change en sélectionnant
+// l'intervalle puis en cliquant un bouton de type (ou 1 à 4).
 function list() {
   const box = $("list");
   box.innerHTML = "";
   intervals.map((iv, i) => [iv, i]).sort((a, b) => a[0].t0 - b[0].t0).forEach(([iv, i]) => {
     const chip = document.createElement("span");
     chip.className = "chip" + (i === selected ? " sel" : "");
-    const c = COLORS[iv.label] || [200, 200, 200];
-    chip.style.background = `rgba(${c}, 0.18)`;
-    chip.append(`${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s`);
-    const s = document.createElement("select");
-    D.labels.forEach(([code, name]) => s.add(new Option(name, code, false, code === iv.label)));
-    s.onchange = () => { iv.label = s.value; changed(); };
+    chip.style.background = `rgba(${rgb(iv.label)}, 0.18)`;
+    chip.style.borderColor = i === selected ? "#fff" : `rgb(${rgb(iv.label)})`;
+    chip.title = "Sélectionner, puis un bouton de type pour le changer";
+    chip.append(`${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s · ${labelName(iv.label)}`);
     const x = document.createElement("button");
     x.textContent = "×"; x.title = "Effacer";
     x.onclick = ev => { ev.stopPropagation(); remove(i); };
@@ -503,9 +554,9 @@ function list() {
       }
       list(); draw();
     };
-    chip.append(s, x); box.appendChild(chip);
+    chip.append(x); box.appendChild(chip);
   });
-  setHeight();
+  showTypes(); setHeight();
 }
 function changed() { list(); draw(); emit(); }
 function remove(i) { intervals.splice(i, 1); selected = -1; changed(); }
@@ -566,7 +617,7 @@ window.addEventListener("mousemove", e => {
     if (drag.line === 0) setBand(Math.min(f, S.band[1] - 100), S.band[1]);
     else setBand(S.band[0], Math.max(f, S.band[0] + 100));
   } else if (drag.mode === "edge") {
-    intervals[drag.i][drag.edge] = t; selected = drag.i;
+    intervals[drag.i][drag.edge] = t;
   } else {
     drag.t2 = t;
   }
@@ -577,7 +628,8 @@ window.addEventListener("mouseup", () => {
   const d = drag; drag = null;
   if (d.mode === "pan" && d.moved) { clearTimeout(settle); settling = false; draw(); return; }
   if (!d.moved) {
-    if (D.interval_mode && d.i >= 0) { selected = d.i; list(); }
+    // Sélection par un clic seulement : un bouton de type change alors cet intervalle.
+    if (D.interval_mode) { selected = d.i; list(); }
     const p = players[active];  // la lecture reprendra de cet instant
     if (p && d.t >= D.t0 && d.t <= D.t1) p.currentTime = Math.max(0, d.t - D.audios[active].start);
     draw();
@@ -586,8 +638,8 @@ window.addEventListener("mouseup", () => {
   if (d.mode === "draw") {
     const t0 = Math.min(d.t, d.t2), t1 = Math.max(d.t, d.t2);
     if (t1 - t0 >= 0.05) {
-      intervals.push({t0, t1, label: $("newlabel").value});
-      selected = intervals.length - 1; changed();
+      intervals.push({t0, t1, label: newLabel});
+      selected = -1; changed();
     } else draw();
   } else if (d.mode === "edge") {
     const iv = intervals[d.i];
@@ -603,22 +655,19 @@ canvas.addEventListener("contextmenu", e => {
 canvas.addEventListener("dblclick", () => {
   view = {t0: D.t0, t1: D.t1, f0: 0, f1: Math.min(D.fview, fmax())}; draw();
 });
-$("zin").onclick = () => zoomTime(0.5);
-$("zout").onclick = () => zoomTime(2);
-$("fin").onclick = () => zoomFreq(0.5);
-$("fout").onclick = () => zoomFreq(2);
-$("all").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
-$("win").onclick = () => {
-  const w = (D.windows || []).find(w => w.current || w.candidate) || (D.windows || [])[0];
-  if (!w) return;
-  const pad = 0.5 * (w.t1 - w.t0);
-  view.t0 = w.t0 - pad; view.t1 = w.t1 + pad; clampView(); draw();
-};
+// Les boutons de la barre ne prennent pas la main : Espace, Suppr et 1 à 4 restent au
+// spectrogramme.
+document.querySelectorAll(".bar").forEach(bar => bar.addEventListener("mousedown", e => {
+  if (e.target.tagName === "BUTTON") e.preventDefault();
+}));
+$("home").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
 document.addEventListener("keydown", e => {
   if (["SELECT", "INPUT"].includes(e.target.tagName)) return;
   if (e.code === "Space") {
     e.preventDefault();
     const p = players[active]; if (p) (p.paused ? p.play() : p.pause());
+  } else if (D && D.interval_mode && /^[1-9]$/.test(e.key) && D.labels[+e.key - 1]) {
+    setType(D.labels[+e.key - 1][0]);
   } else if ((e.key === "Delete" || e.key === "Backspace") && selected >= 0) {
     remove(selected);
   } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
