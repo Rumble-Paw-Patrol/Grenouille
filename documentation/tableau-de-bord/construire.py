@@ -3,13 +3,14 @@
     uv run python documentation/tableau-de-bord/construire.py
 
 Lit les rapports et les CSV de documentation/benchmarks/, les tableaux PNG, la bibliographie,
-le glossaire, l'inventaire de documentation/commandes.md, les tests, l'historique git,
+l'inventaire de documentation/commandes.md, les tests, l'historique git,
 structure.yaml (objectif, chaîne, plan d'annotation), en_cours.yaml (le travail en cours, tenu à la main)
 et, si la base locale existe, l'avancement des annotations. Écrit :
 
 - index.html : modele.html avec toutes les données intégrées ;
 - fichiers.json : les images à publier à côté de la page (chemin publié → chemin du dépôt),
-  dont le spectrogramme du bandeau (spectrogramme.jpg, fait par spectrogramme.py) ;
+  dont le spectrogramme du bandeau (spectrogramme.jpg, fait par spectrogramme.py) et, s'il
+  existe, la capture du poste d'annotation (poste-annotation.png) ;
 - annotations.json : l'avancement des annotations, relu tel quel quand la base est absente
   (session sans les données) ; versionné.
 
@@ -396,7 +397,6 @@ AUTOMATIQUE = (
     "documentation/benchmarks/",
     "documentation/tableaux/",
     "documentation/biblio/biblio.md",
-    "documentation/glossaire-bioacoustique.md",
     "documentation/commandes.md",
     "tests/",
     "documentation/tableau-de-bord/",
@@ -510,7 +510,9 @@ def main() -> None:
     contenu = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
     contenu.update(yaml.safe_load((ICI / "en_cours.yaml").read_text(encoding="utf-8")))
     fichiers: dict[str, str] = {
-        "spectrogramme.jpg": str((ICI / "spectrogramme.jpg").relative_to(RACINE))
+        nom: str((ICI / nom).relative_to(RACINE))
+        for nom in ("spectrogramme.jpg", "poste-annotation.png")
+        if (ICI / nom).exists()
     }
     tests = compter_tests()
     for etape in contenu["chaine"]:
@@ -527,7 +529,7 @@ def main() -> None:
         "tetes": benchmark_tetes(),
         "tableaux": tableaux(fichiers),
         "biblio": (DOC / "biblio" / "biblio.md").read_text(encoding="utf-8"),
-        "glossaire": (DOC / "glossaire-bioacoustique.md").read_text(encoding="utf-8"),
+        "poste": "poste-annotation.png" if (ICI / "poste-annotation.png").exists() else None,
     }
     brut = json.dumps(donnees, ensure_ascii=False, separators=(",", ":"), default=str)
     brut = brut.replace("</", "<\\/")  # pas de </script> dans les données

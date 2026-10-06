@@ -243,6 +243,7 @@ code { font-family: var(--f-mono); font-size: .86em; background: var(--surface-2
 .progres .rail i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .progres .lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; }
 .vide { color: var(--muted); font-size: 13.5px; padding: 14px 0; }
+.capture { width: 100%; border: 1px solid var(--line); border-radius: 6px; cursor: zoom-in; background: #FFFFFF; }
 .etapes-plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
 .etapes-plan li { background: var(--surface-2); border-radius: var(--radius); padding: 12px; display: grid; gap: 8px; align-content: start; }
 .etapes-plan li.fort { background: var(--deep); color: var(--deep-ink); }
@@ -450,7 +451,7 @@ const nomEnc = (e) => e.replace(/^esp_aves2_/, "aves2 ");
 const SECTIONS = [
   ["accueil", "Vue d'ensemble"], ["en-cours", "Travail en cours"], ["donnees", "Données"],
   ["chaine", "Chaîne de traitement"], ["annotation", "Annotation"], ["encodeurs", "Encodeurs"], ["explorateur", "Explorateur des têtes"],
-  ["rapports", "Rapports"], ["tableaux", "Tableaux"], ["biblio", "Bibliographie"], ["glossaire", "Glossaire"],
+  ["rapports", "Rapports"], ["tableaux", "Tableaux"], ["biblio", "Bibliographie"],
 ];
 const vues = $("#vues");
 function section(id, titre, sous, eyebrow) {
@@ -669,7 +670,12 @@ $("#pied").append(
     el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Trois principes"), puces(P.principes)));
   s.append(carte("Apprentissage actif", A.contexte, etapesEl(A.boucle, -1),
     el("p", { class: "sous" }, "La boucle recommence : les nouveaux labels donnent une nouvelle tête, qui choisit les écoutes suivantes."),
-    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Pour choisir intelligemment quoi écouter"), puces(A.methodes)));
+    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Méthodes de sélection et contrôles"), puces(A.methodes)));
+  if (D.poste) {
+    const img = el("img", { src: D.poste, alt: "Capture du poste d'annotation Streamlit", class: "capture", loading: "lazy" });
+    img.addEventListener("click", () => ouvrirImage(img.src, "Poste d'annotation (Streamlit)"));
+    s.append(carte("Poste d'annotation", "Mon outil d'annotation, une page Streamlit qui s'ouvre dans le navigateur (blanci annotate). Work in progress.", img));
+  }
 }
 
 /* ======================================================================
@@ -981,7 +987,7 @@ $("#pied").append(
 }
 
 /* ======================================================================
-   9–10. Bibliographie, glossaire (avec recherche)
+   10. Bibliographie (avec recherche)
    ====================================================================== */
 function lecture(id, titre, sous, texte, eyebrow) {
   const s = section(id, titre, sous, eyebrow);
@@ -999,7 +1005,6 @@ function lecture(id, titre, sous, texte, eyebrow) {
   s.append(el("div", { class: "controles" }, el("label", { class: "champ", style: "flex:1;max-width:420px" }, el("span", {}, "Chercher"), champ), nb), corps);
 }
 lecture("biblio", "Bibliographie", "Chaque référence avec ce qu'on en retient pour A. blanci.", D.biblio, "documentation/biblio/biblio.md");
-lecture("glossaire", "Glossaire", "Les termes de bioacoustique et d'apprentissage automatique employés dans le projet.", D.glossaire);
 
 /* ---------- section active dans la navigation ---------- */
 const liensNav = [...nav.querySelectorAll("a")];

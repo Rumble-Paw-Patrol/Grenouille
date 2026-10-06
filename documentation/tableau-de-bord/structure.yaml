@@ -40,21 +40,21 @@ chaine:
     commandes: [ingest, flag, status]
     etat: fait
     resume: >-
-      Chaque enregistrement est rangé en base avec son jeu, son site, son micro et son heure.
-      Les drapeaux écartent les fichiers de durée anormale ou hors relevé ; l'horloge douteuse
-      n'est plus qu'une remarque.
+      Chaque enregistrement est rangé en base avec sa campagne (phénologie 2023 ou
+      campagne 2026), son site, son micro et son heure.
     chiffre: 96 292 enregistrements, 3 204 h
     suite: [qc]
   - id: qc
-    etape: Contrôle audio
+    etape: Contrôle qualité
     groupe: donnees
     module: blanci/inputs/qc.py
     tests: tests/inputs
     commandes: [qc]
     etat: fait
     resume: >-
-      Une seule lecture de tout le corpus avant l'encodage, pour sortir les fichiers cassés ou
-      sans rapport avec le projet (silencieux, micro resté dans le sac).
+      Une seule passe sur tout le corpus avant l'encodage. Des flags écartent les fichiers
+      cassés ou sans rapport avec le projet : durée anormale, hors relevé, silencieux,
+      micro resté allumé dans le sac. L'horloge douteuse n'est plus qu'une remarque.
     chiffre: 96 109 enregistrements encodables
     suite: [signal]
   - id: signal
@@ -65,10 +65,11 @@ chaine:
     commandes: [onsets]
     etat: en_cours
     resume: >-
-      En amont de l'encodeur : filtre passe-bande, PCEN, log-mel, débruitage spectral et
-      extraction des fenêtres candidates par l'énergie dans la bande 4,4–5,5 kHz. Mesure aussi
-      le rythme (une note de 0,09 s toutes les 1,2 à 1,9 s), sans apprentissage. Les chants
-      faibles ne sont pas encore retenus : seuil à hystérésis à ajouter.
+      Facultatif : on ne sait pas encore s'il servira. Placé en amont de l'encodeur, il
+      appliquerait un filtre passe-bande, le PCEN, le log-mel et un débruitage spectral,
+      puis extrairait les fenêtres candidates par l'énergie dans la bande 4,4–5,5 kHz. Il
+      mesure aussi le rythme du chant (une note de 0,09 s toutes les 1,2 à 1,9 s), sans
+      apprentissage.
     chiffre: bande 4,4–5,5 kHz
     suite: [encodage]
   - id: encodage
@@ -79,12 +80,11 @@ chaine:
     commandes: [embed, tokens]
     etat: en_cours
     resume: >-
-      L'encodeur gelé transforme chaque fenêtre de 5 s en un vecteur (embedding), et en
-      jetons pour les têtes qui les lisent. perch_v2 tourne sur le processeur du portable i5,
-      sans carte graphique. Son modèle calcule aussi les scores de ses 14 795 espèces, dont on
-      n'a pas besoin : on n'en garde que la partie qui produit l'embedding et les jetons, à
-      résultat identique. Avec les autres optimisations, l'encodage passe de 8,0 à 2,05 s par
-      enregistrement de 2 min.
+      L'encodeur gelé transforme chaque fenêtre de 5 s en un embedding, et en tokens pour
+      les têtes qui les lisent. perch_v2 tourne sur le processeur du portable i5, sans
+      carte graphique. Secondes gagnées par enregistrement de 2 min : 0,7 (lot de 1), 1,1
+      (lecture en avance), 0,5 (calculs du signal allégés), 0,8 (rééchantillonnage par
+      enregistrement), 2,85 (modèle réduit aux sorties utiles). Soit 8,0 → 2,05 s.
     chiffre: 2,05 s par enregistrement de 2 min
     suite: [tetes]
   - id: tetes
@@ -95,11 +95,12 @@ chaine:
     commandes: [train, heads, heads-curve, search]
     etat: fait
     resume: >-
-      Une petite couche apprise sur les embeddings donne un score par fenêtre : logistique,
-      prototypes, sonde attentive ou à prototypes sur les jetons, avec les régularisations
-      contre « apprendre le site ». La recherche par similarité (plus proches voisins d'un
-      exemple) est la référence à battre.
-    chiffre: 14 têtes et régularisations comparées
+      Une petite couche posée sur les embeddings donne un score par fenêtre. Têtes
+      comparées : régression logistique, prototype (chaque fenêtre est comparée à la
+      moyenne des exemples avec chant et à celle des exemples sans chant, sans
+      apprentissage), sondes sur les tokens. Sur un nouveau site, on peut être amené à
+      utiliser deux têtes différentes selon le nombre de données annotées : le prototype
+      tant qu'il y a peu d'exemples, la logistique dès qu'il y en a assez.
     suite: [fusion]
   - id: fusion
     etape: Fusion (si besoin)
@@ -122,8 +123,8 @@ chaine:
     commandes: [score, activity]
     etat: fait
     resume: >-
-      Passe de la fenêtre à l'enregistrement puis au point d'écoute, avec un seuil par site ;
-      produit les courbes d'activité pour une étude phénologique future.
+      Passe de la fenêtre à l'enregistrement puis au point d'écoute, avec un seuil par
+      site. Produit les courbes d'activité pour une étude phénologique future.
     suite: [evaluation, verification]
   - id: evaluation
     etape: Évaluation
@@ -144,9 +145,12 @@ chaine:
     commandes: [queue, select, candidates]
     etat: fait
     resume: >-
-      Choisit quoi faire écouter : des extraits tirés selon le plan d'annotation pour le
-      premier lot, puis la file d'apprentissage actif (60 % d'incertains, 20 % des meilleurs
-      scores, 20 % au hasard).
+      Choisit quoi faire écouter. Pour le premier lot : des extraits tirés selon le plan
+      d'annotation. Ensuite, plusieurs méthodes au choix dans le poste d'annotation : file
+      60-20-20 (incertains, meilleurs scores, hasard), similarité à des chants connus,
+      couverture (ce qu'on n'a jamais entendu), groupes d'embeddings, carte des
+      embeddings, négatifs difficiles, détections isolées, trous dans un chant,
+      enregistrements entiers tirés au hasard.
     suite: [annotation]
   - id: annotation
     etape: Poste d'annotation
@@ -156,8 +160,8 @@ chaine:
     commandes: [annotate, clips-export, clips-import, label]
     etat: en_cours
     resume: >-
-      Écoute dans le navigateur avec spectrogramme ; passerelle vers Raven ou Audacity. Mode
-      « extrait + intervalles » en cours d'écriture.
+      Écoute dans le navigateur avec un spectrogramme zoomable, intervalles du chant
+      tracés à la souris. Work in progress.
     suite: [reentrainement]
   - id: reentrainement
     etape: Réentraînement
@@ -187,10 +191,10 @@ plan_annotation:
     sous-échantillon. Aucun benchmark n'est lancé sur ces données avant leur accord.
   etapes:
     - [Répartir les points, "Avant toute écoute, chaque point d'écoute est attribué soit à l'entraînement, soit au test, jamais aux deux."]
-    - [Jeu d'entraînement, "Environ 450 extraits de 30 s, 3 par point d'écoute : un au pic du matin, un au pic du soir, un dans une autre tranche horaire."]
-    - [Validation, "Validation croisée inter-micros et non intra-micros. Chaque pli met de côté des micros entiers, jamais quelques enregistrements d'un micro déjà vu. On mesure ainsi la généralisation à des paysages sonores jamais entendus. Elle sert à régler la tête sans jamais toucher au jeu de test."]
+    - [Jeu d'entraînement, "Environ 450 extraits de 30 s. 300 en 2026, 3 par point d'écoute : un au pic du matin, un au pic du soir, un dans une autre tranche horaire. 150 en 2023, 50 sur chacun des 3 micros d'entraînement, répartis sur l'année."]
+    - [Validation, "Validation croisée en 5 plis inter-micros et non intra-micros. Chaque pli rassemble environ un cinquième des micros d'entraînement, entiers : jamais quelques enregistrements d'un micro déjà vu. On mesure ainsi la généralisation à des paysages sonores jamais entendus. Elle sert à régler la tête sans jamais toucher au jeu de test."]
     - [Jeu de test, "Environ 250 enregistrements de 2 min écoutés en entier, sur les points tenus à l'écart, avec au moins 60 positifs pour mesurer le rappel avec une précision suffisante."]
-    - [Vérification, "À l'aveugle, par Élodie et Benoît. Mon label est caché et l'ordre mélangé. Environ 2 h 30 d'écoute chacun."]
+    - [Vérification, "Élodie et Benoît écoutent chacun 10 % de mes données annotées, à l'aveugle : mon label est caché et l'ordre mélangé."]
   principes:
     - [Annotations de l'ancien prestataire ignorées, "on repart de zéro, sans reprendre ses annotations, pour ne pas hériter de ses angles morts."]
     - [Peu d'enregistrements sur beaucoup de points, "plutôt que beaucoup d'enregistrements sur peu de points. Varier les paysages sonores aide le détecteur à généraliser."]
@@ -203,14 +207,18 @@ apprentissage_actif:
     servent qu'à l'entraînement, jamais au test.
   boucle:
     - [Score, "La tête en place note toutes les fenêtres encodées."]
-    - [File de vérification, "60 % de fenêtres incertaines (les plus proches du seuil), 20 % des meilleurs scores, 20 % tirées au hasard par micro et par heure."]
-    - [Poste d'annotation, "Logiciel d'écoute dans le navigateur : spectrogramme zoomable, écoute de la seule bande du chant, intervalles tracés à la souris, faux amis notés. Passerelle vers Raven ou Audacity."]
+    - [File de vérification, "Choisit les fenêtres à écouter, par la méthode qu'on veut (ci-dessous). Par défaut, la file 60-20-20 : 60 % d'incertaines (les plus proches du seuil), 20 % des meilleurs scores, 20 % au hasard par micro et par heure."]
+    - [Poste d'annotation, "Logiciel d'écoute dans le navigateur : spectrogramme zoomable, écoute de la seule bande du chant, intervalles tracés à la souris, faux amis notés. Work in progress."]
     - [Réentraînement, "Une nouvelle tête apprend sur tous les labels. Elle n'est adoptée que si elle fait au moins aussi bien sur le jeu de test gelé."]
   methodes:
-    - [Récolte par similarité, "sur les points encore peu annotés, on cherche les fenêtres les plus proches d'un chant connu."]
-    - [Négatifs difficiles, "on fait écouter les faux positifs les mieux classés, ceux qui trompent le plus la tête."]
-    - [Contrôle des experts, "10 % de chaque lot, tirés au hasard, plus tout ce qui est noté incertain."]
-    - [Seuil d'un nouveau site, "5 à 10 enregistrements positifs vérifiés sur place, car le seuil ne se transpose pas d'un site à l'autre."]
+    - [Similarité, "les fenêtres les plus proches d'un chant connu, pour récolter des positifs sur les points encore peu annotés."]
+    - [Couverture, "les fenêtres les plus éloignées de tout ce qui est déjà annoté : écouter ce qu'on n'a jamais entendu."]
+    - [Groupes d'embeddings, "quelques fenêtres par groupe de sons qui se ressemblent. Un groupe homogène s'étiquette d'un coup."]
+    - [Carte des embeddings, "une projection en 2D où l'on entoure à la main une zone de points pour l'écouter."]
+    - [Négatifs difficiles, "les fenêtres au score élevé là où A. blanci est improbable, ou proches des faux amis : apprendre les confusions."]
+    - [Détections isolées et trous dans un chant, "faux positifs probables d'un côté, chants manqués par le modèle de l'autre."]
+    - [Contrôle des experts, "10 % de chaque lot tirés au hasard, plus tout ce que j'ai noté « A. blanci ? »."]
+    - [Seuil d'un nouveau site, "le score à partir duquel on décide « A. blanci présent » change d'un site à l'autre (fond sonore, densité de chant). Sur un nouveau site, on le recale en faisant confirmer à l'oreille 5 à 10 enregistrements avec chant."]
 
 # Cibles du plan d'annotation v1 ; l'avancement est compté dans data/db/blanci.sqlite.
 annotation_cibles:
