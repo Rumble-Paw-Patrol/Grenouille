@@ -381,15 +381,20 @@ def progress(
     return pd.Series([latest.get(i) for i in ids], index=queue.index, dtype=object)
 
 
-def next_position(done: pd.Series, pos: int, unheard_only: bool) -> int:
-    """Candidat qui suit `pos` dans la file (position dans la file entière, jamais dans les
-    seuls candidats restants : « 2 / 1521 » suit « 1 / 1521 »). `unheard_only` : le prochain
-    jamais écouté, en repartant du début s'il n'y en a plus après ; `pos` si tout est écouté."""
+def next_position(
+    done: pd.Series, pos: int, unheard_only: bool, step: int = 1, wrap: bool = True
+) -> int:
+    """Candidat qui suit `pos` dans la file (`step` -1 : qui le précède), en position dans la
+    file entière, jamais dans les seuls candidats restants : « 2 / 1521 » suit « 1 / 1521 ».
+    `unheard_only` : le prochain jamais écouté, en faisant le tour de la file si `wrap`.
+    Renvoie `pos` s'il n'y en a pas (bout de la file, ou tout est écouté)."""
     n = len(done)
     if not unheard_only:
-        return min(pos + 1, n - 1)
+        return min(max(pos + step, 0), n - 1)
     heard = done.notna().to_numpy()
-    for i in [*range(pos + 1, n), *range(pos + 1)]:
+    ahead = range(pos + 1, n) if step > 0 else range(pos - 1, -1, -1)
+    behind = (range(pos + 1) if step > 0 else range(n - 1, pos - 1, -1)) if wrap else ()
+    for i in [*ahead, *behind]:
         if not heard[i]:
             return i
     return pos
@@ -554,6 +559,7 @@ def save_span(
     comment: str | None = None,
     channel: int | None = None,
     species: str | None = None,
+    multiclass: bool = True,
 ) -> int:
     """Enregistre un extrait écouté et ses intervalles d'A. blanci ; renvoie span_id.
 
@@ -561,6 +567,8 @@ def save_span(
     s'ajoutent d'elles-mêmes d'après les intervalles. A. blanci coché sans aucun intervalle
     est refusé : toutes les fenêtres de l'extrait deviendraient négatives. Les fenêtres hors
     intervalles prennent la première des autres classes (`ordered_classes`), « rien » sinon.
+    `multiclass` faux : seule A. blanci a été notée, les autres classes n'ont pas été
+    cherchées (`conditions.multiclass` = false) ; « rien » veut alors dire « pas d'A. blanci ».
     """
     blanci = {"blanci", "blanci_chorus", "blanci_uncertain"}
     if blanci & set(classes) and not intervals:
@@ -572,6 +580,8 @@ def save_span(
         conditions |= comment_fields(comment) | {"comment": comment}
     if channel is not None:
         conditions["channel_listened"] = channel
+    if not multiclass:
+        conditions["multiclass"] = False
     conditions = {k: v for k, v in conditions.items() if v is not None}
     return append_span(
         con,

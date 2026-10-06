@@ -3156,3 +3156,28 @@ de Léonard, 01/10/2026.
      - Barre de lecture verte cerclée de noir (le rouge se perdait dans la palette magma) ;
        intervalles d'A. blanci en bleu ; graduations intermédiaires sur les deux axes ;
        mode d'emploi (souris, clavier) dépliable en haut de la page (`viewer.HELP`).
+
+185. **Poste d'annotation : navigation et formulaire simplifiés** (retours de Léonard).
+     - Cases renommées : « Sauter les candidats déjà écoutés » et « Masquer les annotations
+       d'autres personnes » (la case de calibration du n° 69 : seules mes réponses
+       comptent comme écoutées). Le bouton « Prochain jamais écouté ⏭ » disparaît, il
+       doublait la première case : **◀ ▶ vont au précédent ou au prochain jamais écouté si
+       elle est cochée, au voisin dans la file sinon** (`next_position(step=-1, wrap=False)`,
+       sans faire le tour de la file ; bouton grisé s'il n'y en a pas). La liste des
+       candidats donne toujours accès à tous.
+     - **Section « Étendue affichée » retirée** : le poste montre toujours l'enregistrement
+       entier, le candidat est marqué dessus et « Candidat » y zoome. Le contexte réglable
+       autour de la fenêtre ne servait plus depuis les intervalles (n° 182).
+     - **Case « Multi-classe »**, décochée par défaut : on ne note qu'A. blanci (intervalles,
+       qualité, commentaire) ; cochée, les autres classes et l'espèce reviennent dans le
+       formulaire. Un extrait noté sans multi-classe porte `conditions.multiclass = false` :
+       son « rien » veut dire « pas d'A. blanci », pas « rien d'autre », et ne doit pas
+       servir de négatif à une autre classe.
+     - **Zoom fluide** : pendant la molette ou le glisser, l'image déjà calculée est
+       seulement étirée ; le calcul à pleine résolution attend 250 ms de repos (ou le
+       relâchement de la souris), comme dans les logiciels d'analyse sonore.
+     - **Échelle de couleurs comme les figures de la présentation** : le haut de l'échelle
+       est le centile 99,5 des niveaux entre 500 Hz et 10 kHz (au lieu du maximum, qu'un
+       seul claquement suffisait à placer très haut, assombrissant tout le reste), et il est
+       propre à chaque micro : jusqu'ici celui du micro 1 servait aussi au micro 2, plus fort
+       de 12 dB, qui sortait saturé.

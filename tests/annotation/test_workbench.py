@@ -393,6 +393,16 @@ def test_next_position_counts_in_the_whole_queue():
     assert next_position(done, 3, unheard_only=False) == 3
 
 
+def test_next_position_backwards_and_without_wrapping():
+    done = pd.Series([None, "bird", None, None], dtype=object)
+    assert next_position(done, 2, unheard_only=False, step=-1) == 1
+    assert next_position(done, 0, unheard_only=False, step=-1) == 0
+    assert next_position(done, 2, unheard_only=True, step=-1) == 0  # saute le 2e
+    assert next_position(done, 0, unheard_only=True, step=-1) == 3  # fait le tour
+    assert next_position(done, 0, unheard_only=True, step=-1, wrap=False) == 0
+    assert next_position(done, 3, unheard_only=True, wrap=False) == 3  # bout de la file
+
+
 def test_split_windows_are_anchored_on_the_candidate():
     assert split_windows(0.0, 12.0, 4.5, 3.0) == [1.5, 4.5, 7.5]
     assert split_windows(0.0, 12.0, 3.0, 3.0) == [0.0, 3.0, 6.0, 9.0]

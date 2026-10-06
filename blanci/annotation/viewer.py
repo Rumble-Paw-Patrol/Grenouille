@@ -2,7 +2,8 @@
 JavaScript, sans outil de construction) qui renvoie à Python les intervalles tracés.
 
 Tout ce qui ne change pas l'annotation se fait dans le navigateur, sans aller-retour avec
-Python : le spectrogramme est calculé à la résolution de la vue (zoomer l'affine), la bande
+Python : le spectrogramme est calculé à la résolution de la vue (zoomer l'affine), une fois
+la molette ou la souris lâchée (pendant le geste, l'image déjà calculée est étirée), la bande
 d'écoute et le volume passent par Web Audio (on entend le réglage pendant qu'on le fait).
 L'audio est servi comme fichier à côté de la page (`VIEWER_DIR/assets`) et chargé en mémoire
 dans le navigateur, ce qui permet de reprendre la lecture n'importe où.
@@ -107,8 +108,11 @@ const COLORS = {blanci: [80, 170, 255], blanci_chorus: [200, 120, 255],
                 blanci_uncertain: [255, 170, 40]};
 const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
-let view = null, intervals = [], selected = -1, vmax = null, loading = 0;
-const spec = document.createElement("canvas"); let specKey = "";
+let view = null, intervals = [], selected = -1, vmax = [], loading = 0;
+const spec = document.createElement("canvas"); let specKey = "", specView = null;
+// Pendant un zoom ou un déplacement, l'image déjà calculée est seulement étirée ; le calcul à
+// pleine résolution attend que l'on ait lâché la molette ou la souris.
+let settling = false, settle = null;
 
 // --- Réglages d'écoute, gardés d'une séance à l'autre --------------------------------------
 const store = (() => { try { return window.localStorage; } catch (e) { return null; } })();
@@ -178,7 +182,7 @@ function render(args) {
   if (fresh) {
     view = {t0: D.t0, t1: D.t1, f0: 0, f1: D.fview};
     intervals = (D.intervals || []).map(([t0, t1, l]) => ({t0, t1, label: l}));
-    selected = -1; vmax = null; specKey = ""; buffers = [];
+    selected = -1; vmax = []; specKey = ""; specView = null; settling = false; buffers = [];
     load();
     list();
   }
@@ -221,7 +225,7 @@ async function load() {
     const buf = await actx.decodeAudioData(data[i].slice(0));
     if (token !== loading) return;
     buffers[i] = buf.getChannelData(0); buffers.rate = buf.sampleRate;
-    if (i === 0) { vmax = reference(buffers[0]); }
+    vmax[i] = reference(buffers[i]);
     draw();
   }
   $("status").textContent = "";
@@ -271,14 +275,20 @@ function spectrum(x, center, n) {  // dB de la trame centrée sur l'échantillon
   }
   return P.db;
 }
-function reference(x) {  // niveau du haut de l'échelle de couleurs, fixe pour l'extrait
-  let top = -Infinity;
-  const n = 1024, cols = 1500;
+// Haut de l'échelle de couleurs, fixe pour l'extrait et propre à chaque micro : le centile
+// 99,5 des niveaux entre 500 Hz et le haut de la vue par défaut, comme les figures de la
+// présentation (un claquement isolé n'assombrit plus tout le reste).
+function reference(x) {
+  const n = 1024, cols = 600, binHz = buffers.rate / n;
+  const k0 = Math.ceil(500 / binHz), k1 = Math.min(n / 2, Math.floor(D.fview / binHz));
+  const levels = new Float32Array(cols * (k1 - k0 + 1));
+  let m = 0;
   for (let c = 0; c < cols; c++) {
     const db = spectrum(x, (c + 0.5) / cols * x.length, n);
-    for (let k = 1; k < db.length; k++) if (db[k] > top) top = db[k];
+    for (let k = k0; k <= k1; k++) levels[m++] = db[k];
   }
-  return top;
+  levels.sort();
+  return levels[Math.floor(0.995 * (m - 1))];
 }
 function fftSize() {
   const rate = buffers.rate, tspan = view.t1 - view.t0, fspan = view.f1 - view.f0;
@@ -288,16 +298,15 @@ function fftSize() {
   return rate > 30000 ? 2048 : 1024;
 }
 function renderSpectrogram(cols, rows) {
-  const x = buffers[S.channel] || buffers[0];
+  const ch = buffers[S.channel] ? S.channel : 0, x = buffers[ch];  // micro 2 pas encore décodé
   const n = fftSize(), rate = buffers.rate;
-  const start = D.audios[S.channel] ? D.audios[S.channel].start : D.t0;
-  const key = [view.t0, view.t1, view.f0, view.f1, cols, rows, n, S.range, S.channel,
-               x.length].join();
+  const start = D.audios[ch] ? D.audios[ch].start : D.t0;
+  const key = [view.t0, view.t1, view.f0, view.f1, cols, rows, n, S.range, ch].join();
   if (key === specKey) return;
-  specKey = key;
+  specKey = key; specView = {...view};
   spec.width = cols; spec.height = rows;
   const sctx = spec.getContext("2d"), image = sctx.createImageData(cols, rows), px = image.data;
-  const binHz = rate / n, top = vmax, range = S.range;
+  const binHz = rate / n, top = vmax[ch], range = S.range;
   const binOf = new Float32Array(rows);
   for (let r = 0; r < rows; r++) {
     binOf[r] = (view.f1 - (r + 0.5) / rows * (view.f1 - view.f0)) / binHz;
@@ -354,11 +363,24 @@ function playheadTime() {
   return p ? D.audios[active].start + p.currentTime : null;
 }
 
+function moved() {  // vue changée : image étirée tout de suite, recalculée une fois au repos
+  settling = true; draw();
+  clearTimeout(settle);
+  settle = setTimeout(function rest() {
+    if (drag) settle = setTimeout(rest, 150); else { settling = false; draw(); }
+  }, 250);
+}
 function draw() {
   if (!D || !view) return;
   const w = canvas.clientWidth;
   ctx.fillStyle = "#0e1117"; ctx.fillRect(0, 0, w, H());
-  if (buffers.length && vmax !== null) {
+  if (buffers.length && vmax.length && settling && specView) {
+    ctx.save(); ctx.beginPath(); ctx.rect(M.l, M.t, W(), PH()); ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    const x0 = xOf(specView.t0), y0 = yOf(specView.f1);
+    ctx.drawImage(spec, x0, y0, xOf(specView.t1) - x0, yOf(specView.f0) - y0);
+    ctx.restore();
+  } else if (buffers.length && vmax.length) {
     renderSpectrogram(Math.max(1, Math.round(W())), Math.max(1, Math.round(PH())));
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(spec, M.l, M.t, W(), PH());
@@ -440,9 +462,8 @@ function loop() {
     const p = players[active], t = playheadTime();
     if (t !== null && $("follow").checked && !drag && (t > view.t1 || t < view.t0)) {
       const span = view.t1 - view.t0;
-      view.t0 = t - 0.1 * span; view.t1 = view.t0 + span; clampView();
-    }
-    draw();
+      view.t0 = t - 0.1 * span; view.t1 = view.t0 + span; clampView(); moved();
+    } else draw();
     raf = p && !p.paused ? requestAnimationFrame(step) : null;
   };
   raf = requestAnimationFrame(step);
@@ -450,12 +471,12 @@ function loop() {
 function zoomTime(factor, at) {
   at = at ?? (view.t0 + view.t1) / 2;
   view.t0 = at - (at - view.t0) * factor; view.t1 = at + (view.t1 - at) * factor;
-  clampView(); draw();
+  clampView(); moved();
 }
 function zoomFreq(factor, at) {
   at = at ?? (view.f0 + view.f1) / 2;
   view.f0 = at - (at - view.f0) * factor; view.f1 = at + (view.f1 - at) * factor;
-  clampView(); draw();
+  clampView(); moved();
 }
 
 // --- Intervalles -------------------------------------------------------------------------
@@ -539,7 +560,7 @@ window.addEventListener("mousemove", e => {
     const df = dy / PH() * (drag.view.f1 - drag.view.f0);
     view = {t0: drag.view.t0 - dt, t1: drag.view.t1 - dt,
             f0: drag.view.f0 + df, f1: drag.view.f1 + df};
-    clampView();
+    clampView(); moved(); return;
   } else if (drag.mode === "band") {
     const f = Math.max(0, fOf(localY(e)));
     if (drag.line === 0) setBand(Math.min(f, S.band[1] - 100), S.band[1]);
@@ -554,6 +575,7 @@ window.addEventListener("mousemove", e => {
 window.addEventListener("mouseup", () => {
   if (!drag) return;
   const d = drag; drag = null;
+  if (d.mode === "pan" && d.moved) { clearTimeout(settle); settling = false; draw(); return; }
   if (!d.moved) {
     if (D.interval_mode && d.i >= 0) { selected = d.i; list(); }
     const p = players[active];  // la lecture reprendra de cet instant
@@ -602,7 +624,7 @@ document.addEventListener("keydown", e => {
   } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
     e.preventDefault();
     const span = view.t1 - view.t0, s = (e.key === "ArrowLeft" ? -0.25 : 0.25) * span;
-    view.t0 += s; view.t1 += s; clampView(); draw();
+    view.t0 += s; view.t1 += s; clampView(); moved();
   }
 });
 
