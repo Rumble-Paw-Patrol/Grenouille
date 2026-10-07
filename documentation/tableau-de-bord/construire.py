@@ -4,7 +4,8 @@
 
 Lit les rapports et les CSV de documentation/benchmarks/, les tableaux PNG, la bibliographie,
 l'inventaire de documentation/commandes.md, les tests, l'historique git,
-structure.yaml (objectif, chaîne, plan d'annotation), en_cours.yaml (le travail en cours, tenu à la main)
+structure.yaml (chaîne : modules, états), textes.yaml (tous les textes de la page) et
+en_cours.yaml (le travail en cours), ces deux derniers tenus à la main par Léonard
 et, si la base locale existe, l'avancement des annotations. Écrit :
 
 - index.html : modele.html avec toutes les données intégrées ;
@@ -118,6 +119,13 @@ def historique(ref: str, n: int = 20) -> list[list]:
     out = []
     for ligne in sortie.splitlines():
         h, d, s = ligne.split("\t", 2)
+        if s.startswith("Merge "):
+            # Une fusion ne dit que le nom d'une branche de travail (claude/…) : on montre à la
+            # place le dernier commit qu'elle apporte, ou rien si elle n'apporte rien de neuf.
+            apports = git("log", "--no-merges", "--format=%s", f"{h}^1..{h}^2").splitlines()
+            if not apports:
+                continue
+            s = apports[0] + (f" (+{len(apports) - 1} autres)" if len(apports) > 1 else "")
         s = re.sub(r"\s*\((DECISIONS )?n° [^)]*\)", "", s)  # renvois au journal retirés
         out.append([h, d, s.split(" - ")[0].strip(), num.get(h)])
     return out
@@ -261,6 +269,37 @@ def benchmark_encodeurs() -> dict:
             ["encoder", "head", "species", "diff", "lo", "hi", "p_holm", "significant_holm"],
         ),
         "courbe": lignes(courbe_moy, ["encoder", "head", "k", "ap_window", "ap_minute"]),
+    }
+
+
+def anuraset_jeu() -> dict:
+    """Le jeu AnuraSet réduit : positifs par espèce et par site (fenêtre de 5 s et minute),
+    taille de chaque site, et signature des chants des cinq espèces (benchmarks 01 et 07)."""
+    ts = pd.read_csv(BENCH / "2026-09-29_anuraset_global" / "donnees" / "transfert_sites.csv")
+    ts = ts[(ts["encoder"] == "perch_v2") & (ts["head"] == "logistic")].copy()
+    ts["total"] = ts["n_pos"] + ts["n_neg"]
+    # Taille d'un site : toutes ses fenêtres (ou minutes) ; une espèce en écarte parfois quelques
+    # fichiers (signalée sans chant daté, n° 138), d'où le maximum sur les espèces.
+    sites = ts.groupby(["site", "level"])["total"].max().unstack("level")
+    especes = pd.read_csv(BENCH / "2026-09-28_anuraset_perch_v2" / "donnees" / "especes.csv")
+    return {
+        "sites": [
+            {"site": s, "fenetres": int(r["fenetre"]), "minutes": int(r["minute"])}
+            for s, r in sites.iterrows()
+        ],
+        "positifs": lignes(ts, ["species", "site", "level", "n_pos", "total"]),
+        "especes": lignes(
+            especes,
+            [
+                "species",
+                "n_calls",
+                "n_recordings",
+                "n_sites",
+                "duration_median_s",
+                "duration_p90_s",
+                "dominant_hz",
+            ],
+        ),
     }
 
 
@@ -476,7 +515,8 @@ AUTOMATIQUE = (
     "documentation/tableau-de-bord/",
 )
 # Ce que le tableau de bord ne montre pas, volontairement.
-IGNORE = ("DECISIONS.md", "uv.lock", ".gitignore", ".python-version", ".claude/", "config/")
+# resultats/ : sorties brutes des calculs, déjà rassemblées dans les CSV des benchmarks.
+IGNORE = ("resultats/", "DECISIONS.md", "uv.lock", ".gitignore", ".python-version", ".claude/", "config/")
 
 
 def commandes_cli() -> set[str]:
@@ -489,10 +529,25 @@ def commandes_cli() -> set[str]:
     return noms
 
 
+def charger_contenu() -> dict:
+    """structure.yaml (tenu par Claude), textes.yaml et en_cours.yaml (tenus par Léonard), réunis.
+    Les textes d'une étape de la chaîne (nom, détail, repère) viennent de textes.yaml."""
+    lire = lambda nom: yaml.safe_load((ICI / nom).read_text(encoding="utf-8"))  # noqa: E731
+    contenu, textes = lire("structure.yaml"), lire("textes.yaml")
+    textes_chaine = textes.pop("chaine")
+    for etape in contenu["chaine"]:
+        if etape["id"] not in textes_chaine:
+            raise SystemExit(f"textes.yaml : pas de textes pour l'étape « {etape['id']} » (chaine:)")
+        etape.update(textes_chaine[etape["id"]])
+    contenu.update(textes)
+    contenu.update(lire("en_cours.yaml"))
+    return contenu
+
+
 def changements() -> str:
     """Rapport en Markdown : ce qui a changé dans le dépôt depuis la dernière publication du
     tableau de bord, rangé selon ce qu'il faut en faire. Lu par le skill tableau-de-bord."""
-    structure = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
+    structure = charger_contenu()
     base = ""
     if PUBLICATION.exists():
         base = json.loads(PUBLICATION.read_text(encoding="utf-8")).get("commit", "")
@@ -581,8 +636,7 @@ def main() -> None:
         )
         return
     config = opts.config
-    contenu = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
-    contenu.update(yaml.safe_load((ICI / "en_cours.yaml").read_text(encoding="utf-8")))
+    contenu = charger_contenu()
     fichiers: dict[str, str] = {
         nom: str((ICI / nom).relative_to(RACINE))
         for nom in ("spectrogramme.jpg", "poste-annotation.png")
@@ -602,6 +656,7 @@ def main() -> None:
         "rapports": rapports(fichiers),
         "encodeurs": benchmark_encodeurs(),
         "tetes": benchmark_tetes(),
+        "anuraset": anuraset_jeu(),
         "tableaux": tableaux(fichiers),
         "biblio": (DOC / "biblio" / "biblio.md").read_text(encoding="utf-8"),
         "poste": "poste-annotation.png" if (ICI / "poste-annotation.png").exists() else None,
