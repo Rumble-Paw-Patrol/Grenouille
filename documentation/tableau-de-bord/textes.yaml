@@ -95,6 +95,12 @@ sections:
     cartes:
       plan:
         titre: Plan d'annotation
+      files:
+        titre: Files d'écoute du premier lot
+        legende: >-
+          Tirées au hasard avant toute écoute, sans aucun modèle, avec une graine fixe
+          (uv run blanci candidates --plan). Au plus un enregistrement par micro, jour et tranche
+          horaire. Elles s'ouvrent dans le poste d'annotation (File déjà écrite).
       apprentissage_actif:
         titre: Apprentissage actif
       compteur:
@@ -337,6 +343,11 @@ plan_annotation:
     - [Annotations de l'ancien prestataire ignorées, "on repart de zéro, sans reprendre ses annotations, pour ne pas hériter de ses angles morts."]
     - [Peu d'enregistrements sur beaucoup de points, "plutôt que beaucoup d'enregistrements sur peu de points. Varier les paysages sonores aide le détecteur à généraliser."]
     - [Un tirage stratifié par point et par heure, "fait avant toute écoute. Chaque point et chaque tranche horaire fournit des extraits avec et sans chant, si bien que la tête apprend le chant et pas l'ambiance sonore de l'heure ni du lieu."]
+
+# Files d'écoute du premier lot (DECISIONS n° 196) : [nom de la file dans le poste, contenu].
+files_ecoute:
+  - [lot1, "424 extraits de 30 s pour l'entraînement. 274 sur les micros 2026 d'entraînement, 3 par micro : un vers 7–9 h, un vers 15–17 h, un à une autre heure. 150 en 2023, 50 par station, surtout en février–mars et en saison haute. Le début de l'extrait est tiré au hasard dans l'enregistrement."]
+  - [test_v1, "250 enregistrements de 2 min écoutés en entier, sur les micros jamais utilisés à l'entraînement : tout RNRT, un micro sur cinq des autres sites 2026, une station sur deux par site en 2023. Heures de pic et saison haute deux fois plus représentées, probabilité de tirage notée pour chaque enregistrement."]
 
 # Apprentissage actif : les lots d'annotation suivants, après l'accord des experts (DECISIONS §5.9).
 apprentissage_actif:
