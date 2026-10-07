@@ -151,12 +151,23 @@ sections:
         L'AP (précision moyenne) résume la courbe précision-rappel.
         Avec quatre plis, il y a deux façons de la calculer.
       titre_matrice: Qui chante où
+      consigne_clic: >-
+        Cliquez sur le nom d'un site, en tête de colonne, pour le tenir à l'écart comme dans un
+        pli : le tableau montre alors sur quoi le modèle apprend et sur quoi il est jugé.
+        Recliquez pour revenir.
+      bouton_site: tenir à l'écart
+      bouton_site_actif: site de test
+      aide_matrice: >-
+        Nombre de {unite} où chaque espèce chante, site par site, et en dessous la part que cela
+        représente dans le site. Hachuré : l'espèce n'y chante pas.
       titre_signature: La signature des chants
       legende_signature: >-
-        Chaque espèce à la durée médiane et à la fréquence dominante de ses chants ; la taille
-        du point suit le nombre de chants datés. En pointillés dorés, A. blanci : des notes plus
-        brèves que toutes, dans la bande de DENMIN. Les chants de PHYCUV et LEPLAT débordent
-        souvent une fenêtre de 3 s.
+        Durée des chants de chaque espèce, une ligne par espèce, rangées de la plus aiguë à la
+        plus grave (fréquence dominante à gauche). Le point marque la durée médiane, la barre
+        épaisse va du 1er au 3e quartile (la moitié des chants), le trait fin du 10e au 90e
+        centile. En doré, A. blanci : une note plus brève que toutes, dans la bande de
+        fréquence de DENMIN. Les chants de PHYCUV et LEPLAT dépassent souvent une fenêtre de
+        3 s : un encodeur à fenêtres de 3 s les coupe en morceaux.
 
   encodeurs:
     menu: Benchmark des encodeurs
@@ -365,15 +376,15 @@ anuraset:
     - [Généraliser à un site neuf, "Le cœur du projet. On ne demande pas au détecteur de reconnaître les sites qu'il a appris, mais de fonctionner là où il n'a pas encore écouté."]
     - ["Un indicateur, pas un verdict", "D'autres espèces qu'A. blanci, 2 à 4 sites par espèce. Le choix final se fera sur les données de l'ONF."]
   methode:
-    - [Un site tenu à l'écart, "Quatre plis : on apprend sur trois sites, on juge sur le quatrième, jamais vu. Les réglages (C de la logistique…) sont choisis par des plis internes, eux aussi par site."]
-    - [Apprentissage, "Tous les positifs de l'espèce et 20 négatifs par positif, tirés dans chaque site d'apprentissage."]
-    - [Évaluation, "Toutes les fenêtres du site tenu à l'écart, à sa prévalence réelle (plusieurs milliers de négatifs)."]
-    - [Comparaisons, "Écart à une référence fixée d'avance (perch_v2 + logistique), bootstrap apparié des enregistrements dans chaque site, correction de Holm. Avec 2 à 4 sites on ne peut pas tirer les sites : l'intervalle reste optimiste."]
+    - [Un site tenu à l'écart, "Quatre plis : à chaque pli, j'entraîne la tête sur trois sites et je la juge sur le quatrième, qu'elle n'a jamais vu. Une tête a aussi des réglages à fixer avant l'entraînement, par exemple le C de la régression logistique, qui dose la régularisation : trop peu, la tête apprend par cœur les exemples d'entraînement ; trop, elle n'apprend presque rien. Pour choisir ce réglage sans jamais regarder le site de test, je refais la même chose à l'intérieur des trois sites d'entraînement : j'en mets un de côté, j'entraîne sur les deux autres avec chaque valeur candidate, et je garde la valeur qui marche le mieux sur les sites mis de côté. Le site de test ne sert qu'à la note finale."]
+    - [Apprentissage, "Pour entraîner la tête, je prends toutes les fenêtres où l'espèce chante (les positifs) dans les trois sites d'entraînement. Pour les fenêtres sans l'espèce (les négatifs), je n'en garde que 20 par positif, tirées au hasard dans le même site que ces positifs. Les garder toutes noierait quelques centaines de chants sous des milliers de fenêtres de bruit. Les tirer site par site garde dans l'entraînement le bruit de fond propre à chaque site, pour que la tête apprenne le chant et pas « tel site = chant »."]
+    - [Évaluation, "Pour noter la tête sur le site de test, en revanche, je garde toutes ses fenêtres, sans en tirer un échantillon : 4 000 à 5 600 fenêtres de 5 s selon le site, dont souvent seulement quelques dizaines ou centaines avec l'espèce. C'est la proportion de chants qu'on rencontre vraiment sur le terrain (la prévalence réelle). Une tête qui laisse passer un peu de bruit est alors pénalisée comme elle le serait sur nos enregistrements de l'ONF ; avec seulement 20 négatifs par positif, elle aurait paru meilleure qu'elle n'est."]
+    - [Comparaisons, "Chaque encodeur ou tête est comparé à une référence choisie d'avance (perch_v2 + logistique), sur exactement les mêmes enregistrements : c'est une comparaison appariée. Pour savoir si l'écart dépasse le hasard, je fais un bootstrap : je retire au sort, avec remise, les enregistrements de chaque site, je recalcule l'écart à chaque tirage, et la dispersion de ces écarts donne un intervalle de confiance. Comme je fais des dizaines de comparaisons à la fois, certaines paraîtraient significatives par pur hasard : la correction de Holm rend le seuil plus exigeant en conséquence. Limite : ce qui varie le plus, c'est le site, et avec 2 à 4 sites par espèce je ne peux pas tirer les sites au sort. L'intervalle ne mesure que la variation d'un enregistrement à l'autre, pas d'un site à l'autre : il est plus étroit qu'il ne devrait, donc optimiste."]
   unites:
-    - [Fenêtre, "Chaque fenêtre (3, 5 ou 6 s selon l'encodeur) est une unité, positive si elle contient un chant de l'espèce. C'est ce que voit le détecteur et ce qu'on annote : la mesure la plus fine. Mais deux encodeurs à grille différente ne jugent pas les mêmes fenêtres : la comparaison n'est appariée qu'entre encodeurs à 5 s."]
+    - [Fenêtre, "Chaque fenêtre (3, 5 ou 6 s selon l'encodeur) est une unité, positive si elle contient un chant de l'espèce. C'est ce que voit le détecteur et ce qu'on annote : la mesure la plus fine. Mais les encodeurs ne découpent pas tous la minute de la même façon : BirdNET en fenêtres de 3 s, Perch en 5 s, d'autres en 6 s. Une fenêtre de 3 s et une fenêtre de 5 s ne contiennent pas le même morceau de son, ni forcément le même chant : on ne note pas les mêmes objets, et leurs AP par fenêtre ne se comparent pas directement. Entre encodeurs qui ont la même grille (5 s), en revanche, chaque fenêtre est jugée par les deux : la comparaison est appariée, faite sur exactement les mêmes fenêtres."]
     - [Minute, "Chaque enregistrement d'une minute est une unité ; son score est le maximum de ses fenêtres. C'est la seule unité identique pour tous les encodeurs (comparaison appariée), et la plus proche de l'usage final : l'espèce chante-t-elle sur cet enregistrement, à ce point d'écoute ? Dans les benchmarks 01 à 06 elle s'appelle « enregistrement »."]
   lectures:
-    - [AP moyenne par site, "L'AP est calculée sur chaque site tenu à l'écart, avec ses seuls scores, puis moyennée sur les sites où l'espèce chante. Elle ne juge que le classement à l'intérieur d'un site : les chants passent-ils devant le bruit sur un site neuf ? C'est la lecture principale pour choisir l'encodeur. Plus bruitée (peu de positifs par site), et non définie là où l'espèce est absente."]
+    - [AP moyenne par site, "À chaque pli, je calcule l'AP sur les seules fenêtres du site tenu à l'écart, avec les scores du modèle qui ne l'a jamais vu : une AP par site. Je fais ensuite la moyenne de ces AP. Un site où l'espèce ne chante pas est laissé de côté : sans aucun chant à retrouver, l'AP n'y a pas de sens. Elle ne juge que le classement à l'intérieur d'un site : les chants passent-ils devant le bruit sur un site neuf ? C'est la lecture principale pour choisir l'encodeur. Plus bruitée (peu de positifs par site), et non définie là où l'espèce est absente."]
     - [AP poolée, "Les scores des quatre plis, rendus par quatre modèles, sont mis bout à bout et jugés ensemble. Elle juge en plus l'échelle des scores : un même seuil vaut-il pour tous les sites ? Elle pénalise une tête dont les sites finissent sur des échelles différentes (centrage par site, C choisi pli par pli)."]
   lecture_conseil: >-
     Lire les deux côte à côte : un grand écart entre AP par site et AP poolée signale des sites

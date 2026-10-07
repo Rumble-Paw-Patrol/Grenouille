@@ -100,5 +100,6 @@ uv run python documentation/tableau-de-bord/construire.py --publie
 ## 6. Rendre compte et committer
 
 En trois à cinq lignes : ce qui a changé sur la page, ce qui attend une réponse, le lien.
-Committer les fichiers du dossier modifiés (« Tableau de bord : … »), puis pousser sur la
-branche de travail.
+Committer les fichiers du dossier modifiés (« Tableau de bord : … »), pousser sur la branche
+de travail, puis sur main (`git push origin HEAD:main`, en avance rapide après la fusion de
+l'étape 1) : Léonard édite ses fichiers sur main.

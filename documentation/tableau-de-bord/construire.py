@@ -282,6 +282,9 @@ def anuraset_jeu() -> dict:
     # fichiers (signalée sans chant daté, n° 138), d'où le maximum sur les espèces.
     sites = ts.groupby(["site", "level"])["total"].max().unstack("level")
     especes = pd.read_csv(BENCH / "2026-09-28_anuraset_perch_v2" / "donnees" / "especes.csv")
+    # Quantiles des durées de chant (durees_chants.py) : médiane et 90e centile identiques.
+    durees = pd.read_csv(ICI / "durees_chants.csv").rename(columns={"espece": "species"})
+    especes = especes.merge(durees, on="species", how="left")
     return {
         "sites": [
             {"site": s, "fenetres": int(r["fenetre"]), "minutes": int(r["minute"])}
@@ -295,9 +298,12 @@ def anuraset_jeu() -> dict:
                 "n_calls",
                 "n_recordings",
                 "n_sites",
-                "duration_median_s",
-                "duration_p90_s",
                 "dominant_hz",
+                "p10_s",
+                "q1_s",
+                "mediane_s",
+                "q3_s",
+                "p90_s",
             ],
         ),
     }
@@ -498,7 +504,9 @@ def encodage(config: Path | None, structure: dict) -> dict:
         if not (sortie[nom].get("statut") == "fini" and m["statut"] != "fini"):
             sortie[nom].update(m)
     sauvegarde.write_text(
-        json.dumps({n: v for n, v in sortie.items() if v.get("statut")}, ensure_ascii=False, indent=1),
+        json.dumps(
+            {n: v for n, v in sortie.items() if v.get("statut")}, ensure_ascii=False, indent=1
+        ),
         encoding="utf-8",
     )
     return {"encodeurs": sortie, "source": "base locale"}
@@ -516,7 +524,15 @@ AUTOMATIQUE = (
 )
 # Ce que le tableau de bord ne montre pas, volontairement.
 # resultats/ : sorties brutes des calculs, déjà rassemblées dans les CSV des benchmarks.
-IGNORE = ("resultats/", "DECISIONS.md", "uv.lock", ".gitignore", ".python-version", ".claude/", "config/")
+IGNORE = (
+    "resultats/",
+    "DECISIONS.md",
+    "uv.lock",
+    ".gitignore",
+    ".python-version",
+    ".claude/",
+    "config/",
+)
 
 
 def commandes_cli() -> set[str]:
@@ -537,7 +553,9 @@ def charger_contenu() -> dict:
     textes_chaine = textes.pop("chaine")
     for etape in contenu["chaine"]:
         if etape["id"] not in textes_chaine:
-            raise SystemExit(f"textes.yaml : pas de textes pour l'étape « {etape['id']} » (chaine:)")
+            raise SystemExit(
+                f"textes.yaml : pas de textes pour l'étape « {etape['id']} » (chaine:)"
+            )
         etape.update(textes_chaine[etape["id"]])
     contenu.update(textes)
     contenu.update(lire("en_cours.yaml"))
