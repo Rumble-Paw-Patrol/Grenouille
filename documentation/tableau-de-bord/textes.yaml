@@ -141,15 +141,14 @@ sections:
         titre: À quoi ressemble le jeu réduit
     phrases:
       titre_methode: "La méthode : un site tenu à l'écart à la fois"
-      titre_unite: "Unité : fenêtre ou minute"
+      titre_unite: "Choix de l'unité : fenêtre ou minute"
       exemple_minute: >-
-        Une minute d'AnuraSet, découpée en douze fenêtres de 5 s. En vert, les fenêtres qui
-        contiennent un chant ; dans chaque case, le score que la tête leur donne. Au niveau
+        Une minute d'AnuraSet, découpée en fenêtres (ici 12 de 5 secondes pour perch_v2). En vert, les fenêtres qui
+        contiennent un chant et dans chaque case, le score que la tête leur donne. Au niveau
         minute, l'enregistrement est positif et son score est le plus haut des douze (encadré).
       titre_ap: "Lecture de l'AP : moyenne par site ou poolée"
       explication_ap: >-
-        L'AP (précision moyenne) résume la courbe précision-rappel : 1 si tous les chants
-        passent devant tout le bruit, la part de positifs si les scores sont tirés au hasard.
+        L'AP (précision moyenne) résume la courbe précision-rappel.
         Avec quatre plis, il y a deux façons de la calculer.
       titre_matrice: Qui chante où
       titre_signature: La signature des chants
@@ -356,26 +355,26 @@ anuraset:
   pourquoi: >-
     Choisir un encodeur et une tête demande des données annotées, et les nôtres ne le sont pas
     encore. Encoder tout le corpus de l'ONF coûte des dizaines d'heures par encodeur (61 h pour
-    Perch 2.0) : on ne peut pas tout essayer dessus. AnuraSet (Cañas et al. 2023, CC BY) est
+    Perch 2.0) : on ne peut pas tous les essayer dessus. AnuraSet (Cañas et al. 2023, CC BY) est
     un jeu public d'anoures néotropicaux du Brésil, annotés au chant près, enregistrés sur
-    plusieurs sites. Il sert de banc d'essai pour trier 24 encodeurs et des dizaines de têtes
+    plusieurs sites. Il sert de banc d'essai pour trier 24 encodeurs (inférences réalisées sur machines virtuelles) et des dizaines de têtes
     avant de payer l'encodage du corpus ONF.
   liens:
     - [Des anoures tropicaux, "Comme A. blanci : chants brefs et tonals, dans le bruit d'une forêt tropicale (insectes, pluie, autres anoures). DENMIN (5,3 kHz, notes brèves) est l'analogue le plus proche."]
     - [Plusieurs sites, "Quatre sites INCT, chacun avec son micro, sa végétation, son chœur. C'est notre situation : Kaw, Trésor, Mataroni… et demain des points d'écoute jamais annotés."]
-    - [Généraliser à un site neuf, "Le cœur du projet. On ne demande pas au détecteur de reconnaître les sites qu'il a appris, mais de marcher là où personne n'a encore écouté."]
-    - ["Un indicateur, pas un verdict", "D'autres espèces qu'A. blanci, 2 à 4 sites par espèce : on élimine ce qui échoue nettement ; le choix final se fera sur les données de l'ONF."]
+    - [Généraliser à un site neuf, "Le cœur du projet. On ne demande pas au détecteur de reconnaître les sites qu'il a appris, mais de fonctionner là où il n'a pad encore écouté."]
+    - ["Un indicateur, pas un verdict", "D'autres espèces qu'A. blanci, 2 à 4 sites par espèce. Le choix final se fera sur les données de l'ONF."]
   methode:
     - [Un site tenu à l'écart, "Quatre plis : on apprend sur trois sites, on juge sur le quatrième, jamais vu. Les réglages (C de la logistique…) sont choisis par des plis internes, eux aussi par site."]
     - [Apprentissage, "Tous les positifs de l'espèce et 20 négatifs par positif, tirés dans chaque site d'apprentissage."]
     - [Évaluation, "Toutes les fenêtres du site tenu à l'écart, à sa prévalence réelle (plusieurs milliers de négatifs)."]
     - [Comparaisons, "Écart à une référence fixée d'avance (perch_v2 + logistique), bootstrap apparié des enregistrements dans chaque site, correction de Holm. Avec 2 à 4 sites on ne peut pas tirer les sites : l'intervalle reste optimiste."]
   unites:
-    - [Fenêtre, "Chaque fenêtre (5 s, ou 3 et 6 s selon l'encodeur) est une unité, positive si elle contient un chant de l'espèce. C'est ce que voit le détecteur et ce qu'on annote : la mesure la plus fine. Mais deux encodeurs à grille différente ne jugent pas les mêmes fenêtres : la comparaison n'est appariée qu'entre encodeurs à 5 s."]
+    - [Fenêtre, "Chaque fenêtre (3, 5 ou 6 s selon l'encodeur) est une unité, positive si elle contient un chant de l'espèce. C'est ce que voit le détecteur et ce qu'on annote : la mesure la plus fine. Mais deux encodeurs à grille différente ne jugent pas les mêmes fenêtres : la comparaison n'est appariée qu'entre encodeurs à 5 s."]
     - [Minute, "Chaque enregistrement d'une minute est une unité ; son score est le maximum de ses fenêtres. C'est la seule unité identique pour tous les encodeurs (comparaison appariée), et la plus proche de l'usage final : l'espèce chante-t-elle sur cet enregistrement, à ce point d'écoute ? Dans les benchmarks 01 à 06 elle s'appelle « enregistrement »."]
   lectures:
     - [AP moyenne par site, "L'AP est calculée sur chaque site tenu à l'écart, avec ses seuls scores, puis moyennée sur les sites où l'espèce chante. Elle ne juge que le classement à l'intérieur d'un site : les chants passent-ils devant le bruit sur un site neuf ? C'est la lecture principale pour choisir l'encodeur. Plus bruitée (peu de positifs par site), et non définie là où l'espèce est absente."]
-    - [AP poolée, "Les scores des quatre plis, rendus par quatre modèles, sont mis bout à bout et jugés ensemble. Elle juge en plus l'échelle des scores : un même seuil vaut-il pour tous les sites ? Elle pénalise une tête dont les sites finissent sur des échelles différentes (centrage par site, C choisi pli par pli, n° 133)."]
+    - [AP poolée, "Les scores des quatre plis, rendus par quatre modèles, sont mis bout à bout et jugés ensemble. Elle juge en plus l'échelle des scores : un même seuil vaut-il pour tous les sites ? Elle pénalise une tête dont les sites finissent sur des échelles différentes (centrage par site, C choisi pli par pli)."]
   lecture_conseil: >-
     Lire les deux côte à côte : un grand écart entre AP par site et AP poolée signale des sites
     sur des échelles différentes, donc un seuil qui ne voyagera pas. Sur AnuraSet c'est le cas
