@@ -85,8 +85,15 @@ $B status
 $B baselines --channels 0,1                          # → data/reports/baselines.md
 
 # --- Annotation (§5) : uv sync --group app -------------------------------
-$B candidates --random 12 --name lot1             # → data/reports/candidats_lot1.csv
+# Lot 1 et jeu de test, tirés par plan (§5.2–5.5, DECISIONS n° 196) : sans détecteur, graine
+# fixée. Partition des points versionnée (config/plan/partition_v1.csv), tirée une seule fois
+# puis relue ; files → data/reports/files/lot1/ (extraits de 30 s) et files/test_v1/
+# (enregistrements entiers, colonne prob_tirage). Réglages : section `plan` de la config.
+$B candidates --plan
 $B annotate                                          # poste d'écoute dans le navigateur
+
+# Fenêtres au hasard aux heures de pic (hors plan : pas pour le lot 1)
+$B candidates --random 12 --name essai           # → data/reports/candidats_essai.csv
 
 # Enregistrements entiers (audit aléatoire, jeu gelé) ; accord entre deux annotateurs
 $B candidates --entiers 300 --sites Mataroni --reason audit_aleatoire --random 0 --name audit

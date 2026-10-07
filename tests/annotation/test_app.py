@@ -93,7 +93,7 @@ def _multiclass(at):
 
 def _draw(at, intervals):
     """Intervalles « tracés » : la valeur que renverrait le spectrogramme."""
-    key = next(k for k in at.session_state if k.startswith("iv::"))
+    key = next(k for k in at.session_state.filtered_state if k.startswith("iv::"))
     at.session_state[key] = intervals
 
 
@@ -141,6 +141,26 @@ def test_intervals_are_drawn_on_the_whole_recording_and_saved(app_config):
     assert intervals == [(span_id, 4.0, 5.5, "blanci"), (span_id, 8.0, 8.4, "blanci_uncertain")]
     assert any("File terminée" in s.value for s in at.success)
     assert "déjà écouté : A. blanci" in _caption(at)  # le candidat (3–6 s) touche 4–5,5 s
+
+
+def test_a_plan_extract_is_listened_and_saved_alone_then_the_next_one_opens(app_config, tmp_path):
+    """File tirée par plan (n° 196) : l'extrait est la fenêtre du candidat, pas
+    l'enregistrement entier ; l'envoyer ouvre le candidat suivant."""
+    reports = tmp_path / "data" / "reports"
+    queue = pd.read_csv(reports / "candidats_test.csv")
+    plan = pd.concat([queue, queue]).assign(offset_s=[2.0, 7.0], dur_s=4.0, source="plan")
+    plan.to_csv(reports / "candidats_test.csv", index=False)
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.sidebar.text_input[0].input("léonard").run()
+    assert _caption(at).startswith("Candidat 1 / 2")
+    _draw(at, [[3.0, 4.5, "blanci"]])
+    _button(at, "Envoyer l'extrait ▶").click().run()
+    assert not at.exception
+    spans, intervals = _spans(app_config)
+    [(span_id, start, end, _, _, _, source, _)] = spans
+    assert (start, end, source) == (2.0, 6.0, "plan")
+    assert intervals == [(span_id, 3.0, 4.5, "blanci")]
+    assert _caption(at).startswith("Candidat 2 / 2")
 
 
 def test_blanci_ticked_without_interval_is_refused(app_config):
@@ -248,7 +268,9 @@ def test_numbering_follows_the_whole_queue_and_going_back_works(app_config):
     assert _caption(at).startswith("Candidat 3 / 3")
     next(c for c in at.sidebar.checkbox if c.label.startswith("Sauter")).check().run()
     assert _button(at, "◀ Candidat précédent").disabled
-    strip = at.sidebar.selectbox(key=next(k for k in at.session_state if k.startswith("strip::")))
+    strip = at.sidebar.selectbox(
+        key=next(k for k in at.session_state.filtered_state if k.startswith("strip::"))
+    )
     strip.set_value(0).run()
     assert _caption(at).startswith("Candidat 1 / 3")
     _button(at, "Candidat suivant ▶").click().run()

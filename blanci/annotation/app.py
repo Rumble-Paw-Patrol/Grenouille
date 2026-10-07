@@ -372,12 +372,13 @@ def _candidate_strip(queue, done, chosen, key, offset_h) -> None:
 
 
 @st.cache_data(max_entries=6, show_spinner="Lecture de l'enregistrement…")
-def _media(full: str) -> dict:
-    """Enregistrement entier, des deux micros, rangé à côté du visualiseur et gardé en cache :
-    changer de fenêtre ou tracer un intervalle ne relit pas le disque. Le spectrogramme, le
-    volume et la bande d'écoute se font dans le navigateur."""
+def _media(full: str, offset_s: float = 0.0, dur_s: float = math.inf) -> dict:
+    """Enregistrement entier (ou l'extrait [offset_s, offset_s + dur_s]), des deux micros,
+    rangé à côté du visualiseur et gardé en cache : changer de fenêtre ou tracer un
+    intervalle ne relit pas le disque. Le spectrogramme, le volume et la bande d'écoute se
+    font dans le navigateur."""
     full = Path(full)
-    clips = {c: read_clip(full.parent, full.name, 0.0, math.inf, 0.0, c) for c in CHANNELS}
+    clips = {c: read_clip(full.parent, full.name, offset_s, dur_s, 0.0, c) for c in CHANNELS}
     wav, sr, start = clips[0]
     return {
         "t0": start,
@@ -674,11 +675,19 @@ def main() -> None:
 
     intervals: list = []
     channel = spectro_default
+    # Extrait écouté : l'enregistrement entier (n° 182), sauf pour une file tirée par plan,
+    # dont l'extrait est la fenêtre du candidat (30 s du lot 1, n° 196). L'extrait enregistré
+    # est ce qu'on a écouté : tout ce qui y est sans intervalle devient négatif.
+    t0, t1 = (media["t0"], media["t1"]) if media is not None else (0.0, 0.0)
+    planned = candidate.get("source") == "plan"
+    if media is not None and planned and not window_mode and cand_dur < t1 - t0 - 0.05:
+        media = _media(str(full), cand_offset, cand_dur)  # le lecteur ne joue que l'extrait
+        t0, t1 = media["t0"], media["t1"]
     if media is not None:
-        extract = f"{candidate['path']}:{media['t0']:.2f}:{media['t1']:.2f}"
+        extract = f"{candidate['path']}:{t0:.2f}:{t1:.2f}"
         ikey = f"iv::{extract}"
         if ikey not in st.session_state:
-            saved = span_intervals(con, candidate["recording_id"], media["t0"], media["t1"], who)
+            saved = span_intervals(con, candidate["recording_id"], t0, t1, who)
             st.session_state[ikey] = [list(i) for i in saved or []]
         shown = [
             {
@@ -694,8 +703,8 @@ def main() -> None:
         st.session_state.setdefault(ckey, spectro_default)
         _viewer_fragment(
             viewer_args(
-                media["t0"],
-                media["t1"],
+                t0,
+                t1,
                 media["audios"],
                 shown,
                 band_hz,
@@ -718,8 +727,8 @@ def main() -> None:
         if media is not None and _span_form(
             con,
             candidate,
-            media["t0"],
-            media["t1"],
+            t0,
+            t1,
             intervals,
             form_key,
             annotator,
