@@ -1,11 +1,12 @@
 """Bandeau du tableau de bord : spectrogramme d'un vrai chant d'A. blanci, centré sur sa bande.
 
-    uv run --group app python documentation/tableau-de-bord/spectrogramme.py
+    uv run python documentation/tableau-de-bord/spectrogramme.py
 
-Lit l'extrait de 10 s de Mataroni de la présentation de suivi n° 2
-(`documentation/prez/presentation-suivi-2/audio/blanci_net.wav`, canal 0, 24 kHz) et écrit
-`spectrogramme.jpg` (versionné, publié à côté de la page). Fenêtre 3,5–6,3 kHz : la bande du chant
-(4,4–5,5 kHz) au milieu, avec ce qui chante juste au-dessus et au-dessous.
+Lit Molokoi SMA14163, 26/02/2024 à 16 h 30 locales, de 27 à 45 s (canal 0, 48 kHz), sur le
+disque des enregistrements (`paths.raw` de la configuration, lecture seule : le disque doit
+être branché), et écrit `spectrogramme.jpg` (versionné, publié à côté de la page). Fenêtre
+3–6 kHz : la bande du chant (4,4–5,5 kHz) au milieu, avec ce qui chante juste au-dessus et
+au-dessous (choix de Léonard, 07/10/2026).
 """
 
 from __future__ import annotations
@@ -18,18 +19,30 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import soundfile as sf
+from matplotlib.colors import PowerNorm
 from scipy.signal import stft
 
+from blanci.core.config import config_path, default_user_config, load_config
+
 ICI = Path(__file__).resolve().parent
-SOURCE = ICI.parents[0] / "prez" / "presentation-suivi-2" / "audio" / "blanci_net.wav"
+SOURCE = (
+    "Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/"
+    "SMA14163_20240226_163000.wav"
+)
+DEBUT_S, FIN_S = 27.0, 45.0
 SORTIE = ICI / "spectrogramme.jpg"
-BANDE = (3500, 6300)
+BANDE = (3000, 6000)
+# Réglages du poste d'annotation (viewer.py) : dynamique en dB sous le maximum, et contraste,
+# courbe en puissance d'exposant 1 + 0,35 × contraste sur l'échelle (Léonard, 07/10/2026).
+DYNAMIQUE_DB = 70
+CONTRASTE = 8
 
 
 def main() -> None:
-    wav, sr = sf.read(SOURCE)
-    if wav.ndim > 1:
-        wav = wav[:, 0]
+    with sf.SoundFile(config_path(load_config(default_user_config()), "raw") / SOURCE) as f:
+        sr = f.samplerate
+        f.seek(round(DEBUT_S * sr))
+        wav = f.read(round((FIN_S - DEBUT_S) * sr), always_2d=True)[:, 0]
     n = 1024
     f, t, z = stft(wav, fs=sr, nperseg=n, noverlap=n * 7 // 8)
     s = 20 * np.log10(np.abs(z) + 1e-9)
@@ -37,9 +50,8 @@ def main() -> None:
     vmax = np.percentile(s[garde], 99.7)
     fig = plt.figure(figsize=(14, 2))
     ax = fig.add_axes([0, 0, 1, 1])
-    ax.pcolormesh(
-        t, f[garde], s[garde], shading="gouraud", cmap="magma", vmin=vmax - 50, vmax=vmax
-    )
+    norme = PowerNorm(1 + 0.35 * CONTRASTE, vmin=vmax - DYNAMIQUE_DB, vmax=vmax, clip=True)
+    ax.pcolormesh(t, f[garde], s[garde], shading="gouraud", cmap="magma", norm=norme)
     ax.set_xlim(t[0], t[-1])
     ax.set_ylim(*BANDE)
     ax.set_axis_off()

@@ -6,7 +6,7 @@
 /* Mise en page : barre latérale fixe (sections) + colonne de lecture. Habillage « nuit
    guyanaise » : fond de sous-bois la nuit, lueurs tirées de la palette du spectrogramme
    (inferno : braise, ambre, jaune pâle), panneaux en verre dépoli. Le bandeau est une fenêtre
-   d'écoute : une tête de lecture balaie les 10 s du chant d'A. blanci (spectrogramme.py).
+   d'écoute : une tête de lecture balaie les 18 s du chant d'A. blanci (spectrogramme.py).
    Sombre par défaut ; le thème clair garde le bandeau et la barre latérale de nuit. */
 :root {
   --bg: #050B0A;
@@ -148,7 +148,7 @@ main { padding-inline: clamp(16px, 4vw, 56px); padding-block: 0 96px; min-width:
 .spectro .tete-lecture { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; z-index: 2; background: linear-gradient(180deg, transparent, #FFF6DC 20%, #FFF6DC 80%, transparent); box-shadow: 0 0 12px 2px rgba(255, 224, 138, .8), 0 0 40px 8px rgba(245, 165, 58, .35); pointer-events: none; opacity: 0; }
 .spectro .tete-lecture::before { content: ""; position: absolute; top: 0; bottom: 0; right: 2px; width: 90px; background: linear-gradient(90deg, transparent, rgba(255, 224, 138, .12)); }
 @media (prefers-reduced-motion: no-preference) {
-  .spectro .tete-lecture { opacity: 1; animation: balayage 10s linear infinite; }
+  .spectro .tete-lecture { opacity: 1; animation: balayage 18s linear infinite; }
   @keyframes balayage { from { left: 0; } to { left: 100%; } }
   .bande .eyebrow::before { animation: enregistre 1.8s ease-out infinite; }
   @keyframes enregistre { 0% { box-shadow: 0 0 0 0 rgba(255, 90, 78, .6); } 80%, 100% { box-shadow: 0 0 0 9px rgba(255, 90, 78, 0); } }
@@ -156,7 +156,7 @@ main { padding-inline: clamp(16px, 4vw, 56px); padding-block: 0 96px; min-width:
   .bande > :nth-child(2) { animation-delay: .08s; } .bande > :nth-child(3) { animation-delay: .16s; } .bande > :nth-child(4) { animation-delay: .24s; } .bande > :nth-child(5) { animation-delay: .32s; }
   @keyframes leve { from { transform: translateY(14px); filter: blur(4px); } to { transform: none; filter: none; } }
 }
-.spectro .bande-f { position: absolute; left: 0; right: 0; top: 28.6%; height: 39.3%; z-index: 1; border-block: 1px dashed rgba(255, 224, 138, .85); background: linear-gradient(180deg, rgba(255, 224, 138, .05), rgba(255, 224, 138, 0) 50%, rgba(255, 224, 138, .05)); pointer-events: none; }
+.spectro .bande-f { position: absolute; left: 0; right: 0; top: 16.7%; height: 36.7%; z-index: 1; border-block: 1px dashed rgba(255, 224, 138, .85); background: linear-gradient(180deg, rgba(255, 224, 138, .05), rgba(255, 224, 138, 0) 50%, rgba(255, 224, 138, .05)); pointer-events: none; }
 .spectro .axe { position: absolute; z-index: 2; left: 8px; font-family: var(--f-mono); font-size: 10.5px; color: #FFF0C8; background: rgba(0, 0, 0, .45); padding: 2px 6px; border-radius: 4px; line-height: 1.2; backdrop-filter: blur(4px); }
 .spectro-legende { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; font-family: var(--f-mono); font-size: 11px; color: var(--nuit-muted); }
 .spectro-legende #maj { color: var(--nuit-or); }
@@ -479,13 +479,13 @@ section.sous-vue .vue-tete h2 { font-size: clamp(19px, 2.1vw, 24px); }
       <p id="objectif"></p>
       <div class="perchoir" aria-hidden="true"><canvas id="grenouille"></canvas></div>
       <div class="spectro">
-        <img src="spectrogramme.jpg" alt="Spectrogramme de 10 s d'un chant d'A. blanci enregistré à Mataroni, de 3,5 à 6,3 kHz : notes brèves et régulières vers 4,4 kHz">
+        <img src="spectrogramme.jpg" alt="Spectrogramme de 18 s d'un chant d'A. blanci enregistré à Molokoi, de 3 à 6 kHz : notes brèves et régulières vers 5 kHz">
         <span class="bande-f" aria-hidden="true"></span>
         <span class="tete-lecture" aria-hidden="true"></span>
-        <span class="axe" style="top:6px" aria-hidden="true">6,3 kHz</span>
-        <span class="axe" style="bottom:6px" aria-hidden="true">3,5 kHz</span>
+        <span class="axe" style="top:6px" aria-hidden="true">6 kHz</span>
+        <span class="axe" style="bottom:6px" aria-hidden="true">3 kHz</span>
       </div>
-      <div class="spectro-legende"><span>chant d'A. blanci enregistré à Mataroni, 10 s : note de 0,09 s · toutes les 1,2–1,9 s · bande 4,4–5,5 kHz en pointillés</span><span id="maj"></span></div>
+      <div class="spectro-legende"><span>chant d'A. blanci enregistré à Molokoi le 26/02/2024, 18 s : notes de 0,09 s · bande 4,4–5,5 kHz en pointillés</span><span id="maj"></span></div>
     </header>
     <div id="vues"></div>
   </main>
@@ -985,6 +985,8 @@ function camemberts() {
   const P = C.plan_annotation, A = C.apprentissage_actif;
   s.append(carte(T["annotation"].cartes.plan.titre, P.contexte, etapesEl(P.etapes, P.etapes.length - 1),
     el("h4", { class: "eyebrow", style: "margin-top:4px" }, T["annotation"].phrases.titre_principes), puces(P.principes)));
+  if (C.files_ecoute) s.append(carteT("annotation", "files",
+    el("ul", { class: "principes deux-colonnes" }, C.files_ecoute.map(([nom, d]) => el("li", {}, el("strong", { class: "mono" }, nom), el("span", { class: "sous" }, d))))));
   s.append(carte(T["annotation"].cartes.apprentissage_actif.titre, A.contexte, etapesEl(A.boucle, -1),
     el("p", { class: "sous" }, T["annotation"].phrases.boucle),
     el("h4", { class: "eyebrow", style: "margin-top:4px" }, T["annotation"].phrases.titre_methodes),
