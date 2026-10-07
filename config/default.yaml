@@ -34,6 +34,40 @@ signal:
 # Heures locales à traiter en priorité (Courtois et al. 2025) : [début, fin[.
 peak_hours_local: [[7, 9], [15, 17]]
 
+# Tirage par plan du lot 1 (`blanci candidates --plan`, DECISIONS §5.2–5.5, n° 196).
+plan:
+  seed: 2026
+  partition_file: config/plan/partition_v1.csv   # versionnée : relue, jamais retirée
+  level2_site: RNRT                # site 2026 tenu à l'écart en entier (Léonard, 07/10)
+  level1_fraction: 0.2             # part des points de chacun des autres sites 2026
+  # 2023 : le point est la station, avec ses micros successifs (dates et dossiers SM4 C/D/E/F).
+  stations_2023:
+    Kaw: {C: [SMA13599], D: [SMA14079, SMA15429]}
+    Molokoi: {F: [SMA14163], E: [SMA14157, SMA14636]}
+    Tresor: {A: [SMA13417], B: [SMA13496]}
+  tranches:                        # heure locale, [début, fin[ (§5.3)
+    aube: [5, 7]
+    pic_matin: [7, 9]
+    journee: [9, 15]
+    pic_soir: [15, 17]
+    soir: [17, 20]
+  periods_2023:                    # mois locaux (§5.3)
+    haute_fevmars: [2, 3]
+    haute: [12, 1, 4]
+    transition: [5, 6, 11]
+    basse: [7, 8, 9, 10]
+  lot1:
+    extract_s: 30
+    per_point_2026: 3              # pic du matin, pic du soir, une autre tranche au hasard
+    per_station_2023: 50
+    periods_2023: {haute_fevmars: 0.3333, haute: 0.1667, transition: 0.2, basse: 0.3}
+    peak_share: 0.6
+  test:
+    n: 250                         # réparti à parts égales entre les trois niveaux
+    peak_weight: 2                 # strates surreprésentées deux fois (§5.5)
+    high_weight: 2
+    high_periods: [haute_fevmars, haute]
+
 # Grilles de fenêtres, indépendantes de l'encodeur (§4). Pas ≤ moitié de la fenêtre (§1).
 grids:
   w3: {window_s: 3.0, hop_s: 1.5}

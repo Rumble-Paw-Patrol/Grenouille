@@ -385,7 +385,7 @@ def test_viewer_serves_its_files_next_to_the_page(tmp_path, monkeypatch):
     assert args["extract"] == "a.wav:1.00:7.00" and args["channel"] == 1
     assert args["intervals"] == [[2.0, 2.5, "blanci"]]
     assert args["audios"] == [{"name": "micro 1", "src": src, "start": 1.0}]
-    page = (viewer._prepare() / "index.html").read_text()
+    page = (viewer._prepare() / "index.html").read_text(encoding="utf-8")
     assert "__MAGMA__" not in page and "[0, 0, 4]" in page
 
 

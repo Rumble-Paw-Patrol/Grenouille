@@ -35,6 +35,7 @@ QUALITIES = ("A", "B", "C")
 # ce qu'il vaut (n° 154) ; jamais mêlé à l'audit aléatoire, qui mesure le rappel.
 # « external » : réponse d'un outil externe (Raven, Audacity, YAPAT…) sur des extraits exportés
 # (`selection.import_clip_labels`).
+# « plan » : lot 1 et jeu de test tirés par plan, sans détecteur (`annotation.plan`, n° 196).
 SOURCES = (
     "similarity",
     "active",
@@ -49,6 +50,7 @@ SOURCES = (
     "gap",
     "external",
     "flag",
+    "plan",
 )
 
 

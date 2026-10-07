@@ -1824,11 +1824,22 @@ def candidates(
     sites: Annotated[str | None, typer.Option(help="Sites, ex. « CDR,PatawaOuest ».")] = None,
     name: Annotated[str, typer.Option(help="Nom de la file : candidats_<nom>.csv.")] = "lot1",
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
+    plan: Annotated[
+        bool,
+        typer.Option(
+            "--plan",
+            help="Tirage par plan (§5.2–5.5) : partition des points, lot 1 et jeu de test, "
+            "réglés par la section `plan` de la configuration (les autres options sont ignorées).",
+        ),
+    ] = False,
 ) -> None:
-    """File d'écoute pour le poste d'annotation (§5) : strate aléatoire,
-    enregistrements entiers (audit aléatoire et jeu gelé, §6)."""
+    """File d'écoute pour le poste d'annotation (§5) : tirage par plan du lot 1 (`--plan`),
+    strate aléatoire, enregistrements entiers (audit aléatoire et jeu gelé, §6)."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
+    if plan:
+        _plan_queues(con, cfg)
+        return
     wanted = _split(sites) or None
     parts = []
     if random:
@@ -1850,6 +1861,33 @@ def candidates(
         config_path(cfg, "reports") / f"candidats_{name}.csv",
         f"{len(queue)} candidats",
     )
+
+
+def _plan_queues(con, cfg: dict[str, Any]) -> None:
+    """Partition versionnée, files `files/lot1/` et `files/test_v1/` (DECISIONS n° 196)."""
+    from blanci.annotation.plan import draw_plan
+    from blanci.annotation.selection import write_queue
+
+    partition_path = project_path(cfg["plan"]["partition_file"])
+    drawn = draw_plan(con, cfg, partition_path)
+    partition = drawn["partition"]
+    typer.echo(
+        f"partition {'tirée et écrite' if drawn['partition_drawn'] else 'relue'} : {partition_path}"
+    )
+    for (dataset, site), part in partition.groupby(["dataset", "site"]):
+        counts = ", ".join(f"{k} {v}" for k, v in part["niveau"].value_counts().items())
+        typer.echo(f"  {dataset} {site:<12} {counts}")
+    settings = {
+        "méthode": "tirage par plan, sans détecteur ni score (DECISIONS §5.2–5.5, n° 196)",
+        "graine": cfg["plan"]["seed"],
+        "partition": cfg["plan"]["partition_file"],
+    }
+    for key, title in (("lot1", "lot1"), ("test", "test_v1")):
+        queue = drawn[key]
+        path = write_queue(cfg, queue, title, settings)
+        typer.echo(f"{title} : {len(queue)} candidats, {path}")
+        for niveau, n in queue["niveau"].value_counts().sort_index().items():
+            typer.echo(f"  {niveau:<14} {n}")
 
 
 @app.command()

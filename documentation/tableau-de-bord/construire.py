@@ -282,6 +282,9 @@ def anuraset_jeu() -> dict:
     # fichiers (signalée sans chant daté, n° 138), d'où le maximum sur les espèces.
     sites = ts.groupby(["site", "level"])["total"].max().unstack("level")
     especes = pd.read_csv(BENCH / "2026-09-28_anuraset_perch_v2" / "donnees" / "especes.csv")
+    # Quantiles des durées de chant (durees_chants.py) : médiane et 90e centile identiques.
+    durees = pd.read_csv(ICI / "durees_chants.csv").rename(columns={"espece": "species"})
+    especes = especes.merge(durees, on="species", how="left")
     return {
         "sites": [
             {"site": s, "fenetres": int(r["fenetre"]), "minutes": int(r["minute"])}
@@ -295,9 +298,12 @@ def anuraset_jeu() -> dict:
                 "n_calls",
                 "n_recordings",
                 "n_sites",
-                "duration_median_s",
-                "duration_p90_s",
                 "dominant_hz",
+                "p10_s",
+                "q1_s",
+                "mediane_s",
+                "q3_s",
+                "p90_s",
             ],
         ),
     }
@@ -359,19 +365,24 @@ def tableaux(fichiers: dict[str, str]) -> list[dict]:
 
 # Source de labels qui ne relève pas du plan d'annotation v1 : l'écoute des enregistrements
 # écartés par un drapeau.
-HORS_PLAN = ("flag",)
+# Hors plan : drapeaux posés à l'écoute, et labels du détecteur externe, sortis de
+# l'entraînement et de l'évaluation (DECISIONS n° 157).
+HORS_PLAN = ("flag", "import")
 
 
 def annotations(config: Path | None) -> dict:
     """Avancement du plan d'annotation v1, compté dans la base locale (lecture seule).
 
     Entraînement : enregistrements hors jeu gelé ayant au moins un label du plan. Évaluation :
-    enregistrements du jeu gelé (toutes versions) ayant au moins un label ; positifs : ceux qui
+    enregistrements du jeu gelé (toutes versions) ou du jeu de test v1 tiré par plan
+    (`files/test_v1/`) ayant au moins un label ; positifs : ceux qui
     ont au moins une fenêtre positive. Dernier label de chaque fenêtre. Sans base, relit
     annotations.json (dernier comptage connu).
     """
     sauvegarde = ICI / "annotations.json"
     try:
+        import pandas as pd
+
         from blanci.core.config import config_path, load_config
         from blanci.inputs.dataset import current_labels, recordings_table
         from blanci.inputs.frozen import frozen_recordings
@@ -385,7 +396,15 @@ def annotations(config: Path | None) -> dict:
             raise FileNotFoundError(base)
         con = sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)
         try:
-            labels = current_labels(con)
+            labels = current_labels(con)[["recording_id", "label", "source"]]
+            # Annotation par intervalles (n° 182) : un extrait écouté, positif s'il porte un
+            # intervalle d'A. blanci ; « background » sinon (seul le caractère positif compte).
+            spans = pd.read_sql_query(
+                "SELECT s.recording_id, COALESCE(i.label, 'background') AS label, s.source "
+                "FROM spans s LEFT JOIN intervals i USING (span_id)",
+                con,
+            )
+            labels = pd.concat([labels, spans], ignore_index=True)
             recs = recordings_table(con)[["recording_id", "site", "mic_id"]]
         finally:
             con.close()
@@ -393,6 +412,10 @@ def annotations(config: Path | None) -> dict:
             geles = frozen_recordings(cfg)
         except (OSError, ValueError):
             geles = set()
+        # Jeu de test v1 tiré par plan (n° 196), avant son gel : compté en évaluation.
+        test_v1 = config_path(cfg, "reports") / "files" / "test_v1" / "candidats.csv"
+        if test_v1.exists():
+            geles = set(geles) | set(pd.read_csv(test_v1, usecols=["recording_id"])["recording_id"])
     except (ImportError, OSError, sqlite3.Error) as err:
         if sauvegarde.exists():
             ancien = json.loads(sauvegarde.read_text(encoding="utf-8"))
@@ -498,7 +521,9 @@ def encodage(config: Path | None, structure: dict) -> dict:
         if not (sortie[nom].get("statut") == "fini" and m["statut"] != "fini"):
             sortie[nom].update(m)
     sauvegarde.write_text(
-        json.dumps({n: v for n, v in sortie.items() if v.get("statut")}, ensure_ascii=False, indent=1),
+        json.dumps(
+            {n: v for n, v in sortie.items() if v.get("statut")}, ensure_ascii=False, indent=1
+        ),
         encoding="utf-8",
     )
     return {"encodeurs": sortie, "source": "base locale"}
@@ -516,7 +541,15 @@ AUTOMATIQUE = (
 )
 # Ce que le tableau de bord ne montre pas, volontairement.
 # resultats/ : sorties brutes des calculs, déjà rassemblées dans les CSV des benchmarks.
-IGNORE = ("resultats/", "DECISIONS.md", "uv.lock", ".gitignore", ".python-version", ".claude/", "config/")
+IGNORE = (
+    "resultats/",
+    "DECISIONS.md",
+    "uv.lock",
+    ".gitignore",
+    ".python-version",
+    ".claude/",
+    "config/",
+)
 
 
 def commandes_cli() -> set[str]:
@@ -537,7 +570,9 @@ def charger_contenu() -> dict:
     textes_chaine = textes.pop("chaine")
     for etape in contenu["chaine"]:
         if etape["id"] not in textes_chaine:
-            raise SystemExit(f"textes.yaml : pas de textes pour l'étape « {etape['id']} » (chaine:)")
+            raise SystemExit(
+                f"textes.yaml : pas de textes pour l'étape « {etape['id']} » (chaine:)"
+            )
         etape.update(textes_chaine[etape["id"]])
     contenu.update(textes)
     contenu.update(lire("en_cours.yaml"))
@@ -660,6 +695,9 @@ def main() -> None:
         "tableaux": tableaux(fichiers),
         "biblio": (DOC / "biblio" / "biblio.md").read_text(encoding="utf-8"),
         "poste": "poste-annotation.png" if (ICI / "poste-annotation.png").exists() else None,
+        "grenouille": json.loads((ICI / "grenouille.json").read_text(encoding="utf-8"))
+        if (ICI / "grenouille.json").exists()
+        else None,
     }
     brut = json.dumps(donnees, ensure_ascii=False, separators=(",", ":"), default=str)
     brut = brut.replace("</", "<\\/")  # pas de </script> dans les données

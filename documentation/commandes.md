@@ -48,8 +48,9 @@ enregistrements de 120 s :
 | 5 s | 2,5 s | 47 | 4 517 593 |
 | 6 s | 3 s | 39 | 3 748 641 |
 
-Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 8 micros
-dans le sac ; 96 109 enregistrements de 120 s restent encodables. Les 1 521 à l'horloge
+Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 895 micros
+dans le sac ou étouffés (calculés, suites d'au moins 2 h, DECISIONS n° 194) et 8 notés à
+l'écoute ; 95 214 enregistrements restent encodables. Les 1 521 à l'horloge
 douteuse (Molokoi SMA14636, avril 2024) sont réintégrés : `clock_off` n'est plus qu'une
 remarque. Détail et anomalies : DECISIONS n° 153, 154 et 191.
 
@@ -84,8 +85,15 @@ $B status
 $B baselines --channels 0,1                          # → data/reports/baselines.md
 
 # --- Annotation (§5) : uv sync --group app -------------------------------
-$B candidates --random 12 --name lot1             # → data/reports/candidats_lot1.csv
+# Lot 1 et jeu de test, tirés par plan (§5.2–5.5, DECISIONS n° 196) : sans détecteur, graine
+# fixée. Partition des points versionnée (config/plan/partition_v1.csv), tirée une seule fois
+# puis relue ; files → data/reports/files/lot1/ (extraits de 30 s) et files/test_v1/
+# (enregistrements entiers, colonne prob_tirage). Réglages : section `plan` de la config.
+$B candidates --plan
 $B annotate                                          # poste d'écoute dans le navigateur
+
+# Fenêtres au hasard aux heures de pic (hors plan : pas pour le lot 1)
+$B candidates --random 12 --name essai           # → data/reports/candidats_essai.csv
 
 # Enregistrements entiers (audit aléatoire, jeu gelé) ; accord entre deux annotateurs
 $B candidates --entiers 300 --sites Mataroni --reason audit_aleatoire --random 0 --name audit

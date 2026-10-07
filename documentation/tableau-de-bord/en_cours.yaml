@@ -1,18 +1,22 @@
 # Travail en cours : LE SEUL FICHIER DU TABLEAU DE BORD À TENIR À LA MAIN.
-# Un chantier = titre, etat (en_cours | a_venir | bloque | fait), detail, suite (prochaine action).
+# Un chantier = titre, etat (en_cours | a_venir | bloque | fait | termine), detail, suite (prochaine action).
+# « termine » : chantier fini qu'on garde affiché, pastille verte « terminé ».
 # Retirer un chantier quand il est fini. Puis : /tableau-de-bord (ou demander « mets à jour le
 # tableau de bord »).
 
 en_cours:
   - titre: Benchmark des encodeurs et des têtes sur AnuraSet
-    etat: en_cours
+    etat: termine
     detail: >-
       Confection des sections de benchmark sur AnuraSet du tableau de bord : encodeurs et têtes à la carte, amorçage d'un site neuf. Plus le temps d'encodage du corpus ONF.
   - titre: Annotation de mes données
     etat: en_cours
     detail: >-
       Répartir les points d'écoute entre le training set et le test set avant toute écoute (pour éviter un data leakage), puis annoter les extraits par point d'écoute, heure, date.
-    suite: Préparer la validation par k-fold
+    suite: >-
+      Partition des points et files tirées par plan (DECISIONS n° 196) : annoter le lot 1
+      (424 extraits de 30 s), puis le jeu de test (250 enregistrements entiers). Ensuite,
+      préparer la validation par k-fold.
   - titre: Façonnement du poste d'annotation
     etat: en_cours
     detail: >-
