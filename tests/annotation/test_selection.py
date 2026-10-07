@@ -188,10 +188,12 @@ def test_clip_bridge_exports_clips_and_reads_answers_back(scored, cfg, tmp_path)
 
 def test_write_queue_is_read_by_the_workbench(scored, cfg):  # noqa: F811
     from blanci.annotation.workbench import load_candidates
+    from blanci.core.config import config_path
 
     queue = select_candidates(scored, cfg, "audit", n=2)
     path = write_queue(cfg, queue, "audit_essai")
-    assert path.name == "candidats_audit_essai.csv"
+    assert path == config_path(cfg, "reports") / "files" / "audit_essai" / "candidats.csv"
+    assert "audit" in (path.parent / "LISEZMOI.md").read_text(encoding="utf-8")
     again = load_candidates(path, scored)
     assert len(again) == 2 and (again["source"] == "audit").all()
 

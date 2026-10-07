@@ -1,7 +1,7 @@
 """Poste d'annotation Streamlit (§5, M2, DECISIONS n° 100) : outil de travail, pas le livrable.
 
     uv sync --group app
-    uv run blanci --config config/local.yaml annotate
+    uv run blanci annotate   (les enregistrements sont cherchés sur les disques branchés)
 
 - **Mode de sélection** (panneau de gauche) : une file déjà écrite, ou une nouvelle file tirée
   sur place par n'importe quelle méthode de l'outil de sélection (`blanci/annotation/selection.py` :
@@ -59,6 +59,7 @@ from blanci.annotation.workbench import (
 )
 from blanci.core.config import config_path, default_user_config, load_config
 from blanci.core.db import connect, window_id_for
+from blanci.core.locate import locate, remember_root, remembered_roots
 from blanci.inputs.labels import QUALITIES
 
 CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
@@ -93,8 +94,8 @@ NEEDS_ENCODER = (
 
 def _config_file() -> Path | None:
     """`--config` après `--` sur la ligne de commande streamlit, sinon $BLANCI_CONFIG, sinon
-    `config/local.yaml` s'il existe (racine du disque externe) : sans lui, `paths.raw` pointe
-    sur `data/raw`, absent, et toutes les lectures échouent."""
+    `config/local.yaml` s'il existe. Pas indispensable pour écouter : les enregistrements sont
+    aussi cherchés sur les disques branchés (`blanci.core.locate`)."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=None)
     args, _ = parser.parse_known_args(sys.argv[1:])
@@ -110,9 +111,15 @@ def _setup(config: Path | None):
 
 
 def _queues(reports: Path) -> list[Path]:
-    patterns = ("candidats_*.csv", "queue_*.csv", "search_*.csv")
+    """Files de candidats : un dossier par file (`files/<nom>/candidats.csv`), et les anciens
+    CSV posés à plat dans `paths.reports`."""
+    patterns = ("files/*/candidats.csv", "candidats_*.csv", "queue_*.csv", "search_*.csv")
     found = {p for pattern in patterns for p in reports.glob(pattern)}
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def _queue_name(path: Path) -> str:
+    return path.parent.name if path.name == "candidats.csv" else path.name
 
 
 def _encoders(con) -> list[str]:
@@ -160,9 +167,11 @@ def _selection_panel(cfg, con, reports: Path) -> tuple[str, Path | None, str | N
             return mode, None, encoder
         wanted = st.session_state.get("queue_path")
         index = next((i for i, q in enumerate(queues) if str(q) == wanted), 0)
-        chosen = st.selectbox(
-            "File de candidats", queues, index=index, format_func=lambda p: p.name
-        )
+        chosen = st.selectbox("File de candidats", queues, index=index, format_func=_queue_name)
+        readme = chosen.parent / "LISEZMOI.md"
+        if chosen.name == "candidats.csv" and readme.is_file():
+            with st.expander("D'où vient cette file ?"):
+                st.markdown(readme.read_text(encoding="utf-8"))
         return mode, chosen, encoder
     if mode == MAP:
         return mode, None, encoder
@@ -221,7 +230,9 @@ def _selection_panel(cfg, con, reports: Path) -> tuple[str, Path | None, str | N
             st.warning("Aucun candidat.")
             return mode, None, encoder
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        _open_queue(write_queue(cfg, queue, f"{mode}_{stamp}"))
+        about = {"mode": MODES[mode], "encodeur": encoder} | options
+        about["annotateur"] = st.session_state.get("annotator")
+        _open_queue(write_queue(cfg, queue, f"{mode}_{stamp}", about))
     return mode, None, encoder
 
 
@@ -276,7 +287,13 @@ def _map_page(cfg, con, encoder: str | None, config: Path | None) -> None:
     st.write(f"{len(chosen)} fenêtres dans la zone, dont {len(unheard)} jamais écoutées.")
     if len(unheard) and st.button(f"Écouter la zone ({len(unheard)} fenêtres)", type="primary"):
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        _open_queue(write_queue(cfg, map_selection(con, unheard), f"carte_{stamp}"))
+        about = {
+            "mode": MODES[MAP],
+            "encodeur": encoder,
+            "projection": method,
+            "zone": f"x {x0:.2f}…{x1:.2f}, y {y0:.2f}…{y1:.2f}",
+        }
+        _open_queue(write_queue(cfg, map_selection(con, unheard), f"carte_{stamp}", about))
 
 
 # --- Groupes : étiquetage en bloc ----------------------------------------------------------------
@@ -355,11 +372,12 @@ def _candidate_strip(queue, done, chosen, key, offset_h) -> None:
 
 
 @st.cache_data(max_entries=6, show_spinner="Lecture de l'enregistrement…")
-def _media(raw: str, path: str) -> dict:
+def _media(full: str) -> dict:
     """Enregistrement entier, des deux micros, rangé à côté du visualiseur et gardé en cache :
     changer de fenêtre ou tracer un intervalle ne relit pas le disque. Le spectrogramme, le
     volume et la bande d'écoute se font dans le navigateur."""
-    clips = {c: read_clip(Path(raw), path, 0.0, math.inf, 0.0, c) for c in CHANNELS}
+    full = Path(full)
+    clips = {c: read_clip(full.parent, full.name, 0.0, math.inf, 0.0, c) for c in CHANNELS}
     wav, sr, start = clips[0]
     return {
         "t0": start,
@@ -498,22 +516,34 @@ NO_GREY = """<style>
 </style>"""
 
 
-def _read_error(raw: Path, path: str, exc: Exception) -> str:
-    """Message de lecture impossible : libsndfile dit « System error » pour un fichier absent,
-    on dit plutôt où il était attendu et quoi vérifier."""
-    full = Path(raw) / path
-    if not Path(raw).is_dir():
-        return (
-            f"Dossier des enregistrements introuvable : {raw}. Disque débranché, ou "
-            "`paths.raw` à corriger dans la config locale (lancer avec `--config "
-            "config/local.yaml`)."
+def _recordings_root(cfg) -> list[Path]:
+    """Dossiers collés à la main (retenus à côté de la base), en plus des disques branchés que
+    `locate` parcourt seul."""
+    return remembered_roots(config_path(cfg, "db"))
+
+
+def _missing_recording(cfg, path: str) -> None:
+    """Enregistrement introuvable sur tous les disques : on le dit, et on propose de coller le
+    dossier où il se trouve (retenu pour les fois suivantes)."""
+    st.error(
+        f"Enregistrement introuvable sur les disques branchés : {path}. Brancher le disque, "
+        "ou coller ci-dessous le dossier qui contient ce chemin."
+    )
+    folder = (
+        st.text_input(
+            "Dossier des enregistrements",
+            placeholder="/Volumes/MonDisque  ou  D:\\",
+            help="Le dossier d'où part le chemin ci-dessus (souvent la racine du disque). Retenu "
+            "pour les prochaines fois.",
         )
-    if not full.is_file():
-        return (
-            f"Enregistrement introuvable : {full}. Fichier déplacé ou renommé, ou `paths.raw` "
-            "ne pointe pas sur la racine utilisée à l'inventaire."
-        )
-    return f"Lecture impossible : {full} ({exc}). Fichier ouvert ailleurs ou abîmé ?"
+        .strip()
+        .strip('"')
+    )
+    if folder:
+        if (Path(folder) / path).is_file():
+            remember_root(config_path(cfg, "db"), Path(folder))
+            st.rerun()
+        st.warning(f"Pas de {path} sous {folder}.")
 
 
 def main() -> None:
@@ -523,6 +553,7 @@ def main() -> None:
     cfg, con = _setup(config)
     _apply_pending_queue()
     raw, reports = config_path(cfg, "raw"), config_path(cfg, "reports")
+    extra = _recordings_root(cfg)
     band_hz = tuple(float(f) for f in cfg["signal"]["band_hz"])
     spectro_default = int(cfg["audio"]["channel"] == 1)
 
@@ -616,14 +647,15 @@ def main() -> None:
         + (f" · déjà écouté : {NAMES.get(heard, heard)}" if heard else "")
     )
 
-    try:
-        media = _media(
-            str(raw),
-            str(candidate["path"]),
-        )
-    except Exception as exc:  # disque débranché, fichier déplacé
-        st.error(_read_error(raw, str(candidate["path"]), exc))
-        media = None
+    media = None
+    full = locate(str(candidate["path"]), raw, extra)
+    if full is None:  # disque débranché, fichier déplacé
+        _missing_recording(cfg, str(candidate["path"]))
+    else:
+        try:
+            media = _media(str(full))
+        except Exception as exc:  # fichier ouvert ailleurs, abîmé
+            st.error(f"Lecture impossible : {full} ({exc}). Fichier ouvert ailleurs ou abîmé ?")
 
     # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait (mode fenêtres).
     cand_offset, cand_dur = float(candidate["offset_s"]), float(candidate["dur_s"])

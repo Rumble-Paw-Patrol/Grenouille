@@ -3,8 +3,9 @@ sortie.
 
 Chaque méthode rend une file au format du poste d'annotation (`workbench.CANDIDATE_COLUMNS` :
 recording_id, path, site, mic_id, start_utc, offset_s, dur_s, score, reason, source), écrite
-en `paths.reports/candidats_<nom>.csv` et ouverte telle quelle par `blanci annotate`. La
-colonne `source` suit la fenêtre jusqu'au label : on saura quelle méthode a trouvé quoi.
+en `paths.reports/files/<nom>/candidats.csv` (avec un `LISEZMOI.md`) et ouverte telle quelle
+par `blanci annotate`. La colonne `source` suit la fenêtre jusqu'au label : on saura quelle
+méthode a trouvé quoi.
 
 - `active` : file 60-20-20 (incertains, meilleurs scores, aléatoire stratifié micro × heure),
   proportions réglables ; baseline, plus d'aléatoire en début d'entraînement ;
@@ -36,6 +37,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -522,12 +524,45 @@ def select_candidates(
     return _DISPATCH[method](con, cfg, encoder_id=encoder_id, **options)
 
 
-def write_queue(cfg: dict, candidates: pd.DataFrame, name: str) -> Path:
-    """`paths.reports/candidats_<nom>.csv`, ouvert par le poste d'annotation."""
-    path = config_path(cfg, "reports") / f"candidats_{name}.csv"
-    path.parent.mkdir(parents=True, exist_ok=True)
+def queue_dir(cfg: dict) -> Path:
+    """`paths.reports/files/` : une file par dossier."""
+    return config_path(cfg, "reports") / "files"
+
+
+def write_queue(cfg: dict, candidates: pd.DataFrame, name: str, about: dict | None = None) -> Path:
+    """Dossier `paths.reports/files/<nom>/` (DECISIONS n° 195) : `candidats.csv`, ouvert par le
+    poste d'annotation, et `LISEZMOI.md`, qui dit d'où vient la file (réglages, date, contenu).
+    Les enregistrements n'y sont pas copiés : la file ne garde que leurs références."""
+    folder = queue_dir(cfg) / name
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "candidats.csv"
     candidates.to_csv(path, index=False)
+    (folder / "LISEZMOI.md").write_text(_queue_readme(candidates, name, about), encoding="utf-8")
     return path
+
+
+def _queue_readme(candidates: pd.DataFrame, name: str, about: dict | None) -> str:
+    lines = [
+        f"# File de candidats « {name} »",
+        "",
+        f"Écrite le {datetime.now():%d/%m/%Y à %H:%M}. {len(candidates)} candidats, "
+        f"{candidates['recording_id'].nunique()} enregistrements.",
+        "",
+        "`candidats.csv` ne contient que des références (enregistrement, début, durée) : le "
+        "poste d'annotation (`blanci annotate`) retrouve l'audio sur les disques branchés.",
+        "",
+    ]
+    if about:
+        lines += ["## Réglages", ""]
+        lines += [f"- {key} : {value}" for key, value in about.items() if value not in (None, "")]
+        lines.append("")
+    for column, title in (("reason", "Motifs"), ("site", "Sites")):
+        if column in candidates and candidates[column].notna().any():
+            lines += [f"## {title}", ""]
+            counts = candidates[column].fillna("—").value_counts()
+            lines += [f"- {value} : {count}" for value, count in counts.items()]
+            lines.append("")
+    return "\n".join(lines)
 
 
 # --- Étiquetage en bloc par groupe (§5 bis, C2) ---------------------------------------------------

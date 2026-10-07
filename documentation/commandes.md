@@ -163,6 +163,7 @@ $B select --method negative_mining --encoder birdmae-bacpipe1.3.5 --mode false_f
 $B select --method cluster --encoder birdmae-bacpipe1.3.5 --n 10   # puis cluster-status
 $B select --method gaps --encoder birdmae-bacpipe1.3.5   # trous : faux négatifs suspects
 $B select --method gaps --mode labels                     # négatifs annotés à réécouter
+# chaque file : data/reports/files/<nom>/candidats.csv + LISEZMOI.md (réglages, contenu)
 $B cluster-label --encoder birdmae-bacpipe1.3.5 --cluster 7        # groupe homogène
 $B clips-export data/reports/candidats_active.csv    # extraits WAV + manifeste, outil externe
 $B clips-import data/exports/extraits/manifest.csv reponses.xlsx   # réponses → labels

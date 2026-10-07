@@ -3304,3 +3304,21 @@ de Léonard, 01/10/2026.
      n° 191, comptés à partir des 94 588 du 29/09, d'avant le passage audio de `blanci qc`
      (n° 173–174). Le micro 2LA04525 (RNRT, parasites à l'écoute) reste encodable : on ne
      sait pas encore signaler les glitchs (Léonard, 07/10).
+
+## 2026-10-07 — Poste d'annotation sans configuration, une file par dossier
+
+195. **Le poste retrouve seul les enregistrements, et chaque file est un dossier** (Léonard,
+     07/10). La base garde le chemin de chaque enregistrement relatif à la racine du disque ;
+     le poste (`blanci/core/locate.py`) essaie ce chemin sous les racines qui ont déjà marché,
+     `paths.raw`, les dossiers collés à la main, puis chaque disque branché (`/Volumes/*` sur
+     Mac, `D:`–`Z:` sur Windows, `/media`, `/mnt` sous Linux) et un niveau de dossier
+     en dessous. Plusieurs dossiers d'un disque : rien à faire, ils sont dans le chemin ;
+     deux disques : chaque fichier est cherché sur les deux, le premier qui l'a gagne. Coût :
+     un test d'existence par racine essayée, puis la racine trouvée passe devant. Introuvable
+     partout : un champ « Dossier des enregistrements » s'affiche, le dossier collé est retenu
+     dans `data/db/racines_audio.txt`. Les enregistrements ne sont jamais copiés. Les files
+     tirées par le poste, la carte et `blanci select` s'écrivent en
+     `data/reports/files/<nom>/` : `candidats.csv` et `LISEZMOI.md` (mode, encodeur,
+     réglages, date, motifs, sites), affiché sous la liste des files (« D'où vient cette
+     file ? »). Les anciens `candidats_*.csv` à plat se lisent toujours. Les autres commandes
+     (encodage, benchmarks) lisent encore `paths.raw` seul.

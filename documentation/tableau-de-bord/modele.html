@@ -74,6 +74,8 @@ h1, h2, h3, h4 { font-family: var(--f-display); text-wrap: balance; line-height:
 .nav a:hover { color: var(--deep-ink); background: rgba(255,255,255,.06); }
 .nav a.actif { color: var(--deep-ink); background: rgba(255,255,255,.1); box-shadow: inset 2px 0 0 var(--gold); }
 .nav small { color: var(--deep-muted); font-family: var(--f-mono); font-size: 11px; opacity: .8; }
+.nav a.sous { margin-left: 12px; padding-block: 5px; font-size: 13.5px; border-radius: 0 6px 6px 0; border-left: 1px solid rgba(255,255,255,.16); }
+.nav a.parent-actif { color: var(--deep-ink); }
 .side .pied { margin-top: auto; color: var(--deep-muted); font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
 .side .pied a { color: var(--deep-ink); }
 
@@ -266,6 +268,39 @@ tr.nouveau-groupe td { border-top: 2px solid var(--line); }
 .principes.deux-colonnes li strong { display: block; }
 @media (max-width: 700px) { .principes.deux-colonnes { grid-template-columns: 1fr; } }
 
+/* Section AnuraSet */
+section.sous-vue { padding-top: 32px; }
+section.sous-vue .vue-tete h2 { font-size: 22px; }
+.intro-anura { display: grid; gap: 14px; font-size: 14.5px; }
+.intro-anura > p { margin: 0; }
+.intro-anura h4 { font-size: 15.5px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.intro-anura ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.intro-anura .conseil { background: var(--gold-soft); border-left: 3px solid var(--gold); padding: 10px 12px; border-radius: 0 6px 6px 0; margin: 0; }
+.plis { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)); gap: 4px; font-size: 12.5px; }
+.plis > span { padding: 5px 6px; border-radius: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plis .tete-p { color: var(--muted); font-weight: 600; background: none; }
+.plis .app { background: var(--surface-2); color: var(--muted); }
+.plis .test { background: var(--accent); color: var(--accent-ink); font-weight: 650; }
+.minute-bande { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; }
+.minute-bande span { height: 26px; border-radius: 3px; background: var(--surface-2); display: grid; place-items: center; font-size: 10.5px; color: var(--muted); font-family: var(--f-mono); }
+.minute-bande span.pos { background: var(--s1); color: #FFFFFF; }
+.minute-bande span.max { outline: 2px solid var(--gold); outline-offset: 1px; }
+.matrice td.cel { text-align: center; font-variant-numeric: tabular-nums; cursor: default; border: 2px solid var(--surface); border-radius: 6px; padding: 8px 6px; min-width: 64px; }
+.matrice td.cel small { display: block; font-size: 11px; color: var(--muted); }
+.matrice td.cel.absente { color: var(--muted); background: repeating-linear-gradient(135deg, transparent 0 5px, var(--surface-2) 5px 7px); }
+.matrice th.site { text-align: center; }
+.matrice th.site button { display: grid; gap: 2px; justify-items: center; width: 100%; padding: 6px 4px; border-radius: 6px; border: 1.5px solid var(--accent); background: var(--surface); color: var(--ink); cursor: pointer; }
+.matrice th.site button:hover { background: var(--surface-2); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.matrice th.site button .action { font-size: 10.5px; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--accent); }
+.matrice th.site button[aria-pressed="true"] .action { color: var(--accent-ink); }
+.consigne { margin: 0; align-self: center; font-size: 13.5px; background: var(--surface-2); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 0 6px 6px 0; }
+.matrice th.site button small { font-size: 10.5px; letter-spacing: 0; text-transform: none; font-weight: 500; }
+.matrice th.site button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.matrice td.hors { opacity: .45; }
+.matrice td.esp { white-space: nowrap; }
+.matrice td.esp i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.matrice td.esp em { display: block; color: var(--muted); font-size: 12px; }
+
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .side { position: sticky; top: env(safe-area-inset-top, 0px); height: auto; z-index: 10; flex-direction: row; align-items: center; padding: 8px 16px; gap: 12px; overflow: hidden; }
@@ -274,6 +309,8 @@ tr.nouveau-groupe td { border-top: 2px solid var(--line); }
   .nav { flex-direction: row; overflow-x: auto; gap: 2px; scrollbar-width: none; }
   .nav a { white-space: nowrap; padding: 6px 9px; font-size: 13px; }
   .nav small { display: none; }
+  .nav a.sous { margin-left: 0; border-left: 0; border-radius: 6px; }
+  .nav a.sous::before { content: "· "; opacity: .6; }
 }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 </style>
@@ -461,20 +498,26 @@ const coulEsp = (s) => `var(--s${ESPECES.indexOf(s) + 1})`;
 const nomEnc = (e) => e.replace(/^esp_aves2_/, "aves2 ");
 
 /* ---------- squelette des sections ---------- */
+// Ordre des sections ; le troisième élément range la section sous une autre dans le menu.
+// Tous les textes (menu, titres, sous-titres, cartes) sont dans textes.yaml.
+const T = C.sections;
 const SECTIONS = [
-  ["accueil", "Vue d'ensemble"], ["en-cours", "Travail en cours"], ["donnees", "Données"],
-  ["chaine", "Chaîne de traitement"], ["annotation", "Annotation"], ["encodage", "Temps d'encodage"],
-  ["encodeurs", "Benchmark des encodeurs"], ["explorateur", "Explorateur des têtes"], ["amorcage", "Amorcer un site"],
-  ["rapports", "Rapports"], ["tableaux", "Tableaux"], ["biblio", "Bibliographie"],
+  ["accueil"], ["en-cours"], ["donnees"], ["chaine"], ["annotation"], ["encodage"],
+  ["anuraset"], ["encodeurs", , "anuraset"], ["explorateur", , "anuraset"], ["amorcage", , "anuraset"],
+  ["rapports"], ["tableaux"], ["biblio"],
 ];
 const vues = $("#vues");
-function section(id, titre, sous, eyebrow) {
-  const s = el("section", { class: "vue", id, "data-comment-target": "" });
+const PARENT = Object.fromEntries(SECTIONS.filter((x) => x[2]).map(([id, , p]) => [id, p]));
+function section(id, eyebrow) {
+  const { titre, sous_titre: sous, surtitre } = T[id];
+  eyebrow = surtitre ?? eyebrow;
+  const s = el("section", { class: PARENT[id] ? "vue sous-vue" : "vue", id, "data-comment-target": "" });
   const h = el("div", { class: "vue-tete" },
     el("div", {}, eyebrow ? el("div", { class: "eyebrow" }, eyebrow) : null, el("h2", {}, titre), sous ? el("p", {}, sous) : null),
     boutonCommenter(s, "Commenter la section"));
   s.append(h); vues.append(s); return s;
 }
+const carteT = (sec, k, ...kids) => carte(T[sec].cartes[k].titre, T[sec].cartes[k].legende, ...kids);
 const carte = (titre, sous, ...kids) => {
   const c = el("div", { class: "carte", "data-comment-target": "" });
   if (titre) c.append(el("div", { class: "carte-tete" }, el("h3", {}, titre), boutonCommenter(c)));
@@ -492,7 +535,7 @@ $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
 
 /* ---------- navigation ---------- */
 const nav = $("#nav");
-for (const [id, nom] of SECTIONS) nav.append(el("a", { href: "#" + id, "data-id": id }, nom));
+for (const [id, , parent] of SECTIONS) nav.append(el("a", { href: "#" + id, "data-id": id, class: parent ? "sous" : null }, T[id].menu));
 $("#pied").append(
   ...C.projet.stage.map((l) => el("div", {}, l)), el("div", {}, C.projet.auteur),
   el("a", { href: C.projet.depot, target: "_blank", rel: "noopener" }, "Dépôt GitHub"));
@@ -501,7 +544,7 @@ $("#pied").append(
    1. Vue d'ensemble
    ====================================================================== */
 {
-  const s = section("accueil", "Vue d'ensemble", "État d'avancement du projet et critères de choix du détecteur.");
+  const s = section("accueil");
   const totalH = D.inventaire.sites.reduce((a, x) => a + x.heures, 0);
   const totalN = D.inventaire.sites.reduce((a, x) => a + x.enregistrements, 0);
   const f5 = D.inventaire.fenetres.find((f) => f[0] === "5 s");
@@ -516,9 +559,9 @@ $("#pied").append(
   const crit = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Rang"), el("th", {}, "Critère"), el("th", {}, "Mesure"))),
     el("tbody", {}, C.projet.criteres.map(([r, c, m]) => el("tr", {}, el("td", { class: "num" }, String(r)), el("td", {}, el("strong", {}, c)), el("td", {}, m)))));
   const etat = el("div", { class: "grille-2" },
-    carte("Critères de choix du détecteur", "Critères appliqués dans cet ordre.", el("div", { class: "defile" }, crit),
+    carteT("accueil", "criteres", el("div", { class: "defile" }, crit),
       C.criteres_note ? el("p", { class: "sous" }, C.criteres_note) : null),
-    carte("Chantiers en cours", null, el("ul", { style: "margin:0;padding:0;list-style:none;display:grid;gap:8px" },
+    carteT("accueil", "en_developpement", el("ul", { style: "margin:0;padding:0;list-style:none;display:grid;gap:8px" },
       C.en_cours.map((t) => el("li", { style: "display:flex;gap:10px;align-items:baseline;justify-content:space-between" }, el("a", { href: "#en-cours" }, t.titre), puceEtat(t.etat))))));
   s.append(etat);
 
@@ -528,7 +571,7 @@ $("#pied").append(
    2. Travail en cours
    ====================================================================== */
 {
-  const s = section("en-cours", "Travail en cours", "Ce qui est sur la table en ce moment, et ce qui a bougé dans le dépôt.", `Mis à jour le ${dateFr(String(D.genere.date))}`);
+  const s = section("en-cours", `Mis à jour le ${dateFr(String(D.genere.date))}`);
   const g = el("div", { class: "grille" });
   for (const t of C.en_cours) {
     const c = el("div", { class: "carte", "data-comment-target": "" },
@@ -542,14 +585,14 @@ $("#pied").append(
 
   const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg, n]) =>
     el("div", {}, el("time", { title: h }, (n ? `n° ${n} · ` : "") + d.split("-").reverse().join("/")), el("span", {}, msg))));
-  s.append(carte("Derniers changements du dépôt", "Commits poussés sur main, numérotés depuis le premier : ce sont les numéros à donner à /audit-n-from.", commits));
+  s.append(carteT("en-cours", "commits", commits));
 }
 
 /* ======================================================================
    3. Données
    ====================================================================== */
 {
-  const s = section("donnees", "Données", "Inventaire des enregistrements de l'ONF (2 min, toutes les 30 min de 5 h à 20 h, 48 kHz stéréo). L'audio reste sur les disques, jamais dans le dépôt.");
+  const s = section("donnees");
   const inv = D.inventaire; const sites = inv.sites;
   // Même graphique que la diapo « Le jeu de données » de la présentation de suivi n° 2 :
   // heures d'audio par lieu, les relevés 2026 rattachés à leur site (C.lieux), une couleur par jeu.
@@ -591,12 +634,12 @@ $("#pied").append(
   const vueTable = el("div", { class: "defile", hidden: true }, tbl);
   const bascule = el("button", { type: "button", class: "lien-btn" }, "Voir le tableau");
   bascule.addEventListener("click", () => { vueTable.hidden = !vueTable.hidden; svg.style.display = vueTable.hidden ? "" : "none"; bascule.textContent = vueTable.hidden ? "Voir le tableau" : "Voir le graphique"; });
-  const c1 = carte("Heures d'audio par site", "Enregistrements de 2 min.", el("div", { class: "legende" },
+  const c1 = carteT("donnees", "heures", el("div", { class: "legende" },
     ...Object.entries(JEUX).map(([j, c]) => el("span", {}, el("i", { style: `background:${c}` }), inv.jeux[j]))), svg, vueTable, bascule);
   const MODELE_FEN = { "3 s": "BirdNET", "5 s": "Perch", "6 s": "Autre" };
   const fen = el("table", {}, el("thead", {}, el("tr", {}, ["Fenêtre", "Pas", "Par enregistrement", "Au total"].map((h, i) => el("th", { class: i > 1 ? "n" : null }, h)))),
     el("tbody", {}, inv.fenetres.map((f) => el("tr", {}, el("td", {}, f[0] + (MODELE_FEN[f[0]] ? ` (${MODELE_FEN[f[0]]})` : "")), el("td", {}, f[1]), el("td", { class: "n" }, String(f[2])), el("td", { class: "n" }, entier(f[3]))))));
-  const c2 = carte("Fenêtres à encoder", "Chevauchement de moitié, sur les enregistrements de 120 s.", el("div", { class: "defile" }, fen),
+  const c2 = carteT("donnees", "fenetres", el("div", { class: "defile" }, fen),
     el("p", { class: "sous" }, inv.drapeaux + "."));
   s.append(el("div", { class: "grille-2" }, c1, c2));
 }
@@ -605,7 +648,7 @@ $("#pied").append(
    4. Chaîne de traitement
    ====================================================================== */
 {
-  const s = section("chaine", "Chaîne de traitement", "Du fichier audio au score par point d'écoute. Cliquer une étape pour son détail ; en doré : la boucle d'annotation et de réentraînement ; pointillés gris : la fusion, seulement si besoin.");
+  const s = section("chaine");
   // Le chemin principal sur une ligne ; dessous, la boucle d'annotation qui revient aux têtes.
   const POS = { inventaire: [1, 1], qc: [2, 1], signal: [3, 1], encodage: [4, 1],
     tetes: [5, 1], fusion: [6, 1], score: [7, 1], evaluation: [8, 1],
@@ -704,7 +747,7 @@ function camemberts() {
     detail.replaceChildren(ms.length
       ? el("div", { style: "display:grid;gap:8px" }, el("h4", { class: "eyebrow" }, `Micros de ${site}`),
           el("div", { class: "camemberts petits" }, ms.map(([, mic, n, p]) => tuile(mic, { n, p }))))
-      : el("p", { class: "sous" }, "Détail par micro disponible au prochain comptage."));
+      : el("p", { class: "sous" }, T["annotation"].phrases.micros_absents));
   };
   sites.forEach(([site, x]) => { const b = tuile(site, x, null, () => choisir(site, b)); b.setAttribute("aria-pressed", "false"); rangee.append(b); });
   boite.append(rangee, el("div", { class: "legende" }, el("span", {}, el("i", { style: "background:var(--gold)" }), "avec A. blanci"), el("span", {}, el("i", { style: "background:var(--idle-soft);border:1px solid var(--line)" }), "sans"), el("span", {}, `compté le ${dateFr(A.compte_le)}`)), detail);
@@ -715,22 +758,22 @@ function camemberts() {
    5. Annotation : plan du premier lot, puis apprentissage actif
    ====================================================================== */
 {
-  const s = section("annotation", "Annotation", "Le premier lot, tiré sans aucun modèle, puis les lots suivants choisis par apprentissage actif.");
+  const s = section("annotation");
   const etapesEl = (liste, chaud) => el("ol", { class: "etapes-plan" }, liste.map(([titre, d], k) => el("li", { class: k === chaud ? "fort" : null },
     el("span", { class: "rang" }, String(k + 1)), el("div", {}, el("strong", {}, titre), el("p", {}, d)))));
   const puces = (liste) => el("ul", { class: "principes" }, liste.map(([titre, d]) => el("li", {}, el("strong", {}, titre), " : ", d)));
   const P = C.plan_annotation, A = C.apprentissage_actif;
-  s.append(carte("Plan d'annotation", P.contexte, etapesEl(P.etapes, P.etapes.length - 1),
-    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Trois principes"), puces(P.principes)));
-  s.append(carte("Apprentissage actif", A.contexte, etapesEl(A.boucle, -1),
-    el("p", { class: "sous" }, "La boucle recommence : les nouveaux labels donnent une nouvelle tête, qui choisit les écoutes suivantes."),
-    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Méthodes de sélection et contrôles"),
+  s.append(carte(T["annotation"].cartes.plan.titre, P.contexte, etapesEl(P.etapes, P.etapes.length - 1),
+    el("h4", { class: "eyebrow", style: "margin-top:4px" }, T["annotation"].phrases.titre_principes), puces(P.principes)));
+  s.append(carte(T["annotation"].cartes.apprentissage_actif.titre, A.contexte, etapesEl(A.boucle, -1),
+    el("p", { class: "sous" }, T["annotation"].phrases.boucle),
+    el("h4", { class: "eyebrow", style: "margin-top:4px" }, T["annotation"].phrases.titre_methodes),
     el("ul", { class: "principes deux-colonnes" }, A.methodes.map(([titre, d]) => el("li", {}, el("strong", {}, titre), el("span", { class: "sous" }, d.charAt(0).toUpperCase() + d.slice(1)))))));
-  s.append(carte("Annotations par site et par micro", "Enregistrements annotés avec et sans A. blanci, recomptés dans la base à chaque mise à jour du tableau de bord. Cliquer un site pour voir ses micros.", camemberts()));
+  s.append(carteT("annotation", "compteur", camemberts()));
   if (D.poste) {
     const img = el("img", { src: D.poste, alt: "Capture du poste d'annotation Streamlit", class: "capture", loading: "lazy" });
     img.addEventListener("click", () => ouvrirImage(img.src, "Poste d'annotation (Streamlit)"));
-    s.append(carte("Poste d'annotation", "Mon outil d'annotation, une page Streamlit qui s'ouvre dans le navigateur (blanci annotate). Work in progress.", img));
+    s.append(carteT("annotation", "poste", img));
   }
 }
 
@@ -738,7 +781,7 @@ function camemberts() {
    6. Temps d'encodage du corpus ONF
    ====================================================================== */
 {
-  const s = section("encodage", "Temps d'encodage", "Durée réelle pour encoder tout le corpus de l'ONF sur le processeur du portable i5. Une barre apparaît dès qu'un encodeur a fini, lue dans la base à la mise à jour du tableau de bord.");
+  const s = section("encodage");
   const E = Object.entries(D.encodage?.encodeurs || {});
   const finis = E.filter(([, v]) => v.statut === "fini" && v.heures);
   const max = Math.max(1, ...finis.map(([, v]) => v.heures));
@@ -758,7 +801,151 @@ function camemberts() {
         sv("text", { x: gauche + 10, y: y + 25 }, txt));
     }
   });
-  s.append(carte("Encodage du corpus par encodeur", null, svg));
+  s.append(carteT("encodage", "encodage", svg));
+}
+
+/* ======================================================================
+   AnuraSet : introduction et jeu réduit (puis les trois sous-sections)
+   ====================================================================== */
+{
+  const A = C.anuraset, J = D.anuraset;
+  const s = section("anuraset");
+  const paire = (liste) => el("ul", { class: "principes deux-colonnes" }, liste.map(([t, x]) => el("li", {}, el("strong", {}, t), x)));
+  const SITES = J.sites.map((x) => x.site);
+
+  // Bloc 1 : pourquoi, et comment on juge.
+  const plis = el("div", { class: "plis", role: "img", "aria-label": "Quatre plis : à chaque pli, un site différent est tenu à l'écart pour le test, les trois autres servent à l'apprentissage." },
+    el("span", { class: "tete-p" }, ""), SITES.map((x) => el("span", { class: "tete-p" }, x)),
+    SITES.map((test, i) => [el("span", { class: "tete-p" }, `pli ${i + 1}`), SITES.map((x) => el("span", { class: x === test ? "test" : "app" }, x === test ? "test" : "appr."))]));
+  const exemple = [0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0], scores = [0.04, 0.1, 0.62, 0.91, 0.2, 0.07, 0.05, 0.55, 0.12, 0.03, 0.08, 0.06];
+  const bande = el("div", { class: "minute-bande", role: "img", "aria-label": "Une minute découpée en 12 fenêtres de 5 s : trois contiennent un chant ; le score de la minute est le plus haut des 12 scores de fenêtre, 0,91." },
+    exemple.map((p, i) => el("span", { class: (p ? "pos" : "") + (i === 3 ? " max" : ""), title: `fenêtre ${i * 5}–${i * 5 + 5} s · score ${fr(scores[i])}` }, fr(scores[i]))));
+  s.append(carteT("anuraset", "introduction",
+    el("div", { class: "intro-anura" },
+      el("p", {}, A.pourquoi),
+      paire(A.liens),
+      el("h4", {}, T["anuraset"].phrases.titre_methode),
+      plis,
+      el("ul", {}, A.methode.map(([t, x]) => el("li", {}, el("strong", {}, t + " : "), x))),
+      el("h4", {}, T["anuraset"].phrases.titre_unite),
+      el("p", {}, T["anuraset"].phrases.exemple_minute),
+      bande,
+      paire(A.unites),
+      el("h4", {}, T["anuraset"].phrases.titre_ap),
+      el("p", {}, T["anuraset"].phrases.explication_ap),
+      paire(A.lectures),
+      el("p", { class: "conseil" }, A.lecture_conseil))));
+
+  // Bloc 2 : le jeu réduit.
+  const nbFen = J.sites.reduce((a, x) => a + x.fenetres, 0), nbMin = J.sites.reduce((a, x) => a + x.minutes, 0);
+  const tuile = (b, span, em) => el("div", { class: "tuile" }, el("b", {}, b), el("span", {}, span), em ? el("em", {}, em) : null);
+  const tuiles = el("div", { class: "tuiles" },
+    tuile(String(SITES.length), "sites du Brésil", SITES.join(" · ")),
+    tuile(entier(nbMin), "enregistrements d'une minute", `sur ${entier(A.total_enregistrements)} dans le jeu complet`),
+    tuile(entier(nbFen), "fenêtres de 5 s jointives", "grille de perch_v2"),
+    tuile(String(ESPECES.length), "espèces retenues", `sur ${A.total_especes} : celles présentes sur au moins deux sites`));
+
+  // Matrice espèce × site, à l'unité choisie ; un clic sur un site le tient à l'écart.
+  const POS = {};
+  for (const [sp, site, lvl, n, tot] of J.positifs) POS[`${sp}|${site}|${lvl}`] = { n, tot };
+  const taille = Object.fromEntries(J.sites.map((x) => [x.site, x]));
+  const etatM = { lvl: "fenetre", test: null };
+  const tableM = el("table", { class: "matrice" });
+  const lecture = el("p", { class: "sous", "aria-live": "polite" });
+  const segM = el("div", { class: "seg", role: "group", "aria-label": "Unité" });
+  for (const [v, nom] of [["fenetre", "fenêtres de 5 s"], ["minute", "minutes"]]) {
+    const b = el("button", { type: "button", "aria-pressed": String(etatM.lvl === v) }, nom);
+    b.addEventListener("click", () => { etatM.lvl = v; segM.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); matrice(); });
+    segM.append(b);
+  }
+  function matrice() {
+    const lvl = etatM.lvl, unite = lvl === "fenetre" ? "fenêtres" : "minutes";
+    const tete = el("tr", {}, el("th", {}, "Espèce"), SITES.map((x) => {
+      const actif = etatM.test === x, Ph = T.anuraset.phrases;
+      const b = el("button", { type: "button", "aria-pressed": String(actif), title: actif ? Ph.bouton_site_actif : Ph.bouton_site }, x, el("small", {}, `${entier(lvl === "fenetre" ? taille[x].fenetres : taille[x].minutes)} ${unite}`),
+        el("span", { class: "action" }, actif ? "✓ " + Ph.bouton_site_actif : "▸ " + Ph.bouton_site));
+      b.addEventListener("click", () => { etatM.test = etatM.test === x ? null : x; matrice(); });
+      return el("th", { class: "site" }, b);
+    }), el("th", { class: "n" }, "Total"));
+    const corps = ESPECES.map((sp) => {
+      let total = 0;
+      const cells = SITES.map((x) => {
+        const v = POS[`${sp}|${x}|${lvl}`] || { n: 0, tot: lvl === "fenetre" ? taille[x].fenetres : taille[x].minutes };
+        total += v.n;
+        const part = v.tot ? v.n / v.tot : 0;
+        const hors = etatM.test && etatM.test !== x;
+        if (!v.n) return el("td", { class: "cel absente" + (hors ? " hors" : ""), title: `${sp} absente de ${x}` }, "—");
+        const td = el("td", { class: "cel" + (hors ? " hors" : ""), style: `background:color-mix(in srgb, ${coulEsp(sp)} ${Math.round(12 + Math.min(1, part / 0.45) * 48)}%, var(--surface))` },
+          el("strong", {}, entier(v.n)), el("small", {}, fr(part * 100, 0) + " %"));
+        survol(td, () => `<b>${esc(NOMS_ESP[sp])}</b> à ${esc(x)}<br>${entier(v.n)} ${unite} positives sur ${entier(v.tot)} (${fr(part * 100, 1)} %)`);
+        return td;
+      });
+      return el("tr", {}, el("td", { class: "esp" }, el("i", { style: `background:${coulEsp(sp)}` }), el("strong", {}, sp), el("em", {}, NOMS_ESP[sp])), cells, el("td", { class: "n" }, entier(total)));
+    });
+    tableM.replaceChildren(el("thead", {}, tete), el("tbody", {}, corps));
+    if (!etatM.test) { lecture.textContent = T.anuraset.phrases.aide_matrice.replace("{unite}", unite); return; }
+    const t = etatM.test;
+    const absentes = ESPECES.filter((sp) => !(POS[`${sp}|${t}|${lvl}`]?.n));
+    const rares = ESPECES.filter((sp) => { const n = POS[`${sp}|${t}|${lvl}`]?.n || 0; return n > 0 && n < (lvl === "fenetre" ? 100 : 15); });
+    lecture.textContent = `Pli « ${t} tenu à l'écart » : on apprend sur ${SITES.filter((x) => x !== t).join(", ")}, on juge sur ${t}. ` +
+      (absentes.length ? `${absentes.join(", ")} n'y chante${absentes.length > 1 ? "nt" : ""} pas : pas d'AP par site pour ce pli, mais les ${unite} du site comptent comme négatifs dans l'AP poolée. ` : "") +
+      (rares.length ? `${rares.join(", ")} n'y a que quelques positifs : AP de ce site très bruitée.` : "");
+  }
+  matrice();
+
+  // Signature des chants : durée contre fréquence, A. blanci en repère.
+  // Une ligne par espèce, rangées par fréquence dominante ; A. blanci en tête, en repère.
+  function signature() {
+    const rangs = [...J.especes].sort((a, b) => b[4] - a[4]);
+    const L = 200, W = 900, d = 18, h = 26, pas = 40, b = 44, H = h + pas * (rangs.length + 1) + b - 14;
+    const lx = (v) => Math.log10(v), x0 = lx(0.05), x1 = lx(6);
+    const xs = (v) => L + (lx(v) - x0) / (x1 - x0) * (W - L - d);
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "graphe", role: "img", "aria-label": "Durée des chants de chaque espèce (médiane, quartiles, 10e et 90e centiles), rangées par fréquence dominante, avec A. blanci en repère" });
+    const bas = H - b;
+    for (const v of [0.05, 0.1, 0.2, 0.5, 1, 2, 5]) svg.append(
+      sv("line", { x1: xs(v), x2: xs(v), y1: h - 12, y2: bas, class: "grille-l" }),
+      sv("text", { x: xs(v), y: bas + 18, "text-anchor": "middle" }, fr(v, v < 0.1 ? 2 : v < 1 ? 1 : 0)));
+    svg.append(sv("text", { x: (L + W - d) / 2, y: H - 6, "text-anchor": "middle" }, "durée d'un chant, en s (échelle log)"));
+    svg.append(sv("text", { x: 4, y: 12 }, "espèce · fréquence dominante"));
+    for (const v of [3, 5]) svg.append(
+      sv("line", { x1: xs(v), x2: xs(v), y1: h - 12, y2: bas, stroke: "var(--muted)", "stroke-dasharray": "3 4", "stroke-width": 1 }),
+      sv("text", { x: xs(v) + 4, y: h - 2, style: "font-size:10.5px" }, `fenêtre ${v} s`));
+    // A. blanci : note de 0,09 s, bande 4,4–5,5 kHz (bandeau du haut).
+    const yb = h + pas / 2;
+    svg.append(sv("rect", { x: 0, y: yb - pas / 2 + 3, width: W, height: pas - 6, rx: 6, fill: "var(--gold-soft)" }),
+      sv("text", { x: 8, y: yb - 2, class: "fort" }, "A. blanci"), sv("text", { x: 8, y: yb + 12 }, "4,4–5,5 kHz · Guyane"),
+      sv("circle", { cx: xs(0.09), cy: yb, r: 6, fill: "var(--gold)", stroke: "var(--surface)", "stroke-width": 2 }),
+      sv("text", { x: xs(0.09) + 12, y: yb + 4, class: "fort" }, "note de 0,09 s"));
+    rangs.forEach(([sp, nCalls, nRec, nSites, hz, p10, q1, med, q3, p90], i) => {
+      const y = h + pas * (i + 1.5), c = coulEsp(sp);
+      const g = sv("g", {},
+        sv("rect", { x: 0, y: y - pas / 2, width: W, height: pas, fill: "transparent" }),
+        sv("circle", { cx: 12, cy: y - 5, r: 5, fill: c }),
+        sv("text", { x: 22, y: y - 1, class: "fort" }, sp), sv("text", { x: 22, y: y + 13 }, `${fr(hz / 1000, 1)} kHz · ${NOMS_ESP[sp]}`),
+        sv("line", { x1: xs(p10), x2: xs(p90), y1: y, y2: y, stroke: c, "stroke-width": 2, "stroke-linecap": "round" }),
+        sv("rect", { x: xs(q1), y: y - 6, width: xs(q3) - xs(q1), height: 12, rx: 4, fill: c, "fill-opacity": 0.35, stroke: c, "stroke-width": 1.5 }),
+        sv("circle", { cx: xs(med), cy: y, r: 6, fill: c, stroke: "var(--surface)", "stroke-width": 2 }));
+      survol(g, () => `<b>${esc(NOMS_ESP[sp])}</b> (${sp})<br>${entier(nCalls)} chants datés · ${nRec} enregistrements · ${nSites} sites<br>fréquence dominante ${fr(hz / 1000, 1)} kHz<br>durée : médiane ${fr(med, 2)} s · moitié des chants entre ${fr(q1, 2)} et ${fr(q3, 2)} s · 80 % entre ${fr(p10, 2)} et ${fr(p90, 1)} s`);
+      svg.append(g);
+    });
+    return svg;
+  }
+  s.append(carte(T["anuraset"].cartes.jeu_reduit.titre, A.jeu, tuiles,
+    el("div", { style: "display:grid;gap:22px" },
+      el("div", { style: "display:grid;gap:10px;align-content:start;min-width:0" },
+        el("h4", {}, T["anuraset"].phrases.titre_matrice),
+        el("div", { class: "controles" }, el("div", { class: "champ" }, el("span", {}, "Unité"), segM),
+          el("p", { class: "consigne" }, T.anuraset.phrases.consigne_clic)),
+        el("div", { class: "defile" }, tableM), lecture),
+      el("div", { style: "display:grid;gap:10px;align-content:start;min-width:0" },
+        el("h4", {}, T["anuraset"].phrases.titre_signature),
+        el("p", { class: "sous" }, T["anuraset"].phrases.legende_signature),
+        signature(),
+        el("div", { class: "legende" },
+          el("span", {}, el("i", { style: "background:var(--ink)" }), "médiane"),
+          el("span", {}, el("i", { style: "width:22px;height:10px;border-radius:3px;background:var(--surface-2);border:1.5px solid var(--ink)" }), "1er–3e quartile (la moitié des chants)"),
+          el("span", {}, el("i", { class: "trait" }), "10e–90e centile"),
+          el("span", {}, el("i", { class: "tirets gris" }), "taille d'une fenêtre d'encodeur"))))));
 }
 
 /* ======================================================================
@@ -766,7 +953,7 @@ function camemberts() {
    ====================================================================== */
 const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "naturebeats", "convnext_birdset"];
 {
-  const s = section("encodeurs", "Benchmark des encodeurs sur AnuraSet", "Benchmark global sur AnuraSet (anoures du Brésil) : chaque encodeur jugé avec la tête adaptée à sa sortie, un site tenu à l'écart à la fois. Indicateur, pas verdict : le choix se fera sur les données de l'ONF.", "Pré-benchmark AnuraSet");
+  const s = section("encodeurs");
   const E = D.encodeurs.encodeurs.filter((e) => e.ap_site_best != null);
   const lic = (e) => e.libre === "oui" ? ["libre", "lic-oui"] : e.libre === "non" ? ["non libre", "lic-non"] : [e.libre, "lic-autre"];
   const choisis = new Set(ENC_DEFAUT.filter((x) => E.some((e) => e.encoder === x)));
@@ -826,12 +1013,12 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
     return sc;
   }
   rendre();
-  s.append(carte("Choisir les encodeurs à comparer", "Ils s'affichent dans le classement et sur le graphique. Pastille verte : libre d'accès.",
+  s.append(carteT("encodeurs", "choix",
     el("div", { class: "controles" }, raccourci("tous", () => E.forEach((e) => choisis.add(e.encoder))), raccourci("libres seulement", () => { choisis.clear(); E.filter((e) => e.libre === "oui").forEach((e) => choisis.add(e.encoder)); }), raccourci("aucun", () => choisis.clear())),
     puces));
-  s.append(carte("Classement des encodeurs", "AP moyenne par site tenu à l'écart (minute, cinq espèces), avec la meilleure tête de chaque encodeur, choisie après coup. Cliquer un en-tête pour trier.",
+  s.append(carteT("encodeurs", "classement",
     el("div", { class: "defile" }, el("table", {}, thead, corps))));
-  s.append(carte("Débit contre qualité", "Plein : libre d'accès.", zoneSc,
+  s.append(carteT("encodeurs", "debit", zoneSc,
     el("div", { class: "legende" }, el("span", {}, el("i", { style: "background:var(--accent)" }), "libre"), el("span", {}, el("i", { class: "anneau", style: "border-color:var(--muted)" }), "non libre ou non relevé"))));
 }
 
@@ -839,7 +1026,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    6. Explorateur des têtes
    ====================================================================== */
 {
-  const s = section("explorateur", "Explorateur des têtes (AnuraSet)", "Choisir ce qu'on compare : encodeurs, têtes, espèces, unité et lecture de l'AP. Les têtes sont rangées sous leur encodeur ; chaque point est une espèce, le trait la moyenne des espèces choisies.", "Comparaison à la carte");
+  const s = section("explorateur");
   const SOURCES = {
     adaptees: { nom: "Encodeurs × têtes (benchmark global)", rows: D.encodeurs.transfert.map((r) => ({ enc: r[0], sp: r[1], head: r[2], lvl: r[3], ap: r[4], aps: r[5] })),
       ref: ["perch_v2", "logistic"], encs: ["perch_v2", "birdnet_v3", "audioprotopnet"], heads: ["logistic", "simple_prototype", "proto_probe"] },
@@ -981,7 +1168,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    8. Amorcer un site neuf : les têtes comparées, sur un ou plusieurs encodeurs
    ====================================================================== */
 {
-  const s = section("amorcage", "Amorcer un site neuf (AnuraSet)", "Pour observer comment se comportent les têtes sur un site nouveau, selon le nombre d'annotations qu'il a déjà reçues : AP sur le site tenu à l'écart en fonction du nombre de ses enregistrements positifs annotés (moyenne des espèces et des sites). Une couleur par tête, un trait par encodeur.", "Pré-benchmark AnuraSet");
+  const s = section("amorcage");
   const COURBE = D.encodeurs.courbe; // [enc, head, k, apw, apm]
   const K = [0, 1, 2, 5, 10, 20, -1], KN = ["0", "1", "2", "5", "10", "20", "tout"];
   const encs = [...new Set(COURBE.map((r) => r[0]))].sort();
@@ -1048,7 +1235,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
     zone.replaceChildren(svg);
   }
   puces(); dessiner();
-  s.append(carte("Les têtes face au peu d'annotations", "k = 0 : le site neuf n'a encore aucune annotation, la tête n'a appris que sur les autres sites. « tout » : toutes ses annotations. Trois encodeurs au plus.",
+  s.append(carteT("amorcage", "courbes",
     el("div", { class: "controles" }, el("div", { class: "champ" }, el("span", {}, "Unité"), selN)),
     el("div", { class: "champ" }, el("span", {}, "Encodeurs (un style de trait chacun)"), pucesE),
     el("div", { class: "champ" }, el("span", {}, "Têtes"), pucesH), zone));
@@ -1058,7 +1245,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    9. Rapports
    ====================================================================== */
 {
-  const s = section("rapports", "Rapports de benchmark", "Les huit rapports complets, avec leurs figures. Chacun a ses données (CSV) et le script qui les redessine dans le dépôt.");
+  const s = section("rapports");
   const liste = el("div", { class: "liste-rapports", role: "group", "aria-label": "Rapports" });
   const lecteur = el("article", { class: "carte md", "data-comment-target": "" });
   const boutons = [];
@@ -1088,7 +1275,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    10. Tableaux
    ====================================================================== */
 {
-  const s = section("tableaux", "Tableaux de référence", "Un tableau par famille de méthodes : protocole, encodeurs, têtes, régularisations, fusion… Cliquer pour agrandir.");
+  const s = section("tableaux");
   const g = el("div", { class: "galerie" });
   D.tableaux.forEach((t) => {
     const f = el("figure", { "data-comment-target": "" },
@@ -1104,8 +1291,8 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
 /* ======================================================================
    11. Bibliographie (avec recherche)
    ====================================================================== */
-function lecture(id, titre, sous, texte, eyebrow) {
-  const s = section(id, titre, sous, eyebrow);
+function lecture(id, texte) {
+  const s = section(id), titre = T[id].titre;
   const champ = el("input", { type: "search", id: id + "-q", placeholder: "Chercher…", "aria-label": "Chercher dans " + titre });
   const nb = el("span", { class: "sous" });
   const corps = el("div", { class: "carte md", "data-comment-target": "" });
@@ -1119,12 +1306,15 @@ function lecture(id, titre, sous, texte, eyebrow) {
   });
   s.append(el("div", { class: "controles" }, el("label", { class: "champ", style: "flex:1;max-width:420px" }, el("span", {}, "Chercher"), champ), nb), corps);
 }
-lecture("biblio", "Bibliographie", "Chaque référence avec ce qu'on en retient pour A. blanci.", D.biblio, "documentation/biblio/biblio.md");
+lecture("biblio", D.biblio);
 
 /* ---------- section active dans la navigation ---------- */
 const liensNav = [...nav.querySelectorAll("a")];
 const obs = new IntersectionObserver((entrees) => {
-  for (const e of entrees) if (e.isIntersecting) liensNav.forEach((a) => a.classList.toggle("actif", a.dataset.id === e.target.id));
+  for (const e of entrees) if (e.isIntersecting) liensNav.forEach((a) => {
+    a.classList.toggle("actif", a.dataset.id === e.target.id);
+    a.classList.toggle("parent-actif", a.dataset.id === PARENT[e.target.id]);
+  });
 }, { rootMargin: "-20% 0px -70% 0px" });
 document.querySelectorAll("section.vue").forEach((x) => obs.observe(x));
 if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) setTimeout(() => t.scrollIntoView(), 50); }
