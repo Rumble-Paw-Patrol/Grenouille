@@ -111,7 +111,11 @@ cheveu (roue CPU, `uv pip install` à la main), y compris sous un encodage en co
 paquets ne changent alors que par un `uv sync --inexact` lancé exprès, quand rien ne tourne.
 
 Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`,
-ignorée par git) : racine du disque externe, jamais modifié.
+ignorée par git) : racine du disque externe, jamais modifié. **Pour écouter, ce n'est pas
+nécessaire** : `uv run blanci annotate` cherche chaque enregistrement sur les disques branchés
+(`/Volumes/*` sur Mac, `D:`… sur Windows), et sinon demande le dossier une fois (DECISIONS
+n° 195). Les files de candidats sont des dossiers, `data/reports/files/<nom>/` : `candidats.csv`
+(références, pas d'audio) et `LISEZMOI.md` (d'où vient la file).
 
 ## Données
 

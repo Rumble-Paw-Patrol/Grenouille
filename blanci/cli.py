@@ -1280,8 +1280,8 @@ def select(
     name: Annotated[str | None, typer.Option(help="Nom de la file (défaut : la méthode).")] = None,
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
 ) -> None:
-    """Outil de sélection (DECISIONS n° 99) : une méthode, une file candidats_<nom>.csv pour le
-    poste d'annotation."""
+    """Outil de sélection (DECISIONS n° 99) : une méthode, une file files/<nom>/ (candidats.csv,
+    LISEZMOI.md) pour le poste d'annotation."""
     from blanci.annotation.selection import select_candidates, write_queue
 
     cfg = _cfg(ctx)
@@ -1303,7 +1303,8 @@ def select(
         raise typer.Exit(1)
     for reason, count in queue["reason"].value_counts().items():
         typer.echo(f"  {reason:<28} {count}")
-    path = write_queue(cfg, queue, name or method)
+    about = {"commande": f"blanci select --method {method}", "encodeur": encoder} | options
+    path = write_queue(cfg, queue, name or method, about)
     typer.echo(f"{len(queue)} candidats : {path}")
 
 

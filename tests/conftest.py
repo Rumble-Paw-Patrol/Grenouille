@@ -14,6 +14,14 @@ def _no_local_config(monkeypatch, tmp_path):
     monkeypatch.setattr("blanci.core.config.LOCAL_CONFIG", tmp_path / "absent.yaml")
 
 
+@pytest.fixture(autouse=True)
+def _no_disk_search(monkeypatch):
+    """Les tests ne parcourent pas les vrais disques et n'héritent pas des racines trouvées par
+    un test précédent."""
+    monkeypatch.setattr("blanci.core.locate.mounted_disks", lambda: [])
+    monkeypatch.setattr("blanci.core.locate._FOUND", [])
+
+
 def write_wav(
     path: Path,
     sr: int = 16000,

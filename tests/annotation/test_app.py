@@ -186,8 +186,9 @@ def test_a_queue_is_drawn_in_the_app_and_opened(app_config):
     at.sidebar.number_input(key="n::random").set_value(1).run()
     _button(at, "Générer la file").click().run()
     assert not at.exception
-    queues = list(Path(app_config["paths"]["reports"]).glob("candidats_random_*.csv"))
+    queues = list(Path(app_config["paths"]["reports"]).glob("files/random_*/candidats.csv"))
     assert len(queues) == 1
+    assert "Fenêtres au hasard" in (queues[0].parent / "LISEZMOI.md").read_text(encoding="utf-8")
     assert at.sidebar.selectbox(key="mode").value == "existing"
     assert "CDR" in at.subheader[0].value
 
@@ -296,3 +297,21 @@ def test_a_recording_is_split_into_windows_annotated_on_the_same_page(app_config
         (3.0, "background"),
         (6.0, "blanci"),
     ]
+
+
+def test_a_moved_disk_is_found_by_pasting_its_folder(app_config, tmp_path):
+    """Disque introuvable : le poste le dit et propose de coller le dossier, retenu ensuite."""
+    import shutil
+
+    from blanci.core import locate
+
+    moved = tmp_path / "ailleurs"
+    shutil.move(app_config["paths"]["raw"], moved)
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    assert any("introuvable" in e.value for e in at.error)
+    field = next(t for t in at.text_input if t.label == "Dossier des enregistrements")
+    field.input(str(moved)).run()
+    assert not at.exception and not at.error
+    locate._FOUND.clear()  # nouvelle session : le dossier collé a été retenu à côté de la base
+    again = AppTest.from_file(APP, default_timeout=60).run()
+    assert not again.exception and not again.error

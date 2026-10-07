@@ -3303,3 +3303,21 @@ de Léonard, 01/10/2026.
      l'écoute avant de relancer `blanci flag`. L'exclusion de 2LA04525 se décide à part,
      après écoute. Le n° 189 se trompait sur le nombre d'encodables (96 109, compté avant le
      passage `blanci qc`, n° 173–174) ; le bon chiffre se fixe après `blanci flag`.
+
+## 2026-10-07 — Poste d'annotation sans configuration, une file par dossier
+
+195. **Le poste retrouve seul les enregistrements, et chaque file est un dossier** (Léonard,
+     07/10). La base garde le chemin de chaque enregistrement relatif à la racine du disque ;
+     le poste (`blanci/core/locate.py`) essaie ce chemin sous les racines qui ont déjà marché,
+     `paths.raw`, les dossiers collés à la main, puis chaque disque branché (`/Volumes/*` sur
+     Mac, `D:`–`Z:` sur Windows, `/media`, `/mnt` sous Linux) et un niveau de dossier
+     en dessous. Plusieurs dossiers d'un disque : rien à faire, ils sont dans le chemin ;
+     deux disques : chaque fichier est cherché sur les deux, le premier qui l'a gagne. Coût :
+     un test d'existence par racine essayée, puis la racine trouvée passe devant. Introuvable
+     partout : un champ « Dossier des enregistrements » s'affiche, le dossier collé est retenu
+     dans `data/db/racines_audio.txt`. Les enregistrements ne sont jamais copiés. Les files
+     tirées par le poste, la carte et `blanci select` s'écrivent en
+     `data/reports/files/<nom>/` : `candidats.csv` et `LISEZMOI.md` (mode, encodeur,
+     réglages, date, motifs, sites), affiché sous la liste des files (« D'où vient cette
+     file ? »). Les anciens `candidats_*.csv` à plat se lisent toujours. Les autres commandes
+     (encodage, benchmarks) lisent encore `paths.raw` seul.
