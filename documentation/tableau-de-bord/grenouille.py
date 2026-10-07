@@ -123,23 +123,7 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     n1, n2, n3 = bruit(x, y, 1), bruit(x, y, 2), bruit(X, Y, 3)
     alea = random.Random(7)
 
-    # --- patte arrière : jambe repliée sous la cuisse, pied à plat vers l'avant
-    jambe = catmull(
-        [
-            (30.6, 31.6),
-            (35, 33.2),
-            (41, 35.4),
-            (46.3, 36.6),
-            (46.3, 38.6),
-            (43, 38.9),
-            (37.5, 37.2),
-            (31.2, 34.4),
-        ]
-    )
-    jm = dans(jambe, X, Y)
-    g[jm] = "S"
-    g[jm & (n3 < 0.18)] = "M"
-    g[jm & ~dans(jambe, X, Y + 0.6)] = "Z"
+    # --- pied arrière, à plat vers l'avant (la jambe est tracée plus bas, sur la cuisse)
     pied = catmull([(46.4, 37.6), (46.6, 39.3), (40, 39.4), (35, 39.3), (35, 38.4), (40, 38.2)])
     pm = dans(pied, X, Y)
     g[pm] = "F"
@@ -263,6 +247,38 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         voisin_corps = np.roll(np.roll(avant, dy, 0), dx, 1)
         bord |= cuisse & voisin_hors & voisin_corps
     g[bord] = "Z"
+
+    # --- jambe : du genou, à l'avant du bas de la cuisse, jusqu'au talon. Elle passe
+    # par-dessus la cuisse (et devant le ventre), soulignée d'un pli sombre là où elle la
+    # recouvre ; bord du haut éclairé, dessous dans l'ombre.
+    jambe = catmull(
+        [
+            (30.2, 30.8),
+            (33, 30.9),
+            (38.5, 32.4),
+            (44, 34.4),
+            (46.6, 35.8),
+            (46.6, 38.4),
+            (43, 38.9),
+            (37.5, 37.4),
+            (31.4, 34.6),
+            (29.8, 32.6),
+        ]
+    )
+    jm = dans(jambe, X, Y)
+    sous_jambe = g != "."
+    g[jm] = "O"
+    g[jm & (n3 < 0.12)] = "M"
+    g[jm & ~dans(jambe, X, Y - 1.2)] = "H"
+    g[jm & ~dans(jambe, X, Y + 1.2)] = "S"
+    g[jm & ~dans(jambe, X, Y + 0.6)] = "Z"
+    g[ellipse(33.2, 32.0, 1.0, 0.45, X, Y, 0.25)] = "I"  # reflet au genou
+    pli = np.zeros_like(jm)
+    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        voisin_hors = ~np.roll(np.roll(jm, dy, 0), dx, 1)
+        voisin_dessous = np.roll(np.roll(sous_jambe, dy, 0), dx, 1)
+        pli |= jm & voisin_hors & voisin_dessous & (Y < 37.6)
+    g[pli] = "Z"
 
     # --- patte avant : sort du flanc sous la bande, coude en arrière, longue main fine
     patte = catmull(
