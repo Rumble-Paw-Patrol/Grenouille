@@ -63,7 +63,7 @@ chaine:
     module: blanci/heads/signal_processing.py
     tests: tests/heads
     commandes: [onsets]
-    etat: en_cours
+    etat: a_venir
     resume: >-
       Facultatif : on ne sait pas encore s'il servira. Placé en amont de l'encodeur, il
       appliquerait un filtre passe-bande, le PCEN, le log-mel et un débruitage spectral,
@@ -232,3 +232,43 @@ annotation_cibles:
   entrainement: 450      # enregistrements annotés hors jeu gelé (≈ un extrait de 30 s chacun)
   evaluation: 250        # enregistrements du jeu gelé, écoutés en entier
   positifs_evaluation: 60
+
+# Section AnuraSet : l'introduction aux trois sous-sections de pré-benchmark (encodeurs, têtes,
+# amorçage). Sources : rapports 01, 07 et 08 de documentation/benchmarks/, DECISIONS n° 125,
+# 133, 135, 138, 139, 141. Les chiffres du jeu réduit sont relus dans les CSV (construire.py).
+anuraset:
+  pourquoi: >-
+    Choisir un encodeur et une tête demande des données annotées, et les nôtres ne le sont pas
+    encore. Encoder tout le corpus de l'ONF coûte des dizaines d'heures par encodeur (61 h pour
+    Perch 2.0) : on ne peut pas tout essayer dessus. AnuraSet (Cañas et al. 2023, CC BY) est
+    un jeu public d'anoures néotropicaux du Brésil, annotés au chant près, enregistrés sur
+    plusieurs sites. Il sert de banc d'essai pour trier 24 encodeurs et des dizaines de têtes
+    avant de payer l'encodage du corpus ONF.
+  liens:
+    - [Des anoures tropicaux, "Comme A. blanci : chants brefs et tonals, dans le bruit d'une forêt tropicale (insectes, pluie, autres anoures). DENMIN (5,3 kHz, notes brèves) est l'analogue le plus proche."]
+    - [Plusieurs sites, "Quatre sites INCT, chacun avec son micro, sa végétation, son chœur. C'est notre situation : Kaw, Trésor, Mataroni… et demain des points d'écoute jamais annotés."]
+    - [Généraliser à un site neuf, "Le cœur du projet. On ne demande pas au détecteur de reconnaître les sites qu'il a appris, mais de marcher là où personne n'a encore écouté."]
+    - ["Un indicateur, pas un verdict", "D'autres espèces qu'A. blanci, 2 à 4 sites par espèce : on élimine ce qui échoue nettement ; le choix final se fera sur les données de l'ONF."]
+  methode:
+    - [Un site tenu à l'écart, "Quatre plis : on apprend sur trois sites, on juge sur le quatrième, jamais vu. Les réglages (C de la logistique…) sont choisis par des plis internes, eux aussi par site."]
+    - [Apprentissage, "Tous les positifs de l'espèce et 20 négatifs par positif, tirés dans chaque site d'apprentissage."]
+    - [Évaluation, "Toutes les fenêtres du site tenu à l'écart, à sa prévalence réelle (plusieurs milliers de négatifs)."]
+    - [Comparaisons, "Écart à une référence fixée d'avance (perch_v2 + logistique), bootstrap apparié des enregistrements dans chaque site, correction de Holm. Avec 2 à 4 sites on ne peut pas tirer les sites : l'intervalle reste optimiste."]
+  unites:
+    - [Fenêtre, "Chaque fenêtre (5 s, ou 3 et 6 s selon l'encodeur) est une unité, positive si elle contient un chant de l'espèce. C'est ce que voit le détecteur et ce qu'on annote : la mesure la plus fine. Mais deux encodeurs à grille différente ne jugent pas les mêmes fenêtres : la comparaison n'est appariée qu'entre encodeurs à 5 s."]
+    - [Minute, "Chaque enregistrement d'une minute est une unité ; son score est le maximum de ses fenêtres. C'est la seule unité identique pour tous les encodeurs (comparaison appariée), et la plus proche de l'usage final : l'espèce chante-t-elle sur cet enregistrement, à ce point d'écoute ? Dans les benchmarks 01 à 06 elle s'appelle « enregistrement »."]
+  lectures:
+    - [AP moyenne par site, "L'AP est calculée sur chaque site tenu à l'écart, avec ses seuls scores, puis moyennée sur les sites où l'espèce chante. Elle ne juge que le classement à l'intérieur d'un site : les chants passent-ils devant le bruit sur un site neuf ? C'est la lecture principale pour choisir l'encodeur. Plus bruitée (peu de positifs par site), et non définie là où l'espèce est absente."]
+    - [AP poolée, "Les scores des quatre plis, rendus par quatre modèles, sont mis bout à bout et jugés ensemble. Elle juge en plus l'échelle des scores : un même seuil vaut-il pour tous les sites ? Elle pénalise une tête dont les sites finissent sur des échelles différentes (centrage par site, C choisi pli par pli, n° 133)."]
+  lecture_conseil: >-
+    Lire les deux côte à côte : un grand écart entre AP par site et AP poolée signale des sites
+    sur des échelles différentes, donc un seuil qui ne voyagera pas. Sur AnuraSet c'est le cas
+    d'une espèce présente sur deux sites seulement (PITAZU : rappel 0,01 au seuil appris
+    ailleurs, 0,92 au seuil choisi sur place) ; chaque site neuf demandera son propre seuil.
+  jeu: >-
+    Le jeu complet compte 1 612 enregistrements d'une minute, 4 sites et 42 espèces. On garde
+    1 599 enregistrements (1 206 aux chants datés et 393 sans aucune espèce, seuls négatifs
+    sûrs) et les 5 espèces présentes sur au moins deux sites : sans deuxième site, impossible
+    de mesurer le transfert.
+  total_enregistrements: 1612
+  total_especes: 42

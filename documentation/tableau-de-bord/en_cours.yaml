@@ -30,7 +30,7 @@ en_cours:
   - titre: Création du module de traitement du signal
     etat: a_venir
     detail: >-
-      Filtre passe-bande, PCEN, log-mel, débruitage spectral, extraction de fenêtres candidates basée sur l'énergie, les chants faibles ne sont pas encore retenus : seuil à hystérésis à ajouter..   
+      Filtre passe-bande, PCEN, log-mel, débruitage spectral, extraction de fenêtres candidates basée sur l'énergie, seuil à hystérésis à ajouter.
     suite: Placement du module dans la pipeline, en amont ou en parallèle du couple foundation-model & head.
   - titre: Test d'une application Windows
     etat: a_venir
@@ -41,4 +41,9 @@ en_cours:
   - titre: Fabrication de notebooks
     etat: a_venir
     detail: >-
-      Il existe déjà des notebooks, mais le travail autour des notebooks est à recommencer à zéro.
+      Des notebooks Jupyter pour voir ce que fait la chaîne, étape par étape, sur nos propres
+      enregistrements : spectrogrammes avant et après le traitement du signal, fenêtres
+      candidates retenues, nuage des embeddings par site et par micro, scores des têtes le
+      long d'une nuit, extraits annotés. De quoi vérifier chaque étape à l'œil, comprendre un
+      faux positif, et montrer le travail aux encadrants et aux naturalistes sans passer par la
+      ligne de commande.

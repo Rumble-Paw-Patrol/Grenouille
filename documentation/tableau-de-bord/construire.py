@@ -264,6 +264,37 @@ def benchmark_encodeurs() -> dict:
     }
 
 
+def anuraset_jeu() -> dict:
+    """Le jeu AnuraSet réduit : positifs par espèce et par site (fenêtre de 5 s et minute),
+    taille de chaque site, et signature des chants des cinq espèces (benchmarks 01 et 07)."""
+    ts = pd.read_csv(BENCH / "2026-09-29_anuraset_global" / "donnees" / "transfert_sites.csv")
+    ts = ts[(ts["encoder"] == "perch_v2") & (ts["head"] == "logistic")].copy()
+    ts["total"] = ts["n_pos"] + ts["n_neg"]
+    # Taille d'un site : toutes ses fenêtres (ou minutes) ; une espèce en écarte parfois quelques
+    # fichiers (signalée sans chant daté, n° 138), d'où le maximum sur les espèces.
+    sites = ts.groupby(["site", "level"])["total"].max().unstack("level")
+    especes = pd.read_csv(BENCH / "2026-09-28_anuraset_perch_v2" / "donnees" / "especes.csv")
+    return {
+        "sites": [
+            {"site": s, "fenetres": int(r["fenetre"]), "minutes": int(r["minute"])}
+            for s, r in sites.iterrows()
+        ],
+        "positifs": lignes(ts, ["species", "site", "level", "n_pos", "total"]),
+        "especes": lignes(
+            especes,
+            [
+                "species",
+                "n_calls",
+                "n_recordings",
+                "n_sites",
+                "duration_median_s",
+                "duration_p90_s",
+                "dominant_hz",
+            ],
+        ),
+    }
+
+
 def benchmark_tetes() -> list[list]:
     """AP poolée (fenêtre, enregistrement) et AP moyenne par site (fenêtre), benchmarks 01–06."""
     out = []
@@ -602,6 +633,7 @@ def main() -> None:
         "rapports": rapports(fichiers),
         "encodeurs": benchmark_encodeurs(),
         "tetes": benchmark_tetes(),
+        "anuraset": anuraset_jeu(),
         "tableaux": tableaux(fichiers),
         "biblio": (DOC / "biblio" / "biblio.md").read_text(encoding="utf-8"),
         "poste": "poste-annotation.png" if (ICI / "poste-annotation.png").exists() else None,
