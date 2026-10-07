@@ -1,30 +1,10 @@
-# Structure du projet pour le tableau de bord : ce que le code ne dit pas de lui-même (objectif,
-# critères, étapes de la chaîne et leur état, plan d'annotation). Tenu à jour par Claude
-# (skill tableau-de-bord) quand le code change ; le travail en cours est dans en_cours.yaml et
-# le compteur d'annotations est lu dans la base locale.
+# Structure du projet pour le tableau de bord : ce que le code ne dit pas de lui-même (étapes
+# de la chaîne, leur module et leur état, cibles d'annotation). Tenu à jour par Claude (skill
+# tableau-de-bord) quand le code change. Les textes de la page sont dans textes.yaml, les
+# chantiers dans en_cours.yaml.
 #
 # État d'une étape : fait | en_cours | a_venir | bloque
 
-projet:
-  titre: Outil de détection automatique d'Anomaloglossus blanci
-  stage: [Stage de fin d'études, Office National des Forêts de Guyane, "6 mois, 15/09/2026 → 14/03/2027"]
-  auteur: Léonard Laplace-Palette
-  objectif: >-
-    Développement d'un détecteur acoustique d'A. blanci en apprentissage continu capable de
-    généraliser à de nouveaux points d'écoute jamais vus.
-  depot: https://github.com/Rumble-Paw-Patrol/Grenouille
-  criteres:
-    - [1, Droit d'utilisation, "poids publics et licence qui permet l'usage commercial* par l'ONF"]
-    - [2, Performance, "AP et rappel"]
-    - [3, Facilité d'utilisation, "Application de bureau Windows sans écriture de code par les naturalistes"]
-    - [4, Durée d'encodage, "si possible en heures pour une campagne d'écoute d'une semaine sur CPU de l'ONF"]
-
-# Tuiles de la vue d'ensemble qui ne se lisent pas dans les CSV.
-criteres_note: >-
-  * Le caractère « usage commercial » est encore flou : reste à établir si l'utilisation du
-  détecteur par l'ONF, établissement public à caractère industriel et commercial, tombe sous
-  les clauses « non commerciales » de certaines licences de poids (CC BY-NC notamment).
-meilleur_encodeur: [Perch 2.0, "Se démarque a priori devant BirdNET 2.4", "BirdNET 3.0 en preview"]
 
 # Lieux : les relevés 2026 rattachés aux sites de la phénologie 2023 (présentation de suivi n° 2).
 lieux: {CDR: Kaw, Patawa Est: Kaw, Patawa Ouest: Kaw, RNRT: Trésor}
@@ -33,145 +13,81 @@ lieux: {CDR: Kaw, Patawa Est: Kaw, Patawa Ouest: Kaw, RNRT: Trésor}
 # « tests » = dossier de tests/ dont on compte les tests ; « suite » = étapes suivantes.
 chaine:
   - id: inventaire
-    etape: Inventaire
     groupe: donnees
     module: blanci/inputs/ingest.py
     tests: tests/inputs
     commandes: [ingest, flag, status]
     etat: fait
-    resume: >-
-      Chaque enregistrement est rangé en base avec sa campagne (phénologie 2023 ou
-      campagne 2026), son site, son micro et son heure.
-    chiffre: 96 292 enregistrements, 3 204 h
     suite: [qc]
   - id: qc
-    etape: Contrôle qualité
     groupe: donnees
     module: blanci/inputs/qc.py
     tests: tests/inputs
     commandes: [qc]
     etat: fait
-    resume: >-
-      Une seule passe sur tout le corpus avant l'encodage. Des flags écartent les fichiers
-      cassés ou sans rapport avec le projet : durée anormale, hors relevé, silencieux,
-      micro resté allumé dans le sac. L'horloge douteuse n'est plus qu'une remarque.
-    chiffre: 96 109 enregistrements encodables
     suite: [signal]
   - id: signal
-    etape: Traitement du signal
     groupe: signal
     module: blanci/heads/signal_processing.py
     tests: tests/heads
     commandes: [onsets]
     etat: a_venir
-    resume: >-
-      Facultatif : on ne sait pas encore s'il servira. Placé en amont de l'encodeur, il
-      appliquerait un filtre passe-bande, le PCEN, le log-mel et un débruitage spectral,
-      puis extrairait les fenêtres candidates par l'énergie dans la bande 4,4–5,5 kHz. Il
-      mesure aussi le rythme du chant (une note de 0,09 s toutes les 1,2 à 1,9 s), sans
-      apprentissage.
-    chiffre: bande 4,4–5,5 kHz
     suite: [encodage]
   - id: encodage
-    etape: Encodage
     groupe: modele
     module: blanci/embedding
     tests: tests/embedding
     commandes: [embed, tokens]
     etat: en_cours
-    resume: >-
-      L'encodeur gelé transforme chaque fenêtre de 5 s en un embedding, et en tokens pour
-      les têtes qui les lisent. perch_v2 tourne sur le processeur du portable i5, sans
-      carte graphique. Suite aux optimisations, l'encodage est passé de 8,0 à 2,05 s par
-      enregistrement de 2 min.
-    chiffre: 2,05 s par enregistrement de 2 min
     suite: [tetes]
   - id: tetes
-    etape: Têtes de classification
     groupe: modele
     module: blanci/heads
     tests: tests/heads
     commandes: [train, heads, heads-curve, search]
     etat: fait
-    resume: >-
-      Une petite couche posée sur les embeddings donne un score par fenêtre. Têtes
-      comparées : régression logistique, prototype (chaque fenêtre est comparée à la
-      moyenne des exemples avec chant et à celle des exemples sans chant, sans
-      apprentissage), sondes sur les tokens. Sur un nouveau site, on peut être amené à
-      utiliser deux têtes différentes selon le nombre de données annotées : le prototype
-      tant qu'il y a peu d'exemples, la logistique dès qu'il y en a assez.
     suite: [fusion]
   - id: fusion
-    etape: Fusion (si besoin)
     groupe: modele
     module: blanci/combination
     tests: tests/interfaces
     commandes: [fusion, fusion-bench, ensemble]
     etat: fait
     optionnel: true
-    resume: >-
-      Entre la classification et le score, seulement si besoin : combiner plusieurs modèles
-      (approche par ensemble), et/ou le score de la tête avec le module de traitement du
-      signal si celui-ci est finalement placé en parallèle de l'encodeur plutôt qu'en amont.
     suite: [score]
   - id: score
-    etape: Score et agrégation
     groupe: sortie
     module: blanci/results
     tests: tests/results
     commandes: [score, activity]
     etat: fait
-    resume: >-
-      Passe de la fenêtre à l'enregistrement puis au point d'écoute, avec un seuil par
-      site. Produit les courbes d'activité pour une étude phénologique future.
     suite: [evaluation, verification]
   - id: evaluation
-    etape: Évaluation
     groupe: sortie
     module: blanci/evaluation
     tests: tests/evaluation
     commandes: [evaluate, freeze, benchmark]
     etat: a_venir
-    resume: >-
-      AP et rappel par enregistrement sur des points tenus à l'écart et sur le jeu gelé. Sur
-      les données ONF : seulement après le go des experts sur les annotations.
-    chiffre: rappel ≥ 0,85 à précision ≥ 0,1 visé
   - id: verification
-    etape: File de vérification
     groupe: annotation
     module: blanci/annotation/selection.py
     tests: tests/annotation
     commandes: [queue, select, candidates]
     etat: fait
-    resume: >-
-      Choisit quoi faire écouter. Pour le premier lot : des extraits tirés selon le plan
-      d'annotation. Ensuite, plusieurs méthodes au choix dans le poste d'annotation : file
-      60-20-20 (incertains, meilleurs scores, hasard), similarité à des chants connus,
-      couverture (ce qu'on n'a jamais entendu), groupes d'embeddings, carte des
-      embeddings, négatifs difficiles, détections isolées, trous dans un chant,
-      enregistrements entiers tirés au hasard.
     suite: [annotation]
   - id: annotation
-    etape: Poste d'annotation
     groupe: annotation
     module: blanci/annotation/app.py
     tests: tests/annotation
     commandes: [annotate, clips-export, clips-import, label]
     etat: en_cours
-    resume: >-
-      Écoute dans le navigateur avec un spectrogramme zoomable, intervalles du chant
-      tracés à la souris. Work in progress.
     suite: [reentrainement]
   - id: reentrainement
-    etape: Réentraînement
     groupe: annotation
     module: blanci/service.py
     tests: tests/interfaces
     commandes: [retrain]
     etat: fait
-    resume: >-
-      Une nouvelle tête est apprise sur tous les labels, jugée sur le jeu gelé, et adoptée
-      seulement si elle n'est pas moins bonne.
     suite: [tetes]
 # Commandes de recherche ou d'outillage, volontairement hors du schéma de la chaîne. Une
 # commande de la CLI absente d'ici et de la chaîne est signalée comme nouvelle.
@@ -179,43 +95,6 @@ commandes_hors_chaine: [agreement, anuraset benchmark, anuraset campaign, anuras
   anuraset prepare, anuraset profile, baselines, benchmark-all, check-grid, cluster,
   cluster-label, cluster-status, detector-bench, export-labels, pca, prevalence,
   qc-calibrate, sources, throughput, upstream-bench]
-
-# Plan d'annotation (présentation de suivi n° 2, décision avec Élodie du 29/09/2026, DECISIONS §5).
-# Pas de point-virgule dans ces textes (demande de Léonard).
-plan_annotation:
-  contexte: >-
-    Les prochaines campagnes dureront toutes une semaine, en saison des pluies, à Mataroni, sur
-    de nouveaux points d'écoute. Le jeu de test imite cette situation avec des points de
-    Mataroni jamais vus à l'entraînement. J'annote seul, puis Élodie et Benoît vérifient un
-    sous-échantillon. Aucun benchmark n'est lancé sur ces données avant leur accord.
-  etapes:
-    - [Répartir les points, "Avant toute écoute, chaque point d'écoute est attribué soit à l'entraînement, soit au test, jamais aux deux."]
-    - [Jeu d'entraînement, "Environ 450 extraits de 30 s. 300 en 2026, 3 par point d'écoute : un au pic du matin, un au pic du soir, un dans une autre tranche horaire. 150 en 2023, 50 sur chacun des 3 micros d'entraînement, répartis sur l'année."]
-    - [Validation, "Validation croisée en 5 plis inter-micros et non intra-micros. Chaque pli rassemble environ un cinquième des micros d'entraînement, entiers : jamais quelques enregistrements d'un micro déjà vu. On mesure ainsi la généralisation à des paysages sonores jamais entendus. Elle sert à régler la tête sans jamais toucher au jeu de test."]
-    - [Jeu de test, "Environ 250 enregistrements de 2 min écoutés en entier, sur les points tenus à l'écart, avec au moins 60 positifs pour mesurer le rappel avec une précision suffisante."]
-    - [Vérification, "Élodie et Benoît écoutent chacun 10 % de mes données annotées, à l'aveugle : mon label est caché et l'ordre mélangé."]
-  principes:
-    - [Annotations de l'ancien prestataire ignorées, "on repart de zéro, sans reprendre ses annotations, pour ne pas hériter de ses angles morts."]
-    - [Peu d'enregistrements sur beaucoup de points, "plutôt que beaucoup d'enregistrements sur peu de points. Varier les paysages sonores aide le détecteur à généraliser."]
-    - [Un tirage stratifié par point et par heure, "fait avant toute écoute. Chaque point et chaque tranche horaire fournit des extraits avec et sans chant, si bien que la tête apprend le chant et pas l'ambiance sonore de l'heure ni du lieu."]
-
-# Apprentissage actif : les lots d'annotation suivants, après l'accord des experts (DECISIONS §5.9).
-apprentissage_actif:
-  contexte: >-
-    Une fois le premier lot validé, le modèle aide à choisir quoi écouter ensuite. Ces lots ne
-    servent qu'à l'entraînement, jamais au test.
-  boucle:
-    - [Score, "La tête en place note toutes les fenêtres encodées."]
-    - [File de vérification, "Choisit les fenêtres à écouter, par la méthode qu'on veut (ci-dessous). Par défaut, la file 60-20-20 : 60 % d'incertaines (les plus proches du seuil), 20 % des meilleurs scores, 20 % au hasard par micro et par heure."]
-    - [Poste d'annotation, "Logiciel d'écoute dans le navigateur : spectrogramme zoomable, écoute de la seule bande du chant, intervalles tracés à la souris, faux amis notés. Work in progress."]
-    - [Réentraînement, "Une nouvelle tête apprend sur tous les labels. Elle n'est adoptée que si elle fait au moins aussi bien sur le jeu de test gelé."]
-  methodes:
-    - [Similarité, "les fenêtres les plus proches d'un chant connu, pour récolter des positifs sur les points encore peu annotés."]
-    - [Couverture, "les fenêtres les plus éloignées de tout ce qui est déjà annoté : écouter ce qu'on n'a jamais entendu."]
-    - [Groupes d'embeddings, "quelques fenêtres par groupe de sons qui se ressemblent. Un groupe homogène s'étiquette d'un coup."]
-    - [Carte des embeddings, "une projection en 2D où l'on entoure à la main une zone de points pour l'écouter."]
-    - [Négatifs difficiles, "faire écouter les fenêtres que la tête note haut alors qu'A. blanci n'y chante sûrement pas, et celles qui ressemblent aux faux amis déjà repérés (autres anoures, insectes). Une fois annotées négatives, elles apprennent à la tête ce qu'elle confond avec le chant."]
-    - [Détections isolées et trous dans un chant, "de manière générale, les chants d'A. blanci s'étendent sur la durée : faux positif probable pour une détection isolée, faux négatif probable pour une fenêtre négative entourée de positives."]
 
 # Temps d'encodage du corpus ONF : les encodeurs suivis par le tableau de bord. La durée se lit
 # dans la base (models.params_json.totals, cumul de tous les passages d'embed) dès qu'un
@@ -230,43 +109,3 @@ annotation_cibles:
   entrainement: 450      # enregistrements annotés hors jeu gelé (≈ un extrait de 30 s chacun)
   evaluation: 250        # enregistrements du jeu gelé, écoutés en entier
   positifs_evaluation: 60
-
-# Section AnuraSet : l'introduction aux trois sous-sections de pré-benchmark (encodeurs, têtes,
-# amorçage). Sources : rapports 01, 07 et 08 de documentation/benchmarks/, DECISIONS n° 125,
-# 133, 135, 138, 139, 141. Les chiffres du jeu réduit sont relus dans les CSV (construire.py).
-anuraset:
-  pourquoi: >-
-    Choisir un encodeur et une tête demande des données annotées, et les nôtres ne le sont pas
-    encore. Encoder tout le corpus de l'ONF coûte des dizaines d'heures par encodeur (61 h pour
-    Perch 2.0) : on ne peut pas tout essayer dessus. AnuraSet (Cañas et al. 2023, CC BY) est
-    un jeu public d'anoures néotropicaux du Brésil, annotés au chant près, enregistrés sur
-    plusieurs sites. Il sert de banc d'essai pour trier 24 encodeurs et des dizaines de têtes
-    avant de payer l'encodage du corpus ONF.
-  liens:
-    - [Des anoures tropicaux, "Comme A. blanci : chants brefs et tonals, dans le bruit d'une forêt tropicale (insectes, pluie, autres anoures). DENMIN (5,3 kHz, notes brèves) est l'analogue le plus proche."]
-    - [Plusieurs sites, "Quatre sites INCT, chacun avec son micro, sa végétation, son chœur. C'est notre situation : Kaw, Trésor, Mataroni… et demain des points d'écoute jamais annotés."]
-    - [Généraliser à un site neuf, "Le cœur du projet. On ne demande pas au détecteur de reconnaître les sites qu'il a appris, mais de marcher là où personne n'a encore écouté."]
-    - ["Un indicateur, pas un verdict", "D'autres espèces qu'A. blanci, 2 à 4 sites par espèce : on élimine ce qui échoue nettement ; le choix final se fera sur les données de l'ONF."]
-  methode:
-    - [Un site tenu à l'écart, "Quatre plis : on apprend sur trois sites, on juge sur le quatrième, jamais vu. Les réglages (C de la logistique…) sont choisis par des plis internes, eux aussi par site."]
-    - [Apprentissage, "Tous les positifs de l'espèce et 20 négatifs par positif, tirés dans chaque site d'apprentissage."]
-    - [Évaluation, "Toutes les fenêtres du site tenu à l'écart, à sa prévalence réelle (plusieurs milliers de négatifs)."]
-    - [Comparaisons, "Écart à une référence fixée d'avance (perch_v2 + logistique), bootstrap apparié des enregistrements dans chaque site, correction de Holm. Avec 2 à 4 sites on ne peut pas tirer les sites : l'intervalle reste optimiste."]
-  unites:
-    - [Fenêtre, "Chaque fenêtre (5 s, ou 3 et 6 s selon l'encodeur) est une unité, positive si elle contient un chant de l'espèce. C'est ce que voit le détecteur et ce qu'on annote : la mesure la plus fine. Mais deux encodeurs à grille différente ne jugent pas les mêmes fenêtres : la comparaison n'est appariée qu'entre encodeurs à 5 s."]
-    - [Minute, "Chaque enregistrement d'une minute est une unité ; son score est le maximum de ses fenêtres. C'est la seule unité identique pour tous les encodeurs (comparaison appariée), et la plus proche de l'usage final : l'espèce chante-t-elle sur cet enregistrement, à ce point d'écoute ? Dans les benchmarks 01 à 06 elle s'appelle « enregistrement »."]
-  lectures:
-    - [AP moyenne par site, "L'AP est calculée sur chaque site tenu à l'écart, avec ses seuls scores, puis moyennée sur les sites où l'espèce chante. Elle ne juge que le classement à l'intérieur d'un site : les chants passent-ils devant le bruit sur un site neuf ? C'est la lecture principale pour choisir l'encodeur. Plus bruitée (peu de positifs par site), et non définie là où l'espèce est absente."]
-    - [AP poolée, "Les scores des quatre plis, rendus par quatre modèles, sont mis bout à bout et jugés ensemble. Elle juge en plus l'échelle des scores : un même seuil vaut-il pour tous les sites ? Elle pénalise une tête dont les sites finissent sur des échelles différentes (centrage par site, C choisi pli par pli, n° 133)."]
-  lecture_conseil: >-
-    Lire les deux côte à côte : un grand écart entre AP par site et AP poolée signale des sites
-    sur des échelles différentes, donc un seuil qui ne voyagera pas. Sur AnuraSet c'est le cas
-    d'une espèce présente sur deux sites seulement (PITAZU : rappel 0,01 au seuil appris
-    ailleurs, 0,92 au seuil choisi sur place) ; chaque site neuf demandera son propre seuil.
-  jeu: >-
-    Le jeu complet compte 1 612 enregistrements d'une minute, 4 sites et 42 espèces. On garde
-    1 599 enregistrements (1 206 aux chants datés et 393 sans aucune espèce, seuls négatifs
-    sûrs) et les 5 espèces présentes sur au moins deux sites : sans deuxième site, impossible
-    de mesurer le transfert.
-  total_enregistrements: 1612
-  total_especes: 42

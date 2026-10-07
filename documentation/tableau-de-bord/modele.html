@@ -494,22 +494,26 @@ const coulEsp = (s) => `var(--s${ESPECES.indexOf(s) + 1})`;
 const nomEnc = (e) => e.replace(/^esp_aves2_/, "aves2 ");
 
 /* ---------- squelette des sections ---------- */
+// Ordre des sections ; le troisième élément range la section sous une autre dans le menu.
+// Tous les textes (menu, titres, sous-titres, cartes) sont dans textes.yaml.
+const T = C.sections;
 const SECTIONS = [
-  ["accueil", "Vue d'ensemble"], ["en-cours", "En développement"], ["donnees", "Données"],
-  ["chaine", "Chaîne de traitement"], ["annotation", "Annotation"], ["encodage", "Temps d'encodage"],
-  ["anuraset", "AnuraSet"],
-  ["encodeurs", "Benchmark des encodeurs", "anuraset"], ["explorateur", "Explorateur des têtes", "anuraset"], ["amorcage", "Amorcer un site", "anuraset"],
-  ["rapports", "Rapports"], ["tableaux", "Tableaux"], ["biblio", "Bibliographie"],
+  ["accueil"], ["en-cours"], ["donnees"], ["chaine"], ["annotation"], ["encodage"],
+  ["anuraset"], ["encodeurs", , "anuraset"], ["explorateur", , "anuraset"], ["amorcage", , "anuraset"],
+  ["rapports"], ["tableaux"], ["biblio"],
 ];
 const vues = $("#vues");
 const PARENT = Object.fromEntries(SECTIONS.filter((x) => x[2]).map(([id, , p]) => [id, p]));
-function section(id, titre, sous, eyebrow) {
+function section(id, eyebrow) {
+  const { titre, sous_titre: sous, surtitre } = T[id];
+  eyebrow = surtitre ?? eyebrow;
   const s = el("section", { class: PARENT[id] ? "vue sous-vue" : "vue", id, "data-comment-target": "" });
   const h = el("div", { class: "vue-tete" },
     el("div", {}, eyebrow ? el("div", { class: "eyebrow" }, eyebrow) : null, el("h2", {}, titre), sous ? el("p", {}, sous) : null),
     boutonCommenter(s, "Commenter la section"));
   s.append(h); vues.append(s); return s;
 }
+const carteT = (sec, k, ...kids) => carte(T[sec].cartes[k].titre, T[sec].cartes[k].legende, ...kids);
 const carte = (titre, sous, ...kids) => {
   const c = el("div", { class: "carte", "data-comment-target": "" });
   if (titre) c.append(el("div", { class: "carte-tete" }, el("h3", {}, titre), boutonCommenter(c)));
@@ -527,7 +531,7 @@ $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
 
 /* ---------- navigation ---------- */
 const nav = $("#nav");
-for (const [id, nom, parent] of SECTIONS) nav.append(el("a", { href: "#" + id, "data-id": id, class: parent ? "sous" : null }, nom));
+for (const [id, , parent] of SECTIONS) nav.append(el("a", { href: "#" + id, "data-id": id, class: parent ? "sous" : null }, T[id].menu));
 $("#pied").append(
   ...C.projet.stage.map((l) => el("div", {}, l)), el("div", {}, C.projet.auteur),
   el("a", { href: C.projet.depot, target: "_blank", rel: "noopener" }, "Dépôt GitHub"));
@@ -536,7 +540,7 @@ $("#pied").append(
    1. Vue d'ensemble
    ====================================================================== */
 {
-  const s = section("accueil", "Vue d'ensemble", "État d'avancement du projet et critères de choix du détecteur.");
+  const s = section("accueil");
   const totalH = D.inventaire.sites.reduce((a, x) => a + x.heures, 0);
   const totalN = D.inventaire.sites.reduce((a, x) => a + x.enregistrements, 0);
   const f5 = D.inventaire.fenetres.find((f) => f[0] === "5 s");
@@ -551,9 +555,9 @@ $("#pied").append(
   const crit = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Rang"), el("th", {}, "Critère"), el("th", {}, "Mesure"))),
     el("tbody", {}, C.projet.criteres.map(([r, c, m]) => el("tr", {}, el("td", { class: "num" }, String(r)), el("td", {}, el("strong", {}, c)), el("td", {}, m)))));
   const etat = el("div", { class: "grille-2" },
-    carte("Critères de choix du détecteur", "Critères appliqués dans cet ordre.", el("div", { class: "defile" }, crit),
+    carteT("accueil", "criteres", el("div", { class: "defile" }, crit),
       C.criteres_note ? el("p", { class: "sous" }, C.criteres_note) : null),
-    carte("En développement", null, el("ul", { style: "margin:0;padding:0;list-style:none;display:grid;gap:8px" },
+    carteT("accueil", "en_developpement", el("ul", { style: "margin:0;padding:0;list-style:none;display:grid;gap:8px" },
       C.en_cours.map((t) => el("li", { style: "display:flex;gap:10px;align-items:baseline;justify-content:space-between" }, el("a", { href: "#en-cours" }, t.titre), puceEtat(t.etat))))));
   s.append(etat);
 
@@ -563,7 +567,7 @@ $("#pied").append(
    2. Travail en cours
    ====================================================================== */
 {
-  const s = section("en-cours", "En développement", "Ce qui est sur la table en ce moment, et ce qui a bougé dans le dépôt.", `Mis à jour le ${dateFr(String(D.genere.date))}`);
+  const s = section("en-cours", `Mis à jour le ${dateFr(String(D.genere.date))}`);
   const g = el("div", { class: "grille" });
   for (const t of C.en_cours) {
     const c = el("div", { class: "carte", "data-comment-target": "" },
@@ -577,14 +581,14 @@ $("#pied").append(
 
   const commits = el("div", { class: "commits" }, D.historique.slice(0, 12).map(([h, d, msg, n]) =>
     el("div", {}, el("time", { title: h }, (n ? `n° ${n} · ` : "") + d.split("-").reverse().join("/")), el("span", {}, msg))));
-  s.append(carte("Derniers changements du dépôt", "Commits poussés sur main, numérotés depuis le premier : ce sont les numéros à donner à /audit-n-from.", commits));
+  s.append(carteT("en-cours", "commits", commits));
 }
 
 /* ======================================================================
    3. Données
    ====================================================================== */
 {
-  const s = section("donnees", "Données", "Inventaire des enregistrements de l'ONF (2 min, toutes les 30 min de 5 h à 20 h, 48 kHz stéréo). L'audio reste sur les disques, jamais dans le dépôt.");
+  const s = section("donnees");
   const inv = D.inventaire; const sites = inv.sites;
   // Même graphique que la diapo « Le jeu de données » de la présentation de suivi n° 2 :
   // heures d'audio par lieu, les relevés 2026 rattachés à leur site (C.lieux), une couleur par jeu.
@@ -626,12 +630,12 @@ $("#pied").append(
   const vueTable = el("div", { class: "defile", hidden: true }, tbl);
   const bascule = el("button", { type: "button", class: "lien-btn" }, "Voir le tableau");
   bascule.addEventListener("click", () => { vueTable.hidden = !vueTable.hidden; svg.style.display = vueTable.hidden ? "" : "none"; bascule.textContent = vueTable.hidden ? "Voir le tableau" : "Voir le graphique"; });
-  const c1 = carte("Heures d'audio par site", "Enregistrements de 2 min.", el("div", { class: "legende" },
+  const c1 = carteT("donnees", "heures", el("div", { class: "legende" },
     ...Object.entries(JEUX).map(([j, c]) => el("span", {}, el("i", { style: `background:${c}` }), inv.jeux[j]))), svg, vueTable, bascule);
   const MODELE_FEN = { "3 s": "BirdNET", "5 s": "Perch", "6 s": "Autre" };
   const fen = el("table", {}, el("thead", {}, el("tr", {}, ["Fenêtre", "Pas", "Par enregistrement", "Au total"].map((h, i) => el("th", { class: i > 1 ? "n" : null }, h)))),
     el("tbody", {}, inv.fenetres.map((f) => el("tr", {}, el("td", {}, f[0] + (MODELE_FEN[f[0]] ? ` (${MODELE_FEN[f[0]]})` : "")), el("td", {}, f[1]), el("td", { class: "n" }, String(f[2])), el("td", { class: "n" }, entier(f[3]))))));
-  const c2 = carte("Fenêtres à encoder", "Chevauchement de moitié, sur les enregistrements de 120 s.", el("div", { class: "defile" }, fen),
+  const c2 = carteT("donnees", "fenetres", el("div", { class: "defile" }, fen),
     el("p", { class: "sous" }, inv.drapeaux + "."));
   s.append(el("div", { class: "grille-2" }, c1, c2));
 }
@@ -640,7 +644,7 @@ $("#pied").append(
    4. Chaîne de traitement
    ====================================================================== */
 {
-  const s = section("chaine", "Chaîne de traitement", "Du fichier audio au score par point d'écoute. Cliquer une étape pour son détail ; en doré : la boucle d'annotation et de réentraînement ; pointillés gris : la fusion, seulement si besoin.");
+  const s = section("chaine");
   // Le chemin principal sur une ligne ; dessous, la boucle d'annotation qui revient aux têtes.
   const POS = { inventaire: [1, 1], qc: [2, 1], signal: [3, 1], encodage: [4, 1],
     tetes: [5, 1], fusion: [6, 1], score: [7, 1], evaluation: [8, 1],
@@ -739,7 +743,7 @@ function camemberts() {
     detail.replaceChildren(ms.length
       ? el("div", { style: "display:grid;gap:8px" }, el("h4", { class: "eyebrow" }, `Micros de ${site}`),
           el("div", { class: "camemberts petits" }, ms.map(([, mic, n, p]) => tuile(mic, { n, p }))))
-      : el("p", { class: "sous" }, "Détail par micro disponible au prochain comptage."));
+      : el("p", { class: "sous" }, T["annotation"].phrases.micros_absents));
   };
   sites.forEach(([site, x]) => { const b = tuile(site, x, null, () => choisir(site, b)); b.setAttribute("aria-pressed", "false"); rangee.append(b); });
   boite.append(rangee, el("div", { class: "legende" }, el("span", {}, el("i", { style: "background:var(--gold)" }), "avec A. blanci"), el("span", {}, el("i", { style: "background:var(--idle-soft);border:1px solid var(--line)" }), "sans"), el("span", {}, `compté le ${dateFr(A.compte_le)}`)), detail);
@@ -750,22 +754,22 @@ function camemberts() {
    5. Annotation : plan du premier lot, puis apprentissage actif
    ====================================================================== */
 {
-  const s = section("annotation", "Annotation", "Le premier lot, tiré sans aucun modèle, puis les lots suivants choisis par apprentissage actif.");
+  const s = section("annotation");
   const etapesEl = (liste, chaud) => el("ol", { class: "etapes-plan" }, liste.map(([titre, d], k) => el("li", { class: k === chaud ? "fort" : null },
     el("span", { class: "rang" }, String(k + 1)), el("div", {}, el("strong", {}, titre), el("p", {}, d)))));
   const puces = (liste) => el("ul", { class: "principes" }, liste.map(([titre, d]) => el("li", {}, el("strong", {}, titre), " : ", d)));
   const P = C.plan_annotation, A = C.apprentissage_actif;
-  s.append(carte("Plan d'annotation", P.contexte, etapesEl(P.etapes, P.etapes.length - 1),
-    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Trois principes"), puces(P.principes)));
-  s.append(carte("Apprentissage actif", A.contexte, etapesEl(A.boucle, -1),
-    el("p", { class: "sous" }, "La boucle recommence : les nouveaux labels donnent une nouvelle tête, qui choisit les écoutes suivantes."),
-    el("h4", { class: "eyebrow", style: "margin-top:4px" }, "Méthodes de sélection"),
+  s.append(carte(T["annotation"].cartes.plan.titre, P.contexte, etapesEl(P.etapes, P.etapes.length - 1),
+    el("h4", { class: "eyebrow", style: "margin-top:4px" }, T["annotation"].phrases.titre_principes), puces(P.principes)));
+  s.append(carte(T["annotation"].cartes.apprentissage_actif.titre, A.contexte, etapesEl(A.boucle, -1),
+    el("p", { class: "sous" }, T["annotation"].phrases.boucle),
+    el("h4", { class: "eyebrow", style: "margin-top:4px" }, T["annotation"].phrases.titre_methodes),
     el("ul", { class: "principes deux-colonnes" }, A.methodes.map(([titre, d]) => el("li", {}, el("strong", {}, titre), el("span", { class: "sous" }, d.charAt(0).toUpperCase() + d.slice(1)))))));
-  s.append(carte("Annotations par site et par micro", "Enregistrements annotés avec et sans A. blanci, recomptés dans la base à chaque mise à jour du tableau de bord. Cliquer un site pour voir ses micros.", camemberts()));
+  s.append(carteT("annotation", "compteur", camemberts()));
   if (D.poste) {
     const img = el("img", { src: D.poste, alt: "Capture du poste d'annotation Streamlit", class: "capture", loading: "lazy" });
     img.addEventListener("click", () => ouvrirImage(img.src, "Poste d'annotation (Streamlit)"));
-    s.append(carte("Poste d'annotation", "Mon outil d'annotation, une page Streamlit qui s'ouvre dans le navigateur (uv run blanci annotate). Work in progress.", img));
+    s.append(carteT("annotation", "poste", img));
   }
 }
 
@@ -773,7 +777,7 @@ function camemberts() {
    6. Temps d'encodage du corpus ONF
    ====================================================================== */
 {
-  const s = section("encodage", "Temps d'encodage", "Durée réelle pour encoder tout le corpus de l'ONF sur le processeur du portable i5. Une barre apparaît dès qu'un encodeur a fini, lue dans la base à la mise à jour du tableau de bord.");
+  const s = section("encodage");
   const E = Object.entries(D.encodage?.encodeurs || {});
   const finis = E.filter(([, v]) => v.statut === "fini" && v.heures);
   const max = Math.max(1, ...finis.map(([, v]) => v.heures));
@@ -793,7 +797,7 @@ function camemberts() {
         sv("text", { x: gauche + 10, y: y + 25 }, txt));
     }
   });
-  s.append(carte("Encodage du corpus par encodeur", null, svg));
+  s.append(carteT("encodage", "encodage", svg));
 }
 
 /* ======================================================================
@@ -801,7 +805,7 @@ function camemberts() {
    ====================================================================== */
 {
   const A = C.anuraset, J = D.anuraset;
-  const s = section("anuraset", "AnuraSet", "Un pré-benchmark sur des anoures du Brésil, pour trier encodeurs et têtes avant de les essayer sur les données de l'ONF. Les trois sous-sections qui suivent en donnent les résultats.", "Pré-benchmark");
+  const s = section("anuraset");
   const paire = (liste) => el("ul", { class: "principes deux-colonnes" }, liste.map(([t, x]) => el("li", {}, el("strong", {}, t), x)));
   const SITES = J.sites.map((x) => x.site);
 
@@ -812,19 +816,19 @@ function camemberts() {
   const exemple = [0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0], scores = [0.04, 0.1, 0.62, 0.91, 0.2, 0.07, 0.05, 0.55, 0.12, 0.03, 0.08, 0.06];
   const bande = el("div", { class: "minute-bande", role: "img", "aria-label": "Une minute découpée en 12 fenêtres de 5 s : trois contiennent un chant ; le score de la minute est le plus haut des 12 scores de fenêtre, 0,91." },
     exemple.map((p, i) => el("span", { class: (p ? "pos" : "") + (i === 3 ? " max" : ""), title: `fenêtre ${i * 5}–${i * 5 + 5} s · score ${fr(scores[i])}` }, fr(scores[i]))));
-  s.append(carte("Pourquoi AnuraSet, et comment on le lit", null,
+  s.append(carteT("anuraset", "introduction",
     el("div", { class: "intro-anura" },
       el("p", {}, A.pourquoi),
       paire(A.liens),
-      el("h4", {}, "La méthode : un site tenu à l'écart à la fois"),
+      el("h4", {}, T["anuraset"].phrases.titre_methode),
       plis,
       el("ul", {}, A.methode.map(([t, x]) => el("li", {}, el("strong", {}, t + " : "), x))),
-      el("h4", {}, "Unité : fenêtre ou minute"),
-      el("p", {}, "Une minute d'AnuraSet, découpée en douze fenêtres de 5 s. En vert, les fenêtres qui contiennent un chant ; dans chaque case, le score que la tête leur donne. Au niveau minute, l'enregistrement est positif et son score est le plus haut des douze (encadré)."),
+      el("h4", {}, T["anuraset"].phrases.titre_unite),
+      el("p", {}, T["anuraset"].phrases.exemple_minute),
       bande,
       paire(A.unites),
-      el("h4", {}, "Lecture de l'AP : moyenne par site ou poolée"),
-      el("p", {}, "L'AP (précision moyenne) résume la courbe précision-rappel : 1 si tous les chants passent devant tout le bruit, la part de positifs si les scores sont tirés au hasard. Avec quatre plis, il y a deux façons de la calculer."),
+      el("h4", {}, T["anuraset"].phrases.titre_ap),
+      el("p", {}, T["anuraset"].phrases.explication_ap),
       paire(A.lectures),
       el("p", { class: "conseil" }, A.lecture_conseil))));
 
@@ -913,15 +917,15 @@ function camemberts() {
     }
     return svg;
   }
-  s.append(carte("À quoi ressemble le jeu réduit", A.jeu, tuiles,
+  s.append(carte(T["anuraset"].cartes.jeu_reduit.titre, A.jeu, tuiles,
     el("div", { style: "display:grid;gap:22px" },
       el("div", { style: "display:grid;gap:10px;align-content:start;min-width:0" },
-        el("h4", {}, "Qui chante où"),
+        el("h4", {}, T["anuraset"].phrases.titre_matrice),
         el("div", { class: "controles" }, el("div", { class: "champ" }, el("span", {}, "Unité"), segM)),
         el("div", { class: "defile" }, tableM), lecture),
       el("div", { style: "display:grid;gap:10px;align-content:start;min-width:0" },
-        el("h4", {}, "La signature des chants"),
-        el("p", { class: "sous" }, "Chaque espèce à la durée médiane et à la fréquence dominante de ses chants ; la taille du point suit le nombre de chants datés. En pointillés dorés, A. blanci : des notes plus brèves que toutes, dans la bande de DENMIN. Les chants de PHYCUV et LEPLAT débordent souvent une fenêtre de 3 s."),
+        el("h4", {}, T["anuraset"].phrases.titre_signature),
+        el("p", { class: "sous" }, T["anuraset"].phrases.legende_signature),
         signature()))));
 }
 
@@ -930,7 +934,7 @@ function camemberts() {
    ====================================================================== */
 const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "naturebeats", "convnext_birdset"];
 {
-  const s = section("encodeurs", "Benchmark des encodeurs", "Benchmark global : chaque encodeur jugé avec la tête adaptée à sa sortie, un site tenu à l'écart à la fois. Indicateur, pas verdict : le choix se fera sur les données de l'ONF.", "AnuraSet · 1 / 3");
+  const s = section("encodeurs");
   const E = D.encodeurs.encodeurs.filter((e) => e.ap_site_best != null);
   const lic = (e) => e.libre === "oui" ? ["libre", "lic-oui"] : e.libre === "non" ? ["non libre", "lic-non"] : [e.libre, "lic-autre"];
   const choisis = new Set(ENC_DEFAUT.filter((x) => E.some((e) => e.encoder === x)));
@@ -990,12 +994,12 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
     return sc;
   }
   rendre();
-  s.append(carte("Choisir les encodeurs à comparer", "Ils s'affichent dans le classement et sur le graphique. Pastille verte : libre d'accès.",
+  s.append(carteT("encodeurs", "choix",
     el("div", { class: "controles" }, raccourci("tous", () => E.forEach((e) => choisis.add(e.encoder))), raccourci("libres seulement", () => { choisis.clear(); E.filter((e) => e.libre === "oui").forEach((e) => choisis.add(e.encoder)); }), raccourci("aucun", () => choisis.clear())),
     puces));
-  s.append(carte("Classement des encodeurs", "AP moyenne par site tenu à l'écart (minute, cinq espèces), avec la meilleure tête de chaque encodeur, choisie après coup. Cliquer un en-tête pour trier.",
+  s.append(carteT("encodeurs", "classement",
     el("div", { class: "defile" }, el("table", {}, thead, corps))));
-  s.append(carte("Débit contre qualité", "Plein : libre d'accès.", zoneSc,
+  s.append(carteT("encodeurs", "debit", zoneSc,
     el("div", { class: "legende" }, el("span", {}, el("i", { style: "background:var(--accent)" }), "libre"), el("span", {}, el("i", { class: "anneau", style: "border-color:var(--muted)" }), "non libre ou non relevé"))));
 }
 
@@ -1003,7 +1007,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    6. Explorateur des têtes
    ====================================================================== */
 {
-  const s = section("explorateur", "Explorateur des têtes", "Choisir ce qu'on compare : encodeurs, têtes, espèces, unité et lecture de l'AP. Les têtes sont rangées sous leur encodeur ; chaque point est une espèce, le trait la moyenne des espèces choisies.", "AnuraSet · 2 / 3");
+  const s = section("explorateur");
   const SOURCES = {
     adaptees: { nom: "Encodeurs × têtes (benchmark global)", rows: D.encodeurs.transfert.map((r) => ({ enc: r[0], sp: r[1], head: r[2], lvl: r[3], ap: r[4], aps: r[5] })),
       ref: ["perch_v2", "logistic"], encs: ["perch_v2", "birdnet_v3", "audioprotopnet"], heads: ["logistic", "simple_prototype", "proto_probe"] },
@@ -1145,7 +1149,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    8. Amorcer un site neuf : les têtes comparées, sur un ou plusieurs encodeurs
    ====================================================================== */
 {
-  const s = section("amorcage", "Amorcer un site neuf", "Pour observer comment se comportent les têtes sur un site nouveau, selon le nombre d'annotations qu'il a déjà reçues : AP sur le site tenu à l'écart en fonction du nombre de ses enregistrements positifs annotés (moyenne des espèces et des sites). Une couleur par tête, un trait par encodeur.", "AnuraSet · 3 / 3");
+  const s = section("amorcage");
   const COURBE = D.encodeurs.courbe; // [enc, head, k, apw, apm]
   const K = [0, 1, 2, 5, 10, 20, -1], KN = ["0", "1", "2", "5", "10", "20", "tout"];
   const encs = [...new Set(COURBE.map((r) => r[0]))].sort();
@@ -1212,7 +1216,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
     zone.replaceChildren(svg);
   }
   puces(); dessiner();
-  s.append(carte("Les têtes face au peu d'annotations", "k = 0 : le site neuf n'a encore aucune annotation, la tête n'a appris que sur les autres sites. « tout » : toutes ses annotations. Trois encodeurs au plus.",
+  s.append(carteT("amorcage", "courbes",
     el("div", { class: "controles" }, el("div", { class: "champ" }, el("span", {}, "Unité"), selN)),
     el("div", { class: "champ" }, el("span", {}, "Encodeurs (un style de trait chacun)"), pucesE),
     el("div", { class: "champ" }, el("span", {}, "Têtes"), pucesH), zone));
@@ -1222,7 +1226,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    9. Rapports
    ====================================================================== */
 {
-  const s = section("rapports", "Rapports de benchmark", "Les huit rapports complets, avec leurs figures. Chacun a ses données (CSV) et le script qui les redessine dans le dépôt.");
+  const s = section("rapports");
   const liste = el("div", { class: "liste-rapports", role: "group", "aria-label": "Rapports" });
   const lecteur = el("article", { class: "carte md", "data-comment-target": "" });
   const boutons = [];
@@ -1252,7 +1256,7 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
    10. Tableaux
    ====================================================================== */
 {
-  const s = section("tableaux", "Tableaux de référence", "Un tableau par famille de méthodes : protocole, encodeurs, têtes, régularisations, fusion… Cliquer pour agrandir.");
+  const s = section("tableaux");
   const g = el("div", { class: "galerie" });
   D.tableaux.forEach((t) => {
     const f = el("figure", { "data-comment-target": "" },
@@ -1268,8 +1272,8 @@ const ENC_DEFAUT = ["perch_v2", "birdnet", "birdnet_v3", "audioprotopnet", "natu
 /* ======================================================================
    11. Bibliographie (avec recherche)
    ====================================================================== */
-function lecture(id, titre, sous, texte, eyebrow) {
-  const s = section(id, titre, sous, eyebrow);
+function lecture(id, texte) {
+  const s = section(id), titre = T[id].titre;
   const champ = el("input", { type: "search", id: id + "-q", placeholder: "Chercher…", "aria-label": "Chercher dans " + titre });
   const nb = el("span", { class: "sous" });
   const corps = el("div", { class: "carte md", "data-comment-target": "" });
@@ -1283,7 +1287,7 @@ function lecture(id, titre, sous, texte, eyebrow) {
   });
   s.append(el("div", { class: "controles" }, el("label", { class: "champ", style: "flex:1;max-width:420px" }, el("span", {}, "Chercher"), champ), nb), corps);
 }
-lecture("biblio", "Bibliographie", "Chaque référence avec ce qu'on en retient pour A. blanci.", D.biblio, "documentation/biblio/biblio.md");
+lecture("biblio", D.biblio);
 
 /* ---------- section active dans la navigation ---------- */
 const liensNav = [...nav.querySelectorAll("a")];

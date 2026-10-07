@@ -4,7 +4,8 @@
 
 Lit les rapports et les CSV de documentation/benchmarks/, les tableaux PNG, la bibliographie,
 l'inventaire de documentation/commandes.md, les tests, l'historique git,
-structure.yaml (objectif, chaîne, plan d'annotation), en_cours.yaml (le travail en cours, tenu à la main)
+structure.yaml (chaîne : modules, états), textes.yaml (tous les textes de la page) et
+en_cours.yaml (le travail en cours), ces deux derniers tenus à la main par Léonard
 et, si la base locale existe, l'avancement des annotations. Écrit :
 
 - index.html : modele.html avec toutes les données intégrées ;
@@ -514,7 +515,8 @@ AUTOMATIQUE = (
     "documentation/tableau-de-bord/",
 )
 # Ce que le tableau de bord ne montre pas, volontairement.
-IGNORE = ("DECISIONS.md", "uv.lock", ".gitignore", ".python-version", ".claude/", "config/")
+# resultats/ : sorties brutes des calculs, déjà rassemblées dans les CSV des benchmarks.
+IGNORE = ("resultats/", "DECISIONS.md", "uv.lock", ".gitignore", ".python-version", ".claude/", "config/")
 
 
 def commandes_cli() -> set[str]:
@@ -527,10 +529,25 @@ def commandes_cli() -> set[str]:
     return noms
 
 
+def charger_contenu() -> dict:
+    """structure.yaml (tenu par Claude), textes.yaml et en_cours.yaml (tenus par Léonard), réunis.
+    Les textes d'une étape de la chaîne (nom, détail, repère) viennent de textes.yaml."""
+    lire = lambda nom: yaml.safe_load((ICI / nom).read_text(encoding="utf-8"))  # noqa: E731
+    contenu, textes = lire("structure.yaml"), lire("textes.yaml")
+    textes_chaine = textes.pop("chaine")
+    for etape in contenu["chaine"]:
+        if etape["id"] not in textes_chaine:
+            raise SystemExit(f"textes.yaml : pas de textes pour l'étape « {etape['id']} » (chaine:)")
+        etape.update(textes_chaine[etape["id"]])
+    contenu.update(textes)
+    contenu.update(lire("en_cours.yaml"))
+    return contenu
+
+
 def changements() -> str:
     """Rapport en Markdown : ce qui a changé dans le dépôt depuis la dernière publication du
     tableau de bord, rangé selon ce qu'il faut en faire. Lu par le skill tableau-de-bord."""
-    structure = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
+    structure = charger_contenu()
     base = ""
     if PUBLICATION.exists():
         base = json.loads(PUBLICATION.read_text(encoding="utf-8")).get("commit", "")
@@ -619,8 +636,7 @@ def main() -> None:
         )
         return
     config = opts.config
-    contenu = yaml.safe_load((ICI / "structure.yaml").read_text(encoding="utf-8"))
-    contenu.update(yaml.safe_load((ICI / "en_cours.yaml").read_text(encoding="utf-8")))
+    contenu = charger_contenu()
     fichiers: dict[str, str] = {
         nom: str((ICI / nom).relative_to(RACINE))
         for nom in ("spectrogramme.jpg", "poste-annotation.png")
