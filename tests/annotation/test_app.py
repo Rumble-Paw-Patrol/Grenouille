@@ -91,9 +91,15 @@ def _multiclass(at):
     at.run()
 
 
+def _keys(at):
+    """Clés de l'état de session : `filtered_state` jusqu'à Streamlit 1.59 (Windows, uv.lock),
+    `at.session_state` lui-même ensuite (1.64 sous Linux), qui n'a plus `filtered_state`."""
+    return getattr(at.session_state, "filtered_state", at.session_state)
+
+
 def _draw(at, intervals):
     """Intervalles « tracés » : la valeur que renverrait le spectrogramme."""
-    key = next(k for k in at.session_state.filtered_state if k.startswith("iv::"))
+    key = next(k for k in _keys(at) if k.startswith("iv::"))
     at.session_state[key] = intervals
 
 
@@ -268,9 +274,7 @@ def test_numbering_follows_the_whole_queue_and_going_back_works(app_config):
     assert _caption(at).startswith("Candidat 3 / 3")
     next(c for c in at.sidebar.checkbox if c.label.startswith("Sauter")).check().run()
     assert _button(at, "◀ Candidat précédent").disabled
-    strip = at.sidebar.selectbox(
-        key=next(k for k in at.session_state.filtered_state if k.startswith("strip::"))
-    )
+    strip = at.sidebar.selectbox(key=next(k for k in _keys(at) if k.startswith("strip::")))
     strip.set_value(0).run()
     assert _caption(at).startswith("Candidat 1 / 3")
     _button(at, "Candidat suivant ▶").click().run()

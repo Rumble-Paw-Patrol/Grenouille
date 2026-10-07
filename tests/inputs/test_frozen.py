@@ -1,7 +1,5 @@
 """Jeu gelé (§6) : versionné, en lecture seule, jamais entraîné, seulement jugé."""
 
-import os
-
 import pandas as pd
 import pytest
 from typer.testing import CliRunner
@@ -50,7 +48,8 @@ def test_freeze_writes_a_read_only_version_and_never_overwrites(embedded):  # no
     cfg = _cfg(config)
     path, report = freeze(con, cfg, queue, "v1")
     assert report["n_recordings"] == 4 and report["positive_labels_withdrawn"] >= 1
-    assert not os.access(path, os.W_OK)
+    # Les bits de droits, pas os.access : en root (session cloud), tout est accessible en écriture.
+    assert not path.stat().st_mode & 0o222
     assert frozen_recordings(cfg) == ids and list(frozen_versions(cfg)) == ["v1"]
     with pytest.raises(FileExistsError):
         freeze(con, cfg, queue, "v1")
