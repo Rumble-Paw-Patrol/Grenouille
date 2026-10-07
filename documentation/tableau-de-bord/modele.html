@@ -170,8 +170,12 @@ section.vue { position: relative; padding-top: 56px; scroll-margin-top: 12px; di
 .eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
 
 /* Cartes en verre dépoli, éclairées là où passe le pointeur */
-.carte { position: relative; background: radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), var(--spot), transparent 45%), var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; box-shadow: var(--ombre); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); transition: border-color .3s, transform .3s; }
+.carte { position: relative; isolation: isolate; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; box-shadow: var(--ombre); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); transition: border-color .3s, transform .3s; }
 .carte:hover { border-color: var(--line-fort); }
+/* Le halo est une couche à part : il s'allume et s'éteint en fondu, sur une seule carte à la fois
+   (celle que désigne le pointeur), au lieu de rester figé au bord de la carte quittée. */
+.carte::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 50%), var(--spot), transparent 45%); opacity: 0; transition: opacity .45s ease; }
+.carte.eclairee::before { opacity: 1; transition-duration: .2s; }
 .carte h3 { font-size: 15.5px; font-weight: 500; letter-spacing: -.005em; }
 .carte .sous { color: var(--muted); font-size: 13.5px; margin: 0; }
 .carte-tete { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
@@ -1541,12 +1545,23 @@ if (location.hash) { const t = document.getElementById(location.hash.slice(1)); 
   const barre = document.getElementById("progres-lecture");
   const maj = () => { const h = document.documentElement.scrollHeight - innerHeight; barre.style.width = (h > 0 ? Math.min(100, (scrollY / h) * 100) : 0) + "%"; };
   addEventListener("scroll", maj, { passive: true }); addEventListener("resize", maj); maj();
+  let eclairee = null;
+  const eclairer = (c) => {
+    if (c === eclairee) return;
+    eclairee?.classList.remove("eclairee");
+    c?.classList.add("eclairee");
+    eclairee = c;
+  };
   document.addEventListener("pointermove", (ev) => {
-    const c = ev.target.closest?.(".carte");
-    if (!c) return;
-    const r = c.getBoundingClientRect();
-    c.style.setProperty("--mx", ev.clientX - r.left + "px");
-    c.style.setProperty("--my", ev.clientY - r.top + "px");
+    const c = ev.pointerType === "touch" ? null : ev.target.closest?.(".carte") ?? null;
+    if (c) {
+      const r = c.getBoundingClientRect();
+      c.style.setProperty("--mx", ev.clientX - r.left + "px");
+      c.style.setProperty("--my", ev.clientY - r.top + "px");
+    }
+    eclairer(c);
   }, { passive: true });
+  document.addEventListener("pointerout", (ev) => { if (!ev.relatedTarget) eclairer(null); });
+  addEventListener("scroll", () => eclairer(null), { passive: true });
 }
 </script>
