@@ -3,7 +3,7 @@
 Page claude.ai privée, pour Léonard et ses encadrants :
 <https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8>
 
-Sections : vue d'ensemble, sur l'établi (travail en cours), données, chaîne de traitement,
+Sections : vue d'ensemble, en développement (travail en cours), données, chaîne de traitement,
 annotation, temps d'encodage, AnuraSet (introduction et jeu réduit, puis trois sous-sections :
 benchmark des encodeurs, explorateur des têtes, amorcer un site), rapports de benchmark,
 tableaux, bibliographie. Chaque carte a un bouton « Commenter » ; les commentaires sont

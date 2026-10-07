@@ -197,7 +197,7 @@ plan_annotation:
   principes:
     - [Annotations de l'ancien prestataire ignorées, "on repart de zéro, sans reprendre ses annotations, pour ne pas hériter de ses angles morts."]
     - [Peu d'enregistrements sur beaucoup de points, "plutôt que beaucoup d'enregistrements sur peu de points. Varier les paysages sonores aide le détecteur à généraliser."]
-    - [Un tirage stratifié par point et par heure, "fait avant toute écoute. Chaque point et chaque tranche horaire fournit des extraits avec et sans chant, si bien que la tête apprend le chant et pas l'heure ni le lieu. Ensuite, à l'entraînement, chaque positif reçoit des négatifs tirés au même point et à la même heure (négatifs appariés)."]
+    - [Un tirage stratifié par point et par heure, "fait avant toute écoute. Chaque point et chaque tranche horaire fournit des extraits avec et sans chant, si bien que la tête apprend le chant et pas l'ambiance sonore de l'heure ni du lieu."]
 
 # Apprentissage actif : les lots d'annotation suivants, après l'accord des experts (DECISIONS §5.9).
 apprentissage_actif:
@@ -214,10 +214,8 @@ apprentissage_actif:
     - [Couverture, "les fenêtres les plus éloignées de tout ce qui est déjà annoté : écouter ce qu'on n'a jamais entendu."]
     - [Groupes d'embeddings, "quelques fenêtres par groupe de sons qui se ressemblent. Un groupe homogène s'étiquette d'un coup."]
     - [Carte des embeddings, "une projection en 2D où l'on entoure à la main une zone de points pour l'écouter."]
-    - [Négatifs difficiles, "les fenêtres au score élevé là où A. blanci est improbable, ou proches des faux amis : apprendre les confusions."]
-    - [Détections isolées et trous dans un chant, "faux positifs probables d'un côté, chants manqués par le modèle de l'autre."]
-    - [Contrôle des experts, "10 % de chaque lot tirés au hasard, plus tout ce que j'ai noté « A. blanci ? »."]
-    - [Seuil d'un nouveau site, "le score à partir duquel on décide « A. blanci présent » change d'un site à l'autre (fond sonore, densité de chant). Sur un nouveau site, on le recale en faisant confirmer à l'oreille 5 à 10 enregistrements avec chant."]
+    - [Négatifs difficiles, "faire écouter les fenêtres que la tête note haut alors qu'A. blanci n'y chante sûrement pas, et celles qui ressemblent aux faux amis déjà repérés (autres anoures, insectes). Une fois annotées négatives, elles apprennent à la tête ce qu'elle confond avec le chant."]
+    - [Détections isolées et trous dans un chant, "de manière générale, les chants d'A. blanci s'étendent sur la durée : faux positif probable pour une détection isolée, faux négatif probable pour une fenêtre négative entourée de positives."]
 
 # Temps d'encodage du corpus ONF : les encodeurs suivis par le tableau de bord. La durée se lit
 # dans la base (models.params_json.totals, cumul de tous les passages d'embed) dès qu'un

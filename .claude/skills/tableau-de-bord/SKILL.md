@@ -29,6 +29,9 @@ Le rapport range tout ce qui a changé depuis le commit noté dans `publication.
 Un chiffre de la page (débit, repère d'étape) ne change que s'il vient d'un commit, d'un
 rapport ou d'un CSV. Ne rien inventer.
 
+Jamais de nom de branche de travail (`claude/…`) sur la page : les commits de fusion ne
+s'affichent pas tels quels, `construire.py` les remplace par le commit qu'ils apportent.
+
 ## 2. Chantiers (`en_cours.yaml`)
 
 C'est le seul fichier de Léonard. Le mettre à jour :

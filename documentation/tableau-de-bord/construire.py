@@ -118,6 +118,13 @@ def historique(ref: str, n: int = 20) -> list[list]:
     out = []
     for ligne in sortie.splitlines():
         h, d, s = ligne.split("\t", 2)
+        if s.startswith("Merge "):
+            # Une fusion ne dit que le nom d'une branche de travail (claude/…) : on montre à la
+            # place le dernier commit qu'elle apporte, ou rien si elle n'apporte rien de neuf.
+            apports = git("log", "--no-merges", "--format=%s", f"{h}^1..{h}^2").splitlines()
+            if not apports:
+                continue
+            s = apports[0] + (f" (+{len(apports) - 1} autres)" if len(apports) > 1 else "")
         s = re.sub(r"\s*\((DECISIONS )?n° [^)]*\)", "", s)  # renvois au journal retirés
         out.append([h, d, s.split(" - ")[0].strip(), num.get(h)])
     return out

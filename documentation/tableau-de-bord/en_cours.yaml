@@ -41,9 +41,8 @@ en_cours:
   - titre: Fabrication de notebooks
     etat: a_venir
     detail: >-
-      Des notebooks Jupyter pour voir ce que fait la chaîne, étape par étape, sur nos propres
-      enregistrements : spectrogrammes avant et après le traitement du signal, fenêtres
-      candidates retenues, nuage des embeddings par site et par micro, scores des têtes le
-      long d'une nuit, extraits annotés. De quoi vérifier chaque étape à l'œil, comprendre un
-      faux positif, et montrer le travail aux encadrants et aux naturalistes sans passer par la
-      ligne de commande.
+      Des notebooks pour voir ce que fait la chaîne, étape par étape, sur nos enregistrements :
+      spectrogrammes avant et après le traitement du signal, voir le résultat de l'attention
+      sur token sur le spectro, UMAPs en tout genre, scores des têtes, extraits annotés. De quoi
+      vérifier chaque étape à l'œil, comprendre un faux positif, et montrer aux encadrants et
+      aux naturalistes le travail plus en détail que sur le tableau de bord.
