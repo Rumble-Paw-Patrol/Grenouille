@@ -19,6 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import soundfile as sf
+from matplotlib.colors import PowerNorm
 from scipy.signal import stft
 
 from blanci.core.config import config_path, default_user_config, load_config
@@ -31,6 +32,10 @@ SOURCE = (
 DEBUT_S, FIN_S = 27.0, 45.0
 SORTIE = ICI / "spectrogramme.jpg"
 BANDE = (3000, 6000)
+# Réglages du poste d'annotation (viewer.py) : dynamique en dB sous le maximum, et contraste,
+# courbe en puissance d'exposant 1 + 0,35 × contraste sur l'échelle (Léonard, 07/10/2026).
+DYNAMIQUE_DB = 70
+CONTRASTE = 8
 
 
 def main() -> None:
@@ -45,7 +50,8 @@ def main() -> None:
     vmax = np.percentile(s[garde], 99.7)
     fig = plt.figure(figsize=(14, 2))
     ax = fig.add_axes([0, 0, 1, 1])
-    ax.pcolormesh(t, f[garde], s[garde], shading="gouraud", cmap="magma", vmin=vmax - 50, vmax=vmax)
+    norme = PowerNorm(1 + 0.35 * CONTRASTE, vmin=vmax - DYNAMIQUE_DB, vmax=vmax, clip=True)
+    ax.pcolormesh(t, f[garde], s[garde], shading="gouraud", cmap="magma", norm=norme)
     ax.set_xlim(t[0], t[-1])
     ax.set_ylim(*BANDE)
     ax.set_axis_off()
