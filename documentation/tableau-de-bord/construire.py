@@ -365,19 +365,24 @@ def tableaux(fichiers: dict[str, str]) -> list[dict]:
 
 # Source de labels qui ne relève pas du plan d'annotation v1 : l'écoute des enregistrements
 # écartés par un drapeau.
-HORS_PLAN = ("flag",)
+# Hors plan : drapeaux posés à l'écoute, et labels du détecteur externe, sortis de
+# l'entraînement et de l'évaluation (DECISIONS n° 157).
+HORS_PLAN = ("flag", "import")
 
 
 def annotations(config: Path | None) -> dict:
     """Avancement du plan d'annotation v1, compté dans la base locale (lecture seule).
 
     Entraînement : enregistrements hors jeu gelé ayant au moins un label du plan. Évaluation :
-    enregistrements du jeu gelé (toutes versions) ayant au moins un label ; positifs : ceux qui
+    enregistrements du jeu gelé (toutes versions) ou du jeu de test v1 tiré par plan
+    (`files/test_v1/`) ayant au moins un label ; positifs : ceux qui
     ont au moins une fenêtre positive. Dernier label de chaque fenêtre. Sans base, relit
     annotations.json (dernier comptage connu).
     """
     sauvegarde = ICI / "annotations.json"
     try:
+        import pandas as pd
+
         from blanci.core.config import config_path, load_config
         from blanci.inputs.dataset import current_labels, recordings_table
         from blanci.inputs.frozen import frozen_recordings
@@ -391,7 +396,15 @@ def annotations(config: Path | None) -> dict:
             raise FileNotFoundError(base)
         con = sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)
         try:
-            labels = current_labels(con)
+            labels = current_labels(con)[["recording_id", "label", "source"]]
+            # Annotation par intervalles (n° 182) : un extrait écouté, positif s'il porte un
+            # intervalle d'A. blanci ; « background » sinon (seul le caractère positif compte).
+            spans = pd.read_sql_query(
+                "SELECT s.recording_id, COALESCE(i.label, 'background') AS label, s.source "
+                "FROM spans s LEFT JOIN intervals i USING (span_id)",
+                con,
+            )
+            labels = pd.concat([labels, spans], ignore_index=True)
             recs = recordings_table(con)[["recording_id", "site", "mic_id"]]
         finally:
             con.close()
@@ -399,6 +412,10 @@ def annotations(config: Path | None) -> dict:
             geles = frozen_recordings(cfg)
         except (OSError, ValueError):
             geles = set()
+        # Jeu de test v1 tiré par plan (n° 196), avant son gel : compté en évaluation.
+        test_v1 = config_path(cfg, "reports") / "files" / "test_v1" / "candidats.csv"
+        if test_v1.exists():
+            geles = set(geles) | set(pd.read_csv(test_v1, usecols=["recording_id"])["recording_id"])
     except (ImportError, OSError, sqlite3.Error) as err:
         if sauvegarde.exists():
             ancien = json.loads(sauvegarde.read_text(encoding="utf-8"))

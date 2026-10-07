@@ -12,7 +12,10 @@ en_cours:
     etat: en_cours
     detail: >-
       Répartir les points d'écoute entre le training set et le test set avant toute écoute (pour éviter un data leakage), puis annoter les extraits par point d'écoute, heure, date.
-    suite: Préparer la validation par k-fold
+    suite: >-
+      Partition des points et files tirées par plan (DECISIONS n° 196) : annoter le lot 1
+      (424 extraits de 30 s), puis le jeu de test (250 enregistrements entiers). Ensuite,
+      préparer la validation par k-fold.
   - titre: Façonnement du poste d'annotation
     etat: en_cours
     detail: >-
