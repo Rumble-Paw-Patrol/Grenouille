@@ -3297,9 +3297,10 @@ de Léonard, 01/10/2026.
      bloc de CDR (24–28/12/2025) est étouffé avec des parasites de type glitch, donc micro
      défaillant, bonnette contre le sol ou sac, et inutilisable dans tous les cas. Les
      annotations `artefact_in_bag` posées à l'écoute ne changent pas.
-     Essai sur une copie de la base, rien d'appliqué : 1 961 → **895** `in_bag` (CDR 880,
-     PatawaOuest 15) ; RNRT, Mataroni et 2023 n'en gardent plus ; encodables 94 148 →
-     **95 214**. Les 423 de CDR entre 0,05 et 0,2 sortent aussi du drapeau : à vérifier à
-     l'écoute avant de relancer `blanci flag`. L'exclusion de 2LA04525 se décide à part,
-     après écoute. Le n° 189 se trompait sur le nombre d'encodables (96 109, compté avant le
-     passage `blanci qc`, n° 173–174) ; le bon chiffre se fixe après `blanci flag`.
+     Appliqué par `blanci flag` le 07/10 : 1 961 → **895** `in_bag` calculés (CDR 880,
+     PatawaOuest 15) ; RNRT, Mataroni et 2023 n'en gardent plus, ni les 423 de CDR entre 0,05
+     et 0,2. **Encodables : 95 214** (sur 96 292 : 173 de durée anormale, 88 hors relevé,
+     895 + 8 notés à l'écoute, recouvrements déduits). Ce chiffre remplace les 96 109 du
+     n° 191, comptés à partir des 94 588 du 29/09, d'avant le passage audio de `blanci qc`
+     (n° 173–174). Le micro 2LA04525 (RNRT, parasites à l'écoute) reste encodable : on ne
+     sait pas encore signaler les glitchs (Léonard, 07/10).

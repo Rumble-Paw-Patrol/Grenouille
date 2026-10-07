@@ -48,8 +48,9 @@ enregistrements de 120 s :
 | 5 s | 2,5 s | 47 | 4 517 593 |
 | 6 s | 3 s | 39 | 3 748 641 |
 
-Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 8 micros
-dans le sac ; 96 109 enregistrements de 120 s restent encodables. Les 1 521 à l'horloge
+Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 895 micros
+dans le sac ou étouffés (calculés, suites d'au moins 2 h, DECISIONS n° 194) et 8 notés à
+l'écoute ; 95 214 enregistrements restent encodables. Les 1 521 à l'horloge
 douteuse (Molokoi SMA14636, avril 2024) sont réintégrés : `clock_off` n'est plus qu'une
 remarque. Détail et anomalies : DECISIONS n° 153, 154 et 191.
 

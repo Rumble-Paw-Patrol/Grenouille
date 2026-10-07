@@ -55,7 +55,7 @@ chaine:
       Une seule passe sur tout le corpus avant l'encodage. Des flags écartent les fichiers
       cassés ou sans rapport avec le projet : durée anormale, hors relevé, silencieux,
       micro resté allumé dans le sac. L'horloge douteuse n'est plus qu'une remarque.
-    chiffre: 96 109 enregistrements encodables
+    chiffre: 95 214 enregistrements encodables
     suite: [signal]
   - id: signal
     etape: Traitement du signal
