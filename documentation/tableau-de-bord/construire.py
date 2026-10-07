@@ -179,6 +179,9 @@ def inventaire() -> dict:
     drapeaux = drapeaux.replace(
         "Écartés par les drapeaux (jamais encodés)", "Enregistrements écartés du projet"
     ).replace("micros dans le sac", "micros allumés dans le sac")
+    # Le renvoi aux DECISIONS et les 8 notés à l'écoute n'ont pas leur place sur la page.
+    drapeaux = re.sub(r" \(calculés[^)]*\) et \d+ notés à l'écoute", "", drapeaux)
+    drapeaux = drapeaux.replace(", 88 hors relevé, ", ", 88 hors relevé et ")
     return {
         "sites": sites,
         "fenetres": [
@@ -186,9 +189,9 @@ def inventaire() -> dict:
         ],
         "drapeaux": drapeaux,
         "jeux": {
-            "2023": "Phénologie 2023 : 3 sites, 2 micros par site, 1 an",
-            "2026": "Campagne 2026 : 3 sites, +100 micros, 1 semaine "
-            "(au pic d'activité annuel d'A. blanci)",
+            "2023": "Phénologie 2023 : 3 sites, 2 points d'écoute par site, 1 an",
+            "2026": "Campagne 2026 : 3 sites, ~150 points d'écoute, 1 semaine "
+            "(au pic d'activité annuel)",
         },
     }
 

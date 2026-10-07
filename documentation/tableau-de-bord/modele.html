@@ -9,6 +9,7 @@
    d'écoute : une tête de lecture balaie les 18 s du chant d'A. blanci (spectrogramme.py).
    Sombre par défaut ; le thème clair garde le bandeau et la barre latérale de nuit. */
 :root {
+  --fleche: color-mix(in srgb, var(--muted) 70%, var(--ink));
   --bg: #050B0A;
   --bg-2: #08120F;
   --surface: rgba(16, 29, 25, .72);
@@ -270,13 +271,13 @@ svg .grille-l { stroke: var(--line); stroke-width: 1; }
 /* Chaîne de traitement */
 .chaine { position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: minmax(64px, auto); gap: 46px 34px; padding: 6px 0; }
 .chaine svg.liens { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-.chaine svg.liens path { fill: none; stroke: var(--muted); stroke-width: 1.6; opacity: .7; }
+.chaine svg.liens path { fill: none; stroke: var(--fleche); stroke-width: 1.7; }
 .chaine svg.liens path.boucle { stroke: var(--gold); opacity: 1; stroke-dasharray: 7 5; filter: drop-shadow(0 0 4px var(--gold)); }
 @media (prefers-reduced-motion: no-preference) {
   .chaine svg.liens path.boucle { animation: flux 1.1s linear infinite; }
   @keyframes flux { to { stroke-dashoffset: -12; } }
 }
-.chaine svg.liens marker path { stroke: none; fill: var(--muted); }
+.chaine svg.liens marker path { stroke: none; fill: var(--fleche); }
 .chaine svg.liens marker#flb path { fill: var(--gold); }
 .chaine svg.liens path.option { stroke-dasharray: 3 4; }
 .noeud.option { border-style: dashed; }
@@ -294,6 +295,16 @@ svg .grille-l { stroke: var(--line); stroke-width: 1; }
   .chaine svg.liens, .couloir { display: none; }
   .suites-mobile { display: block; }
 }
+/* Le schéma et le détail de l'étape forment un bloc : un fil doré descend du nœud choisi,
+   en passant sous les autres nœuds, jusqu'à la carte de détail, qui porte un liseré de la même couleur. */
+.chaine-groupe { position: relative; display: grid; gap: 28px; }
+.chaine-groupe .detail-etape { border-top: 2px solid var(--accent); }
+.chaine-groupe .attache { position: absolute; z-index: 0; width: 2px; margin-left: -1px; pointer-events: none; background: linear-gradient(var(--accent), var(--gold)); box-shadow: 0 0 10px var(--accent); transition: left .35s ease, top .35s ease, height .35s ease; }
+.chaine-groupe .attache::before, .chaine-groupe .attache::after { content: ""; position: absolute; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.chaine-groupe .attache::before { top: -4px; }
+.chaine-groupe .attache::after { bottom: -4px; background: var(--gold); }
+@media (max-width: 900px) { .chaine-groupe .attache { display: none; } }
+.chaine-groupe .legende span { position: relative; z-index: 1; background: var(--surface-solid); padding-inline: 4px; border-radius: 4px; }
 .detail-etape dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: 14px; }
 .detail-etape dt { color: var(--muted); font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; padding-top: 3px; }
 .detail-etape dd { margin: 0; }
@@ -432,6 +443,8 @@ section.sous-vue .vue-tete h2 { font-size: clamp(19px, 2.1vw, 24px); }
     .carte, .tuile, .galerie figure, .vue-tete {
       animation: apparait linear both; animation-timeline: view(); animation-range: entry 0% entry 55%;
     }
+    .chaine-groupe > .carte { animation: none; }
+    .chaine-groupe { animation: apparait linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
     @keyframes apparait { from { opacity: .15; transform: translateY(46px) scale(.965); } to { opacity: 1; transform: none; } }
   }
 }
@@ -888,6 +901,16 @@ $("#pied").append(
     n.addEventListener("click", () => choisir(e.id));
     noeuds[e.id] = n; box.append(n);
   }
+  const attache = el("div", { class: "attache", "aria-hidden": "true" });
+  function attacher() {
+    const id = Object.keys(noeuds).find((k) => noeuds[k].getAttribute("aria-pressed") === "true");
+    if (!id || !box.isConnected) return;
+    const G = box.getBoundingClientRect(), n = noeuds[id].getBoundingClientRect(), d = detail.getBoundingClientRect();
+    const k = G.height / box.offsetHeight || 1; // échelle de l'animation d'entrée
+    attache.style.left = (n.left + n.width / 2 - G.left) / k + "px";
+    attache.style.top = (n.bottom - G.top) / k + "px";
+    attache.style.height = Math.max(0, d.top - n.bottom) / k + "px";
+  }
   function choisir(id) {
     const e = byId[id];
     Object.entries(noeuds).forEach(([k, n]) => n.setAttribute("aria-pressed", String(k === id)));
@@ -901,13 +924,14 @@ $("#pied").append(
         el("dt", {}, "Tests"), el("dd", {}, `${e.n_tests} dans `, el("code", {}, e.tests + "/")),
         el("dt", {}, "Ensuite"), el("dd", {}, e.suite?.length ? e.suite.map((x) => byId[x]?.etape || x).join(", ") : "—")));
     if (commentaires) detail.querySelectorAll(".commenter").forEach((b) => (b.hidden = false));
+    requestAnimationFrame(attacher);
   }
   function tracer() {
     liens.replaceChildren();
     if (getComputedStyle(liens).display === "none") return;
     const B = box.getBoundingClientRect();
     liens.setAttribute("viewBox", `0 0 ${B.width} ${B.height}`);
-    liens.append(sv("defs", {}, sv("marker", { id: "fl", viewBox: "0 0 8 8", refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, sv("path", { d: "M0 0L8 4L0 8z", fill: "var(--muted)" })),
+    liens.append(sv("defs", {}, sv("marker", { id: "fl", viewBox: "0 0 8 8", refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, sv("path", { d: "M0 0L8 4L0 8z", fill: "var(--fleche)" })),
       sv("marker", { id: "flb", viewBox: "0 0 8 8", refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, sv("path", { d: "M0 0L8 4L0 8z", fill: "var(--gold)" }))));
     const R = (id) => { const r = noeuds[id].getBoundingClientRect(); return { l: r.left - B.left, r: r.right - B.left, t: r.top - B.top, b: r.bottom - B.top, cx: (r.left + r.right) / 2 - B.left, cy: (r.top + r.bottom) / 2 - B.top }; };
     const BOUCLE = new Set(["verification>annotation", "annotation>reentrainement", "reentrainement>tetes", "score>verification"]);
@@ -924,14 +948,17 @@ $("#pied").append(
       liens.append(sv("path", { d, class: boucle ? "boucle" : option ? "option" : null, "marker-end": boucle ? "url(#flb)" : "url(#fl)" }));
     }
   }
-  s.append(carte(null, null, box, el("div", { class: "legende" },
+  const groupe = el("div", { class: "chaine-groupe" });
+  s.append(groupe);
+  groupe.append(carte(null, null, box, el("div", { class: "legende" },
     el("span", {}, el("i", { style: "background:var(--ok)" }), "écrit et testé"), el("span", {}, el("i", { style: "background:var(--warn)" }), "en cours"),
     el("span", {}, el("i", { style: "background:var(--idle)" }), "à venir"), el("span", {}, el("i", { class: "trait", style: "background:var(--gold)" }), "boucle d'annotation"),
     el("span", {}, el("i", { class: "tirets gris" }), "si besoin (ensemble, signal en parallèle)"))), detail);
+  box.append(attache);
   choisir("encodage");
   requestAnimationFrame(tracer);
-  new ResizeObserver(() => tracer()).observe(box);
-  document.fonts?.ready.then(tracer);
+  new ResizeObserver(() => { tracer(); attacher(); }).observe(groupe);
+  document.fonts?.ready.then(() => { tracer(); attacher(); });
 }
 
 /* ---------- camemberts des annotations (positifs / négatifs) ---------- */
@@ -987,11 +1014,11 @@ function camemberts() {
     el("h4", { class: "eyebrow", style: "margin-top:4px" }, T["annotation"].phrases.titre_principes), puces(P.principes)));
   if (C.files_ecoute) s.append(carteT("annotation", "files",
     el("ul", { class: "principes deux-colonnes" }, C.files_ecoute.map(([nom, d]) => el("li", {}, el("strong", { class: "mono" }, nom), el("span", { class: "sous" }, d))))));
+  s.append(carteT("annotation", "compteur", camemberts()));
   s.append(carte(T["annotation"].cartes.apprentissage_actif.titre, A.contexte, etapesEl(A.boucle, -1),
     el("p", { class: "sous" }, T["annotation"].phrases.boucle),
     el("h4", { class: "eyebrow", style: "margin-top:4px" }, T["annotation"].phrases.titre_methodes),
     el("ul", { class: "principes deux-colonnes" }, A.methodes.map(([titre, d]) => el("li", {}, el("strong", {}, titre), el("span", { class: "sous" }, d.charAt(0).toUpperCase() + d.slice(1)))))));
-  s.append(carteT("annotation", "compteur", camemberts()));
   if (D.poste) {
     const img = el("img", { src: D.poste, alt: "Capture du poste d'annotation Streamlit", class: "capture", loading: "lazy" });
     img.addEventListener("click", () => ouvrirImage(img.src, "Poste d'annotation (Streamlit)"));

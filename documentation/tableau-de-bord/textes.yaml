@@ -73,7 +73,7 @@ sections:
     cartes:
       heures:
         titre: Heures d'audio par site
-        legende: Enregistrements de 2 min.
+        legende: Les enregistrements durent tous 2 min.
       fenetres:
         titre: Fenêtres à encoder
         legende: Chevauchement de moitié, sur les enregistrements de 120 s.
@@ -98,9 +98,8 @@ sections:
       files:
         titre: Files d'écoute du premier lot
         legende: >-
-          Tirées au hasard avant toute écoute, sans aucun modèle, avec une graine fixe
-          (uv run blanci candidates --plan). Au plus un enregistrement par micro, jour et tranche
-          horaire. Elles s'ouvrent dans le poste d'annotation (File déjà écrite).
+          Tirées au hasard avant toute écoute, sans aucun modèle, avec une graine fixe. Au plus un enregistrement par micro, jour et tranche
+          horaire. Elles s'ouvrent dans le poste d'annotation (bouton File déjà écrite).
       apprentissage_actif:
         titre: Apprentissage actif
       compteur:
@@ -271,7 +270,7 @@ chaine:
   encodage:
     etape: Encodage
     resume: >-
-      L'encodeur gelé transforme chaque fenêtre de 5 s en un embedding, et en tokens pour
+      L'encodeur gelé transforme chaque fenêtre en un embedding, et en tokens pour
       les têtes qui les lisent. perch_v2 tourne sur le processeur du portable i5, sans
       carte graphique. Suite aux optimisations, l'encodage est passé de 8,0 à 2,05 s par
       enregistrement de 2 min.
