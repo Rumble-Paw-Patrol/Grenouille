@@ -7,7 +7,13 @@ de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de 
 du museau au flanc, gorge claire, longue patte avant aux doigts fins, cuisse repliée et
 arrière-train posé presque au sol. Les formes sont décrites dans un repère de 48 × 40 unités
 et tracées sur une grille de 96 × 80 pixels (deux pixels par unité), sans anticrénelage, puis
-cernées d'un contour.
+cernées d'un contour, avec 22 tons de base.
+
+Une passe de nuances (nuancer) affine ensuite chaque matière (peau orangée, bande sombre,
+flanc, gorge et ventre) : ses tons de base sont adoucis par un flou limité à la matière, puis
+redistribués sur une rampe plus fine (de 7 à 12 niveaux de clarté), en trois variantes de
+teinte (plus rouge, neutre, plus dorée) réparties par plaques. Les passages du clair au foncé
+gagnent des teintes intermédiaires, le relief garde son grain : environ 80 couleurs en tout.
 
 Une image par combinaison gorge (gonflée ou non) × flanc (gonflé ou non) × clignement ×
 tête (baissée, droite, relevée) : la page les enchaîne pour que la grenouille respire, cligne
@@ -15,6 +21,7 @@ et bouge un peu la tête. Écrit grenouille.json (palette, taille et images cod�
 plages : « O12 » = douze pixels de la couleur O), lu par construire.py.
 """
 
+import colorsys
 import json
 import math
 import random
@@ -48,6 +55,7 @@ PALETTE = {
     "w": "#9FB4C0",  # second reflet, bleuté
 }
 UNITES = (48, 40)
+BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]])
 ECHELLE = 2
 W, H = UNITES[0] * ECHELLE, UNITES[1] * ECHELLE
 # centres des pixels, en unités
@@ -298,18 +306,21 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         ]
     )
     pa = dans(patte, X, Y)
-    epaule = pa & (Y < 20.6)  # l'épaule se fond dans le flanc : seulement une ombre portée
-    bras = pa & ~epaule
-    g[epaule & ~dans(patte, X - 0.6, Y)] = "S"
-    g[epaule & ~dans(patte, X - 0.6, Y) & (Y > 19.4)] = "Z"
+    # L'épaule se fond dans le flanc : de 19,2 à 22,4 unités de haut, la part de pixels du
+    # bras croît en tramage ordonné (Bayer 4 × 4) ; au-dessus, c'est le flanc. Aucun trait
+    # dans le corps : le contour n'apparaît que là où le bras sort du corps.
+    corps_dessous = g != "."
+    t = np.clip((Y - 19.2) / 3.2, 0, 1)
+    trame = (BAYER4[(np.arange(H) % 4)[:, None], (np.arange(W) % 4)[None, :]] + 0.5) / 16
+    bras = pa & ((trame < t) | ~corps_dessous)
     g[bras] = "O"
     g[bras & (n3 < 0.1)] = "M"
     g[bras & (n3 > 0.93)] = "f"
-    g[bras & ~dans(patte, X + 1.1, Y)] = "H"
-    g[bras & ~dans(patte, X + 0.6, Y)] = "I"
-    g[bras & ~dans(patte, X - 1.1, Y)] = "S"
-    g[bras & ~dans(patte, X - 0.6, Y)] = "Z"
-    g[bras & (Y < 21.2) & dans(patte, X - 0.6, Y) & dans(patte, X + 0.6, Y)] = "F"
+    # lumière d'en haut à gauche : bord avant éclairé, bord arrière dans l'ombre
+    g[bras & ~dans(patte, X - 1.1, Y)] = "H"
+    g[bras & ~dans(patte, X - 0.6, Y)] = "I"
+    g[bras & ~dans(patte, X + 1.1, Y) & (Y > 21.0)] = "S"
+    g[bras & ~dans(patte, X + 0.6, Y) & (Y > 22.0)] = "Z"
     g[ellipse(22.6, 26.6, 0.5, 0.9, X, Y, 0.3)] = "I"  # reflet au coude
     main = catmull([(16.6, 36.0), (20.8, 35.8), (21.4, 37.4), (19.6, 38.2), (16.4, 38.0)])
     mm = dans(main, X, Y)
@@ -388,6 +399,95 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     return ["".join(r) for r in g]
 
 
+def rampe(n, h0, h1, s0, s1, l0, l1, dh=0.0):
+    """n couleurs du sombre au clair : teinte, saturation et clarté interpolées (TSL)."""
+    out = []
+    for i in range(n):
+        t = i / (n - 1)
+        r, v, b = colorsys.hls_to_rgb(
+            ((h0 + (h1 - h0) * t + dh) % 360) / 360, l0 + (l1 - l0) * t, s0 + (s1 - s0) * t
+        )
+        out.append(f"#{round(r * 255):02X}{round(v * 255):02X}{round(b * 255):02X}")
+    return out
+
+
+# matière : (clarté de chaque ton de base, une rampe par variante de teinte, rouge → dorée)
+MATIERES = {
+    "orange": (
+        {"I": 1.0, "H": 0.78, "O": 0.55, "M": 0.34, "S": 0.32, "Z": 0.12},
+        [rampe(12, 17, 34, 0.66, 0.86, 0.22, 0.78, dh) for dh in (-4, 0, 5)],
+    ),
+    "bande": (
+        {"B": 0.25, "b": 0.65},
+        [rampe(7, 18, 24, 0.62, 0.55, 0.11, 0.33, dh) for dh in (-3, 0, 4)],
+    ),
+    "flanc": (
+        {"F": 0.45, "f": 0.78},
+        [rampe(8, 22, 32, 0.45, 0.6, 0.42, 0.72, dh) for dh in (-4, 0, 6)],
+    ),
+    "creme": (
+        {"C": 0.85, "g": 0.62, "c": 0.35, "q": 0.5},
+        [rampe(8, 30, 40, 0.14, 0.38, 0.52, 0.9, dh) for dh in (-6, 0, 6)],
+    ),
+}
+# codes des nouvelles teintes : caractères libres, ni chiffre, ni « . », ni guillemet
+_LIBRES = [
+    chr(c)
+    for c in list(range(0x21, 0x7F)) + list(range(0xC0, 0x17F))
+    if not chr(c).isdigit() and chr(c) not in '."\\' and chr(c) not in PALETTE
+]
+PALETTE_NUANCES = dict(PALETTE)
+CODES = {}
+for _nom, (_, _rampes) in MATIERES.items():
+    for _v, _r in enumerate(_rampes):
+        for _i, _hexa in enumerate(_r):
+            CODES[_nom, _v, _i] = _LIBRES.pop(0)
+            PALETTE_NUANCES[CODES[_nom, _v, _i]] = _hexa
+
+_K = np.array([1, 4, 6, 4, 1], float) / 16
+_YY, _XX = np.mgrid[0:H, 0:W]
+_LUMIERE = 0.07 * (0.5 - (_XX / W * 0.6 + _YY / H * 0.4))  # un peu plus clair en haut à gauche
+_v = np.sin(_XX * 12.9898 + _YY * 78.233) * 43758.5453
+_GRAIN = (_v - np.floor(_v) - 0.5) * 0.05
+_champ = np.kron(np.random.default_rng(11).random((H // 8 + 2, W // 8 + 2)), np.ones((8, 8)))
+
+
+def flou(a):
+    a = np.apply_along_axis(lambda r: np.convolve(r, _K, mode="same"), 1, a)
+    return np.apply_along_axis(lambda c: np.convolve(c, _K, mode="same"), 0, a)
+
+
+_champ = _champ[:H, :W]
+for _ in range(3):
+    _champ = flou(_champ)
+_champ = (_champ - _champ.min()) / (_champ.max() - _champ.min())
+_BAYER2 = (np.array([[0, 2], [3, 1]])[_YY % 2, _XX % 2] + 0.5) / 4
+# plaques de teinte : basse fréquence, bords tramés
+VARIANTE = np.clip(np.floor(_champ * 3 + (_BAYER2 - 0.5) * 0.7), 0, 2).astype(int)
+
+
+def nuancer(rangs):
+    """Rangées en tons de base → rangées en teintes fines (voir MATIERES)."""
+    g = np.array([list(r) for r in rangs])
+    out = g.copy()
+    for nom, (tons, rampes) in MATIERES.items():
+        m = np.isin(g, list(tons))
+        if not m.any():
+            continue
+        clarte = np.zeros(g.shape)
+        for ch, val in tons.items():
+            clarte[g == ch] = val
+        fm, fc = flou(m.astype(float)), flou(clarte * m)
+        lisse = np.where(fm > 0, fc / np.maximum(fm, 1e-6), clarte)
+        final = 0.5 + (0.45 * clarte + 0.55 * lisse - 0.5) * 1.22 + _LUMIERE + _GRAIN
+        n = len(rampes[0])
+        idx = np.clip(np.rint(final * (n - 1)), 0, n - 1).astype(int)
+        for v in range(len(rampes)):
+            for i in range(n):
+                out[m & (idx == i) & (VARIANTE == v)] = CODES[nom, v, i]
+    return ["".join(r) for r in out]
+
+
 def plages(ligne):
     """« ...OOOK » → « .3O3K1 »."""
     out, i = [], 0
@@ -406,13 +506,14 @@ if __name__ == "__main__":
         for s in (0, 1):
             for c in (0, 1):
                 for t in (-1, 0, 1):
-                    rangs = image(g_ * 0.9, s * 0.7, bool(c), t)
+                    rangs = nuancer(image(g_ * 0.9, s * 0.7, bool(c), t))
                     images[f"{g_}{s}{c}{t + 1}"] = [plages(r) for r in rangs]
     (ICI / "grenouille.json").write_text(
         json.dumps(
-            {"palette": PALETTE, "largeur": W, "hauteur": H, "images": images},
+            {"palette": PALETTE_NUANCES, "largeur": W, "hauteur": H, "images": images},
             separators=(",", ":"),
         ),
         encoding="utf-8",
     )
-    print("\n".join(image()))
+    teintes = {ch for rangs in images.values() for r in rangs for ch in r if not ch.isdigit()}
+    print(f"{len(images)} images, {len(teintes - {'.'})} couleurs")
