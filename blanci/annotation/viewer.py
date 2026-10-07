@@ -18,6 +18,8 @@ import json
 import tempfile
 from pathlib import Path
 
+from blanci.inputs.labels import QUALITIES
+
 VIEWER_DIR = Path(tempfile.gettempdir()) / "blanci_viewer"
 KEEP_ASSETS = 40  # fichiers d'écoute gardés (les plus récents)
 
@@ -84,6 +86,8 @@ INDEX = r"""<!doctype html>
 </style></head><body>
 <div class="bar">
   <span class="group types" id="ivbar">Type :</span>
+  <span class="group seg" id="qbar"
+        title="Qualité du chant : de l'intervalle sélectionné, et des prochains">Qualité :</span>
   <span class="group">
     <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
     <label><input type="checkbox" id="follow" checked> Suivre</label>
@@ -118,6 +122,7 @@ const COLORS = {blanci: [80, 170, 255], blanci_chorus: [200, 120, 255],
 const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
 let view = null, intervals = [], selected = -1, vmax = [], loading = 0, newLabel = null;
+let newQuality = null;  // qualité des prochains intervalles (null : non dite)
 const spec = document.createElement("canvas"); let specKey = "", specView = null;
 // Pendant un zoom ou un déplacement, l'image déjà calculée est seulement étirée ; le calcul à
 // pleine résolution attend que l'on ait lâché la molette ou la souris.
@@ -188,6 +193,18 @@ function setType(code) {  // type des prochains intervalles, et de l'intervalle 
     intervals[selected].label = code; changed();
   } else showTypes();
 }
+// Qualité : un intervalle a la sienne (un même extrait mêle chants nets et lointains).
+function showQualities() {
+  const current = selected >= 0 ? intervals[selected].quality : newQuality;
+  [...$("qbar").querySelectorAll("button")]
+    .forEach(b => b.classList.toggle("on", (b.value || null) === current));
+}
+function setQuality(q) {  // qualité des prochains intervalles, et de l'intervalle sélectionné
+  newQuality = q;
+  if (selected >= 0 && intervals[selected].quality !== q) {
+    intervals[selected].quality = q; changed();
+  } else showQualities();
+}
 
 // --- Échanges avec Streamlit ----------------------------------------------------------------
 function send(type, data) {
@@ -198,7 +215,7 @@ const round = t => Math.round(t * 100) / 100;
 function emit() {
   send("streamlit:setComponentValue", {dataType: "json", value: {
     key: D.extract, channel: active,
-    intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label]),
+    intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]),
   }});
 }
 
@@ -210,7 +227,13 @@ function render(args) {
   }
   if (S.contrast === undefined) S.contrast = 0;
   $("ivbar").style.display = D.interval_mode ? "" : "none";
+  $("qbar").style.display = D.interval_mode ? "" : "none";
   if (newLabel === null) {
+    ["—", ...D.qualities].forEach((q, k) => {
+      const b = document.createElement("button");
+      b.value = k ? q : ""; b.textContent = q; b.onclick = () => setQuality(k ? q : null);
+      $("qbar").appendChild(b);
+    });
     newLabel = D.labels[0][0];
     D.labels.forEach(([code, name], k) => {
       const b = document.createElement("button");
@@ -228,7 +251,8 @@ function render(args) {
   showSettings();
   if (fresh) {
     view = {t0: D.t0, t1: D.t1, f0: 0, f1: D.fview};
-    intervals = (D.intervals || []).map(([t0, t1, l]) => ({t0, t1, label: l}));
+    intervals = (D.intervals || [])
+      .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
     selected = -1; vmax = []; specKey = ""; specView = null; settling = false; buffers = [];
     load();
     list();
@@ -542,7 +566,8 @@ function list() {
     chip.style.background = `rgba(${rgb(iv.label)}, 0.18)`;
     chip.style.borderColor = i === selected ? "#fff" : `rgb(${rgb(iv.label)})`;
     chip.title = "Sélectionner, puis un bouton de type pour le changer";
-    chip.append(`${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s · ${labelName(iv.label)}`);
+    chip.append(`${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s · ${labelName(iv.label)}`
+                + (iv.quality ? ` · ${iv.quality}` : ""));
     const x = document.createElement("button");
     x.textContent = "×"; x.title = "Effacer";
     x.onclick = ev => { ev.stopPropagation(); remove(i); };
@@ -556,7 +581,7 @@ function list() {
     };
     chip.append(x); box.appendChild(chip);
   });
-  showTypes(); setHeight();
+  showTypes(); showQualities(); setHeight();
 }
 function changed() { list(); draw(); emit(); }
 function remove(i) { intervals.splice(i, 1); selected = -1; changed(); }
@@ -638,7 +663,7 @@ window.addEventListener("mouseup", () => {
   if (d.mode === "draw") {
     const t0 = Math.min(d.t, d.t2), t1 = Math.max(d.t, d.t2);
     if (t1 - t0 >= 0.05) {
-      intervals.push({t0, t1, label: newLabel});
+      intervals.push({t0, t1, label: newLabel, quality: newQuality});
       selected = -1; changed();
     } else draw();
   } else if (d.mode === "edge") {
@@ -738,7 +763,7 @@ def viewer_args(
     """Arguments du composant. `audios` : (nom, chemin rendu par `asset`, début en s dans
     l'enregistrement), couvrant [t0, t1] ; `windows` : {t0, t1, label, current, candidate} ;
     `key` : identifie l'extrait (un autre extrait remet la vue et les intervalles à zéro) ;
-    `labels` : (code, nom) des intervalles ; `intervals` : [début, fin, label] affichés à
+    `labels` : (code, nom) des intervalles ; `intervals` : [début, fin, label, qualité] affichés à
     l'ouverture de l'extrait ; `band_hz`, `channel` : réglages de départ, la première fois."""
     return {
         "t0": float(t0),
@@ -751,7 +776,11 @@ def viewer_args(
         "band": [float(f) for f in band_hz],
         "extract": key,
         "labels": [list(label) for label in labels],
-        "intervals": [[float(a), float(b), str(c)] for a, b, c in intervals or []],
+        "intervals": [
+            [float(i[0]), float(i[1]), str(i[2]), i[3] if len(i) > 3 else None]
+            for i in intervals or []
+        ],
+        "qualities": list(QUALITIES),
         "interval_mode": bool(interval_mode),
         "channel": int(channel),
         "height": int(height),

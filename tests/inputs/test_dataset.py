@@ -431,6 +431,23 @@ def test_a_window_is_positive_when_it_holds_half_an_interval(con):
     assert data.loc[7.5, "label"] == "blanci"
 
 
+def test_a_window_takes_the_quality_of_its_interval(con):
+    """Deux chants de qualités différentes dans le même extrait : chaque fenêtre prend la
+    qualité de son intervalle ; sans qualité d'intervalle, celle de l'extrait."""
+    from blanci.service import append_span
+
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    append_span(
+        con, rid, 0.0, 30.0, [(10.0, 10.4, "blanci", "A"), (20.0, 20.4, "blanci", "C"),
+                              (25.0, 25.4, "blanci")],
+        "background", source="random", quality="B", annotator="léonard",
+    )  # fmt: skip
+    data = _interval_labels(con, grid_frame([rid]))
+    assert data.loc[9.0, "quality"] == "A"
+    assert data.loc[19.5, "quality"] == "C"
+    assert data.loc[24.0, "quality"] == "B"
+
+
 def test_windows_that_only_graze_an_interval_are_edges(con):
     """Intervalle 10,2–11,2 s (1 s) : 7,5–10,5 n'en a que 0,3 s (< ½) → bord, écarté ;
     10,5–13,5 en a 0,7 s → positive ; 9–12 le contient. Toucher la limite ne compte pas."""

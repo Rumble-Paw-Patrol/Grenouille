@@ -141,6 +141,11 @@ MIGRATIONS = [
     """
     DROP TABLE IF EXISTS imports;
     """,
+    # 5 — qualité (A, B, C) propre à chaque intervalle : un même extrait mêle des chants nets et
+    # des chants lointains. NULL : pas dite à l'intervalle, la qualité de l'extrait s'applique.
+    """
+    ALTER TABLE intervals ADD COLUMN quality TEXT;
+    """,
 ]
 
 

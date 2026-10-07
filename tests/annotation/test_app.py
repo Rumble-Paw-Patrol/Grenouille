@@ -143,6 +143,20 @@ def test_intervals_are_drawn_on_the_whole_recording_and_saved(app_config):
     assert "déjà écouté : A. blanci" in _caption(at)  # le candidat (3–6 s) touche 4–5,5 s
 
 
+def test_each_interval_keeps_its_own_quality(app_config):
+    """La qualité se dit par intervalle (pas une pour tout l'extrait), et se retrouve en
+    rouvrant l'extrait."""
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.sidebar.text_input[0].input("léonard").run()
+    assert not any(r.label.startswith("Qualité") for r in at.radio)
+    _draw(at, [[4.0, 5.5, "blanci", "A"], [8.0, 8.4, "blanci", "C"], [10.0, 11.0, "blanci"]])
+    _button(at, "Envoyer l'extrait ▶").click().run()
+    assert not at.exception
+    con = connect(app_config["paths"]["db"])
+    rows = con.execute("SELECT quality FROM intervals ORDER BY interval_id")
+    assert [r[0] for r in rows] == ["A", "C", None]
+
+
 def test_a_plan_extract_is_listened_and_saved_alone_then_the_next_one_opens(app_config, tmp_path):
     """File tirée par plan (n° 196) : l'extrait est la fenêtre du candidat, pas
     l'enregistrement entier ; l'envoyer ouvre le candidat suivant."""

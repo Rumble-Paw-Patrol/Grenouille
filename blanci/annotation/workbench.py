@@ -475,7 +475,7 @@ def save_span(
     candidate: dict[str, Any],
     start_s: float,
     end_s: float,
-    intervals: list[tuple[float, float, str]],
+    intervals: list[tuple],
     classes: list[str],
     annotator: str,
     quality: str | None = None,
@@ -496,7 +496,7 @@ def save_span(
     blanci = {"blanci", "blanci_chorus", "blanci_uncertain"}
     if blanci & set(classes) and not intervals:
         raise ValueError("A. blanci coché sans intervalle : tracer où il chante")
-    heard = list(dict.fromkeys([*classes, *(label for _, _, label in intervals)]))
+    heard = list(dict.fromkeys([*classes, *(i[2] for i in intervals)]))
     # Les faux amis ont leurs intervalles : ils ne donnent pas leur label au reste de l'extrait.
     other, _ = ordered_classes([c for c in classes if c not in INTERVAL_LABELS])
     conditions: dict[str, Any] = {"candidate_reason": candidate.get("reason") or None}
@@ -529,9 +529,9 @@ def span_intervals(
     start_s: float,
     end_s: float,
     annotator: str | None = None,
-) -> list[tuple[float, float, str]] | None:
-    """Intervalles du dernier extrait [start_s, end_s] déjà annoté (à réafficher quand on y
-    revient), None s'il ne l'a jamais été."""
+) -> list[tuple[float, float, str, str | None]] | None:
+    """Intervalles (début, fin, label, qualité) du dernier extrait [start_s, end_s] déjà annoté
+    (à réafficher quand on y revient), None s'il ne l'a jamais été."""
     sql = (
         "SELECT span_id FROM spans WHERE recording_id = ? AND ABS(start_s - ?) < 0.006 "
         "AND ABS(end_s - ?) < 0.006"
@@ -543,9 +543,10 @@ def span_intervals(
     if row is None:
         return None
     return [
-        (float(a), float(b), str(c))
-        for a, b, c in con.execute(
-            "SELECT start_s, end_s, label FROM intervals WHERE span_id = ? ORDER BY start_s",
+        (float(a), float(b), str(c), q)
+        for a, b, c, q in con.execute(
+            "SELECT start_s, end_s, label, quality FROM intervals WHERE span_id = ? "
+            "ORDER BY start_s",
             (row[0],),
         )
     ]

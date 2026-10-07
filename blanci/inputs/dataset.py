@@ -106,7 +106,7 @@ def load_spans(
     spans["comment"] = spans["conditions"].map(_comment)
     spans = spans.drop(columns="conditions")
     intervals = pd.read_sql_query(
-        "SELECT i.span_id, s.recording_id, i.start_s, i.end_s, i.label "
+        "SELECT i.span_id, s.recording_id, i.start_s, i.end_s, i.label, i.quality "
         f"FROM intervals i JOIN spans s USING (span_id) {where_joined} "
         "ORDER BY i.interval_id",
         con,
@@ -131,8 +131,8 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     _, intervals = load_spans(con)
     valid = current_intervals(spans, intervals)
     intervals = intervals.merge(
-        valid[["span_id", "start_s", "end_s", "label"]].assign(valable=True),
-        on=["span_id", "start_s", "end_s", "label"],
+        valid[["span_id", "start_s", "end_s", "label", "quality"]].assign(valable=True),
+        on=["span_id", "start_s", "end_s", "label", "quality"],
         how="left",
     )
     intervals["valable"] = intervals["valable"].eq(True)
@@ -142,8 +142,10 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     spans["classes"] = spans["classes"].map(lambda c: ", ".join(json.loads(c)) if c else "")
     summary = intervals.groupby("span_id").apply(
         lambda g: "; ".join(
-            f"{a:.2f}-{b:.2f} {lab}"
-            for a, b, lab in zip(g["start_s"], g["end_s"], g["label"], strict=True)
+            f"{a:.2f}-{b:.2f} {lab}" + (f" ({q})" if q else "")
+            for a, b, lab, q in zip(
+                g["start_s"], g["end_s"], g["label"], g["quality"].fillna(""), strict=True
+            )
         ),
         include_groups=False,
     )
@@ -158,7 +160,7 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     ]  # fmt: skip
     intervals = intervals.merge(rec, on="recording_id", how="left")[
         ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "label",
-         "valable"]
+         "quality", "valable"]
     ]  # fmt: skip
     return extracts, intervals
 
@@ -215,28 +217,38 @@ def interval_labels(
         friend = labels == "false_friend"
         certain = ~friend & (labels != "blanci_uncertain")
         ids = iv["span_id"].to_numpy()
+        own = iv["quality"].to_numpy(dtype=object) if "quality" in iv else np.full(len(iv), None)
+
+        def latest(mask, ids=ids, own=own):
+            """(infos de l'extrait, qualité) de l'intervalle le plus récent parmi `mask` : sa
+            propre qualité, sinon celle de son extrait."""
+            at = np.flatnonzero(mask)
+            at = at[ids[at] == ids[at].max()]
+            info = span_info.loc[ids[at[0]]]
+            mine = [own[a] for a in at if own[a] is not None and own[a] == own[a]]
+            return info, (mine[0] if mine else info["quality"])
+
         for j, (wid, off) in enumerate(zip(g["window_id"], g["offset_s"], strict=True)):
             hits = touch[j] & ~friend
             if (enough[j] & certain).any():
                 k = enough[j] & certain
                 label = "blanci_chorus" if (labels[k] == "blanci_chorus").any() else "blanci"
-                info = span_info.loc[ids[k].max()]
-                y = 1
+                (info, quality), y = latest(k), 1
             elif (hits & ~certain).any():
                 label, y = "blanci_uncertain", 0
-                info = span_info.loc[ids[hits & ~certain].max()]
+                info, quality = latest(hits & ~certain)
             elif hits.any():
                 label, y = "edge", 0
-                info = span_info.loc[ids[hits].max()]
+                info, quality = latest(hits)
             elif (enough[j] & friend).any():
                 label, y = "false_friend", 0
-                info = span_info.loc[ids[enough[j] & friend].max()]
+                info, quality = latest(enough[j] & friend)
             elif inside[j].any():
                 info = span_info.loc[sp["span_id"].to_numpy()[np.flatnonzero(inside[j])].max()]
-                label, y = info["other_label"], 0
+                label, y, quality = info["other_label"], 0, info["quality"]
             else:
                 continue
-            rows.append((wid, rid, off, label, y, info["quality"], info["comment"]))
+            rows.append((wid, rid, off, label, y, quality, info["comment"]))
     return pd.DataFrame(rows, columns=columns)
 
 
