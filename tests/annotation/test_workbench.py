@@ -383,7 +383,7 @@ def test_viewer_serves_its_files_next_to_the_page(tmp_path, monkeypatch):
         channel=1,
     )
     assert args["extract"] == "a.wav:1.00:7.00" and args["channel"] == 1
-    assert args["intervals"] == [[2.0, 2.5, "blanci"]]
+    assert args["intervals"] == [[2.0, 2.5, "blanci", None]]
     assert args["audios"] == [{"name": "micro 1", "src": src, "start": 1.0}]
     page = (viewer._prepare() / "index.html").read_text(encoding="utf-8")
     assert "__MAGMA__" not in page and "[0, 0, 4]" in page
@@ -403,6 +403,21 @@ def test_save_span_derives_the_other_label(corpus):
     save_span(con, candidate, 0.0, 12.0, [(4.0, 5.0, "blanci")], ["rain", "bird"], "léonard")
     other, classes = con.execute("SELECT other_label, classes FROM spans").fetchone()
     assert other == "bird" and json.loads(classes) == ["rain", "bird", "blanci"]
-    assert span_intervals(con, rid, 0.0, 12.0) == [(4.0, 5.0, "blanci")]
+    assert span_intervals(con, rid, 0.0, 12.0) == [(4.0, 5.0, "blanci", None)]
     queue = pd.DataFrame({"recording_id": [rid] * 2, "offset_s": [3.0, 6.0], "dur_s": 3.0})
     assert progress(con, queue).tolist() == ["blanci", "bird"]
+
+
+def test_each_interval_has_its_own_quality(corpus):
+    """La qualité se dit par intervalle ; une qualité inconnue est refusée ; elle se retrouve
+    en rouvrant l'extrait."""
+    from blanci.annotation.workbench import save_span, span_intervals
+
+    con, _, _ = corpus
+    rid = con.execute("SELECT recording_id FROM recordings LIMIT 1").fetchone()[0]
+    candidate = {"recording_id": rid, "offset_s": 3.0, "dur_s": 3.0, "source": "random"}
+    with pytest.raises(ValueError, match="qualité inconnue"):
+        save_span(con, candidate, 0.0, 12.0, [(4.0, 5.0, "blanci", "Z")], [], "léonard")
+    intervals = [(4.0, 5.0, "blanci", "A"), (8.0, 9.0, "blanci", "C"), (10.0, 11.0, "blanci")]
+    save_span(con, candidate, 0.0, 12.0, intervals, [], "léonard")
+    assert [q for *_, q in span_intervals(con, rid, 0.0, 12.0)] == ["A", "C", None]

@@ -141,13 +141,20 @@ MIGRATIONS = [
     """
     DROP TABLE IF EXISTS imports;
     """,
+    # 5 — qualité (A, B, C) propre à chaque intervalle : un même extrait mêle des chants nets et
+    # des chants lointains. NULL : pas dite à l'intervalle, la qualité de l'extrait s'applique.
+    """
+    ALTER TABLE intervals ADD COLUMN quality TEXT;
+    """,
 ]
 
 
 def connect(path: Path) -> sqlite3.Connection:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(path)
+    # `embed` et le poste d'annotation écrivent dans la même base : on attend le verrou
+    # d'écriture plutôt que d'échouer au bout des 5 s par défaut.
+    con = sqlite3.connect(path, timeout=30)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA journal_mode = WAL")
@@ -156,11 +163,23 @@ def connect(path: Path) -> sqlite3.Connection:
 
 
 def migrate(con: sqlite3.Connection) -> None:
-    version = con.execute("PRAGMA user_version").fetchone()[0]
-    for number, script in enumerate(MIGRATIONS[version:], start=version + 1):
-        con.executescript(script)
-        con.execute(f"PRAGMA user_version = {number}")
-    con.commit()
+    """Applique les migrations manquantes, chacune dans une transaction avec son numéro de
+    version : un échec ne laisse pas de demi-migration, et si un autre processus a migré entre
+    la lecture de la version et la prise du verrou, on repart de sa version."""
+    while (version := _user_version(con)) < len(MIGRATIONS):
+        try:
+            con.executescript(
+                f"BEGIN IMMEDIATE;\n{MIGRATIONS[version]}\n"
+                f"PRAGMA user_version = {version + 1};\nCOMMIT;"
+            )
+        except sqlite3.OperationalError:
+            con.rollback()
+            if _user_version(con) == version:
+                raise
+
+
+def _user_version(con: sqlite3.Connection) -> int:
+    return con.execute("PRAGMA user_version").fetchone()[0]
 
 
 def model_params(con: sqlite3.Connection, model_id: str, kind: str | None = None) -> dict:

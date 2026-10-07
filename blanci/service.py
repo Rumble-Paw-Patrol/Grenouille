@@ -635,7 +635,7 @@ def append_span(
     recording_id: str,
     start_s: float,
     end_s: float,
-    intervals: list[tuple[float, float, str]],
+    intervals: list[tuple],
     other_label: str,
     source: str,
     classes: list[str] | None = None,
@@ -645,8 +645,9 @@ def append_span(
     annotator: str | None = None,
 ) -> int:
     """Ajoute un extrait écouté [start_s, end_s] et ses intervalles d'A. blanci (début, fin,
-    label) ; renvoie span_id. `other_label` : label des fenêtres de l'extrait qui ne touchent
-    aucun intervalle. Ajout seul : une correction est un nouveau span (§13.7)."""
+    label, qualité facultative) ; renvoie span_id. `other_label` : label des fenêtres de
+    l'extrait qui ne touchent aucun intervalle. `quality` : qualité de l'extrait, celle des
+    intervalles qui n'ont pas la leur. Ajout seul : une correction est un nouveau span (§13.7)."""
     if not end_s > start_s:
         raise ValueError(f"extrait vide : {start_s}–{end_s} s")
     if other_label not in LABELS or other_label in POSITIVE_LABELS:
@@ -659,13 +660,18 @@ def append_span(
     if source not in SOURCES:
         raise ValueError(f"source inconnue : {source!r} (attendues : {', '.join(SOURCES)})")
     cleaned = []
-    for i0, i1, label in intervals:
+    for i0, i1, label, *rest in intervals:
+        interval_quality = rest[0] if rest else None
         if label not in INTERVAL_LABELS:
             raise ValueError(f"label d'intervalle inconnu : {label!r}")
+        if interval_quality is not None and interval_quality not in QUALITIES:
+            raise ValueError(
+                f"qualité inconnue : {interval_quality!r} (attendues : {', '.join(QUALITIES)})"
+            )
         i0, i1 = max(float(i0), start_s), min(float(i1), end_s)
         if i1 <= i0:
             raise ValueError(f"intervalle vide ou hors de l'extrait : {i0}–{i1} s")
-        cleaned.append((round(i0, 2), round(i1, 2), label))
+        cleaned.append((round(i0, 2), round(i1, 2), label, interval_quality))
     if (
         con.execute("SELECT 1 FROM recordings WHERE recording_id = ?", (recording_id,)).fetchone()
         is None
@@ -691,7 +697,7 @@ def append_span(
     )
     span_id = int(cursor.lastrowid)
     con.executemany(
-        "INSERT INTO intervals (span_id, start_s, end_s, label) VALUES (?, ?, ?, ?)",
+        "INSERT INTO intervals (span_id, start_s, end_s, label, quality) VALUES (?, ?, ?, ?, ?)",
         [(span_id, *interval) for interval in cleaned],
     )
     con.commit()

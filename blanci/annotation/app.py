@@ -20,6 +20,8 @@
   intervalles, comme elle) ; coché, on dit aussi les autres classes entendues.
 - **Découpage** : l'extrait se découpe en fenêtres de longueur choisie, calées sur le
   candidat ; on les annote une à une sans quitter l'enregistrement.
+- **Qualité** : en intervalles, chaque intervalle a la sienne (A, B, C : barre au-dessus du
+  spectrogramme) ; en fenêtres, une qualité pour la fenêtre.
 - **Réponse** : une ou plusieurs classes, qualité, espèce, commentaire, puis « Envoyer ▶ »
   (ou Entrée dans un champ) : le label est ajouté (jamais écrasé) et la fenêtre suivante
   s'affiche (fenêtre suivante du découpage, sinon candidat suivant).
@@ -39,6 +41,7 @@ from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from blanci.annotation.viewer import HELP, asset, viewer, viewer_args
 from blanci.annotation.workbench import (
@@ -415,8 +418,16 @@ def _classes(form_key: str, answers) -> list[str]:
     ]
 
 
-def _details(multiclass: bool) -> tuple[str | None, str | None, str | None]:
-    quality = st.radio("Qualité (si A. blanci)", ["—", *QUALITIES], horizontal=True)
+def _details(
+    multiclass: bool, with_quality: bool = True
+) -> tuple[str | None, str | None, str | None]:
+    """Qualité (sauf `with_quality` faux : en intervalles, chacun a la sienne, au-dessus du
+    spectrogramme), espèce, commentaire."""
+    quality = (
+        st.radio("Qualité (si A. blanci)", ["—", *QUALITIES], horizontal=True)
+        if with_quality
+        else "—"
+    )
     species = st.text_input(
         "Espèce entendue (faux ami, congénère…)" if multiclass else "Espèce du faux ami (si connue)"
     )
@@ -440,7 +451,7 @@ def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel, 
                 "intervalles ; aucune cochée : rien)"
             )
             ticked = _classes(form_key, OTHER_ANSWERS)
-        quality, species, comment = _details(multiclass)
+        quality, species, comment = _details(multiclass, with_quality=False)
         sent = st.form_submit_button(
             "Envoyer l'extrait ▶", type="primary", use_container_width=True
         )
@@ -506,7 +517,8 @@ def _interval_caption(intervals) -> str:
             "touche 4 en haut à gauche, avant de tracer)."
         )
     return f"{len(intervals)} intervalle(s) : " + " · ".join(
-        f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)})" for a, b, c in sorted(intervals)
+        f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)}{f', qualité {q}' if q else ''})"
+        for a, b, c, q in sorted(((*i, None)[:4] for i in intervals), key=lambda t: t[:3])
     )
 
 
@@ -515,6 +527,26 @@ def _interval_caption(intervals) -> str:
 NO_GREY = """<style>
 [data-stale="true"], [data-stale="true"] * { opacity: 1 !important; transition: none !important; }
 </style>"""
+
+
+# Les menus déroulants de Streamlit sont aussi des champs de saisie : on y tape du texte qui
+# filtre la liste. Ici les listes sont courtes et choisies à la souris, on rend le champ
+# non éditable. Le script tourne dans un cadre de même origine, d'où il atteint la page ; un
+# observateur le refait pour les menus créés après coup.
+READONLY_MENUS = """<script>
+(() => {
+  const root = window.parent.document;
+  if (window.parent.__blanciMenus) return;
+  window.parent.__blanciMenus = true;
+  const fix = () => root.querySelectorAll('div[data-baseweb="select"] input').forEach(i => {
+    if (i.readOnly) return;
+    i.readOnly = true; i.setAttribute("inputmode", "none"); i.style.caretColor = "transparent";
+    i.style.cursor = "pointer";
+  });
+  new MutationObserver(fix).observe(root.body, {childList: true, subtree: true});
+  fix();
+})();
+</script>"""
 
 
 def _recordings_root(cfg) -> list[Path]:
@@ -550,6 +582,10 @@ def _missing_recording(cfg, path: str) -> None:
 def main() -> None:
     st.set_page_config(page_title="Annotation blanci", layout="wide")
     st.markdown(NO_GREY, unsafe_allow_html=True)
+    if hasattr(st, "iframe"):  # `components.html` est retiré des Streamlit récents
+        st.iframe(READONLY_MENUS, height=1)
+    else:
+        components.html(READONLY_MENUS, height=0)
     config = _config_file()
     cfg, con = _setup(config)
     _apply_pending_queue()
