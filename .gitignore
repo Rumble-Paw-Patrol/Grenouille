@@ -21,3 +21,4 @@ documentation/*.xlsx
 # Tableau de bord : produit par documentation/tableau-de-bord/construire.py.
 documentation/tableau-de-bord/index.html
 documentation/tableau-de-bord/fichiers.json
+documentation/tableau-de-bord/index-ultra.html
