@@ -1,11 +1,12 @@
 """Extraction des embeddings : enregistrements → grille → encodeur → stock Parquet (§4).
 
 Reprenable : un enregistrement déjà présent dans sa partition est sauté ; le stock est écrit
-tous les `flush_every` enregistrements. L'audio lu sert aussi au contrôle qualité (drapeaux
-audio) des enregistrements qui ne l'ont pas encore eu : un enregistrement silencieux ou
-micro dans sac est alors écarté avant d'être encodé. Le débit mesuré (fenêtres/s, facteur
-temps réel) est enregistré dans la table models : c'est la colonne « vitesse » du benchmark
-(§2).
+tous les `flush_every` enregistrements, la base après chaque enregistrement (le verrou
+d'écriture n'est pas gardé, le poste d'annotation écrit pendant un encodage). L'audio lu sert
+aussi au contrôle qualité (drapeaux audio) des enregistrements qui ne l'ont pas encore eu :
+un enregistrement silencieux ou micro dans sac est alors écarté avant d'être encodé. Le débit
+mesuré (fenêtres/s, facteur temps réel) est enregistré dans la table models : c'est la colonne
+« vitesse » du benchmark (§2).
 
 La lecture, le rééchantillonnage et la découpe de l'enregistrement suivant se font dans un fil
 à part pendant que l'encodeur traite le courant (`core.ahead`). `blanci qc` fait le contrôle
@@ -300,6 +301,10 @@ def embed_recordings(
             _store_logits(
                 con, encoder, report.encoder_id, [i for i, p in zip(ids, passed, strict=True) if p]
             )
+            # Commit tout de suite : le verrou d'écriture n'est gardé que le temps des insertions,
+            # le poste d'annotation peut écrire pendant un encodage. Sans risque à la reprise,
+            # guidée par le stock, et les insertions sont idempotentes.
+            con.commit()
             meta = pd.DataFrame(
                 {
                     "window_id": ids,
