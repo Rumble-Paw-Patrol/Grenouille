@@ -695,6 +695,9 @@ def main() -> None:
         "tableaux": tableaux(fichiers),
         "biblio": (DOC / "biblio" / "biblio.md").read_text(encoding="utf-8"),
         "poste": "poste-annotation.png" if (ICI / "poste-annotation.png").exists() else None,
+        "grenouille": json.loads((ICI / "grenouille.json").read_text(encoding="utf-8"))
+        if (ICI / "grenouille.json").exists()
+        else None,
     }
     brut = json.dumps(donnees, ensure_ascii=False, separators=(",", ":"), default=str)
     brut = brut.replace("</", "<\\/")  # pas de </script> dans les données
