@@ -1,0 +1,12 @@
+{
+ "compte": {
+  "entrainement": 0,
+  "positifs_entrainement": 0,
+  "evaluation": 0,
+  "positifs_evaluation": 0
+ },
+ "sites": [],
+ "micros": [],
+ "compte_le": "2026-10-07",
+ "source": "base locale"
+}

@@ -3297,12 +3297,13 @@ de Léonard, 01/10/2026.
      bloc de CDR (24–28/12/2025) est étouffé avec des parasites de type glitch, donc micro
      défaillant, bonnette contre le sol ou sac, et inutilisable dans tous les cas. Les
      annotations `artefact_in_bag` posées à l'écoute ne changent pas.
-     Essai sur une copie de la base, rien d'appliqué : 1 961 → **895** `in_bag` (CDR 880,
-     PatawaOuest 15) ; RNRT, Mataroni et 2023 n'en gardent plus ; encodables 94 148 →
-     **95 214**. Les 423 de CDR entre 0,05 et 0,2 sortent aussi du drapeau : à vérifier à
-     l'écoute avant de relancer `blanci flag`. L'exclusion de 2LA04525 se décide à part,
-     après écoute. Le n° 189 se trompait sur le nombre d'encodables (96 109, compté avant le
-     passage `blanci qc`, n° 173–174) ; le bon chiffre se fixe après `blanci flag`.
+     Appliqué par `blanci flag` le 07/10 : 1 961 → **895** `in_bag` calculés (CDR 880,
+     PatawaOuest 15) ; RNRT, Mataroni et 2023 n'en gardent plus, ni les 423 de CDR entre 0,05
+     et 0,2. **Encodables : 95 214** (sur 96 292 : 173 de durée anormale, 88 hors relevé,
+     895 + 8 notés à l'écoute, recouvrements déduits). Ce chiffre remplace les 96 109 du
+     n° 191, comptés à partir des 94 588 du 29/09, d'avant le passage audio de `blanci qc`
+     (n° 173–174). Le micro 2LA04525 (RNRT, parasites à l'écoute) reste encodable : on ne
+     sait pas encore signaler les glitchs (Léonard, 07/10).
 
 ## 2026-10-07 — Poste d'annotation sans configuration, une file par dossier
 
@@ -3321,3 +3322,49 @@ de Léonard, 01/10/2026.
      réglages, date, motifs, sites), affiché sous la liste des files (« D'où vient cette
      file ? »). Les anciens `candidats_*.csv` à plat se lisent toujours. Les autres commandes
      (encodage, benchmarks) lisent encore `paths.raw` seul.
+
+## 2026-10-07 — Lot 1 et jeu de test tirés par plan
+
+196. **`blanci candidates --plan`** (Léonard, 07/10 ; §5.2–5.5, « À coder » du n° 157). Tirage
+     sans détecteur ni score, graine fixée (`plan.seed` = 2026), avant toute écoute
+     (`blanci/annotation/plan.py`, réglages dans la section `plan` de la configuration).
+     - **Partition des points**, versionnée dans `config/plan/partition_v1.csv` (points
+       seulement, aucun audio), tirée une fois puis relue : une autre graine ne la retire pas.
+       Niveau 2 : **RNRT** entier (40 points ; choix de Léonard, présence d'A. blanci connue
+       sur le terrain). Niveau 1 : 20 % des points de chaque autre site 2026 (CDR 6 sur 28,
+       Mataroni 14 sur 71, PatawaEst 2 sur 9, PatawaOuest 2 sur 8). Niveau 3 : une station
+       sur deux par site en 2023 (Kaw D, Molokoi E, Trésor A). Entraînement : 92 points 2026
+       et 3 stations 2023 (Kaw C, Molokoi F, Trésor B).
+     - **Le point 2023 est la station** (Léonard, 07/10 ; lève le « À VÉRIFIER » du §5.2), avec
+       ses micros successifs, déduits des dates et des dossiers : Kaw D = SMA14079 puis
+       SMA15429 (septembre 2024) ; Molokoi E = SMA14157 puis SMA14636 (« SM4 amont », janvier
+       2024) ; Kaw C, Molokoi F, Trésor A et B : un micro chacun.
+     - **Lot d'entraînement 1** : 424 extraits de 30 s (début tiré au hasard), 274 sur les
+       points 2026 (3 par point : pic du matin, pic du soir, une autre tranche au hasard ;
+       2 manquent, faute d'enregistrement dans la tranche) et 150 sur les stations 2023 (50
+       chacune : haute 25 dont 17 en février–mars, transition 10, basse 15 ; pics 60 %). Dans
+       une case, jours distincts tirés au hasard puis un enregistrement : au plus un par
+       point, jour et tranche. 64 % aux heures de pic.
+     - **Jeu de test v1** : 250 enregistrements entiers, à parts égales entre les trois
+       niveaux (84, 83, 83). Strate = niveau × site × tranche (× période en 2023) ; dans une
+       strate, des couples (point, jour) distincts tirés au hasard, puis un enregistrement
+       dans chacun : probabilité d'inclusion **exacte**, n_h / M_h × 1 / R (colonne
+       `prob_tirage`). Répartition entre strates en proportion des couples disponibles × 2
+       pour les pics × 2 pour la période haute. Le partage égal entre niveaux est un choix
+       (aucun texte ne le fixait) : `plan.test`.
+     - Exclus des deux tirages : enregistrements écartés par un drapeau et enregistrements
+       qui portent déjà un label, quelle que soit sa source (dont ceux du détecteur externe,
+       §5.2) ; pluie et saturation restent. Tranches et périodes à l'heure locale (UTC−3) de
+       `start_utc` : pour Molokoi SMA14636 en avril 2024 (en-tête en avance d'une heure,
+       n° 153), une tranche peut être décalée d'une heure.
+     - Les files suivent le n° 195 : `data/reports/files/lot1/` et `files/test_v1/`
+       (`candidats.csv` au format du poste, source « plan », plus les colonnes point, niveau,
+       strate, prob_tirage ; `LISEZMOI.md`), et non des `candidats_*.csv` à plat.
+     `candidates --random` et `--entiers` restent, hors plan.
+     - **Poste** : la source « plan » rejoint `SOURCES` (sans elle, « Envoyer l'extrait » était
+       refusé). Pour une file de source « plan », l'extrait écouté et enregistré est la
+       fenêtre du candidat (spectrogramme et lecteurs limités aux 30 s), non plus
+       l'enregistrement entier (n° 182) : sinon les 90 s non écoutées seraient devenues
+       négatives. Les autres files gardent l'enregistrement entier. Vérifié dans le navigateur
+       sur une copie de la base : intervalle tracé, extrait 0,6–30,6 s enregistré, candidat
+       suivant ouvert.
