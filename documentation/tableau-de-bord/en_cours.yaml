@@ -1,11 +1,12 @@
 # Travail en cours : LE SEUL FICHIER DU TABLEAU DE BORD À TENIR À LA MAIN.
-# Un chantier = titre, etat (en_cours | a_venir | bloque | fait), detail, suite (prochaine action).
+# Un chantier = titre, etat (en_cours | a_venir | bloque | fait | termine), detail, suite (prochaine action).
+# « termine » : chantier fini qu'on garde affiché, pastille verte « terminé ».
 # Retirer un chantier quand il est fini. Puis : /tableau-de-bord (ou demander « mets à jour le
 # tableau de bord »).
 
 en_cours:
-  - titre: Benchmark des encodeurs et des têtes sur AnuraSet, dans le tableau de bord
-    etat: en_cours
+  - titre: Benchmark des encodeurs et des têtes sur AnuraSet
+    etat: termine
     detail: >-
       Confection des sections de benchmark sur AnuraSet du tableau de bord : encodeurs et têtes à la carte, amorçage d'un site neuf. Plus le temps d'encodage du corpus ONF.
   - titre: Annotation de mes données
@@ -21,12 +22,12 @@ en_cours:
     detail: >-
       Software d'annotation d'enregistrements audio à part entière, on labelise les intervalles ou A. Blanci chante au sein de l'enregistrement.
     suite: Vérification de mes label par Élodie Courtois et Benoit Villette
-  - titre: Encodage du corpus sur modèles de fondation
+  - titre: Extraction des embeddings des modèles de fondation
     etat: en_cours
     detail: >-
-      Étape très longue : 61h pour Perch 2.0 sur CPU intel core i5, BirdNET encore en cours (estimé à 25h)
+      Étape très longue : 61h pour Perch 2.0 sur CPU intel core i5, BirdNET 2.4 encore en cours (estimé à 25h)
     suite: Une fois l'encodage et l'annotation terminée, entraînement des heads
-  - titre: Benchmark des approches sur mon jeu de données
+  - titre: Benchmark des encodeurs et têtes sur mon jeu de données
     etat: a_venir
     detail: >-
       Les Benchmarks pré-existant ont été réalisés sur AnuraSet. Nous allons par la suite tester les encodeurs (pas tous) et têtes de  classifications directement sur notre dataset quand ce dernier sera prêt.
@@ -35,12 +36,6 @@ en_cours:
     detail: >-
       Filtre passe-bande, PCEN, log-mel, débruitage spectral, extraction de fenêtres candidates basée sur l'énergie, seuil à hystérésis à ajouter.
     suite: Placement du module dans la pipeline, en amont ou en parallèle du couple foundation-model & head.
-  - titre: Test d'une application Windows
-    etat: a_venir
-    detail: >-
-      Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une machine Windows propre. L'objectif étant à terme de fournir une appli no code pour naturalistes allergiques aux technologies.
-    suite: Création de l'application Windows
-  
   - titre: Fabrication de notebooks
     etat: a_venir
     detail: >-
@@ -49,3 +44,8 @@ en_cours:
       sur token sur le spectro, UMAPs en tout genre, scores des têtes, extraits annotés. De quoi
       vérifier chaque étape à l'œil, comprendre un faux positif, et montrer aux encadrants et
       aux naturalistes le travail plus en détail que sur le tableau de bord.
+  - titre: Test d'une application Windows
+    etat: a_venir
+    detail: >-
+      Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une machine Windows propre. L'objectif étant à terme de fournir une appli no code pour naturalistes allergiques aux technologies.
+    suite: Création de l'application Windows

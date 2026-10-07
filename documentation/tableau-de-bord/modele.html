@@ -192,7 +192,7 @@ section.vue { position: relative; padding-top: 56px; scroll-margin-top: 12px; di
 /* Puces d'état */
 .puce { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
 .puce::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
-.e-fait { color: var(--ok); background: var(--ok-soft); }
+.e-fait, .e-termine { color: var(--ok); background: var(--ok-soft); }
 .e-en_cours { color: var(--warn); background: var(--warn-soft); }
 .e-a_venir { color: var(--idle); background: var(--idle-soft); }
 .e-bloque { color: var(--bad); background: var(--bad-soft); }
@@ -515,7 +515,7 @@ const sv = (tag, attrs = {}, ...kids) => {
 const fr = (x, n = 2) => x == null || Number.isNaN(x) ? "—" : x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n });
 const entier = (x) => Math.round(x).toLocaleString("fr-FR");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const ETATS = { fait: "fait", en_cours: "en cours", a_venir: "à venir", bloque: "bloqué" };
+const ETATS = { fait: "fait", termine: "terminé", en_cours: "en cours", a_venir: "à venir", bloque: "bloqué" };
 const puceEtat = (e) => el("span", { class: `puce e-${e}` }, ETATS[e] || e);
 const dateFr = (s) => new Date(s + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
