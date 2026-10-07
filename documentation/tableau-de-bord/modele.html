@@ -425,14 +425,14 @@ section.sous-vue .vue-tete h2 { font-size: clamp(19px, 2.1vw, 24px); }
 .matrice td.esp i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 .matrice td.esp em { display: block; color: var(--muted); font-size: 12px; font-family: var(--f-serif); font-style: italic; font-size: 14px; }
 
-/* Les cartes montent doucement à l'entrée dans l'écran, là où le navigateur sait le faire
+/* Les cartes glissent en place à l'entrée dans l'écran, là où le navigateur sait le faire
    au défilement ; ailleurs, et au repos, elles sont simplement là. */
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
     .carte, .tuile, .galerie figure, .vue-tete {
-      animation: apparait linear both; animation-timeline: view(); animation-range: entry 0% entry 35%;
+      animation: apparait linear both; animation-timeline: view(); animation-range: entry 0% entry 55%;
     }
-    @keyframes apparait { from { opacity: .2; transform: translateY(26px) scale(.985); } to { opacity: 1; transform: none; } }
+    @keyframes apparait { from { opacity: .15; transform: translateY(46px) scale(.965); } to { opacity: 1; transform: none; } }
   }
 }
 
