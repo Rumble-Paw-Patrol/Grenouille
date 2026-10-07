@@ -309,16 +309,14 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         g[segment(base, bout, 0.6, X, Y)] = "f"
         g[ellipse(*bout, 0.45, 0.45, X, Y)] = "T"
 
-    # --- l'autre œil : une bosse sur le crâne, devant l'œil visible
+    # --- l'autre œil : une simple bosse de peau sur le crâne, éclairée par-dessus et
+    # soulignée d'une ombre à sa base, qui ne bouge pas quand l'œil visible cligne
     dome = ellipse(8.4, 2.2, 2.5, 1.75, x, y)
     g[dome] = "O"
+    g[dome & (n1 > 0.9)] = "H"
     g[dome & ~ellipse(8.4, 2.5, 2.5, 1.75, x, y)] = "I"
     g[dome & ellipse(7.9, 1.8, 1.3, 0.8, x, y) & ~ellipse(8.4, 2.5, 2.5, 1.75, x, y)] = "H"
-    if not cligne:
-        croissant = dome & ~ellipse(9.0, 2.0, 2.5, 1.9, x, y)
-        g[croissant] = "E"
-        g[croissant & ellipse(9.0, 2.0, 2.95, 2.3, x, y)] = "G"
-    g[dome & ~ellipse(8.4, 1.9, 2.5, 1.75, x, y) & (x > 8.2)] = "S"
+    g[dome & ~ellipse(8.4, 1.6, 2.5, 1.75, x, y)] = "S"
 
     # --- l'œil visible : globe saillant, paupière supérieure en relief, pli dessous
     cx, cy = 11.2, 8.4

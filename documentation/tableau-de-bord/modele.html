@@ -135,6 +135,13 @@ main { padding-inline: clamp(16px, 4vw, 56px); padding-block: 0 96px; min-width:
 .bande h1 { font-size: clamp(26px, 4.2vw, 50px); font-weight: 700; line-height: 1.08; letter-spacing: -.025em; max-width: 22ch; background: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .bande h1 i { font-family: var(--f-serif); font-style: italic; font-weight: 400; font-size: 1.12em; letter-spacing: 0; padding-right: .08em; background: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .bande p { margin: 0; color: var(--nuit-muted); max-width: 72ch; font-size: 16px; }
+/* A. blanci en 8-bit (grenouille.py), perchée sur le spectrogramme, sous le titre qui la
+   chevauche ; autour, une mosaïque de pixels ambrés qui scintille. Taille fixée par le script. */
+.bande .eyebrow, .bande h1, .bande p { position: relative; z-index: 2; }
+.bande h1 { filter: drop-shadow(0 2px 10px rgba(4, 8, 7, .9)); }
+.perchoir { position: relative; z-index: 1; height: 0; margin-bottom: -16px; pointer-events: none; }
+#grenouille { position: absolute; right: clamp(-8px, 2vw, 40px); bottom: 0; width: 448px; max-width: none; image-rendering: pixelated; image-rendering: crisp-edges; }
+@media (max-width: 700px) { .perchoir { height: auto; display: flex; justify-content: flex-end; } #grenouille { position: static; } }
 .spectro { position: relative; border-radius: 12px; overflow: hidden; background: #000004; box-shadow: 0 0 0 1px rgba(255, 210, 120, .14), 0 30px 80px -30px rgba(228, 87, 63, .55), 0 0 60px -20px rgba(245, 165, 58, .35); }
 .spectro img { width: 100%; height: clamp(96px, 15vw, 210px); display: block; object-fit: fill; filter: saturate(1.15) contrast(1.06); }
 .spectro::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, .25), transparent 22%, transparent 78%, rgba(0, 0, 0, .35)), repeating-linear-gradient(90deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 10%); z-index: 1; }
@@ -466,6 +473,7 @@ section.sous-vue .vue-tete h2 { font-size: clamp(19px, 2.1vw, 24px); }
       <div class="eyebrow" style="color: var(--gold)">Tableau de bord du stage</div>
       <h1 id="titre"></h1>
       <p id="objectif"></p>
+      <div class="perchoir" aria-hidden="true"><canvas id="grenouille"></canvas></div>
       <div class="spectro">
         <img src="spectrogramme.jpg" alt="Spectrogramme de 10 s d'un chant d'A. blanci enregistré à Mataroni, de 3,5 à 6,3 kHz : notes brèves et régulières vers 4,4 kHz">
         <span class="bande-f" aria-hidden="true"></span>
@@ -673,6 +681,73 @@ const carte = (titre, sous, ...kids) => {
 }
 $("#objectif").textContent = C.projet.objectif;
 $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
+
+/* ---------- A. blanci en 8-bit ----------
+   Sprite de grenouille.py (96 × 80 pixels, images codées par plages : « O12 » = douze pixels
+   de la couleur O), perché sur le spectrogramme dans une toile de 128 × 88 pixels, sur une
+   mosaïque de tuiles ambrées de 2 × 2 qui scintillent. Elle respire (flanc), sa gorge
+   palpite, elle cligne, et de temps en temps elle baisse ou relève un peu la tête. */
+{
+  const G = D.grenouille, toile = $("#grenouille");
+  if (!G) toile.parentElement.hidden = true;
+  else {
+    const IMG = Object.fromEntries(Object.entries(G.images).map(([k, rangs]) =>
+      [k, rangs.map((r) => [...r.matchAll(/(\D)(\d+)/g)].map((m) => [m[1], +m[2]]))]));
+    const COL = 128, LIG = 88, DX = 24, DY = 8, TUILE = 2, ctx = toile.getContext("2d");
+    const NC = COL / TUILE, NL = LIG / TUILE;
+    const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const phases = Array.from({ length: NC * NL }, () => [Math.random() * 6.28, 0.6 + Math.random() * 1.6]);
+    let p = 1;
+    const dimension = () => {
+      // 3 px par pixel du sprite sur grand écran, 1,5 px sur téléphone ; arrondi par défaut aux
+      // pixels de l'écran, pour que la grenouille tienne dans le bandeau
+      const dpr = devicePixelRatio || 1, cible = Math.min(3.25, Math.max(1.5, innerWidth / 440));
+      p = Math.max(1, Math.floor(cible * dpr));
+      toile.width = COL * p; toile.height = LIG * p;
+      toile.style.width = (COL * p / dpr) + "px"; toile.style.height = (LIG * p / dpr) + "px";
+    };
+    let cligne = -9, prochainCligne = 2.5, tete = 1, prochaineTete = 4 + Math.random() * 3;
+    function dessiner(t) {
+      ctx.clearRect(0, 0, toile.width, toile.height);
+      const q = p * TUILE, jeu = Math.max(1, Math.round(q / 7));
+      for (let y = 0; y < NL; y++) for (let x = 0; x < NC; x++) {
+        const d = Math.hypot((x - 38) / 30, (y - 24) / 21);
+        if (d >= 1) continue;
+        const [ph, v] = phases[y * NC + x];
+        const a = (1 - d) * (1 - d) * (calme ? 0.16 : 0.1 + 0.1 * Math.sin(t * v + ph));
+        if (a < 0.015) continue;
+        ctx.fillStyle = `rgba(245, 165, 58, ${a.toFixed(3)})`;
+        ctx.fillRect(x * q + jeu, y * q + jeu, q - jeu, q - jeu);
+      }
+      const souffle = !calme && t % 3.2 < 1.3 ? 1 : 0;
+      const gorge = !calme && t % 7 < 2.4 && t % 0.6 < 0.3 ? 1 : 0;
+      if (!calme && t > prochainCligne) { cligne = t; prochainCligne = t + 3 + Math.random() * 4.5 + (Math.random() < 0.25 ? -2.8 : 0); }
+      const yeux = !calme && t - cligne < 0.13 ? 1 : 0;
+      // tête : la plupart du temps droite, parfois un peu baissée ou relevée, quelques secondes
+      if (!calme && t > prochaineTete) { tete = tete !== 1 ? 1 : Math.random() < 0.5 ? 0 : 2; prochaineTete = t + (tete === 1 ? 4 + Math.random() * 5 : 1.6 + Math.random() * 2.4); }
+      const img = IMG[`${gorge}${souffle}${yeux}${tete}`] || IMG["0001"];
+      for (let y = 0; y < img.length; y++) {
+        let x = 0;
+        for (const [c, n] of img[y]) {
+          if (c !== ".") { ctx.fillStyle = G.palette[c]; ctx.fillRect((x + DX) * p, (y + DY) * p, n * p, p); }
+          x += n;
+        }
+      }
+    }
+    dimension();
+    addEventListener("resize", () => { dimension(); dessiner(performance.now() / 1000); });
+    if (calme) dessiner(0);
+    else {
+      let dernier = -1;
+      const boucle = (ms) => {
+        const t = ms / 1000;
+        if (t - dernier >= 1 / 12) { dernier = t; dessiner(t); } // 12 images par seconde, cadence de jeu 8-bit
+        requestAnimationFrame(boucle);
+      };
+      requestAnimationFrame(boucle);
+    }
+  }
+}
 
 /* ---------- navigation ---------- */
 const nav = $("#nav");
