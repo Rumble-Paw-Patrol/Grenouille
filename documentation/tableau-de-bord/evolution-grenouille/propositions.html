@@ -1,0 +1,276 @@
+<title>A. blanci en tête de page</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;700&family=Hanken+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Planche de propositions : la même maquette du bandeau du tableau de bord, répétée pour
+   chaque façon de montrer A. blanci. Mêmes jetons que le tableau de bord (nuit guyanaise). */
+:root {
+  --bg: #050B0A; --surface: rgba(16, 29, 25, .72); --ink: #E9F2EC; --muted: #93A89D;
+  --line: rgba(160, 210, 185, .14); --accent: #F5A53A; --accent-2: #E4573F; --gold: #FFE08A;
+  --nuit-ink: #E9F2EC; --nuit-muted: #93A89D;
+  --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-serif: "Instrument Serif", Georgia, serif;
+  --f-body: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --bg: #EDF3EF; --surface: rgba(255, 255, 255, .8); --ink: #11201A; --muted: #55675E; --line: rgba(20, 70, 50, .14); --accent: #B9530D; color-scheme: light; }
+}
+:root[data-theme="light"] { --bg: #EDF3EF; --surface: rgba(255, 255, 255, .8); --ink: #11201A; --muted: #55675E; --line: rgba(20, 70, 50, .14); --accent: #B9530D; color-scheme: light; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+.page { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 80px; display: grid; gap: 44px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 500; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro { display: grid; gap: 10px; max-width: 70ch; }
+.intro h1 { font-size: clamp(24px, 3.4vw, 36px); }
+.intro p { margin: 0; color: var(--muted); }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+
+.option { display: grid; gap: 14px; }
+.option-tete { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.option-tete h2 { font-size: 21px; }
+.option-tete h2 span { font-family: var(--f-mono); font-size: 12px; color: var(--accent); margin-right: 10px; letter-spacing: .1em; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px 22px; font-size: 14px; color: var(--muted); margin: 0; padding: 0; list-style: none; }
+.notes b { color: var(--ink); font-weight: 600; }
+
+/* Maquette du bandeau : copie du vrai, avec une place pour la grenouille à droite. */
+.bande { position: relative; isolation: isolate; overflow: hidden; border-radius: 18px; background: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%); color: var(--nuit-ink); padding-inline: clamp(16px, 4vw, 48px); padding-block: clamp(26px, 4vw, 48px) 22px; display: grid; gap: 16px; border: 1px solid rgba(160, 210, 185, .16); }
+.bande::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(50% 80% at 92% 10%, rgba(228, 87, 63, .22), transparent 70%), radial-gradient(40% 60% at 70% 100%, rgba(79, 216, 192, .10), transparent 70%); }
+.bande .surtitre { position: relative; z-index: 2; font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #FFE08A; display: inline-flex; align-items: center; gap: 10px; }
+.bande .surtitre::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #FF5A4E; }
+.bande h3 { position: relative; z-index: 2; font-size: clamp(24px, 3.9vw, 46px); font-weight: 700; line-height: 1.08; letter-spacing: -.025em; max-width: 19ch; background: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+.bande h3 i { font-family: var(--f-serif); font-style: italic; font-weight: 400; font-size: 1.12em; letter-spacing: 0; padding-right: .08em; background: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bande p { position: relative; z-index: 2; margin: 0; color: var(--nuit-muted); max-width: 56ch; font-size: 15.5px; }
+.spectro { position: relative; z-index: 2; border-radius: 12px; overflow: visible; background: #000004; box-shadow: 0 0 0 1px rgba(255, 210, 120, .14), 0 30px 80px -30px rgba(228, 87, 63, .55); }
+.spectro img { width: 100%; height: clamp(90px, 13vw, 180px); display: block; object-fit: fill; border-radius: 12px; }
+.spectro .bande-f { position: absolute; left: 0; right: 0; top: 28.6%; height: 39.3%; border-block: 1px dashed rgba(255, 224, 138, .85); pointer-events: none; }
+.spectro .tete-lecture { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: linear-gradient(180deg, transparent, #FFF6DC 20%, #FFF6DC 80%, transparent); box-shadow: 0 0 12px 2px rgba(255, 224, 138, .8); pointer-events: none; animation: balayage 10s linear infinite; }
+@keyframes balayage { from { left: 0; } to { left: 100%; } }
+
+/* Emplacement de la grenouille : en haut à droite, sous le titre qui la chevauche. */
+.grenouille { position: absolute; z-index: 1; right: clamp(-10px, 7vw, 110px); top: clamp(10px, 2vw, 30px); width: clamp(220px, 40vw, 480px); height: auto; pointer-events: none; }
+.grenouille.pixel { image-rendering: pixelated; image-rendering: crisp-edges; }
+.halo { position: absolute; z-index: 0; right: clamp(0px, 9vw, 150px); top: 0; width: clamp(200px, 34vw, 420px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(245, 165, 58, .22), transparent 65%); pointer-events: none; }
+.coureur { position: absolute; z-index: 3; left: 0; bottom: 100%; width: clamp(70px, 9vw, 110px); image-rendering: pixelated; image-rendering: crisp-edges; pointer-events: none; }
+@media (max-width: 700px) { .grenouille { opacity: .55; right: -30px; } }
+
+.photo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 22px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; }
+.photo .vide { aspect-ratio: 4 / 3; border-radius: 14px; border: 1.5px dashed var(--accent); display: grid; place-items: center; text-align: center; padding: 16px; font-family: var(--f-mono); font-size: 12px; color: var(--muted); background: repeating-linear-gradient(135deg, transparent 0 8px, rgba(245, 165, 58, .05) 8px 10px); }
+.photo p { margin: 0 0 8px; }
+@media (max-width: 700px) { .photo { grid-template-columns: 1fr; } }
+.avertissement { font-size: 13.5px; color: var(--muted); border-left: 3px solid var(--accent); padding: 8px 14px; background: var(--surface); border-radius: 0 10px 10px 0; max-width: 80ch; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .spectro .tete-lecture { animation: none; opacity: 0; } }
+</style>
+
+<div class="page">
+  <header class="intro">
+    <div class="eyebrow">Propositions · rien n'est encore sur le tableau de bord</div>
+    <h1>A. blanci en tête de page</h1>
+    <p>Trois façons de faire apparaître la grenouille à droite du titre, chacune dans une maquette du vrai bandeau. Le titre passe par-dessus. La quatrième demande une photo.</p>
+  </header>
+
+  <p class="avertissement">Les couleurs suivent le patron courant des <i>Anomaloglossus</i> : dos brun, bande latérale sombre du museau à l'aine, ligne claire au-dessus, ventre pâle, sac vocal sous la gorge. Elles restent à vérifier sur une vraie photo d'A. blanci. Une fois le style choisi, je recale le dessin.</p>
+
+  <section class="option">
+    <div class="option-tete"><h2><span>A</span>Le chanteur 8-bit</h2></div>
+    <div class="bande">
+      <div class="halo"></div>
+      <canvas class="grenouille pixel" id="c-pixel" width="72" height="46" aria-label="A. blanci en pixel art, qui chante en gonflant son sac vocal"></canvas>
+      <div class="surtitre">Tableau de bord du stage</div>
+      <h3>Outil de détection automatique d'<i>Anomaloglossus blanci</i></h3>
+      <p>Développement d'un détecteur acoustique d'A. blanci en apprentissage continu capable de généraliser à de nouveaux points d'écoute jamais vus.</p>
+      <div class="spectro"><img src="../spectrogramme.jpg" alt=""><span class="bande-f"></span><span class="tete-lecture"></span></div>
+    </div>
+    <ul class="notes">
+      <li><b>L'idée</b> : un sprite de jeu vidéo, à gros pixels, qui gonfle son sac vocal au rythme du vrai chant (une note toutes les 1,2 à 1,9 s), avec des notes pixelisées qui s'envolent.</li>
+      <li><b>Pour</b> : très « mascotte », lisible même petit, et l'animation montre le sujet du projet : le chant.</li>
+      <li><b>Contre</b> : le pixel art tranche avec le reste de la page, plus soigné. C'est voulu, mais c'est un parti pris.</li>
+    </ul>
+  </section>
+
+  <section class="option">
+    <div class="option-tete"><h2><span>B</span>Le coureur, façon dinosaure de Chrome</h2></div>
+    <div class="bande">
+      <div class="surtitre">Tableau de bord du stage</div>
+      <h3>Outil de détection automatique d'<i>Anomaloglossus blanci</i></h3>
+      <p>Développement d'un détecteur acoustique d'A. blanci en apprentissage continu capable de généraliser à de nouveaux points d'écoute jamais vus.</p>
+      <div class="spectro"><canvas class="coureur" id="c-coureur" width="44" height="30" aria-label="A. blanci en pixel art qui saute le long du spectrogramme"></canvas><img src="../spectrogramme.jpg" alt=""><span class="bande-f"></span><span class="tete-lecture"></span></div>
+    </div>
+    <ul class="notes">
+      <li><b>L'idée</b> : la même grenouille pixelisée, en petit, qui saute le long du bord du spectrogramme en suivant la tête de lecture, comme le dinosaure qui court quand on n'a pas internet.</li>
+      <li><b>Pour</b> : ludique et discret ; elle ne prend pas la place du titre et rythme les 10 s du chant.</li>
+      <li><b>Contre</b> : la place libre à droite du titre reste vide. On peut combiner avec A.</li>
+    </ul>
+  </section>
+
+  <section class="option">
+    <div class="option-tete"><h2><span>C</span>Le dessin</h2></div>
+    <div class="bande">
+      <div class="halo"></div>
+      <canvas class="grenouille" id="c-dessin" width="720" height="460" aria-label="Dessin d'A. blanci qui chante"></canvas>
+      <div class="surtitre">Tableau de bord du stage</div>
+      <h3>Outil de détection automatique d'<i>Anomaloglossus blanci</i></h3>
+      <p>Développement d'un détecteur acoustique d'A. blanci en apprentissage continu capable de généraliser à de nouveaux points d'écoute jamais vus.</p>
+      <div class="spectro"><img src="../spectrogramme.jpg" alt=""><span class="bande-f"></span><span class="tete-lecture"></span></div>
+    </div>
+    <ul class="notes">
+      <li><b>L'idée</b> : la même grenouille en dessin lisse, éclairée par la lueur ambrée du bandeau. Le sac vocal se gonfle, et des ondes sonores en sortent au lieu de notes.</li>
+      <li><b>Pour</b> : dans le ton du reste de la page ; plus « illustration scientifique » que mascotte.</li>
+      <li><b>Contre</b> : moins de caractère que le pixel art.</li>
+    </ul>
+  </section>
+
+  <section class="option">
+    <div class="option-tete"><h2><span>D</span>La photo détourée</h2></div>
+    <div class="photo">
+      <div class="vide">ici, une vraie photo<br>d'A. blanci sans son fond</div>
+      <div>
+        <p>La plus fidèle : une photo d'A. blanci, détourée, posée à droite du titre avec la même lueur ambrée et un léger halo.</p>
+        <p style="color:var(--muted)">Il me faut la photo : une des tiennes, une de l'ONF, ou une photo publiée sous licence libre (avec son crédit sous le bandeau). Je ne peux pas en inventer une. Pas d'animation possible, sinon une respiration discrète.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* Une seule grenouille, dessinée en formes simples (vue de profil, tournée vers le titre à gauche),
+   puis rendue de deux façons : en basse résolution avec palette réduite et contour (pixel art),
+   ou en haute résolution lisse (dessin). */
+const PAL = {
+  contour: "#1B0F07", brunFonce: "#5A3519", brun: "#7E4B24", brunClair: "#A9703A",
+  bande: "#2E1A0C", ligne: "#E9D7A6", ventre: "#F1E6C6", oeil: "#0B0604", reflet: "#FFFFFF",
+  sac: "#F4EBD3", sacOmbre: "#D2C29A", ambre: "#F5A53A", or: "#FFE08A", braise: "#E4573F",
+};
+const PAL_RGB = Object.entries(PAL).filter(([k]) => !["ambre", "or", "braise", "contour"].includes(k)).map(([, h]) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+
+function ellipse(ctx, x, y, rx, ry, rot, coul) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot || 0, 0, Math.PI * 2); ctx.fillStyle = coul; ctx.fill(); }
+function trait(ctx, pts, l, coul) { ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); ctx.quadraticCurveTo(pts[2], pts[3], pts[4], pts[5]); ctx.lineWidth = l; ctx.strokeStyle = coul; ctx.lineCap = "round"; ctx.stroke(); }
+
+/* Grenouille assise, museau à gauche, sol à y = 38 dans un repère de 56 × 40.
+   p.sac : gonflement du sac vocal (0 à 1) ; p.souffle : flancs ; p.saut : pattes tendues. */
+function grenouille(ctx, p) {
+  const s = p.souffle || 0, saut = p.saut || 0;
+  // corps élancé, posture redressée
+  ellipse(ctx, 29, 25.5, 14, 7.6 + s * 0.6, -0.34, PAL.brun);
+  ellipse(ctx, 27.5, 20.5 - s * 0.3, 11, 2.6, -0.34, PAL.brunClair);
+  // tête et museau pointu
+  ellipse(ctx, 16, 19.5, 8, 5.6, -0.12, PAL.brun);
+  ellipse(ctx, 9.5, 21, 4.2, 2.8, 0.1, PAL.brun);
+  // ventre
+  ellipse(ctx, 27, 29.5 + s * 0.4, 10, 3.6, -0.3, PAL.ventre);
+  // ligne claire puis bande sombre, du museau à l'aine
+  trait(ctx, [8, 18.6, 24, 13.5, 41, 19.5], 1.3, PAL.ligne);
+  trait(ctx, [6.5, 21.2, 24, 17.6, 40, 25], 3, PAL.bande);
+  // patte arrière : cuisse, jambe, pied ; tendue pendant le saut
+  if (saut > 0.3) {
+    trait(ctx, [40, 26, 45, 29, 49, 31], 5, PAL.brunFonce);
+    trait(ctx, [49, 31, 52, 33, 55, 35], 3.2, PAL.brun);
+    trait(ctx, [55, 35, 57, 36, 60, 36.5], 2, PAL.brun);
+  } else {
+    trait(ctx, [41, 25.5, 38, 30.5, 32, 32.5], 5.6, PAL.brunFonce);
+    trait(ctx, [32, 32.5, 38, 35.5, 44, 35.4], 3.4, PAL.brun);
+    trait(ctx, [44, 36.6, 37, 37.6, 29, 37.6], 2, PAL.brun);
+  }
+  // patte avant
+  trait(ctx, [20, 25, 19.5, 28.5, 18, 31], 2.2, PAL.brun);
+  trait(ctx, [18, 31, 16.8, 34, 15.5, 37], 1.8, PAL.brun);
+  ellipse(ctx, 14, 37.4, 2.4, 0.9, 0, PAL.brun);
+  // œil saillant
+  ellipse(ctx, 15, 16.5, 3, 3, 0, PAL.oeil);
+  ellipse(ctx, 14, 15.6, 1, 1, 0, PAL.reflet);
+  // sac vocal sous la gorge
+  if (p.sac > 0.05) {
+    const r = 1.4 + p.sac * 4.8;
+    ellipse(ctx, 11.5, 25 + r * 0.3, r, r * 0.86, 0, PAL.sacOmbre);
+    ellipse(ctx, 11.1, 24.6 + r * 0.3, r * 0.86, r * 0.72, 0, PAL.sac);
+  }
+}
+
+/* Rendu pixel : dessin sur une petite toile, puis seuil d'opacité, couleur ramenée à la palette
+   la plus proche, et contour d'un pixel autour de la silhouette. */
+const tampon = document.createElement("canvas");
+function pixeliser(ctx, W, H, dessiner) {
+  tampon.width = W; tampon.height = H;
+  const t = tampon.getContext("2d");
+  t.clearRect(0, 0, W, H); dessiner(t);
+  const img = t.getImageData(0, 0, W, H), d = img.data, plein = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    if (d[i * 4 + 3] < 110) { d[i * 4 + 3] = 0; continue; }
+    plein[i] = 1;
+    let best = 0, bd = Infinity;
+    PAL_RGB.forEach((c, k) => { const dd = (c[0] - d[i * 4]) ** 2 + (c[1] - d[i * 4 + 1]) ** 2 + (c[2] - d[i * 4 + 2]) ** 2; if (dd < bd) { bd = dd; best = k; } });
+    [d[i * 4], d[i * 4 + 1], d[i * 4 + 2], d[i * 4 + 3]] = [...PAL_RGB[best], 255];
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x; if (plein[i]) continue;
+    if ((x > 0 && plein[i - 1]) || (x < W - 1 && plein[i + 1]) || (y > 0 && plein[i - W]) || (y < H - 1 && plein[i + W])) {
+      d[i * 4] = 0x1B; d[i * 4 + 1] = 0x0F; d[i * 4 + 2] = 0x07; d[i * 4 + 3] = 255;
+    }
+  }
+  ctx.clearRect(0, 0, W, H); ctx.putImageData(img, 0, 0);
+}
+
+/* Rythme du chant : une note toutes les 1,2 à 1,9 s ; le sac gonfle en 0,15 s, dégonfle en 0,35 s. */
+const reduit = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const notes = [];
+let prochaine = 0;
+function sacA(t) {
+  if (t > prochaine) { notes.push({ t0: t }); prochaine = t + 1.2 + Math.random() * 0.7; }
+  const der = notes.length ? t - notes[notes.length - 1].t0 : 9;
+  return der < 0.15 ? der / 0.15 : der < 0.5 ? 1 - (der - 0.15) / 0.35 : 0;
+}
+
+/* A : sprite qui chante ; notes de musique pixelisées qui montent vers la gauche. */
+const NOTE = ["..##", "..#.", "..#.", "###.", "##.."];
+const cPix = document.getElementById("c-pixel"), xPix = cPix.getContext("2d");
+function rendreA(t, sac) {
+  pixeliser(xPix, 72, 46, (c) => { c.save(); c.translate(14, 6); grenouille(c, { sac, souffle: Math.sin(t * 2) * 0.4 }); c.restore(); });
+  for (const n of notes) {
+    const a = t - n.t0; if (a > 2.2) continue;
+    const x = Math.round(20 - a * 7), y = Math.round(28 - a * 12);
+    xPix.fillStyle = a < 1.4 ? PAL.or : PAL.ambre;
+    NOTE.forEach((l, j) => [...l].forEach((ch, i) => { if (ch === "#") xPix.fillRect(x + i, y + j, 1, 1); }));
+  }
+  while (notes.length && t - notes[0].t0 > 2.5) notes.shift();
+}
+
+/* B : petit coureur qui saute le long du spectrogramme, calé sur les 10 s de la tête de lecture. */
+const cRun = document.getElementById("c-coureur"), xRun = cRun.getContext("2d");
+function rendreB(t) {
+  const boite = cRun.parentElement.getBoundingClientRect();
+  const cycle = (t % 10) / 10;
+  const larg = cRun.getBoundingClientRect().width;
+  cRun.style.left = (cycle * Math.max(0, boite.width - larg)) + "px";
+  const phase = (t * 1.6) % 1, haut = Math.sin(phase * Math.PI);
+  pixeliser(xRun, 40, 30, (c) => { c.save(); c.translate(42, 1 + (1 - haut) * 11); c.scale(-0.62, 0.62); grenouille(c, { sac: 0, saut: haut }); c.restore(); });
+}
+
+/* C : même grenouille en dessin lisse, avec ondes sonores ambrées. */
+const cDes = document.getElementById("c-dessin"), xDes = cDes.getContext("2d");
+function rendreC(t, sac) {
+  xDes.clearRect(0, 0, 720, 460);
+  xDes.save(); xDes.scale(10, 10); xDes.translate(14, 6);
+  xDes.shadowColor = "rgba(245,165,58,.35)"; xDes.shadowBlur = 30;
+  grenouille(xDes, { sac, souffle: Math.sin(t * 2) * 0.4 });
+  xDes.restore();
+  for (const n of notes) {
+    const a = t - n.t0; if (a > 1.6) continue;
+    for (let k = 0; k < 3; k++) {
+      const r = 40 + a * 160 + k * 26;
+      xDes.beginPath(); xDes.arc(255, 320, r, Math.PI * 0.82, Math.PI * 1.18);
+      xDes.strokeStyle = `rgba(255,${190 + k * 20},${90 + k * 30},${Math.max(0, 0.75 - a * 0.5 - k * 0.18)})`;
+      xDes.lineWidth = 6; xDes.lineCap = "round"; xDes.stroke();
+    }
+  }
+}
+
+function boucle(ms) {
+  const t = ms / 1000;
+  const sac = reduit ? 0.7 : sacA(t);
+  rendreA(t, sac); rendreB(t); rendreC(t, sac);
+  if (!reduit) requestAnimationFrame(boucle);
+}
+requestAnimationFrame(boucle);
+</script>

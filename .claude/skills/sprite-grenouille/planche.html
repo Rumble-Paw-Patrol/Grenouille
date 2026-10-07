@@ -1,0 +1,156 @@
+<title>Sprite /*NOM*/</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Planche de relecture du sprite : la grenouille seule, en grand et animée, à sa taille réelle
+   sur le tableau de bord, et ses huit images fixes. Fond de nuit du bandeau. */
+:root {
+  --bg: #050B0A; --nuit: #070C0B; --surface: rgba(16, 29, 25, .72); --ink: #E9F2EC; --muted: #93A89D;
+  --line: rgba(160, 210, 185, .16); --accent: #F5A53A; --gold: #FFE08A;
+  --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.6; }
+.page { max-width: 1100px; margin: 0 auto; padding-inline: 16px; padding-block: 36px 72px; display: grid; gap: 32px; }
+h1, h2 { font-family: var(--f-display); font-weight: 500; letter-spacing: -.02em; margin: 0; }
+h1 { font-size: clamp(22px, 3vw, 32px); }
+h2 { font-size: 17px; }
+.sous { color: var(--muted); margin: 0; max-width: 70ch; }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.scene { position: relative; overflow: hidden; border-radius: 18px; border: 1px solid var(--line); background: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%); display: grid; place-items: center; padding: 28px 16px 0; }
+.scene canvas { display: block; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; max-width: 100%; }
+.tailles figure:first-child { grid-column: 1 / -1; }
+.sol { width: 100%; height: 14px; background: #000004; border-top: 1px solid rgba(255, 210, 120, .3); }
+.controles { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; font-size: 13px; font-weight: 500; color: var(--ink); background: rgba(255, 255, 255, .06); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; cursor: pointer; }
+button[aria-pressed="true"] { background: linear-gradient(135deg, #F5A53A, #E4573F); color: #1A0B03; border-color: transparent; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.tailles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; align-items: end; }
+.tailles figure, .images figure { margin: 0; display: grid; gap: 8px; }
+.tailles .scene { padding-top: 18px; }
+figcaption { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.images { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 14px; }
+.images .scene { padding: 12px 8px 0; }
+</style>
+
+<div class="page">
+  <header style="display:grid;gap:8px">
+    <div class="eyebrow">Relecture · rien n'est encore sur le tableau de bord</div>
+    <h1>/*NOM*/ en 8-bit</h1>
+    <p class="sous">/*TEXTE*/</p>
+  </header>
+
+  <section style="display:grid;gap:12px">
+    <h2>En grand, animée</h2>
+    <div class="scene"><canvas id="grand" data-px="6"></canvas><div class="sol"></div></div>
+    <div class="controles">
+      <button type="button" id="b-anim" aria-pressed="true">Animation</button>
+      <button type="button" id="b-mosaique" aria-pressed="true">Mosaïque de pixels</button>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:12px">
+    <h2>À la taille du tableau de bord</h2>
+    <div class="tailles">
+      <figure><div class="scene"><canvas data-px="3.5"></canvas><div class="sol"></div></div><figcaption>ordinateur · 3,5 px par pixel du sprite</figcaption></figure>
+      <figure><div class="scene"><canvas data-px="2.5"></canvas><div class="sol"></div></div><figcaption>portable · 2,5 px</figcaption></figure>
+      <figure><div class="scene"><canvas data-px="1.5"></canvas><div class="sol"></div></div><figcaption>téléphone · 1,5 px</figcaption></figure>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:12px">
+    <h2>Les positions</h2>
+    <p class="sous">L'animation combine gorge, flanc, paupière et tête : 24 images en tout. Voici chaque mouvement seul, à partir de la position de repos.</p>
+    <div class="images" id="images"></div>
+  </section>
+</div>
+
+<script>
+const G = /*SPRITE*/null;
+// images codées par plages : « O12 » = douze pixels de la couleur O
+const IMG = Object.fromEntries(Object.entries(G.images).map(([k, rangs]) =>
+  [k, rangs.map((r) => [...r.matchAll(/(\D)(\d+)/g)].map((m) => [m[1], +m[2]]))]));
+const COL = 128, LIG = 88, DX = 24, DY = 8, TUILE = 2; // en pixels du sprite ; la mosaïque est en tuiles de 2
+const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reglages = { anim: !calme, mosaique: true };
+
+function scene(toile, fixe) {
+  const pxCss = +toile.dataset.px, ctx = toile.getContext("2d");
+  const NC = COL / TUILE, NL = LIG / TUILE;
+  const phases = Array.from({ length: NC * NL }, () => [Math.random() * 6.28, 0.6 + Math.random() * 1.6]);
+  let p = 1, cligne = -9, prochainCligne = 1.5 + Math.random() * 2, tete = 1, prochaineTete = 3 + Math.random() * 3;
+  function dimension() {
+    const dpr = devicePixelRatio || 1;
+    p = Math.max(1, Math.round(pxCss * dpr));
+    toile.width = COL * p; toile.height = LIG * p;
+    toile.style.width = (COL * p / dpr) + "px";
+  }
+  function dessiner(t) {
+    ctx.clearRect(0, 0, toile.width, toile.height);
+    if (reglages.mosaique) {
+      const q = p * TUILE, jeu = Math.max(1, Math.round(q / 7));
+      for (let y = 0; y < NL; y++) for (let x = 0; x < NC; x++) {
+        const d = Math.hypot((x - 38) / 30, (y - 24) / 21);
+        if (d >= 1) continue;
+        const [ph, v] = phases[y * NC + x];
+        const a = (1 - d) * (1 - d) * (reglages.anim ? 0.1 + 0.1 * Math.sin(t * v + ph) : 0.16);
+        if (a < 0.015) continue;
+        ctx.fillStyle = `rgba(245, 165, 58, ${a.toFixed(3)})`;
+        ctx.fillRect(x * q + jeu, y * q + jeu, q - jeu, q - jeu);
+      }
+    }
+    let cle = fixe;
+    if (!cle) {
+      const a = reglages.anim;
+      const souffle = a && t % 3.2 < 1.3 ? 1 : 0;
+      const gorge = a && t % 7 < 2.4 && t % 0.6 < 0.3 ? 1 : 0;
+      if (a && t > prochainCligne) { cligne = t; prochainCligne = t + 3 + Math.random() * 4.5 + (Math.random() < 0.25 ? -2.8 : 0); }
+      const yeux = a && t - cligne < 0.13 ? 1 : 0;
+      // tête : la plupart du temps droite, parfois un peu baissée ou relevée, quelques secondes
+      if (a && t > prochaineTete) { const r = Math.random(); tete = tete !== 1 ? 1 : r < 0.5 ? 0 : 2; prochaineTete = t + (tete === 1 ? 4 + Math.random() * 5 : 1.6 + Math.random() * 2.4); }
+      cle = `${gorge}${souffle}${yeux}${a ? tete : 1}`;
+    }
+    const img = IMG[cle];
+    for (let y = 0; y < img.length; y++) {
+      let x = 0;
+      for (const [c, n] of img[y]) {
+        if (c !== ".") { ctx.fillStyle = G.palette[c]; ctx.fillRect((x + DX) * p, (y + DY) * p, n * p, p); }
+        x += n;
+      }
+    }
+  }
+  dimension();
+  addEventListener("resize", dimension);
+  return dessiner;
+}
+
+const scenes = [...document.querySelectorAll("canvas[data-px]")].map((c) => scene(c));
+const grille = document.getElementById("images");
+const POSES = [["0001", "repos"], ["1001", "gorge gonflée"], ["0101", "flanc gonflé"], ["0011", "œil fermé"], ["0000", "tête baissée"], ["0002", "tête relevée"]];
+for (const [cle, nom] of POSES) {
+  const c = document.createElement("canvas"); c.dataset.px = "2";
+  const f = document.createElement("figure"), s = document.createElement("div"), cap = document.createElement("figcaption");
+  s.className = "scene"; s.append(c);
+  cap.textContent = nom;
+  f.append(s, cap); grille.append(f);
+  scenes.push(scene(c, cle));
+}
+function bascule(id, cle) {
+  const b = document.getElementById(id);
+  b.setAttribute("aria-pressed", String(reglages[cle]));
+  b.addEventListener("click", () => { reglages[cle] = !reglages[cle]; b.setAttribute("aria-pressed", String(reglages[cle])); });
+}
+bascule("b-anim", "anim"); bascule("b-mosaique", "mosaique");
+let dernier = -1;
+function boucle(ms) {
+  const t = ms / 1000;
+  if (t - dernier >= 1 / 12) { dernier = t; scenes.forEach((d) => d(t)); }
+  requestAnimationFrame(boucle);
+}
+scenes.forEach((d) => d(0));
+requestAnimationFrame(boucle);
+</script>
