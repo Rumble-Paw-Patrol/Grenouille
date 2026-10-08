@@ -6,9 +6,9 @@ fois, l'animation continue d'un clic à l'autre (rien n'est renvoyé à chaque r
 Il est posé sur la page sans cadre : son fond (dégradé de nuit, lueurs, filet du bas) et ses
 marges sont ceux du conteneur, dans la feuille de style du poste (`style.py`) ; la page du
 composant reste transparente.
-L'image et la grenouille sont celles du tableau de bord (`documentation/tableau-de-bord/`,
-produites par `spectrogramme.py` et `grenouille.py`), recopiées à côté de la page quand elles
-changent ; sans elles, le bandeau garde son titre.
+L'image, le son et la grenouille sont ceux du tableau de bord (`documentation/tableau-de-bord/`,
+produits par `spectrogramme.py` et `grenouille.py`), recopiés à côté de la page quand ils
+changent ; sans eux, le bandeau garde son titre (sans `chant.mp3`, pas de bouton d'écoute).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from blanci.core.config import PROJECT_ROOT
 
 BANDEAU_DIR = Path(tempfile.gettempdir()) / "blanci_bandeau"
 SOURCES = PROJECT_ROOT / "documentation" / "tableau-de-bord"
-FILES = ("spectrogramme.jpg", "grenouille.json")
+FILES = ("spectrogramme.jpg", "chant.mp3", "grenouille.json")
 
 INDEX = r"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
@@ -39,7 +39,12 @@ INDEX = r"""<!doctype html>
   /* Ni fond ni bord : ils sont au conteneur, sur la page. */
   .bande { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 12px;
            padding: clamp(8px, 1.4vw, 16px) 0 22px; }
-  h1, p { position: relative; z-index: 2; margin: 0; }
+  h1, p { margin: 0; }
+  /* Titre et sous-titre, devant la grenouille, assez hauts pour qu'elle tienne dans le cadre
+     au-dessus du spectrogramme (--grenouille-h : hauteur de sa toile, posée par son script ;
+     34 px : les rangs vides du haut de la toile, l'écart avant le perchoir, la marge du haut). */
+  .texte { position: relative; z-index: 2; display: grid; gap: 12px; align-content: start;
+           min-height: calc(var(--grenouille-h, 34px) - 34px); }
   h1 { font-family: "Unbounded", "Segoe UI", system-ui, sans-serif; font-weight: 700;
        font-size: clamp(24px, 3.6vw, 44px); line-height: 1.08; letter-spacing: -.025em;
        max-width: 19ch; text-wrap: balance;
@@ -50,7 +55,31 @@ INDEX = r"""<!doctype html>
          font-size: 1.12em; letter-spacing: 0; padding-right: .08em;
          background: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A);
          -webkit-background-clip: text; background-clip: text; color: transparent; }
-  p { color: var(--muted); max-width: min(62ch, calc(100% - 240px)); }  /* pas sous la grenouille */
+  /* Sous-titre et bouton d'écoute côte à côte, à gauche de la grenouille (--perchoir : la
+     place qu'elle prend au bord droit, posée par son script) ; le bouton passe sous le
+     sous-titre quand la place manque. */
+  .accroche { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
+              max-width: calc(100% - var(--perchoir, 0px) - 16px); }
+  p { color: var(--muted); max-width: 62ch; flex: 1 1 300px; }
+  .ecouter { flex: none; display: inline-flex; align-items: center; gap: 12px; height: 50px;
+    padding: 0 22px 0 5px; border: 0; border-radius: 999px; cursor: pointer;
+    font: 600 15px/1 "Hanken Grotesk", "Segoe UI", system-ui, sans-serif; letter-spacing: .01em;
+    color: #1A0B03; background: linear-gradient(100deg, #FFE08A 0%, #F5A53A 48%, #E4573F 100%);
+    box-shadow: 0 0 0 1px rgba(255, 224, 138, .4) inset, 0 12px 34px -12px rgba(228, 87, 63, .8),
+                0 0 40px -14px rgba(245, 165, 58, .6);
+    transition: transform .15s, filter .2s; }
+  .ecouter:hover { transform: translateY(-1px); filter: brightness(1.07) saturate(1.05); }
+  .ecouter:active { transform: none; filter: brightness(.96); }
+  .ecouter:focus-visible { outline: 2px solid #FFE08A; outline-offset: 3px; }
+  .ecouter .disque { width: 40px; height: 40px; border-radius: 50%; display: grid;
+    place-items: center; background: #120A06; color: #FFE08A;
+    box-shadow: 0 0 0 1px rgba(255, 224, 138, .25); }
+  .ecouter .lire { width: 15px; height: 15px; margin-left: 2px; fill: currentColor; }
+  .ecouter .egaliseur { display: none; align-items: flex-end; gap: 3px; height: 15px; }
+  .ecouter .egaliseur i { width: 3px; height: 100%; border-radius: 2px; background: currentColor;
+                          transform-origin: bottom; }
+  .ecouter[aria-pressed="true"] .lire { display: none; }
+  .ecouter[aria-pressed="true"] .egaliseur { display: flex; }
   /* A. blanci perchée sur le spectrogramme, sous le titre qui la chevauche, calée au bord
      droit du cadre (sur le tableau de bord, son tibia mord sur la marge de la page, que le
      cadre du composant ne couvre pas). */
@@ -59,7 +88,8 @@ INDEX = r"""<!doctype html>
   #grenouille { position: absolute; right: 0; bottom: 0; max-width: none;
                 image-rendering: pixelated; image-rendering: crisp-edges; }
   @media (max-width: 480px) {
-    p { max-width: none; }
+    .texte { min-height: 0; }
+    .accroche { max-width: none; }
     .perchoir { height: auto; display: flex; justify-content: flex-end; }
     #grenouille { position: static; }
   }
@@ -78,6 +108,7 @@ INDEX = r"""<!doctype html>
     background: linear-gradient(180deg, transparent, #FFF6DC 20%, #FFF6DC 80%, transparent);
     box-shadow: 0 0 12px 2px rgba(255, 224, 138, .8), 0 0 40px 8px rgba(245, 165, 58, .35);
     pointer-events: none; opacity: 0; }
+  .joue .tete-lecture { opacity: 1; }
   .tete-lecture::before { content: ""; position: absolute; top: 0; bottom: 0; right: 2px;
     width: 90px; background: linear-gradient(90deg, transparent, rgba(255, 224, 138, .12)); }
   .bande-f { position: absolute; left: 0; right: 0; top: 16.7%; height: 36.7%; z-index: 1;
@@ -89,19 +120,32 @@ INDEX = r"""<!doctype html>
   .legende { font: 11px/1.4 var(--mono); color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) {
     .tete-lecture { opacity: 1; animation: balayage 18s linear infinite; }
+    .ecouter .egaliseur i { animation: egaliseur .9s ease-in-out infinite alternate; }
+    .ecouter .egaliseur i:nth-child(2) { animation-delay: -.3s; }
+    .ecouter .egaliseur i:nth-child(3) { animation-delay: -.6s; }
+    @keyframes egaliseur { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
     @keyframes balayage { from { left: 0; } to { left: 100%; } }
     .bande > * { animation: leve .9s cubic-bezier(.2, .7, .2, 1) both; }
     .bande > :nth-child(2) { animation-delay: .08s; }
     .bande > :nth-child(3) { animation-delay: .16s; }
     .bande > :nth-child(4) { animation-delay: .24s; }
-    .bande > :nth-child(5) { animation-delay: .32s; }
     @keyframes leve { from { transform: translateY(14px); opacity: 0; } to { transform: none; } }
   }
 </style></head><body>
 <header class="bande">
-  <h1>Poste d'annotation d'<i>Anomaloglossus blanci</i></h1>
-  <p>Écouter chaque extrait, tracer les chants sur le spectrogramme, nommer les faux amis :
-    chaque réponse s'ajoute aux labels, aucune n'en efface.</p>
+  <div class="texte">
+    <h1>Poste d'annotation d'<i>Anomaloglossus blanci</i></h1>
+    <div class="accroche">
+      <p>Écouter chaque extrait, tracer les chants sur le spectrogramme, nommer les faux amis :
+        chaque réponse s'ajoute aux labels, aucune n'en efface.</p>
+      <button type="button" class="ecouter" id="ecouter" aria-pressed="false" hidden>
+        <span class="disque" aria-hidden="true"><svg class="lire" viewBox="0 0 16 16">
+          <path d="M4.5 2.6v10.8L13.4 8z"/></svg><span class="egaliseur"><i></i><i></i><i></i>
+        </span></span>
+        <span class="libelle">Écouter le chant</span>
+      </button>
+    </div>
+  </div>
   <div class="perchoir" aria-hidden="true"><canvas id="grenouille"></canvas></div>
   <div class="spectro">
     <img src="spectrogramme.jpg" alt="Spectrogramme de 18 s d'un chant d'A. blanci enregistré
@@ -129,12 +173,76 @@ function setHeight(force) {
 }
 new ResizeObserver(() => setHeight()).observe(bande);
 $(".spectro img").addEventListener("error", () => {
-  $(".spectro").hidden = true; $(".legende").hidden = true;
+  $(".spectro").hidden = true; $(".legende").hidden = true; $("#ecouter").hidden = true;
 });
 window.addEventListener("message", e => {
   if (e.data && e.data.type === "streamlit:render") setHeight(true);
 });
 send("streamlit:componentReady", {apiVersion: 1});
+
+// --- Le chant à l'écoute -------------------------------------------------------------------
+// Le code du tableau de bord : chant.mp3 (spectrogramme.py), les 18 s du spectrogramme ; le
+// bouton n'apparaît que si le fichier est là. Le son part de l'endroit où passe la tête de
+// lecture et tourne en boucle avec elle ; pendant l'écoute, c'est l'horloge du son qui la place
+// (Web Audio : boucle sans blanc, position exacte, même sans requêtes partielles du serveur de
+// Streamlit). « Couper le son » rend la main au balayage, là où il en est.
+function ecoute(bouton, spectro) {
+  const tete = spectro.querySelector(".tete-lecture"), CYCLE = 18000;  // ms, durée du balayage
+  let octets = null, ctx = null, tampon = null, source = null, gain = null, t0 = 0, depart = 0;
+  let occupe = false;
+  fetch("chant.mp3").then(r => (r.ok ? r.arrayBuffer() : null)).then(b => {
+    if (b && window.AudioContext && !spectro.hidden) { octets = b; bouton.hidden = false; }
+  }).catch(() => {});
+  // le balayage de la feuille de style (absent si l'on a demandé moins d'animations)
+  const balayage = () => tete.getAnimations().find(a => a.animationName === "balayage");
+  const placer = f => {  // f : fraction de l'extrait
+    const a = balayage();
+    if (a) a.currentTime = f * CYCLE; else tete.style.left = `${f * 100}%`;
+  };
+  const etat = joue => {
+    bouton.setAttribute("aria-pressed", String(joue));
+    bouton.querySelector(".libelle").textContent = joue ? "Couper le son" : "Écouter le chant";
+    spectro.classList.toggle("joue", joue);
+  };
+  function suivre() {
+    if (!source) return;
+    const d = tampon.duration;
+    const s = depart + Math.max(0, ctx.currentTime - t0 - (ctx.outputLatency || 0));
+    placer((s % d) / d);
+    requestAnimationFrame(suivre);
+  }
+  async function lancer() {
+    if (!ctx) { ctx = new AudioContext(); tampon = await ctx.decodeAudioData(octets); }
+    await ctx.resume();
+    const a = balayage();
+    depart = a ? (((a.currentTime || 0) % CYCLE) / CYCLE) * tampon.duration : 0;
+    if (a) a.pause();
+    gain = ctx.createGain(); gain.connect(ctx.destination);
+    source = ctx.createBufferSource();
+    source.buffer = tampon; source.loop = true; source.connect(gain);
+    t0 = ctx.currentTime;
+    // fondu de 40 ms à l'entrée, et à la sortie dans couper() : sans claquement
+    gain.gain.setValueAtTime(0, t0); gain.gain.linearRampToValueAtTime(1, t0 + 0.04);
+    source.start(t0, depart);
+    etat(true); requestAnimationFrame(suivre);
+  }
+  function couper() {
+    const s = source, g = gain, t = ctx.currentTime;
+    source = null;
+    g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.04);
+    s.stop(t + 0.05);
+    const a = balayage();
+    if (a) a.play();
+    etat(false);
+  }
+  bouton.addEventListener("click", async () => {
+    if (occupe) return;
+    if (source) { couper(); return; }
+    occupe = true;
+    try { await lancer(); } catch { bouton.hidden = true; } finally { occupe = false; }
+  });
+}
+ecoute($("#ecouter"), $(".spectro"));
 
 // --- A. blanci en 8-bit -------------------------------------------------------------------
 // Le code du tableau de bord : sprite de grenouille.py (images codées par plages : « O12 » =
@@ -164,6 +272,10 @@ function grenouille(G) {
     p = Math.max(1, Math.floor(2 * dpr));
     toile.width = COL * p; toile.height = LIG * p;
     toile.style.width = (COL * p / dpr) + "px"; toile.style.height = (LIG * p / dpr) + "px";
+    // place qu'elle prend au bord droit, jusqu'au bord gauche du sprite : le sous-titre et le
+    // bouton d'écoute restent à sa gauche
+    bande.style.setProperty("--perchoir", ((COL - DX) * p / dpr) + "px");
+    bande.style.setProperty("--grenouille-h", (LIG * p / dpr) + "px");
   };
   let cligne = -9, prochainCligne = 2.5, tete = 1, prochaineTete = 4 + Math.random() * 3;
   function dessiner(t) {

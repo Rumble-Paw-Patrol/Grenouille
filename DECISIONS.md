@@ -3427,3 +3427,16 @@ de Léonard, 01/10/2026.
        bord.
      Vérifié dans Chromium sur une maquette de la page de Streamlit 1.59 (structure et styles
      relevés dans son code), pas dans Streamlit lui-même.
+
+200. **Le chant du bandeau s'écoute** (Léonard, 08/10), sur le tableau de bord comme sur le
+     poste. Un gros bouton « Écouter le chant » sous le titre, à droite du sous-titre et à
+     gauche de la grenouille (il passe sous le sous-titre quand la place manque). Le son part
+     de l'endroit où passe la tête de lecture et tourne en boucle avec elle, à la même vitesse
+     (18 s pour 18 s) ; pendant l'écoute, c'est l'horloge du son qui place la tête (Web Audio :
+     boucle sans blanc, et le serveur de Streamlit n'a pas besoin des requêtes partielles qu'un
+     simple lecteur audio demanderait pour partir du milieu). « Couper le son » rend la main au
+     balayage, là où il en est. Le son, `chant.mp3`, est écrit par `spectrogramme.py` avec
+     l'image (mêmes 18 s de Molokoi, passe-haut à 2 kHz sous tout ce que montre l'image, crête
+     à -1 dBFS, fondus de 20 ms) ; il faut le disque des enregistrements pour le produire, et
+     sans lui la page n'affiche pas de bouton. Vérifié dans Chromium avec un faux son (bips à
+     5 kHz) : le bouton paraît et se place, la tête suit le son puis reprend son balayage.

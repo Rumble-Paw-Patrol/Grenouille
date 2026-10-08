@@ -10,8 +10,9 @@ et, si la base locale existe, l'avancement des annotations. Écrit :
 
 - index.html : modele.html avec toutes les données intégrées ;
 - fichiers.json : les images à publier à côté de la page (chemin publié → chemin du dépôt),
-  dont le spectrogramme du bandeau (spectrogramme.jpg, fait par spectrogramme.py) et, s'il
-  existe, la capture du poste d'annotation (poste-annotation.png) ;
+  dont le spectrogramme du bandeau et son chant à écouter (spectrogramme.jpg et chant.mp3,
+  faits par spectrogramme.py) et, s'il existe, la capture du poste d'annotation
+  (poste-annotation.png) ;
 - annotations.json : l'avancement des annotations, relu tel quel quand la base est absente
   (session sans les données) ; versionné.
 
@@ -677,7 +678,7 @@ def main() -> None:
     contenu = charger_contenu()
     fichiers: dict[str, str] = {
         nom: str((ICI / nom).relative_to(RACINE))
-        for nom in ("spectrogramme.jpg", "poste-annotation.png")
+        for nom in ("spectrogramme.jpg", "chant.mp3", "poste-annotation.png")
         if (ICI / nom).exists()
     }
     tests = compter_tests()

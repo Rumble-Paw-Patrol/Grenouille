@@ -101,8 +101,7 @@ _GRAIN = (
     "filter='url(%23n)'/></svg>\")"
 )
 
-CSS = (
-    """<style>
+CSS = """<style>
 @import url("__FONTS__");
 :root {
   --bg: #050B0A; --bg-2: #08120F; --surface: rgba(16, 29, 25, .72); --surface-solid: #0F1C18;
@@ -450,10 +449,7 @@ CSS = (
     0 0 60px -24px rgba(245, 165, 58, .3);
 }
 
-</style>"""
-    .replace("__FONTS__", FONTS)
-    .replace("__GRAIN__", _GRAIN)
-)
+</style>""".replace("__FONTS__", FONTS).replace("__GRAIN__", _GRAIN)
 
 
 BRAND = '<div class="gr-brand"><b>Grenouille</b></div>'
