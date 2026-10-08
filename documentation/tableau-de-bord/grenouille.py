@@ -2,22 +2,27 @@
 
     uv run python documentation/tableau-de-bord/grenouille.py
 
-Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
-de Benoît Villette et d'Arnaud Aury pour la tête, la robe et les couleurs, et d'après des
-photos d'Anomaloglossus (dont M. Dewynter) pour la posture et les membres : museau court,
-grand œil noir cerclé de doré, bande sombre du museau au flanc, gorge claire. Assise,
-accroupie : patte arrière en Z, cuisse arrondie tournée vers nous, tibia long et bombé
-(surtout sur le dessus) qui descend légèrement du genou, levé, au talon arrondi de la
-cheville, passe sous la cuisse et dépasse derrière la croupe ; tarse qui revient du talon vers
-l'avant, au sol, trois orteils longs en éventail. Bras pliés, coude ouvert, avant-bras un peu
-renflé en son milieu, qui arrive sur le talon de la paume ; le bras droit part de la même
-épaule que le gauche, en arrière-plan, cerné là où le gauche passe devant, sa main plus haut
-et plus en arrière. Mains et pieds sont des gabarits posés au pixel près (ORTEILS,
-MAIN_PROCHE, MAIN_LOINTAINE) : paume étroite, trois doigts d'un pixel en éventail vers l'avant,
-tracés en escalier pour que chaque pixel touche le suivant par un côté, disque clair au bout.
+Grenouille de profil, tournée vers le titre (à gauche), assise, accroupie, dessinée d'après les
+photos d'A. blanci de Benoît Villette et d'Arnaud Aury pour la tête, la robe et les couleurs,
+et d'après des photos d'Anomaloglossus (dont M. Dewynter) pour la posture et les membres :
+patte arrière en Z (cuisse arrondie tournée vers nous, dont le haut cache la bande du dos ;
+tibia long et bombé qui dépasse derrière la croupe ; talon arrondi ; tarse au sol, orteils en
+éventail), bras pliés dont l'épaule s'attache en arrondi et tourne au jaune avant de se fondre
+dans le flanc, bras de l'autre côté en arrière-plan, mains et pieds en gabarits posés au pixel
+près (ORTEILS, MAIN_PROCHE, MAIN_LOINTAINE).
 
-Les formes sont décrites dans un repère de 57 × 43 unités et tracées sur une grille de
-114 × 86 pixels (deux pixels par unité), sans anticrénelage, rien contre les bords, puis
+Deux rendus sont calculés et assemblés pixel par pixel (composer) : le corps vient du rendu
+« ancien », le pied, le tibia, les bras et les mains, avec leur contour, du rendu « nouveau »
+(ombres de la peau plus rouges et lumières plus dorées, moins de grain, contour brun côté
+lumière). Le flanc juste derrière le bras garde sa teinte, assombrie et un peu grisée (ombre de
+contact) ; le ventre est semé d'un grain doux, un cran plus clair ou plus sombre que le flanc
+alentour.
+
+Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
+de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de doré, bande sombre
+du museau au flanc, gorge claire, longue patte avant aux doigts fins, cuisse repliée et
+arrière-train posé presque au sol. Les formes sont décrites dans un repère de 57 × 43 unités
+et tracées sur une grille de 114 × 86 pixels (deux pixels par unité), sans anticrénelage, puis
 cernées d'un contour, avec 22 tons de base.
 
 Une passe de nuances (nuancer) affine ensuite chaque matière (peau orangée, bande sombre,
@@ -43,6 +48,7 @@ import numpy as np
 ICI = Path(__file__).resolve().parent
 PALETTE = {
     "K": "#24120A",  # contour
+    "k": "#5A2B14",  # contour côté lumière des membres (style « nouveau »)
     "I": "#F8C68A",  # reflet vif, peau brillante
     "H": "#E89F55",  # reflet
     "O": "#D07A35",  # dos orangé
@@ -53,6 +59,9 @@ PALETTE = {
     "b": "#6E3818",  # bord de la bande
     "F": "#C2804A",  # flanc
     "f": "#D9A574",  # flanc clair
+    "J": "#F2C46A",  # haut de l'épaule, qui tourne au jaune
+    "v": "#CE9561",  # grain clair du ventre : un cran plus clair que le flanc alentour
+    "u": "#B57643",  # grain sombre du ventre : un cran plus sombre que le flanc alentour
     "T": "#F2CC98",  # lèvre
     "C": "#E8DCC4",  # gorge, ventre
     "g": "#CFC4AE",  # gorge grisée
@@ -209,7 +218,11 @@ def bruit(x, y, graine):
     return v - np.floor(v)
 
 
-def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
+def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien"):
+    """Tons de base d'une image, le masque des membres (pied, tibia, bras, mains, avec
+    leur contour) et celui de l'ombre de contact derrière le bras. Le style « nouveau »
+    sème moins de grain sur les membres et cerne leur côté lumière de brun."""
+    neuf = style == "nouveau"
     g = np.full((H, W), ".", dtype="<U1")
     # Tête baissée ou relevée : rotation de quelques degrés autour du cou, qui s'estompe
     # vers le corps et ne touche pas les pattes. On échantillonne à l'envers.
@@ -311,7 +324,7 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         (50, 27.4),
     ]
     yb = suivre(bande, x) + (n2 - 0.5) * 0.35 * (x > 15)  # bord irrégulier sur le flanc
-    e = np.where(x < 7.5, 0.6, np.where(x < 18, 1.0, 1.25)) * np.clip((48 - x) / 4, 0, 1)
+    e = np.where(x < 7.5, 0.6, np.where(x < 18, 1.0, 1.25))
     haut1, haut2 = ~dans(corps, x, y - 0.6), ~dans(corps, x, y - 1.3)
     bas1, bas2 = ~dans(corps, x, y + 0.6), ~dans(corps, x, y + 1.6)
 
@@ -345,8 +358,8 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     flanc = dessous & (x >= 16)
     g[flanc] = "F"
     g[flanc & (n1 > 0.72)] = "f"
-    g[flanc & (n2 > 0.96)] = "C"
-    g[flanc & (n2 < 0.05)] = "M"
+    g[flanc & (n2 > 0.86)] = "v"
+    g[flanc & (n2 < 0.1)] = "u"
     levre = dessous & (y <= yb + e + 0.8) & (x < 20)
     g[levre] = np.where(x[levre] < 9, "T", "C")
     g[dessous & (y > yb + e + 0.8) & (y <= yb + e + 1.5) & (x < 9)] = "f"
@@ -367,10 +380,12 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         [
             (33.4, 29.07),
             (36.0, 26.81),
-            (40.0, 25.63),
-            (44.4, 26.07),
-            (48.0, 27.87),
-            (50.0, 30.38),
+            (40.0, 25.5),
+            (44.0, 24.6),
+            (47.4, 24.1),
+            (49.8, 25.3),
+            (50.8, 28.0),
+            (50.7, 30.8),
             (50.4, 33.0),
             (48.6, 34.9),
             (44.0, 35.45),
@@ -419,7 +434,7 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[tm] = "O"
     g[tm & ~dans(tarse, X, Y - 0.6)] = "H"
     g[tm & ~dans(tarse, X, Y + 0.6)] = "S"
-    poser(g, ORTEILS)
+    orteils = poser(g, ORTEILS)
 
     # --- tibia : au premier plan, grosse masse ronde du genou (en haut, à l'avant) au talon
     # (en bas, à l'arrière, contre le sol), par-dessus la cuisse ; reflet de peau humide
@@ -449,8 +464,8 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     jm = dans(jambe, X, Y)
     sous_jambe = g != "."
     g[jm] = "O"
-    g[jm & (n3 < 0.1)] = "M"
-    g[jm & (n3 > 0.95)] = "H"
+    g[jm & (n3 < (0.06 if neuf else 0.1))] = "M"
+    g[jm & (n3 > (0.97 if neuf else 0.95))] = "H"
     g[jm & ~dans(jambe, X + 0.4, Y - 1.4)] = "H"
     g[jm & ~dans(jambe, X + 0.2, Y - 0.7) & (X < 44)] = "I"
     g[jm & ~dans(jambe, X - 0.2, Y + 1.6)] = "S"
@@ -493,22 +508,30 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         ]
     )
     pa = dans(patte, X, Y)
-    # L'épaule se fond dans le flanc : de 19,2 à 22,4 unités de haut, la part de pixels du
-    # bras croît en tramage ordonné (Bayer 4 × 4) ; au-dessus, c'est le flanc. Aucun trait
-    # dans le corps : le contour n'apparaît que là où le bras sort du corps.
+    # L'épaule s'attache en arrondi : un capuchon (demi-ellipse) coiffe le haut du bras ; sur
+    # son pourtour, la part de pixels du bras décroît en tramage ordonné (Bayer 4 × 4) et le
+    # flanc reprend. Aucun trait dans le corps : le contour n'apparaît que là où le bras sort
+    # du corps. Le haut du capuchon tourne au jaune avant de se fondre dans le flanc.
     corps_dessous = g != "."
-    t = np.clip((Y - 19.2) / 3.2, 0, 1)
+    cx_e, cy_e, rx_e, ry_e = 22.6, 22.6, 2.2, 2.8
+    rayon = np.sqrt(((X - cx_e) / rx_e) ** 2 + ((Y - cy_e) / ry_e) ** 2)
+    capuchon = (rayon <= 1) & (Y < cy_e)
     trame = (BAYER4[(np.arange(H) % 4)[:, None], (np.arange(W) % 4)[None, :]] + 0.5) / 16
-    bras = pa & ((trame < t) | ~corps_dessous)
+    fondu = capuchon & corps_dessous & (trame < np.clip((1 - rayon) / 0.45, 0, 1))
+    bras = (pa & (Y >= cy_e)) | fondu | (pa & ~corps_dessous)
     g[bras] = "O"
-    g[bras & (n3 < 0.1)] = "M"
-    g[bras & (n3 > 0.93)] = "f"
+    g[bras & (n3 < (0.06 if neuf else 0.1))] = "M"
+    g[bras & (n3 > (0.97 if neuf else 0.93))] = "f"
     # lumière d'en haut à gauche : bord avant éclairé, bord arrière dans l'ombre
     g[bras & ~dans(patte, X - 1.1, Y)] = "H"
     g[bras & ~dans(patte, X - 0.6, Y)] = "I"
     g[bras & ~dans(patte, X + 1.1, Y) & (Y > 21.0)] = "S"
     g[bras & ~dans(patte, X + 0.6, Y) & (Y > 22.0)] = "Z"
     g[ellipse(26.4, 30.6, 0.6, 0.9, X, Y, 0.4)] = "I"  # reflet au coude
+    g[bras & capuchon & (rayon > 0.55)] = "J"  # haut de l'épaule, jaune, sur son pourtour
+    g[bras & capuchon & (rayon <= 0.55) & (Y < cy_e - 0.6)] = "I"
+    # ombre de contact : le flanc juste derrière le bras, sous l'épaule (assombri plus tard)
+    contact = corps_dessous & ~bras & (Y > 21.5) & (np.roll(bras, 1, 1) | np.roll(bras, 2, 1))
     separer(g, bras, bras_loin & ~dedans)  # contour entre les deux bras
     g[miettes(bras_loin & ~dedans & ~bras & (g != "."))] = "."  # restes entre gorge et bras
     # main tournée vers l'intérieur : poignet, paume et trois doigts vers l'avant qui filent
@@ -563,7 +586,9 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
 
     # contour
     plein = g != "."
+    membres = (jm | talon | tm | orteils | bras | proche | (bras_loin & ~dedans)) & plein
     autour = np.zeros_like(plein)
+    eclaire, ombre = np.zeros_like(plein), np.zeros_like(plein)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         decale = np.roll(np.roll(plein, dy, 0), dx, 1)
         if dy == 1:
@@ -575,8 +600,18 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         if dx == -1:
             decale[:, -1] = False
         autour |= decale
+        if dy == -1 or dx == -1:
+            eclaire |= decale
+        else:
+            ombre |= decale
     g[~plein & autour] = "K"
-    return ["".join(r) for r in g]
+    if neuf:  # brun chaud côté lumière, presque noir côté ombre et entre deux formes
+        g[~plein & eclaire & ~ombre] = "k"
+    anneau = np.zeros_like(membres)
+    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        anneau |= np.roll(np.roll(membres, dy, 0), dx, 1)
+    membres |= anneau & ~plein & autour
+    return ["".join(r) for r in g], membres, contact & ~membres
 
 
 def rampe(n, h0, h1, s0, s1, l0, l1, dh=0.0):
@@ -591,18 +626,20 @@ def rampe(n, h0, h1, s0, s1, l0, l1, dh=0.0):
     return out
 
 
-# matière : (clarté de chaque ton de base, une rampe par variante de teinte, rouge → dorée)
-MATIERES = {
-    "orange": (
-        {"I": 1.0, "H": 0.78, "O": 0.55, "M": 0.34, "S": 0.32, "Z": 0.12},
-        [rampe(12, 17, 34, 0.66, 0.86, 0.22, 0.78, dh) for dh in (-4, 0, 5)],
+# matière : (clarté de chaque ton de base, une rampe par variante de teinte, rouge → dorée).
+# Deux styles : « ancien » pour le corps, « nouveau » pour les membres (pied, tibia, bras,
+# mains), dont la peau a des ombres plus rouges et des lumières plus dorées.
+_COMMUNES = {
+    "jaune": (
+        {"J": 0.6},
+        [rampe(5, 36, 46, 0.72, 0.82, 0.5, 0.78, dh) for dh in (-3, 0, 3)],
     ),
     "bande": (
         {"B": 0.25, "b": 0.65},
         [rampe(7, 18, 24, 0.62, 0.55, 0.11, 0.33, dh) for dh in (-3, 0, 4)],
     ),
     "flanc": (
-        {"F": 0.45, "f": 0.78},
+        {"F": 0.45, "f": 0.78, "v": 0.45, "u": 0.45},
         [rampe(8, 22, 32, 0.45, 0.6, 0.42, 0.72, dh) for dh in (-4, 0, 6)],
     ),
     "creme": (
@@ -610,25 +647,59 @@ MATIERES = {
         [rampe(8, 30, 40, 0.14, 0.38, 0.52, 0.9, dh) for dh in (-6, 0, 6)],
     ),
 }
+_PEAU = {"I": 1.0, "H": 0.78, "O": 0.55, "M": 0.34, "S": 0.32, "Z": 0.12}
+MATIERES = {
+    "ancien": {
+        "orange": (_PEAU, [rampe(12, 17, 34, 0.66, 0.86, 0.22, 0.78, dh) for dh in (-4, 0, 5)])
+    }
+    | _COMMUNES,
+    "nouveau": {
+        "orange": (_PEAU, [rampe(12, 13, 37, 0.66, 0.86, 0.22, 0.78, dh) for dh in (-4, 0, 5)])
+    }
+    | _COMMUNES,
+}
 # codes des nouvelles teintes : caractères libres, ni chiffre, ni « . », ni guillemet
 _LIBRES = [
     chr(c)
-    for c in list(range(0x21, 0x7F)) + list(range(0xC0, 0x17F))
+    for c in list(range(0x21, 0x7F)) + list(range(0xC0, 0x24F))
     if not chr(c).isdigit() and chr(c) not in '."\\' and chr(c) not in PALETTE
 ]
 PALETTE_NUANCES = dict(PALETTE)
-CODES = {}
-for _nom, (_, _rampes) in MATIERES.items():
-    for _v, _r in enumerate(_rampes):
-        for _i, _hexa in enumerate(_r):
-            CODES[_nom, _v, _i] = _LIBRES.pop(0)
-            PALETTE_NUANCES[CODES[_nom, _v, _i]] = _hexa
+_PAR_TEINTE = {}
+
+
+def code(hexa):
+    """Code d'une teinte de la palette nuancée (créé à la première demande)."""
+    if hexa not in _PAR_TEINTE:
+        _PAR_TEINTE[hexa] = _LIBRES.pop(0)
+        PALETTE_NUANCES[_PAR_TEINTE[hexa]] = hexa
+    return _PAR_TEINTE[hexa]
+
+
+CODES = {
+    (style, nom, v, i): code(hexa)
+    for style, matieres in MATIERES.items()
+    for nom, (_, rampes) in matieres.items()
+    for v, r in enumerate(rampes)
+    for i, hexa in enumerate(r)
+}
+
+
+def assombrir(ch):
+    """Le même pixel dans l'ombre : sa teinte, plus sombre et un peu grisée."""
+    hexa = PALETTE_NUANCES[ch]
+    r, v, b = (int(hexa[k : k + 2], 16) / 255 for k in (1, 3, 5))
+    t, cl, sa = colorsys.rgb_to_hls(r, v, b)
+    r, v, b = colorsys.hls_to_rgb(t, cl * 0.84, sa * 0.72)
+    return code(f"#{round(r * 255):02X}{round(v * 255):02X}{round(b * 255):02X}")
+
 
 _K = np.array([1, 4, 6, 4, 1], float) / 16
 _YY, _XX = np.mgrid[0:H, 0:W]
 _LUMIERE = 0.07 * (0.5 - (_XX / W * 0.6 + _YY / H * 0.4))  # un peu plus clair en haut à gauche
 _v = np.sin(_XX * 12.9898 + _YY * 78.233) * 43758.5453
-_GRAIN = (_v - np.floor(_v) - 0.5) * 0.05
+_GRAIN = _v - np.floor(_v) - 0.5
+GRAIN = {"ancien": 0.05, "nouveau": 0.035}
 _champ = np.kron(np.random.default_rng(11).random((H // 8 + 2, W // 8 + 2)), np.ones((8, 8)))
 
 
@@ -646,11 +717,11 @@ _BAYER2 = (np.array([[0, 2], [3, 1]])[_YY % 2, _XX % 2] + 0.5) / 4
 VARIANTE = np.clip(np.floor(_champ * 3 + (_BAYER2 - 0.5) * 0.7), 0, 2).astype(int)
 
 
-def nuancer(rangs):
-    """Rangées en tons de base → rangées en teintes fines (voir MATIERES)."""
+def nuancer(rangs, style="ancien"):
+    """Rangées en tons de base → tableau de teintes fines (voir MATIERES)."""
     g = np.array([list(r) for r in rangs])
     out = g.copy()
-    for nom, (tons, rampes) in MATIERES.items():
+    for nom, (tons, rampes) in MATIERES[style].items():
         m = np.isin(g, list(tons))
         if not m.any():
             continue
@@ -659,12 +730,25 @@ def nuancer(rangs):
             clarte[g == ch] = val
         fm, fc = flou(m.astype(float)), flou(clarte * m)
         lisse = np.where(fm > 0, fc / np.maximum(fm, 1e-6), clarte)
-        final = 0.5 + (0.45 * clarte + 0.55 * lisse - 0.5) * 1.22 + _LUMIERE + _GRAIN
+        final = 0.5 + (0.45 * clarte + 0.55 * lisse - 0.5) * 1.22 + _LUMIERE + _GRAIN * GRAIN[style]
         n = len(rampes[0])
         idx = np.clip(np.rint(final * (n - 1)), 0, n - 1).astype(int)
+        # grains du ventre : la teinte du flanc alentour, un seul cran plus clair ou plus sombre
+        idx = np.clip(idx + (g == "v") - (g == "u"), 0, n - 1)
         for v in range(len(rampes)):
             for i in range(n):
-                out[m & (idx == i) & (VARIANTE == v)] = CODES[nom, v, i]
+                out[m & (idx == i) & (VARIANTE == v)] = CODES[style, nom, v, i]
+    return out
+
+
+def composer(gorge, souffle, cligne, tete):
+    """L'image finale : le corps du rendu « ancien », les membres et leur contour copiés tels
+    quels du rendu « nouveau », et le flanc derrière le bras assombri, pixel par pixel."""
+    rangs, membres, contact = image(gorge, souffle, cligne, tete, "ancien")
+    neufs, _, _ = image(gorge, souffle, cligne, tete, "nouveau")
+    out = np.where(membres, nuancer(neufs, "nouveau"), nuancer(rangs, "ancien"))
+    for j, i in zip(*np.nonzero(contact & (out != ".") & (out != "K")), strict=True):
+        out[j, i] = assombrir(out[j, i])
     return ["".join(r) for r in out]
 
 
@@ -686,7 +770,7 @@ if __name__ == "__main__":
         for s in (0, 1):
             for c in (0, 1):
                 for t in (-1, 0, 1):
-                    rangs = nuancer(image(g_ * 0.9, s * 0.7, bool(c), t))
+                    rangs = composer(g_ * 0.9, s * 0.7, bool(c), t)
                     images[f"{g_}{s}{c}{t + 1}"] = [plages(r) for r in rangs]
     (ICI / "grenouille.json").write_text(
         json.dumps(
