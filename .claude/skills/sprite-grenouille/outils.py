@@ -1,7 +1,7 @@
 """Outils du skill sprite-grenouille (lancer avec « uv run python <ce fichier> … »).
 
     grille PHOTO SORTIE.png [x0,y0,x1,y1] [pas]
-        Grille numérotée sur la photo de profil (une case = une unité du repère 48 × 40)
+        Grille numérotée sur la photo de profil (une case = une unité du repère, 48 de large)
         pour y relever la silhouette : museau, œil, dos, cuisse, pattes.
     apercu SPRITE.json SORTIE.png CLE[,CLE…] [zoom] [PHOTO]
         Images du sprite côte à côte, la photo de référence à droite si donnée.
@@ -9,6 +9,10 @@
         Une zone agrandie, pixel par pixel, pour juger un détail (épaule, œil, doigts).
     planche SPRITE.json SORTIE.html NOM "TEXTE"
         La planche de relecture (planche.html) avec le sprite intégré.
+    controle SPRITE.json
+        Groupes de pixels qui ne tiennent pas au reste (contour exclu, voisins par un côté),
+        image par image : un doigt, un orteil ou un talon détaché apparaît ici. Seul le bras
+        de l'autre côté, cerné partout, peut légitimement faire un groupe à part.
 
 Les photos de référence restent dans le bac à sable : jamais dans le dépôt ni dans une page.
 """
@@ -90,7 +94,31 @@ def planche(fichier, sortie, nom, texte):
     Path(sortie).write_text(page, encoding="utf-8")
 
 
+def controle(fichier):
+    s = json.load(open(fichier))
+    for cle in sorted(s["images"]):
+        g = rangees(s, cle)
+        plein = {(j, i) for j, r in enumerate(g) for i, c in enumerate(r) if c not in ".K"}
+        groupes, vus = [], set()
+        for depart in sorted(plein):
+            if depart in vus:
+                continue
+            pile, groupe = [depart], []
+            vus.add(depart)
+            while pile:
+                j, i = pile.pop()
+                groupe.append((j, i))
+                for v in ((j + 1, i), (j - 1, i), (j, i + 1), (j, i - 1)):
+                    if v in plein and v not in vus:
+                        vus.add(v)
+                        pile.append(v)
+            groupes.append(groupe)
+        groupes.sort(key=len, reverse=True)
+        autres = ", ".join(f"{len(g)} px en {min(g)}" for g in groupes[1:]) or "aucun"
+        print(f"{cle} : corps {len(groupes[0])} px ; autres groupes (rangée, colonne) : {autres}")
+
+
 if __name__ == "__main__":
-    {"grille": grille, "apercu": apercu, "zoom": zoom, "planche": planche}[sys.argv[1]](
-        *sys.argv[2:]
-    )
+    {"grille": grille, "apercu": apercu, "zoom": zoom, "planche": planche, "controle": controle}[
+        sys.argv[1]
+    ](*sys.argv[2:])

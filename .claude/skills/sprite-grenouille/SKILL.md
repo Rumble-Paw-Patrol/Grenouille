@@ -1,6 +1,6 @@
 ---
 name: sprite-grenouille
-description: Dessine une espèce de grenouille en sprite 8-bit animé, dans le style d'A. blanci du tableau de bord (96 × 80 pixels, ~80 couleurs nuancées, vue de profil, respire, cligne, bouge un peu la tête, mosaïque de pixels ambrés), d'après des photos de l'espèce, en une seule passe de relecture. À utiliser quand Léonard demande « fais-moi <espèce> en 8-bit », « un sprite de <espèce> comme A. blanci », « /sprite-grenouille », ou veut une autre grenouille animée pour le tableau de bord, une prez ou une page.
+description: Dessine une espèce de grenouille en sprite 8-bit animé, dans le style d'A. blanci du tableau de bord (2 pixels par unité, A. blanci fait 114 × 86 pixels, ~80 couleurs nuancées, vue de profil, assise, respire, cligne, bouge un peu la tête, mosaïque de pixels ambrés), d'après des photos de l'espèce, en une seule passe de relecture. À utiliser quand Léonard demande « fais-moi <espèce> en 8-bit », « un sprite de <espèce> comme A. blanci », « /sprite-grenouille », ou veut une autre grenouille animée pour le tableau de bord, une prez ou une page.
 ---
 
 # Sprite 8-bit d'une grenouille
@@ -24,34 +24,39 @@ Tout ce qui suit est la liste de ce que Léonard a corrigé sur A. blanci : l'ap
 
 1. **Relever la silhouette sur la photo de profil.**
    `uv run python .claude/skills/sprite-grenouille/outils.py grille PHOTO grille.png x0,y0,x1,y1`
-   (cadrer sur la grenouille ; une case = une unité du repère 48 × 40, tête à gauche — retourner
+   (cadrer sur la grenouille ; une case = une unité du repère, tête à gauche — retourner
    la photo si l'animal regarde à droite). Lire sur la grille, en unités : bout du museau, haut
    du crâne et **bosse de l'autre œil**, centre et rayon de l'œil, ligne du dos jusqu'à
    l'arrière-train, cuisse (centre, rayons), genou, talon, pointe des orteils, épaule, coude,
    poignet, doigts, mâchoire, gorge, bas du ventre, trajet de la bande ou des motifs.
 2. **Copier `grenouille.py`** en `<code_espece>.py` à côté de sa destination (même structure :
-   `catmull`, `dans`, `ellipse`, `segment`, `image()`, `nuancer()`, `plages`) et remplacer
-   les points, la palette de base et les rampes de `MATIERES` par ceux de l'espèce. Sortie :
+   `catmull`, `dans`, `ellipse`, gabarits et `poser`, `separer`, `miettes`, `image()`,
+   `nuancer()`, `plages`) et remplacer les points, les gabarits des mains et des pieds, la
+   palette de base et les rampes de `MATIERES` par ceux de l'espèce. Sortie :
    `<code_espece>.json`, même format (palette, largeur, hauteur, images codées par plages).
+   Le repère (`UNITES`) se règle à la taille de la grenouille : rien ne doit toucher les bords
+   de l'image, ni le talon à droite ni les doigts au sol (une rangée de contour sous eux).
 3. **Dessiner en respectant les règles ci-dessous**, puis se relire seul (étape 5) avant de
    montrer quoi que ce soit.
 4. **Animer** comme A. blanci (le code de la page est déjà prêt, voir Intégration).
 5. **Relecture interne** : `outils.py apercu SPRITE.json a.png 0001,0011,1101,0000,0002 6 PHOTO`
    (repos, œil fermé, gorge + flanc, tête baissée, tête relevée, à côté de la photo), puis
-   `outils.py zoom` sur l'œil, l'épaule, le genou et le tibia, la main. Passer la liste de
-   contrôle point par point ; corriger ; recommencer jusqu'à ce que tout passe.
+   `outils.py zoom` sur l'œil, l'épaule, le genou et le tibia, la main, et
+   `outils.py controle SPRITE.json` (aucun pixel détaché). Passer la liste de contrôle point
+   par point ; corriger ; recommencer jusqu'à ce que tout passe.
 6. **Une seule planche** : `outils.py planche SPRITE.json planche.html "<Nom>" "<texte>"`,
    vérifier une fois au navigateur (Chromium, téléphone et ordinateur), publier en artefact
    privé, donner le lien et attendre le go. Rien sur le tableau de bord avant le go.
 
 ## Règles de dessin (tirées des corrections de Léonard)
 
-Repère 48 × 40 unités tracé à 2 pixels par unité (96 × 80), formes en courbes de
-Catmull-Rom, sans anticrénelage, contour sombre d'un pixel autour de la silhouette.
+Repère tracé à 2 pixels par unité (A. blanci : 57 × 43 unités, 114 × 86 pixels), formes en
+courbes de Catmull-Rom tracées comme des polygones simples (un contour qui se croise se
+remplit mal), sans anticrénelage, contour sombre d'un pixel autour de la silhouette.
 
-- **Allure** : une grenouille fine et élégante, jamais un crapaud. Profil tourné vers le
-  titre (à gauche), posture assise redressée : tête haute, **arrière-train posé presque au
-  sol**, genoux bien pliés.
+- **Allure** : une grenouille fine et élégante, jamais un crapaud ni « en surpoids » :
+  ventre haut (du vide sous lui entre le bras et la patte), dos peu incliné. Profil tourné
+  vers le titre (à gauche), posture assise, accroupie, tête haute.
 - **Tête** : museau court et arrondi, narine, ligne de lèvre claire. **L'autre œil se voit
   comme une simple bosse de peau sur le crâne**, éclairée par-dessus, ombrée à sa base : ni
   pupille, ni cercle, ni paupière, et elle ne cligne jamais.
@@ -60,15 +65,33 @@ Catmull-Rom, sans anticrénelage, contour sombre d'un pixel autour de la silhoue
   pli sombre sous le globe.
 - **Paupière fermée** : la peau couvre le globe (haut orangé éclairé), fente sombre en arc,
   paupière basse pâle ; le cercle doré disparaît (sinon effet « lunettes »).
-- **Ordre de superposition** : pied → corps → cuisse → **tibia par-dessus la cuisse** (pli
-  sombre là où il la recouvre, bord du haut éclairé, reflet au genou) → bras → bosse de
-  l'autre œil → œil. Le ventre, même gonflé, passe toujours **derrière** les pattes.
-- **Patte arrière** : repliée en Z — cuisse ronde, tibia du genou (avant-bas de la cuisse)
-  au talon, pied à plat vers l'avant, orteils fins à pelotes claires.
-- **Patte avant** : longue, coude en arrière, doigts fins écartés à pelotes claires. **Elle
-  sort du flanc sans aucun trait** : sur ~3 unités sous l'épaule, tramage ordonné (Bayer 4 × 4)
-  entre flanc et bras ; contour seulement là où le bras sort du corps. Lumière d'en haut à
-  gauche : bord avant éclairé, ombre du bord arrière seulement sous l'épaule.
+- **Ordre de superposition** : bras de l'autre côté → corps → cuisse → tarse et orteils →
+  **tibia par-dessus la cuisse** (pli sombre là où il la recouvre, pas au talon) et talon →
+  bras proche → main proche → bosse de l'autre œil → œil. Le ventre, même gonflé, passe
+  toujours **derrière** les pattes.
+- **Patte arrière, en Z de grenouille assise** : cuisse arrondie, tournée vers nous, de la
+  hanche au genou ; on n'en voit que le dessus. **Tibia** plus gros que la cuisse, long,
+  bombé surtout sur le dessus (le dessous presque droit), couché par-dessus la cuisse, du
+  genou (levé, à l'avant) au talon, en descendant très légèrement, et qui **dépasse derrière la
+  croupe**. La croupe s'arrête derrière le tibia : rien ne descend entre le pied et le tibia.
+  **Talon** arrondi, épais (~5 pixels), aligné sur le bout du tibia, jamais en saillie ni pincé.
+  Tarse qui revient du talon vers l'avant, au sol, séparé du tibia par un liseré de fond.
+- **Pattes avant** : bras pliés, coude ouvert (~130°) qui dépasse un peu sous le ventre sans
+  pointe exagérée ; avant-bras un peu renflé en son milieu, plus fin au coude et au poignet ;
+  le poignet arrive sur le **talon de la paume** (en bas, à l'arrière de la main). **L'épaule
+  sort du flanc sans aucun trait** : sur ~3 unités, tramage ordonné (Bayer 4 × 4) entre flanc
+  et bras ; contour seulement là où le bras sort du corps. Lumière d'en haut à gauche : bord
+  avant éclairé, ombre du bord arrière. **Le bras de l'autre côté se voit** : même épaule, en
+  arrière-plan, même profil en plus fin et plus sombre, cerné d'un contour là où le bras
+  proche passe devant (effacer les restes isolés entre la gorge et le bras) ; sa main plus
+  haut (plus loin) et en retrait vers l'arrière, sans toucher la main de devant.
+- **Mains et pieds : gabarits posés au pixel près**, jamais des formes calculées (elles
+  donnent des pâtés et des doigts collés). Paume étroite, pas ronde ; trois doigts d'un pixel
+  qui partent de la paume, en éventail vers l'avant (diagonale haute, tout droit, diagonale
+  basse) ; orteils longs, en éventail eux aussi. Diagonales **en escalier** : chaque pixel
+  touche le suivant par un côté, sinon le contour les coupe et le doigt paraît détaché. Un
+  pixel vide entre deux doigts (le contour le noircit). Disque de 2 × 2 au bout, plus clair
+  que le doigt, reflet bleuté de peau humide. Couleurs de la peau, jamais de beige à part.
 - **Couleurs** : dessiner en tons de base (une vingtaine), puis `nuancer()` : par matière
   (peau, motifs, flanc, gorge et ventre), flou limité à la matière puis rampe fine de 7 à 12
   niveaux, en 3 variantes de teinte réparties par plaques (plus rouge, neutre, plus dorée),
@@ -94,26 +117,34 @@ plus vives près de la grenouille. `prefers-reduced-motion` : image fixe.
 
 - **Tableau de bord** : le bloc « A. blanci en 8-bit » de `modele.html` lit
   `D.grenouille` (rempli par `construire.py` depuis `grenouille.json`), canvas `#grenouille`
-  dans `.perchoir`, perché sur le spectrogramme, sous le titre. Pour changer d'espèce :
+  dans `.perchoir`, perché sur le spectrogramme, sous le titre. La toile prend la taille du
+  sprite (32 pixels de plus en largeur, 8 en hauteur) et se décale vers la droite d'autant que
+  le sprite dépasse 96 pixels, pour que la tête reste au même endroit. Pour changer d'espèce :
   remplacer `grenouille.json` ; pour en ajouter une : second canvas et seconde clé de
   données, sur le même modèle. Publier selon le skill `tableau-de-bord` ; si la version en
   ligne a été republiée par une autre session depuis la dernière lecture, repartir de
   la version en ligne et n'y remplacer que les données du sprite.
 - **Autre page** : reprendre le JavaScript de `planche.html` (décodage par plages, boucle,
   mosaïque).
+- Ajouter les versions validées à `documentation/tableau-de-bord/evolution-grenouille/`
+  (une étape par version, sprite régénéré depuis son commit ; brouillons en PNG légers).
 - Vérifier le bandeau à 1440, 1280, 1100 et 400 px, thèmes clair et sombre : la grenouille
   tient dans le bandeau, l'œil n'est pas caché par le texte, rien ne déborde ; sur téléphone
   elle a sa propre ligne.
 
 ## Liste de contrôle avant la planche
 
-- [ ] Silhouette fidèle à la photo (superposer mentalement l'aperçu et la photo).
-- [ ] Arrière-train presque au sol, genoux pliés, patte arrière en Z.
+- [ ] Silhouette fidèle à la photo (superposer mentalement l'aperçu et la photo), fine.
+- [ ] Patte arrière en Z : tibia par-dessus la cuisse, qui dépasse derrière la croupe, talon
+      aligné, rien entre le pied et le tibia.
 - [ ] Bosse de l'autre œil, sans détail d'œil, identique quand l'œil visible cligne.
 - [ ] Œil bombé et brillant ; paupière fermée crédible.
 - [ ] Tibia devant la cuisse ; ventre gonflé derrière les pattes (vérifier `0101` et `1101`).
-- [ ] Épaule : aucun trait horizontal ni vertical (zoom).
-- [ ] Doigts et orteils fins, pelotes claires ; couleurs des pattes nuancées.
+- [ ] Épaule : aucun trait horizontal ni vertical (zoom). Coudes pliés, poignet sur le talon
+      de la paume, bras de l'autre côté visible, sa main plus haut et en retrait.
+- [ ] Doigts et orteils d'un pixel en éventail, disques clairs ; `outils.py controle` : pas
+      d'autre groupe que le bras de l'autre côté.
+- [ ] Rien contre les bords de l'image.
 - [ ] ~80 couleurs après `nuancer()`, plaques de teinte visibles mais douces.
 - [ ] Animation : pas de saut, pas de chant, tête qui bouge à peine.
 - [ ] `ruff check` et `ruff format` propres ; crédit des photos dans la docstring.
