@@ -17,9 +17,9 @@ découpé par la branche.
 
 Une étape par rendu, sur les mêmes formes (modèle du skill sprite-grenouille, modele.py) :
 silhouette (trois gris selon le plan, contour, œil), aplats (une couleur par matière et par
-motif), details (volume, nuances, œil brillant), animation (24 images par grenouille : gorge,
-flanc, paupière, tête). Écrit <sprite>_<etape>.json et la composition scene_<etape>.json, que
-lit la planche du skill.
+motif), details (volume, nuances, marbrures, grain, œil brillant), animation (24 images par
+grenouille : gorge, flanc, paupière, tête). Écrit <sprite>_<etape>.json et la composition
+scene_<etape>.json, que lit la planche du skill.
 """
 
 import colorsys
@@ -55,27 +55,28 @@ class Cadre:
 # couleurs médianes de la photo sous chaque forme, dans les parties éclairées (la photo est
 # assez sombre : on garde la teinte et on prend la clarté des zones au soleil)
 MATIERES = {
-    "dos": "#3E9A4C",  # vert feuille : dos, tête, faces externes des membres
-    "flanc": "#C98A62",  # flanc orangé
-    "flanc_pale": "#D8B4A6",  # avant du flanc, blanc rosé près de la gorge
-    "gorge": "#CDBDC0",  # blanc lilas, dans l'ombre de la tête
-    "ventre": "#DCCBC8",  # blanc lilas, rosé (grenouille de gauche, de face)
-    "levre": "#E6DAD4",
-    "membre": "#D08A3C",  # faces cachées des membres, mains, pieds
-    "disque": "#E3A862",  # disques des doigts, plus clairs
-    "plante": "#E2A866",  # plante du pied, claire
-    "bras_pale": "#D4C3CA",  # face interne du bras, pâle, tachetée
-    "cuisse_jaune": "#E2B04A",  # intérieur de la cuisse, jaune
-    "fond": "#B86E3E",  # membres de l'autre côté, un peu moins éclairés
-    "ecorce": "#4A3B32",
+    "dos": "#3AA24C",  # vert feuille vif : dos, tête, faces externes des membres
+    "flanc": "#DE8C4E",  # flanc orangé
+    "flanc_pale": "#ECC2B4",  # avant du flanc, blanc rosé près de la gorge
+    "gorge": "#E2D7E3",  # blanc lilas, dans l'ombre de la tête
+    "ventre": "#E8D9DA",  # blanc lilas, rosé (grenouille de gauche, de face)
+    "levre": "#F5EDE8",
+    "membre": "#E48A36",  # faces cachées des membres, mains, pieds
+    "disque": "#F6C487",  # disques des doigts, plus clairs
+    "plante": "#F4B964",  # plante du pied, claire
+    "bras_pale": "#E2CCD8",  # face interne du bras, pâle, tachetée
+    "cuisse_jaune": "#F4BC30",  # intérieur de la cuisse, jaune
+    "fond": "#C4672C",  # membres de l'autre côté, un peu moins éclairés
+    "ecorce": "#3E302D",
 }
 MOTIFS = {
-    "barre": "#2A0A16",  # barres et taches violet-noir des flancs et des membres
-    "tache": "#7E4A5A",  # marbrure violette du ventre et de la gorge
-    "tubercule": "#E6DAD4",  # rangée de tubercules clairs, granules du talon
-    "lichen": "#8C8680",  # taches claires de l'écorce
-    "creux": "#2A201C",  # creux sombres de l'écorce
-    "bouche": "#3E2228",  # ligne de la bouche, sous la lèvre blanche
+    "barre": "#2E0A22",  # barres et taches violet-noir des flancs et des membres
+    "tache": "#86406A",  # marbrure violette du ventre et de la gorge
+    "tubercule": "#F3E8E6",  # rangée de tubercules clairs, granules du genou
+    "perle": "#DCEED2",  # granules blanches au bord des membres verts
+    "lichen": "#76838A",  # taches claires de l'écorce, gris bleuté
+    "creux": "#211819",  # creux sombres de l'écorce
+    "bouche": "#3C1428",  # ligne de la bouche, sous la lèvre blanche
 }
 OEIL = {"iris": "#C2C4D4", "pupille": "#07070B", "cercle": "#17131C", "paupiere": "dos"}
 CONTOUR, CONTOUR_CLAIR = "#140B10", "#3A2A20"
@@ -95,28 +96,29 @@ SILHOUETTE = {
 # violet-noir ; t : marbrure violette (ventre, gorge) ; l : lichen clair de l'écorce.
 DECALQUE = {
     "droite": (
-        28,
+        27,
         [
-            ".37B6.1B4.2B1.36B1.16",
-            ".50B2.4B2.29B1.16",
-            ".48B3.11B1.41",
-            ".46B4.11B2.22B1.18",
-            ".47B2.6B3.2B3.22B2.1B2.14",
-            ".54B5.1B2.25B2.15",
-            ".54B4.4B1.13B1.9B3.15",
-            ".37B1.14B3.1B2.3B2.12B3.26",
-            ".37B4.2B9.4B2.3B3.11B2.3B3.21",
-            ".56B1.5B1.12B2.3B2.7B1.14",
+            ".25B2.77",
+            ".87B1.16",
+            ".67t1.19B1.16",
+            ".48B3.10t2.4t1.36",
+            ".46B4.11B2.21B2.18",
+            ".31B1.48B2.3B2.1B2.14",
+            ".31B1.48B2.5B2.15",
+            ".54B4.23B1.4B3.15",
+            ".36B2.16B1.1B2.3B2.12B1.28",
+            ".36t2.1t5B5.7B2.3B2.12B1.4B3.21",
+            ".37t1.18B1.17B2.4B2.7B1.14",
             ".40B2.32B2.4B2.6B2.14",
-            ".45B1.28B2.4B2.5B2.15",
+            ".45B1.28B2.4B1.6B2.15",
             ".44B2.27B3.4B2.22",
-            ".49B2.4B2.17B2.4B2.22",
-            ".42B1.7B3.4B1.16B2.28",
-            ".42B2.13B1.46",
-            ".42B2.31B2.27",
-            ".35B3.35B1.4B2.24",
-            ".36B1.36B2.4B1.24",
-            ".75B2.27",
+            ".49B2.23B2.4B2.2B1.19",
+            ".50B3.4B1.16B2.8B1.19",
+            ".31B2.24B1.46",
+            ".35B3.37B2.11B2.14",
+            ".28B2.5B2.67",
+            ".27B2.75",
+            ".104",
             ".104",
             ".104",
             ".104",
@@ -126,78 +128,79 @@ DECALQUE = {
             ".104",
             ".104",
             ".56B3.45",
-            ".56B1.47",
+            ".55B4.45",
+            ".56B2.46",
             ".104",
             ".104",
             ".104",
             ".104",
             ".104",
-            ".72B2.30",
-            ".70B1.33",
-            ".68B1.1B1.33",
-            ".64B1.2B2.35",
-            ".64B1.8B2.29",
-            ".73B2.1B2.26",
-            ".73B5.26",
-            ".74B2.28",
+            ".104",
+            ".104",
+            ".67B2.35",
+            ".73B1.30",
+            ".73B1.30",
+            ".64B1.39",
+            ".64B1.14B2.23",
         ],
     ),
     "gauche": (
         29,
         [
-            ".84t2.1t3.20",
-            ".81t2.2t1.1t2.21",
-            ".77t4.29",
-            ".59t1.10t5.2t3.30",
-            ".57t6.1t11.2t1.1t1.4B3.23",
-            ".57t5.2t3.2t1.3t2.8B2.25",
-            ".53t2.7t2.2t1.43",
-            ".40t6.6t2.56",
-            ".38t4.2t1.3t2.1t4.20t1.34",
-            ".52t2.8t3.9t2.7B3.24",
-            ".43t1.18t2.20B1.7B1.17",
-            ".43t2.47B2.16",
-            ".37t3.4t4.6t2.37B1.16",
-            ".24B2.11t3.5t3.6t2.2t3.9t1.1t4.10B4.3B1.16",
-            ".23B3.12t3.5t1.1t4.6t3.6t6.14B4.19",
-            ".22B2.14t15.6t5.1t6.5t1.11B3.3B1.15",
-            ".21B2.15t1.5t2.5t5.8t3.2t1.6t1.3B2.7B2.3B1.15",
-            ".20B2.2B1.20t2.16t2.11t1.13B1.3B1.15",
-            ".19B2.2B2.12t1.4t1.2t2.28t2.17B1.15",
-            ".18B2.3B3.9t3.4t1.1t4.4t1.22t2.13B1.3B1.15",
-            ".18B1.5B2.9t4.3t2.3t2.3t3.20t2.4B3.6B2.2B2.14",
-            ".20B2.2B1.9t4.4t1.9t5.18t1.6B1.8B2.1B2.14",
-            ".20B3.11t3.5t1.9t3.19t2.18B1.15",
-            ".21B2.19t2.30t2.18B1.15",
-            ".21B1.20t4.27t3.17B1.16",
-            ".16B2.18t1.5t2.9t2.18t2.1t2.5B1.9B1.16",
-            ".16B1.18t2.13t2.3t2.15t2.9B1.26",
-            ".17B1.17t2.12t4.18t2.10B1.6B2.18",
-            ".16B2.16t4.5t3.1t1.3t2.29B2.6B2.18",
-            ".16B1.17t1.1t4.5t3.15t2.17B2.26",
-            ".34t1.3t4.5t2.33B1.27",
-            ".39t3.17t1.50",
-            ".35t2.4t2.16t1.50",
-            ".34t1.1t4.8t1.6t2.53",
-            ".34t2.2t3.6t3.33B1.1B2.23",
-            ".39t2.4t7.31B1.2B1.23",
-            ".10B1.3B1.24t1.2t6.35B2.25",
-            ".10B6.23t1.2t1.67",
-            ".11B4.95",
-            ".11B4.95",
-            ".11B3.96",
-            ".12B2.96",
+            ".85t3B1.21",
+            ".81B2.4B2.21",
+            ".77B3t2.28",
+            ".71B4.2B1t1B1t3.27",
+            ".58B2.5B9.3t3.1t1.28",
+            ".57B5t2B3.1t2.3B2.35",
+            ".53B2.7B2.2B1t1.42",
+            ".52B1t2.12t4.39",
+            ".48B2t1B4.9t1.4t1.22B1.17",
+            ".49t2.1B2.8B2t1.9B2.6B1.9B1.17",
+            ".62B2.18B1.9B2.16",
+            ".43B2.47B2.16",
+            ".45B3.34B2.9B1.16",
+            ".46B2.10t1B2.8t2.2B3.7B1.9B1.16",
+            ".58t1B2.2t2.3B3.12B1.26",
+            ".40B5.12t1.1B3t3B5.13B1.26",
+            ".44B2.7B3.1t1.5t1B3t3.14B1.25",
+            ".45B2.8t2.2t5B1.2t1.16B1.25",
+            ".42t2.1B2.11t6.46",
+            ".25B1.9B2.5B1.1B2.1B1.12t1.5t1.43",
+            ".24B2.9B3.4B2.3B2.3B3.10t2.24B1.18",
+            ".24B1.9B4.4B1t2.2t2.3B5.34B2.1B1.15",
+            ".21B2.11B3.5B1t1.8B3.39B2.14",
+            ".21B1.20B2.50B1.15",
+            ".42B4.21t3.40",
+            ".36B1.5B2.9B2.55",
+            ".35B2.13B2.3B2.12B2.39",
+            ".22B1.12B2.12B4.12t2.43",
+            ".16B2.4B2.12B2.7B1.1B1.3B2.57",
+            ".16B2.5B2.12B3.5B3.50B1.11",
+            ".17B1.5B2.15B2.5B2.49B1.11",
+            ".17B1.5B2.85",
+            ".16B2.5B3.84",
+            ".17B1.5B2.85",
             ".110",
             ".110",
-            ".17B1.75B1.16",
-            ".14B1.2B2.74B2.15",
-            ".14B1.81B1.13",
-            ".16B2.1B1.76B1.13",
-            ".19B1.66B2.7B2.13",
-            ".86B2.7B2.13",
-            ".85B3.6B3.13",
-            ".89B3.2B2.14",
-            ".89B7.14",
+            ".16B2.92",
+            ".17B1.92",
+            ".17B1.16B2.74",
+            ".16B2.92",
+            ".22B1.1B1.85",
+            ".22B1.1B1.85",
+            ".24B1.85",
+            ".24B1.85",
+            ".17B1.6B1.85",
+            ".17B1.4B1.12B2.73",
+            ".22B2.86",
+            ".16B2.92",
+            ".110",
+            ".110",
+            ".110",
+            ".110",
+            ".23B2.85",
+            ".23B1.86",
         ],
     ),
     "branche": (
@@ -654,25 +657,32 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     f = [
         forme("pied_fond", ombre_pied, "fond", "fond", cernee=True, lie=("plante",)),
         forme("plante", plante, "plante", "fond", lum=clarte_pied, lie=("pied_fond",)),
-        forme("bras_fond", bras_haut_f, "fond", "fond", cernee=True),
-        forme("avant_bras_fond", avant_bras_f | main_fond, "fond", "fond", cernee=True),
+        forme("bras_fond", bras_haut_f, "fond", "fond", cernee=True, lie=("avant_bras_fond",)),
+        forme(
+            "avant_bras_fond",
+            avant_bras_f | main_fond,
+            "fond",
+            "fond",
+            cernee=True,
+            lie=("bras_fond",),
+        ),
         forme("corps", corps | ellipse(127.0, 30.0, 1.4, 1.0, xt, yt), "dos"),
         forme("flanc", dessous & ~gorge_ & ~avant, "flanc", volume="corps"),
         forme("flanc_pale", avant, "flanc_pale", volume="corps"),
         forme("gorge", gorge_ & ~levre, "gorge", volume="corps"),
         forme("levre", levre, "levre", volume="corps"),
         forme("cuisse", cuisse, "cuisse_jaune", cernee=True),
-        forme("cuisse_vert", cuisse & (X > 164.7), "dos", volume="cuisse"),
+        forme("cuisse_vert", cuisse & (X > 164.7), "dos", volume="cuisse", lie=("cuisse",)),
         forme("tibia", tibia | genou, "membre", cernee=True),
-        forme("orteils", orteils, "membre", "devant", cernee=True),
+        forme("orteils", orteils, "membre", "devant", cernee=True, lie=("tibia",)),
         forme("epaule", epaule_g & corps & ~bras_haut, "bras_pale", volume="bras"),
         forme("bras", bras_haut, "bras_pale", "devant", cernee=True),
-        forme("doigt_g", doigt_g, "membre", "devant", cernee=True),
+        forme("doigt_g", doigt_g, "membre", "devant", cernee=True, lie=("main",)),
         forme(
             "avant_bras", avant_bras & ~coude, "dos", "devant", cernee=True, lie=("bras", "coude")
         ),
         forme("coude", coude, "bras_pale", "devant", cernee=True, lie=("bras", "avant_bras")),
-        forme("main", main, "membre", "devant", cernee=True),
+        forme("main", main, "membre", "devant", cernee=True, lie=("avant_bras", "doigt_g")),
     ]
     d = decalque("droite", c, xt, yt)
     # tubercules clairs : une rangée, un pixel sur deux, entre le vert du dos et le flanc (le
@@ -878,8 +888,22 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True),
         forme("cuisse_d_vert", cuisse_d_vert, "dos", "fond", volume="cuisse_d"),
         forme("orteils_d", orteils_d | disques_od, "membre", "fond", cernee=True),
-        forme("tibia_d", tibia_d, "membre", "fond", cernee=True),
-        forme("genou_d", genou_d, "dos", "fond", cernee=True),
+        forme(
+            "tibia_d",
+            tibia_d,
+            "membre",
+            "fond",
+            cernee=True,
+            lie=("cuisse_d", "cuisse_d_vert", "orteils_d"),
+        ),
+        forme(
+            "genou_d",
+            genou_d,
+            "dos",
+            "fond",
+            cernee=True,
+            lie=("tibia_d", "cuisse_d", "cuisse_d_vert"),
+        ),
         forme("patte_g", patte_g | orteils_g, "fond", "fond", cernee=True),
         forme("patte_g_vert", patte_g_vert, "dos", "fond", volume="patte_g"),
         forme("bras_g", bras_g | main_g, "membre", "corps", cernee=True),
@@ -889,12 +913,12 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("cotes", (cote_d | cote_g | pli) & ~levre, "flanc", volume="corps"),
         forme("gorge", gorge_ & ~levre, "gorge", volume="corps"),
         forme("levre", levre, "levre", volume="corps"),
-        forme("pouce", pouce, "membre", cernee=True),
+        forme("pouce", pouce, "membre", cernee=True, lie=("main_d",)),
         forme("epaule_d", epaule_d & ventre & ~bras_haut_d, "ventre", "devant"),
         forme("bras_haut_d", bras_haut_d & ~dessous_bras, "ventre", "devant"),
         forme("dessous_bras", dessous_bras, "membre", "devant", volume="bras_haut_d"),
         forme("avant_bras_d", avant_bras_d, "dos", "devant", cernee=True),
-        forme("main_d", main_d, "membre", "devant", cernee=True),
+        forme("main_d", main_d, "membre", "devant", cernee=True, lie=("avant_bras_d", "pouce")),
     ]
     d = decalque("gauche", c, xt, yt)
     granules = genou_d & (np.random.default_rng(37).random(X.shape) < 0.22)
@@ -1056,8 +1080,58 @@ def silhouette(c, f, motifs, oeil):
     )
 
 
+# ------------------------------------------------------------------ parure
+# Ce que le décalque ne garde pas à cette taille : les marbrures violet-noir des membres
+# orangés (tigrés), en taches de deux ou trois pixels qui, sur un doigt, se lisent en bandes ;
+# le liseré de granules blanches au bord des membres verts, un pixel sur deux.
+TIGRE_SAUF = {"tibia_d", "cuisse_d"}  # barres relevées une à une
+LISERE = {
+    "avant_bras",
+    "cuisse_vert",
+    "avant_bras_d",
+    "cuisse_d_vert",
+    "patte_g_vert",
+    "bras_g_vert",
+    "genou_d",
+}
+
+
+def parure(c, f, motifs, oeil):
+    if oeil is None:  # la branche
+        return motifs
+    mat, plan, num = etiqueter(c, f)
+    vide = np.zeros((c.H, c.W), bool)
+    barre, tache = motifs.get("barre", vide).copy(), motifs.get("tache", vide).copy()
+    perle = vide.copy()
+    bruit = _flou(np.random.default_rng(41).random((c.H, c.W)), 1)
+    taches = bruit > np.quantile(bruit, 0.79)
+    pair = (np.arange(c.W)[None, :] + np.arange(c.H)[:, None]) % 2 == 0
+    for k, fo in enumerate(f):
+        ici = num == k
+        if fo["matiere"] in ("membre", "fond") and fo["nom"] not in TIGRE_SAUF:
+            # plus sourdes sur les membres de l'autre côté
+            if fo["plan"] == "fond":
+                tache |= ici & taches & ~oeil["disques"]
+            else:
+                barre |= ici & taches & ~oeil["disques"]
+        if fo["nom"] in LISERE:
+            autour = (
+                _voisin(ici, 1, 0) & _voisin(ici, -1, 0) & _voisin(ici, 0, 1) & _voisin(ici, 0, -1)
+            )
+            vert = (mat == "dos") & (num != k)
+            contre_vert = (
+                _voisin(vert, 1, 0)
+                | _voisin(vert, -1, 0)
+                | _voisin(vert, 0, 1)
+                | _voisin(vert, 0, -1)
+            )
+            perle |= ici & ~autour & ~contre_vert & pair
+    return {**motifs, "barre": barre & ~perle, "tache": tache & ~barre & ~perle, "perle": perle}
+
+
 def aplats(c, f, motifs, oeil):
     mat, plan, num = etiqueter(c, f)
+    motifs = parure(c, f, motifs, oeil)
     img = np.full((c.H, c.W), "", object)
     for nom, coul in MATIERES.items():
         img[mat == nom] = coul
@@ -1079,32 +1153,34 @@ def _flou(a, r):
     return a
 
 
-def hexa_de(r, g, b):
-    return f"#{round(r * 255):02X}{round(g * 255):02X}{round(b * 255):02X}"
+def hexa_de(r, g, b, pas=1):
+    """Couleur hexa ; pas > 1 arrondit chaque canal (couleurs dérivées : palette plus nette)."""
+    return "#" + "".join(f"{min(255, round(v * 255 / pas) * pas):02X}" for v in (r, g, b))
 
 
 # étendue des rampes (clarté de l'ombre et de la lumière, autour de la couleur à plat), nombre
 # de tons, et si la matière prend les trois variantes de teinte par plaques
 RAMPES = {
-    "dos": (-0.26, 0.26, 10, True),
-    "flanc": (-0.26, 0.17, 9, True),
-    "flanc_pale": (-0.26, 0.1, 8, True),
-    "membre": (-0.28, 0.18, 9, True),
-    "fond": (-0.2, 0.1, 7, True),
-    "plante": (-0.16, 0.1, 5, False),
-    "bras_pale": (-0.24, 0.1, 7, True),
-    "cuisse_jaune": (-0.24, 0.14, 7, True),
-    "gorge": (-0.26, 0.1, 8, True),
-    "ventre": (-0.26, 0.1, 8, True),
-    "levre": (-0.14, 0.06, 4, False),
-    "disque": (-0.16, 0.1, 4, False),
-    "ecorce": (-0.14, 0.12, 6, True),
-    "barre": (-0.04, 0.1, 3, False),
-    "tache": (-0.1, 0.1, 4, False),
-    "tubercule": (-0.12, 0.04, 3, False),
-    "lichen": (-0.12, 0.08, 3, False),
+    "dos": (-0.3, 0.27, 12, True),
+    "flanc": (-0.3, 0.18, 10, True),
+    "flanc_pale": (-0.3, 0.1, 9, True),
+    "membre": (-0.33, 0.2, 11, True),
+    "fond": (-0.26, 0.12, 8, True),
+    "plante": (-0.2, 0.1, 6, True),
+    "bras_pale": (-0.3, 0.08, 8, True),
+    "cuisse_jaune": (-0.32, 0.14, 9, True),
+    "gorge": (-0.32, 0.08, 9, True),
+    "ventre": (-0.34, 0.07, 9, True),
+    "levre": (-0.16, 0.05, 4, False),
+    "disque": (-0.2, 0.08, 5, False),
+    "ecorce": (-0.16, 0.14, 7, True),
+    "barre": (-0.05, 0.12, 4, False),
+    "tache": (-0.14, 0.1, 5, True),
+    "tubercule": (-0.14, 0.04, 3, False),
+    "perle": (-0.2, 0.04, 3, False),
+    "lichen": (-0.14, 0.08, 4, False),
     "creux": (-0.04, 0.04, 2, False),
-    "bouche": (-0.04, 0.06, 2, False),
+    "bouche": (-0.04, 0.08, 3, False),
 }
 
 
@@ -1154,9 +1230,11 @@ def profondeur(m, rayon):
 
 def details(c, f, motifs, oeil):
     """Volume par forme (lumière LUMIERE, d'en haut), rampes tramées en trois variantes de
-    teinte par plaques, grain léger, ombres de contact, granules claires sur le vert, contour
-    plus clair côté lumière des membres, œil brillant."""
+    teinte par plaques, grain (plus fort sur la peau granuleuse du ventre), ombres de contact,
+    granules claires sur le vert, articulations fondues, contours teintés sans noir, œil
+    brillant."""
     mat, plan, num = etiqueter(c, f)
+    motifs = parure(c, f, motifs, oeil)
     lx, ly = LUMIERE
     lum = np.full((c.H, c.W), 0.5)
     volumes = {fo["nom"]: fo["masque"] for fo in f}
@@ -1189,7 +1267,10 @@ def details(c, f, motifs, oeil):
         lum[oeil["coudes"] & (num >= 0)] += 0.24  # coudes saillants
         lum[oeil["arete"] & (num >= 0)] += 0.26  # arête du museau, rebord de la narine
         lum[oeil["joue"] & ~oeil["arete"]] -= 0.08  # joue, sous l'arête
-    grain = (np.random.default_rng(5).random((c.H, c.W)) - 0.5) * 0.08
+    grain = (np.random.default_rng(5).random((c.H, c.W)) - 0.5) * 0.12
+    # peau granuleuse du ventre et de la gorge : un grain plus fort, pixel à pixel
+    pale = np.isin(mat, ["ventre", "gorge", "flanc_pale", "bras_pale"])
+    grain += pale * (np.random.default_rng(23).random((c.H, c.W)) - 0.5) * 0.14
     plaques = np.clip(
         np.floor(_flou(np.random.default_rng(3).random((c.H, c.W)), 4) * 6 - 2), -1, 1
     ).astype(int)
@@ -1216,22 +1297,97 @@ def details(c, f, motifs, oeil):
     vert = (mat == "dos") & (zone == "dos")
     interieur = vert & _voisin(vert, 1, 0) & _voisin(vert, -1, 0) & _voisin(vert, 0, 1)
     tirage = np.random.default_rng(17).random((c.H, c.W))
-    for j, i in zip(*np.nonzero(interieur & (tirage < 0.022)), strict=False):
-        img[j, i] = _retoucher(img[j, i], clair=0.32)
-        img[j + 1, i] = _retoucher(img[j + 1, i], sombre=0.85)
-    img = contour(img, f, num)
-    # contour plus clair du côté de la lumière, autour des membres proches
-    proche = plan == "devant"
-    cote = _voisin(proche, 1, 0) | _voisin(proche, 0, 1)
-    img[(img == CONTOUR) & (num < 0) & cote] = CONTOUR_CLAIR
+    for j, i in zip(*np.nonzero(interieur & (tirage < 0.03)), strict=False):
+        img[j, i] = _retoucher(img[j, i], clair=0.4)
+        img[j + 1, i] = _retoucher(img[j + 1, i], sombre=0.82)
+    img = jonctions(img, f, num)
+    img = contour_doux(img, f, num)
     return oeil_details(img, oeil, num)
+
+
+def _hls(hexa):
+    r, g, b = (int(hexa[i : i + 2], 16) / 255 for i in (1, 3, 5))
+    return colorsys.rgb_to_hls(r, g, b)
+
+
+def melange(a, b, t):
+    """La couleur entre a et b (t = part de b)."""
+    ra, ga, ba = (int(a[i : i + 2], 16) for i in (1, 3, 5))
+    rb, gb, bb = (int(b[i : i + 2], 16) for i in (1, 3, 5))
+    return hexa_de(*((x + (y - x) * t) / 255 for x, y in ((ra, rb), (ga, gb), (ba, bb))), pas=6)
+
+
+def ombre_de(hexa, f=0.55):
+    """La même teinte, plus sombre : le bord d'une forme lointaine contre une forme proche."""
+    h, cl, s = _hls(hexa)
+    return hexa_de(*colorsys.hls_to_rgb(h, cl * f, min(s * 1.05, 1)), pas=6)
+
+
+def profond(hexa):
+    """Le contour de la silhouette : très sombre, mais de la teinte qu'il borde."""
+    h, cl, s = _hls(hexa)
+    return hexa_de(*colorsys.hls_to_rgb(h, 0.07 + 0.07 * cl, s * 0.6), pas=6)
+
+
+def _lies(f, fo, num):
+    return np.isin(num, [i for i, g in enumerate(f) if g["nom"] in fo["lie"]])
+
+
+def jonctions(img, f, num):
+    """Aux articulations (formes liées : coude, poignet, genou, cheville), pas de frontière :
+    sur deux pixels, le bord de la forme prend un mélange de sa couleur et de celle de la
+    forme qu'elle continue."""
+    out = img.copy()
+    h, w = num.shape
+    for k, fo in enumerate(f):
+        if not fo["lie"]:
+            continue
+        lies = _lies(f, fo, num)
+        for j, i in zip(*np.nonzero(num == k), strict=False):
+            for dist, part in ((1, 0.5), (2, 0.25)):
+                fait = False
+                for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    jj, ii = j + dy * dist, i + dx * dist
+                    if 0 <= jj < h and 0 <= ii < w and lies[jj, ii] and img[jj, ii]:
+                        out[j, i] = melange(img[j, i], img[jj, ii], part)
+                        fait = True
+                        break
+                if fait:
+                    break
+    return out
+
+
+def contour_doux(img, f, num):
+    """Les contours sans noir : entre deux plans, la forme lointaine prend une ombre de sa
+    propre couleur au bord de la forme proche (sauf aux articulations) ; autour de la
+    silhouette, un contour très sombre de la teinte qu'il borde."""
+    out = img.copy()
+    plein = num >= 0
+    h, w = num.shape
+    for k, fo in enumerate(f):
+        if not fo["cernee"]:
+            continue
+        m = num == k
+        autour = _voisin(m, 1, 0) | _voisin(m, -1, 0) | _voisin(m, 0, 1) | _voisin(m, 0, -1)
+        for j, i in zip(*np.nonzero(autour & plein & (num < k) & ~_lies(f, fo, num)), strict=False):
+            out[j, i] = ombre_de(img[j, i])
+    bord = ~plein & (
+        _voisin(plein, 1, 0) | _voisin(plein, -1, 0) | _voisin(plein, 0, 1) | _voisin(plein, 0, -1)
+    )
+    for j, i in zip(*np.nonzero(bord), strict=False):
+        for dy, dx in ((1, 0), (0, 1), (0, -1), (-1, 0)):
+            jj, ii = j + dy, i + dx
+            if 0 <= jj < h and 0 <= ii < w and plein[jj, ii]:
+                out[j, i] = profond(img[jj, ii])
+                break
+    return out
 
 
 def _retoucher(hexa, sombre=1.0, clair=0.0):
     r, g, b = (int(hexa[i : i + 2], 16) / 255 for i in (1, 3, 5))
     h, cl, s = colorsys.rgb_to_hls(r, g, b)
     cl *= sombre
-    return hexa_de(*colorsys.hls_to_rgb(h, cl + (1 - cl) * clair, s))
+    return hexa_de(*colorsys.hls_to_rgb(h, cl + (1 - cl) * clair, s), pas=6)
 
 
 def oeil_details(img, oeil, num):
