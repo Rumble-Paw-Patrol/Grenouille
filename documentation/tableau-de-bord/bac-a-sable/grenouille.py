@@ -1,17 +1,18 @@
-"""Bac à sable : A. blanci du bandeau, avec les membres de l'audit et une épaule arrondie.
+"""Bac à sable : A. blanci du bandeau, avec quelques grains qui font tache sur le ventre.
 
     uv run python documentation/tableau-de-bord/bac-a-sable/grenouille.py
 
 Repart de ../grenouille.py (la version du bandeau). Deux rendus sont calculés et assemblés
-pixel par pixel (composer) : le corps vient du rendu « ancien », le pied, le tibia, les bras
-et les mains, avec leur contour, sont copiés tels quels du rendu « nouveau » de l'audit
-(ombres de la peau plus rouges et lumières plus dorées, moins de grain, contour brun côté
-lumière). Le flanc juste derrière le bras garde sa teinte, assombrie et un peu grisée (ombre
-de contact). Le haut du contour de la cuisse remonte vers la croupe, juste assez pour que la
-bande sombre du dos passe derrière la cuisse au lieu de s'arrêter d'elle-même. Le ventre est
-semé d'un grain plus dense mais discret : un cran plus clair ou plus sombre que le flanc
-alentour. L'épaule s'attache en arrondi : un capuchon dont le pourtour tourne au jaune et se
-fond dans le flanc en tramage. Bouche et bande sombre comme dans le bandeau. Écrit
+pixel par pixel (composer) : le corps vient du rendu « ancien », le pied, le tibia, les bras et
+les mains, avec leur contour, sont copiés tels quels du rendu « nouveau » de l'audit (ombres de
+la peau plus rouges et lumières plus dorées, moins de grain, contour brun côté lumière). Le
+flanc juste derrière le bras garde sa teinte, assombrie et un peu grisée (ombre de contact). Le
+haut du contour de la cuisse remonte vers la croupe, juste assez pour que la bande sombre du
+dos passe derrière la cuisse au lieu de s'arrêter d'elle-même. Le ventre est semé d'un grain
+plus dense mais discret : un cran plus clair ou plus sombre que le flanc alentour ; par-dessus,
+une douzaine de grains qui font tache, semés sur le flanc resté visible : points crème et
+pustules en relief. L'épaule s'attache en arrondi : un capuchon dont le pourtour tourne au
+jaune et se fond dans le flanc en tramage. Bouche et bande sombre comme dans le bandeau. Écrit
 grenouille.json dans ce dossier (non suivi) ; le tableau de bord n'en lit rien.
 
 Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
@@ -58,6 +59,7 @@ PALETTE = {
     "J": "#F2C46A",  # haut de l'épaule, qui tourne au jaune
     "v": "#CE9561",  # grain clair du ventre : un cran plus clair que le flanc alentour
     "u": "#B57643",  # grain sombre du ventre : un cran plus sombre que le flanc alentour
+    "p": "#9E6436",  # ombre d'une pustule : deux crans plus sombre que le flanc alentour
     "T": "#F2CC98",  # lèvre
     "C": "#E8DCC4",  # gorge, ventre
     "g": "#CFC4AE",  # gorge grisée
@@ -580,6 +582,28 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien"):
     g[ellipse(2.1, 5.9, 0.4, 0.4, x, y)] = "B"
     g[ellipse(2.8, 4.0, 0.7, 0.5, x, y) & dedans] = "I"
 
+    # par-dessus, quelques grains qui font tache : des pustules en relief (reflet crème en
+    # haut à gauche, ombre en bas à droite) et des points crème isolés, loin des bords
+    # (semés à la fin, sur le flanc resté visible entre le bras, la cuisse et la bande)
+    visible = flanc & np.isin(g, ["F", "f", "v", "u"]) & ~contact
+    interieur = visible.copy()
+    for _ in range(2):
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            interieur &= np.roll(np.roll(visible, dy, 0), dx, 1)
+    places, tirage = [], random.Random(13)
+    candidats = list(zip(*np.nonzero(interieur), strict=True))
+    tirage.shuffle(candidats)
+    for j, i in candidats:
+        if all(abs(j - a) + abs(i - b) >= 6 for a, b in places):
+            places.append((j, i))
+        if len(places) == 12:
+            break
+    for k, (j, i) in enumerate(places):
+        g[j, i] = "C"
+        if k % 2 == 0:  # pustule de 2 × 2 : son ombre, dessous et à droite, la met en relief
+            g[j, i + 1] = "v"
+            g[j + 1, i] = g[j + 1, i + 1] = "p"
+
     # contour
     plein = g != "."
     membres = (jm | talon | tm | orteils | bras | proche | (bras_loin & ~dedans)) & plein
@@ -635,7 +659,7 @@ _COMMUNES = {
         [rampe(7, 18, 24, 0.62, 0.55, 0.11, 0.33, dh) for dh in (-3, 0, 4)],
     ),
     "flanc": (
-        {"F": 0.45, "f": 0.78, "v": 0.45, "u": 0.45},
+        {"F": 0.45, "f": 0.78, "v": 0.45, "u": 0.45, "p": 0.45},
         [rampe(8, 22, 32, 0.45, 0.6, 0.42, 0.72, dh) for dh in (-4, 0, 6)],
     ),
     "creme": (
@@ -730,7 +754,7 @@ def nuancer(rangs, style="ancien"):
         n = len(rampes[0])
         idx = np.clip(np.rint(final * (n - 1)), 0, n - 1).astype(int)
         # grains du ventre : la teinte du flanc alentour, un seul cran plus clair ou plus sombre
-        idx = np.clip(idx + (g == "v") - (g == "u"), 0, n - 1)
+        idx = np.clip(idx + (g == "v") - (g == "u") - 2 * (g == "p"), 0, n - 1)
         for v in range(len(rampes)):
             for i in range(n):
                 out[m & (idx == i) & (VARIANTE == v)] = CODES[style, nom, v, i]
