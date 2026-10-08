@@ -1,15 +1,22 @@
 """Habillage du poste d'annotation, repris du tableau de bord
 (`documentation/tableau-de-bord/modele.html`) : « nuit guyanaise », fond de sous-bois la
 nuit, lueurs braise et ambre, panneaux en verre dépoli, titres en Unbounded, texte en Hanken
-Grotesk, étiquettes en JetBrains Mono. Sombre seulement : le spectrogramme l'est.
+Grotesk, étiquettes en JetBrains Mono. Clair ou sombre comme le tableau de bord, selon le
+réglage du système (ou le choix fait dans le menu de Streamlit) ; le spectrogramme reste sombre
+dans les deux.
 
 Deux étages :
-- `THEME` : options `[theme]` de Streamlit (couleurs des cases, curseurs, menus, champs),
-  passées par `blanci annotate` en variables d'environnement (`theme_env`). Une option que la
-  version installée ne connaît pas est simplement ignorée, là où une option inconnue sur la
-  ligne de commande ferait échouer le lancement.
+- `THEME` : options `[theme]` de Streamlit communes aux deux thèmes (polices, bords), et
+  `THEME_LIGHT` / `THEME_DARK` pour `[theme.light]` / `[theme.dark]` (couleurs des cases,
+  curseurs, menus, champs) : avec les deux, Streamlit suit le système. Passées par
+  `blanci annotate` en variables d'environnement (`theme_env`). Une option que la version
+  installée ne connaît pas est simplement ignorée, là où une option inconnue sur la ligne de
+  commande ferait échouer le lancement.
 - `CSS` : feuille injectée par `app.py` à chaque affichage, pour ce que le thème ne règle pas
   (fond, panneau de gauche, boutons, cartes, titres, cadres du bandeau et du visualiseur).
+  Sombre par défaut ; le thème clair est pris quand la page porte `data-gr-theme="light"`
+  (posé par le script de `app.py`, d'après le thème choisi par Streamlit), ou, avant ce
+  script, quand le système est en clair.
 - `LABEL_COLORS` : couleurs des étiquettes d'intervalle, pour le visualiseur et la carte.
 
 Le bandeau (titre, grenouille, spectrogramme) est un composant à part : `bandeau.py`.
@@ -22,7 +29,7 @@ from __future__ import annotations
 
 import re
 
-# Couleurs du tableau de bord (thème sombre).
+# Couleurs du tableau de bord, thème sombre puis thème clair.
 BG = "#050B0A"
 SURFACE = "#0F1C18"
 INK = "#E9F2EC"
@@ -32,7 +39,16 @@ LINE = "#1B2722"  # rgba(160, 210, 185, .14) sur le fond
 LINE_STRONG = "#30433B"  # rgba(160, 210, 185, .28) sur le fond
 
 THEME = {
-    "base": "dark",
+    "showWidgetBorder": "true",
+    "showSidebarBorder": "true",
+    "baseRadius": "10px",
+    # Sans guillemets : selon les versions, Streamlit les ajoute lui-même.
+    "font": "Hanken Grotesk, Segoe UI, system-ui, sans-serif",
+    "headingFont": "Unbounded, Segoe UI, system-ui, sans-serif",
+    "codeFont": "JetBrains Mono, ui-monospace, Menlo, monospace",
+}
+
+THEME_DARK = {
     "primaryColor": ACCENT,
     "backgroundColor": BG,
     "secondaryBackgroundColor": SURFACE,
@@ -41,13 +57,6 @@ THEME = {
     "codeBackgroundColor": SURFACE,
     "borderColor": LINE_STRONG,
     "dataframeBorderColor": LINE,
-    "showWidgetBorder": "true",
-    "showSidebarBorder": "true",
-    "baseRadius": "10px",
-    # Sans guillemets : selon les versions, Streamlit les ajoute lui-même.
-    "font": "Hanken Grotesk, Segoe UI, system-ui, sans-serif",
-    "headingFont": "Unbounded, Segoe UI, system-ui, sans-serif",
-    "codeFont": "JetBrains Mono, ui-monospace, Menlo, monospace",
     "redColor": "#F07A63",
     "orangeColor": "#E4573F",
     "yellowColor": "#F5B547",
@@ -58,6 +67,27 @@ THEME = {
     "sidebar.backgroundColor": "#060E0C",
     "sidebar.secondaryBackgroundColor": SURFACE,
     "sidebar.textColor": INK,
+}
+
+THEME_LIGHT = {
+    "primaryColor": "#B9530D",
+    "backgroundColor": "#EDF3EF",
+    "secondaryBackgroundColor": "#E3ECE6",
+    "textColor": "#11201A",
+    "linkColor": "#B9530D",
+    "codeBackgroundColor": "#E3ECE6",
+    "borderColor": "#B7C6BD",  # rgba(20, 70, 50, .26) sur le fond
+    "dataframeBorderColor": "#D2DDD6",  # rgba(20, 70, 50, .14) sur le fond
+    "redColor": "#B33A28",
+    "orangeColor": "#C2352A",
+    "yellowColor": "#9A5E00",
+    "greenColor": "#237A4A",
+    "blueColor": "#2F6FB3",
+    "violetColor": "#7C5CC0",
+    "grayColor": "#637269",
+    "sidebar.backgroundColor": "#F6F9F7",
+    "sidebar.secondaryBackgroundColor": "#FFFFFF",
+    "sidebar.textColor": "#11201A",
 }
 
 # Étiquettes des intervalles (boutons, intervalles et pastilles du visualiseur, carte des
@@ -75,13 +105,16 @@ UNHEARD_COLOR = "#4A5A52"
 
 
 def theme_env() -> dict[str, str]:
-    """`THEME` en variables d'environnement de Streamlit : theme.primaryColor →
-    STREAMLIT_THEME_PRIMARY_COLOR, theme.sidebar.backgroundColor →
-    STREAMLIT_THEME_SIDEBAR_BACKGROUND_COLOR."""
+    """`THEME`, `THEME_LIGHT` et `THEME_DARK` en variables d'environnement de Streamlit :
+    theme.font → STREAMLIT_THEME_FONT, theme.light.primaryColor →
+    STREAMLIT_THEME_LIGHT_PRIMARY_COLOR, theme.dark.sidebar.backgroundColor →
+    STREAMLIT_THEME_DARK_SIDEBAR_BACKGROUND_COLOR."""
+    sections = {"THEME": THEME, "THEME_LIGHT": THEME_LIGHT, "THEME_DARK": THEME_DARK}
     return {
-        "STREAMLIT_THEME_"
+        f"STREAMLIT_{prefix}_"
         + re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key).replace(".", "_").upper(): value
-        for key, value in THEME.items()
+        for prefix, options in sections.items()
+        for key, value in options.items()
     }
 
 
@@ -114,6 +147,17 @@ CSS = """<style>
   --nuit-ligne: rgba(160, 210, 185, .16);
   --marge: clamp(16px, 4vw, 56px);
   --ombre: 0 20px 50px -24px rgba(0, 0, 0, .8), 0 1px 0 rgba(255, 255, 255, .04) inset;
+  --aura-1: rgba(228, 87, 63, .20); --aura-2: rgba(79, 216, 192, .13);
+  --aura-3: rgba(158, 42, 107, .18);
+  --voile: 5, 11, 10;
+  --fond-side: linear-gradient(180deg, rgba(6, 14, 12, .94), rgba(4, 9, 8, .97));
+  --fond-bande: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%);
+  --halo-1: rgba(228, 87, 63, .22); --halo-2: rgba(79, 216, 192, .10);
+  --titre: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%);
+  --titre-ombre: drop-shadow(0 2px 10px rgba(4, 8, 7, .9));
+  --fond-fenetre: rgba(10, 20, 17, .97);
+  --ombre-fenetre: 0 30px 80px -24px rgba(0, 0, 0, .95);
+  --ombre-menu: 0 20px 50px -20px rgba(0, 0, 0, .9);
   --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
   --f-serif: "Instrument Serif", Georgia, serif;
   --f-body: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
@@ -121,17 +165,64 @@ CSS = """<style>
   --flamme: linear-gradient(100deg, var(--gold) 0%, var(--accent) 38%, var(--accent-2) 70%,
     var(--accent-3) 100%);
 }
+/* Thème clair : celui du tableau de bord. */
+@media (prefers-color-scheme: light) {
+  html:not([data-gr-theme="dark"]) {
+      --bg: #EDF3EF; --bg-2: #E3ECE6; --surface: rgba(255, 255, 255, .78);
+      --surface-solid: #FFFFFF; --surface-2: rgba(20, 60, 45, .06); --ink: #11201A;
+      --muted: #55675E; --line: rgba(20, 70, 50, .14); --line-fort: rgba(20, 70, 50, .26);
+      --accent: #B9530D; --accent-2: #C2352A; --accent-3: #8A1F5C; --accent-ink: #FFFFFF;
+      --gold: #A86F00; --gold-soft: rgba(215, 150, 20, .14); --teal: #137F70;
+      --ok: #237A4A; --ok-soft: rgba(35, 122, 74, .12); --warn: #9A5E00;
+      --warn-soft: rgba(200, 130, 0, .13); --bad: #B33A28; --bad-soft: rgba(179, 58, 40, .12);
+      --nuit-ligne: rgba(20, 70, 50, .14);
+      --ombre: 0 18px 40px -26px rgba(20, 50, 40, .45);
+      --aura-1: rgba(235, 120, 60, .16); --aura-2: rgba(30, 160, 140, .13);
+      --aura-3: rgba(170, 60, 120, .09);
+      --voile: 237, 243, 239;
+      --fond-side: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(237, 243, 239, .92));
+      --fond-bande: radial-gradient(120% 140% at 0% 0%, #F8E7DC 0%, #EEF3EF 46%, #E5EDE8 100%);
+      --halo-1: rgba(235, 120, 60, .16); --halo-2: rgba(30, 160, 140, .10);
+      --titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
+      --titre-ombre: none;
+      --fond-fenetre: rgba(255, 255, 255, .97);
+      --ombre-fenetre: 0 30px 80px -24px rgba(20, 50, 40, .45);
+      --ombre-menu: 0 20px 50px -20px rgba(20, 50, 40, .35);
+  }
+}
+html[data-gr-theme="light"] {
+  --bg: #EDF3EF; --bg-2: #E3ECE6; --surface: rgba(255, 255, 255, .78);
+  --surface-solid: #FFFFFF; --surface-2: rgba(20, 60, 45, .06); --ink: #11201A;
+  --muted: #55675E; --line: rgba(20, 70, 50, .14); --line-fort: rgba(20, 70, 50, .26);
+  --accent: #B9530D; --accent-2: #C2352A; --accent-3: #8A1F5C; --accent-ink: #FFFFFF;
+  --gold: #A86F00; --gold-soft: rgba(215, 150, 20, .14); --teal: #137F70;
+  --ok: #237A4A; --ok-soft: rgba(35, 122, 74, .12); --warn: #9A5E00;
+  --warn-soft: rgba(200, 130, 0, .13); --bad: #B33A28; --bad-soft: rgba(179, 58, 40, .12);
+  --nuit-ligne: rgba(20, 70, 50, .14);
+  --ombre: 0 18px 40px -26px rgba(20, 50, 40, .45);
+  --aura-1: rgba(235, 120, 60, .16); --aura-2: rgba(30, 160, 140, .13);
+  --aura-3: rgba(170, 60, 120, .09);
+  --voile: 237, 243, 239;
+  --fond-side: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(237, 243, 239, .92));
+  --fond-bande: radial-gradient(120% 140% at 0% 0%, #F8E7DC 0%, #EEF3EF 46%, #E5EDE8 100%);
+  --halo-1: rgba(235, 120, 60, .16); --halo-2: rgba(30, 160, 140, .10);
+  --titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
+  --titre-ombre: none;
+  --fond-fenetre: rgba(255, 255, 255, .97);
+  --ombre-fenetre: 0 30px 80px -24px rgba(20, 50, 40, .45);
+  --ombre-menu: 0 20px 50px -20px rgba(20, 50, 40, .35);
+}
 
 /* Fond : les trois lueurs du tableau de bord (braise en haut à gauche, sarcelle en haut à
    droite, pourpre en bas), mêmes teintes et mêmes places, fixes, et le grain. */
 .stApp {
-  color-scheme: dark; color: var(--ink); font-family: var(--f-body);
+  color: var(--ink); font-family: var(--f-body);
   -webkit-font-smoothing: antialiased;
   background:
     __GRAIN__,
-    radial-gradient(44vmax 36vmax at 10% -12%, rgba(228, 87, 63, .20), transparent 70%),
-    radial-gradient(46vmax 38vmax at 98% 14%, rgba(79, 216, 192, .13), transparent 70%),
-    radial-gradient(44vmax 40vmax at 57% 122%, rgba(158, 42, 107, .18), transparent 70%),
+    radial-gradient(44vmax 36vmax at 10% -12%, var(--aura-1), transparent 70%),
+    radial-gradient(46vmax 38vmax at 98% 14%, var(--aura-2), transparent 70%),
+    radial-gradient(44vmax 40vmax at 57% 122%, var(--aura-3), transparent 70%),
     var(--bg) !important;
   background-attachment: fixed !important;
 }
@@ -155,11 +246,11 @@ CSS = """<style>
   }
   @keyframes gr-voile {
     from {
-      background-color: rgba(5, 11, 10, 0);
+      background-color: rgba(var(--voile), 0);
       backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0);
     }
     to {
-      background-color: rgba(5, 11, 10, .72);
+      background-color: rgba(var(--voile), .72);
       backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     }
   }
@@ -181,13 +272,13 @@ CSS = """<style>
   width: calc(100% + 2 * var(--marge)) !important; max-width: none !important;
   margin: -4.25rem calc(-1 * var(--marge)) 6px !important;
   padding: 3.5rem var(--marge) 0;
-  background: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%);
+  background: var(--fond-bande);
   border-bottom: 1px solid var(--nuit-ligne);
 }
 .stMain [data-testid="stElementContainer"]:has(iframe[title*="blanci_bandeau"])::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: radial-gradient(50% 80% at 92% 10%, rgba(228, 87, 63, .22), transparent 70%),
-    radial-gradient(40% 60% at 70% 100%, rgba(79, 216, 192, .10), transparent 70%);
+  background: radial-gradient(50% 80% at 92% 10%, var(--halo-1), transparent 70%),
+    radial-gradient(40% 60% at 70% 100%, var(--halo-2), transparent 70%);
 }
 /* Feuille de style et petit script des menus : hors du flux, sans laisser d'espace. */
 [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] style),
@@ -215,13 +306,13 @@ CSS = """<style>
   border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px;
 }
 
-/* Titre du candidat : dégradé blanc → or → ambre du bandeau ; sa légende en chasse fixe. */
+/* Titre du candidat : dégradé du titre du bandeau ; sa légende en chasse fixe. */
 [data-testid="stMain"] h3:not([data-testid="stExpander"] h3) {
   font-size: clamp(19px, 2.1vw, 25px) !important; letter-spacing: -.02em; line-height: 1.2;
   width: fit-content; max-width: 100%; padding: 4px 0 2px;
-  background: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%);
+  background: var(--titre);
   -webkit-background-clip: text; background-clip: text; color: transparent !important;
-  filter: drop-shadow(0 2px 10px rgba(4, 8, 7, .9));
+  filter: var(--titre-ombre);
 }
 [data-testid="stElementContainer"]:has(h3)
   + [data-testid="stElementContainer"] [data-testid="stCaptionContainer"] p {
@@ -255,9 +346,9 @@ CSS = """<style>
   }
 }
 
-/* Panneau de gauche : nuit, comme la barre latérale du tableau de bord. */
+/* Panneau de gauche : comme la barre latérale du tableau de bord. */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, rgba(6, 14, 12, .94), rgba(4, 9, 8, .97)) !important;
+  background: var(--fond-side) !important;
   border-right: 1px solid var(--nuit-ligne) !important;
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
 }
@@ -313,7 +404,7 @@ CSS = """<style>
 .stApp input:disabled { color: var(--muted) !important; -webkit-text-fill-color: var(--muted); }
 [data-baseweb="popover"] [role="listbox"] {
   background: var(--surface-solid) !important; border: 1px solid var(--line-fort);
-  border-radius: 10px; box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .9);
+  border-radius: 10px; box-shadow: var(--ombre-menu);
 }
 [data-baseweb="popover"] [role="option"] { font-family: var(--f-body); }
 [data-baseweb="popover"] [role="option"]:hover,
@@ -367,9 +458,9 @@ CSS = """<style>
   width: min(800px, calc(100vw - 24px)) !important;
   max-width: none !important; max-height: calc(100dvh - 24px) !important;
   overflow-y: auto !important; padding: 18px 22px !important;
-  background: rgba(10, 20, 17, .97) !important; border: 1px solid var(--line-fort) !important;
+  background: var(--fond-fenetre) !important; border: 1px solid var(--line-fort) !important;
   border-radius: 14px !important;
-  box-shadow: 0 30px 80px -24px rgba(0, 0, 0, .95), 0 0 50px -24px var(--accent) !important;
+  box-shadow: var(--ombre-fenetre), 0 0 50px -24px var(--accent) !important;
 }
 .stApp button:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 3px; }
 

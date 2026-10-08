@@ -64,17 +64,35 @@ INDEX = r"""<!doctype html>
 <html><head><meta charset="utf-8">
 <link rel="stylesheet" href="__FONTS__">
 <style>
-  /* Couleurs et polices du tableau de bord (style.py) ; le cadre est posé par la page. */
+  /* Couleurs et polices du tableau de bord (style.py) ; le cadre est posé par la page.
+     Thème clair ou sombre : celui que Streamlit passe au composant (data-theme), avant lui
+     celui du système. Le spectrogramme (la toile) reste sombre dans les deux. */
   :root { color-scheme: dark; --ink: #E9F2EC; --muted: #93A89D; --accent: #F5A53A;
-          --accent-2: #E4573F; --gold: #FFE08A; --line: rgba(160, 210, 185, .14);
-          --line-fort: rgba(160, 210, 185, .28); --surface-2: rgba(255, 255, 255, .055);
+          --accent-2: #E4573F; --accent-ink: #1A0B03; --gold: #FFE08A;
+          --line: rgba(160, 210, 185, .14); --line-fort: rgba(160, 210, 185, .28);
+          --surface-2: rgba(255, 255, 255, .055); --surface-3: rgba(255, 255, 255, .14);
+          --fond: #08120F; --champ: #0F1C18; --sel: #FFFFFF; --anneau: rgba(255, 210, 110, .12);
           --mono: "JetBrains Mono", ui-monospace, Menlo, monospace; }
-  body { margin: 0; padding: 10px 12px 12px; color: var(--ink); background: #08120F;
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) {
+      color-scheme: light; --ink: #11201A; --muted: #55675E; --accent: #B9530D;
+        --accent-2: #C2352A; --accent-ink: #FFFFFF; --gold: #A86F00;
+        --line: rgba(20, 70, 50, .14); --line-fort: rgba(20, 70, 50, .26);
+        --surface-2: rgba(20, 60, 45, .06); --surface-3: rgba(20, 60, 45, .12); --fond: #E3ECE6;
+        --champ: #FFFFFF; --sel: #11201A; --anneau: rgba(215, 150, 20, .16); }
+  }
+  html[data-theme="light"] {
+    color-scheme: light; --ink: #11201A; --muted: #55675E; --accent: #B9530D;
+    --accent-2: #C2352A; --accent-ink: #FFFFFF; --gold: #A86F00;
+    --line: rgba(20, 70, 50, .14); --line-fort: rgba(20, 70, 50, .26);
+    --surface-2: rgba(20, 60, 45, .06); --surface-3: rgba(20, 60, 45, .12); --fond: #E3ECE6;
+    --champ: #FFFFFF; --sel: #11201A; --anneau: rgba(215, 150, 20, .16); }
+  body { margin: 0; padding: 10px 12px 12px; color: var(--ink); background: var(--fond);
          font: 12.5px "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
          -webkit-font-smoothing: antialiased; }
   .bar { display: flex; gap: 6px 9px; align-items: center; flex-wrap: wrap; padding: 2px 0 7px; }
   .duo { display: flex; gap: 9px; align-items: center; }  /* filtre et contraste, inséparables */
-  button, select, input { background: #0F1C18; color: var(--ink); border-radius: 8px;
+  button, select, input { background: var(--champ); color: var(--ink); border-radius: 8px;
                           border: 1px solid var(--line-fort); padding: 3px 9px; font: inherit;
                           transition: color .2s, border-color .2s, box-shadow .2s; }
   button { cursor: pointer; }
@@ -83,7 +101,7 @@ INDEX = r"""<!doctype html>
   button:disabled { opacity: .4; cursor: default; }
   input:hover { border-color: var(--accent); }
   input:focus { outline: none; border-color: var(--accent);
-                box-shadow: 0 0 0 3px rgba(255, 210, 110, .12); }
+                box-shadow: 0 0 0 3px var(--anneau); }
   input[type=number] { width: 4.4em; font-family: var(--mono); font-size: 11.5px; }
   input[type=range] { width: 80px; vertical-align: middle; padding: 0; border: 0; background: none;
                       accent-color: var(--accent); box-shadow: none; }
@@ -110,43 +128,54 @@ INDEX = r"""<!doctype html>
   #players .playing span { color: var(--gold); }
   #players .playing span::before { opacity: 1; box-shadow: 0 0 8px currentColor; }
   #list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; min-height: 4px; }
-  .chip { border: 1px solid #555; border-radius: 999px; padding: 2px 3px 2px 10px; font-size: 12px;
+  .chip { border: 1px solid var(--line-fort); border-radius: 999px; padding: 2px 3px 2px 10px;
+          font-size: 12px;
           display: flex; gap: 4px; align-items: center; cursor: pointer;
           transition: box-shadow .2s; }
   .chip:hover { box-shadow: 0 0 14px -5px currentColor; }
-  .chip.sel { border-color: #fff; box-shadow: 0 0 0 1px #fff inset; }
+  .chip.sel { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel) inset; }
   .chip button { padding: 0 6px; border: 0; background: transparent; color: var(--muted);
                  border-radius: 999px; }
   .chip button:hover:not(:disabled) { color: #F07A63; box-shadow: none; }
   .chip .q { font-weight: 700; }
   .pills { display: flex; gap: 5px; flex-wrap: wrap; }
-  /* Étiquettes : pleine = celle des prochains intervalles, cerclée de blanc = celle de
-     l'intervalle sélectionné. */
+  /* Étiquettes : pleine = celle des prochains intervalles, cerclée (de blanc en sombre, de
+     noir en clair) = celle de l'intervalle sélectionné. */
   .types button { border-width: 1.5px; border-radius: 999px; padding: 3px 11px; }
   .types button.on { color: #0B0B0B; font-weight: 600; }
-  .types button.sel { outline: 2px solid #fff; outline-offset: 2px; }
+  .types button.sel { outline: 2px solid var(--sel); outline-offset: 2px; }
   .seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--surface-2);
          border: 1px solid var(--line); border-radius: 10px; }
   .seg button { border: 0; background: transparent; color: var(--muted); padding: 3px 10px;
                 border-radius: 7px; }
   .seg button:hover:not(:disabled) { color: var(--ink); box-shadow: none; }
   .seg button.on { background: linear-gradient(135deg, var(--accent), var(--accent-2));
-                   color: #1A0B03; font-weight: 600; box-shadow: 0 4px 16px -6px var(--accent-2); }
+                   color: var(--accent-ink); font-weight: 600;
+                   box-shadow: 0 4px 16px -6px var(--accent-2); }
   /* Qualité en médailles : A or, B argent, C bronze ; « — » (non dite) reste neutre. */
   [data-q="A"] { --m: #F2C14E; --m1: #FFEDB0; --m2: #C8901A; }
   [data-q="B"] { --m: #C9D2DA; --m1: #FAFCFD; --m2: #8E9AA5; }
   [data-q="C"] { --m: #D9925A; --m1: #F5C59B; --m2: #9A5626; }
+  /* En clair, les médailles foncent pour rester lisibles sur le fond. */
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) [data-q="A"] { --m: #A87A00; }
+    html:not([data-theme="dark"]) [data-q="B"] { --m: #6B7882; }
+    html:not([data-theme="dark"]) [data-q="C"] { --m: #9A5626; }
+  }
+  html[data-theme="light"] [data-q="A"] { --m: #A87A00; }
+  html[data-theme="light"] [data-q="B"] { --m: #6B7882; }
+  html[data-theme="light"] [data-q="C"] { --m: #9A5626; }
   .medailles button[data-q], .chip .q { color: var(--m); font-weight: 700; }
   .medailles button[data-q]:hover:not(:disabled) { color: var(--m1); }
   .medailles button[data-q].on { background: linear-gradient(135deg, var(--m1), var(--m2));
                                  color: #1A1206; box-shadow: 0 0 14px -3px var(--m2); }
-  .medailles button:not([data-q]).on { background: rgba(255, 255, 255, .14); color: var(--ink);
+  .medailles button:not([data-q]).on { background: var(--surface-3); color: var(--ink);
                                        box-shadow: none; }
 </style></head><body>
 <div class="bar">
   <span class="group types" id="ivbar"
         title="Pleine : étiquette des prochains intervalles (touches 1 à 4).
-Cerclée de blanc : celle de l'intervalle sélectionné (un clic la change).">
+Cerclée : celle de l'intervalle sélectionné (un clic la change).">
     <span class="lbl">Étiquette</span><span class="pills" id="ivbtns"></span></span>
   <span class="group" id="qbar"
         title="Qualité du chant : de l'intervalle sélectionné, et des prochains">
@@ -648,7 +677,7 @@ function list() {
     const chip = document.createElement("span");
     chip.className = "chip" + (i === selected ? " sel" : "");
     chip.style.background = `rgba(${rgb(iv.label)}, 0.18)`;
-    chip.style.borderColor = i === selected ? "#fff" : `rgb(${rgb(iv.label)})`;
+    chip.style.borderColor = i === selected ? "var(--sel)" : `rgb(${rgb(iv.label)})`;
     chip.title = "Sélectionner, puis cliquer une étiquette en haut pour la changer";
     chip.append(`${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s · ${labelName(iv.label)}`);
     if (iv.quality) {
@@ -800,8 +829,19 @@ document.addEventListener("keydown", e => {
   }
 });
 
+// Thème de la page, clair ou sombre : `base` s'il est donné, sinon d'après la couleur du fond.
+function theme(t) {
+  if (!t) return;
+  let base = t.base;
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(t.backgroundColor || "");
+  if (!base && m) {
+    const [r, g, b] = m.slice(1).map(x => parseInt(x, 16));
+    base = 0.299 * r + 0.587 * g + 0.114 * b > 128 ? "light" : "dark";
+  }
+  if (base === "light" || base === "dark") document.documentElement.dataset.theme = base;
+}
 window.addEventListener("message", e => {
-  if (e.data && e.data.type === "streamlit:render") render(e.data.args);
+  if (e.data && e.data.type === "streamlit:render") { theme(e.data.theme); render(e.data.args); }
 });
 window.addEventListener("resize", () => { if (D) resize(); });
 // Polices chargées après le premier dessin : graduations et hauteur de la barre à refaire.

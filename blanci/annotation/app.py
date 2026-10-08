@@ -27,8 +27,9 @@
   s'affiche (fenêtre suivante du découpage, sinon candidat suivant).
 - **Groupes** : une file tirée par groupes montre, groupe par groupe, ce qui a été entendu ; un
   groupe homogène s'étiquette en entier d'un clic (source « bulk »).
-- **Habillage** : celui du tableau de bord (`style.py`, bandeau dans `bandeau.py`) ; le thème
-  sombre de Streamlit est passé par `blanci annotate`, la feuille de style est injectée ici.
+- **Habillage** : celui du tableau de bord (`style.py`, bandeau dans `bandeau.py`), clair ou
+  sombre selon le système ; les thèmes de Streamlit sont passés par `blanci annotate`, la
+  feuille de style est injectée ici.
   Le mode d'emploi est en tête du panneau de gauche et s'ouvre en haut de la page.
 
 Toute la logique est dans `workbench.py` et `selection.py` ; ce fichier ne fait qu'afficher.
@@ -547,6 +548,9 @@ NO_GREY = """<style>
 # filtre la liste. Ici les listes sont courtes et choisies à la souris, on rend le champ
 # non éditable. Le script tourne dans un cadre de même origine, d'où il atteint la page ; un
 # observateur le refait pour les menus créés après coup.
+# Il recopie aussi le thème choisi par Streamlit (clair ou sombre : le color-scheme qu'il pose
+# sur .stApp) dans `data-gr-theme` sur la page, que lit la feuille de style (`style.py`) ; le
+# menu de Streamlit change le thème sans rien recharger, d'où la vérification régulière.
 READONLY_MENUS = """<script>
 (() => {
   const root = window.parent.document;
@@ -557,8 +561,17 @@ READONLY_MENUS = """<script>
     i.readOnly = true; i.setAttribute("inputmode", "none"); i.style.caretColor = "transparent";
     i.style.cursor = "pointer";
   });
+  const theme = () => {
+    const app = root.querySelector(".stApp");
+    if (!app) return;
+    const scheme = window.parent.getComputedStyle(app).colorScheme || "";
+    const t = scheme.includes("light") ? "light" : scheme.includes("dark") ? "dark" : null;
+    if (t && root.documentElement.dataset.grTheme !== t) root.documentElement.dataset.grTheme = t;
+  };
   new MutationObserver(fix).observe(root.body, {childList: true, subtree: true});
+  window.parent.setInterval(theme, 400);
   fix();
+  theme();
 })();
 </script>"""
 

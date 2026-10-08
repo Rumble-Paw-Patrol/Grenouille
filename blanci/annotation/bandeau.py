@@ -5,7 +5,8 @@ Composant Streamlit à part, comme le visualiseur : la page et ses fichiers sont
 fois, l'animation continue d'un clic à l'autre (rien n'est renvoyé à chaque réexécution).
 Il est posé sur la page sans cadre : son fond (dégradé de nuit, lueurs, filet du bas) et ses
 marges sont ceux du conteneur, dans la feuille de style du poste (`style.py`) ; la page du
-composant reste transparente.
+composant reste transparente. Ses encres suivent le thème que Streamlit lui passe (clair ou
+sombre) ; le spectrogramme reste sombre dans les deux.
 L'image, le son et la grenouille sont ceux du tableau de bord (`documentation/tableau-de-bord/`,
 produits par `spectrogramme.py` et `grenouille.py`), recopiés à côté de la page quand ils
 changent ; sans eux, le bandeau garde son titre (sans `chant.mp3`, pas de bouton d'écoute).
@@ -31,7 +32,21 @@ INDEX = r"""<!doctype html>
   /* Le bandeau du tableau de bord (modele.html), resserré pour laisser la place au poste. Pas
      de color-scheme sombre : différent de celui du cadre, il rendrait son fond opaque. */
   :root { --ink: #E9F2EC; --muted: #93A89D; --mono: "JetBrains Mono", ui-monospace, Menlo,
-          monospace; }
+          monospace;
+          --titre: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%);
+          --titre-i: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A);
+          --titre-ombre: drop-shadow(0 2px 10px rgba(4, 8, 7, .9)); }
+  /* Thème clair (data-theme : celui que Streamlit passe au composant ; avant, le système). */
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) {
+      --ink: #11201A; --muted: #55675E; --titre-ombre: none;
+      --titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
+      --titre-i: linear-gradient(100deg, #A86F00, #B9530D 45%, #C2352A 80%, #8A1F5C); }
+  }
+  html[data-theme="light"] {
+    --ink: #11201A; --muted: #55675E; --titre-ombre: none;
+    --titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
+    --titre-i: linear-gradient(100deg, #A86F00, #B9530D 45%, #C2352A 80%, #8A1F5C); }
   [hidden] { display: none !important; }
   html, body { margin: 0; background: transparent; }
   body { color: var(--ink); font: 15px/1.55 "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
@@ -48,13 +63,12 @@ INDEX = r"""<!doctype html>
   h1 { font-family: "Unbounded", "Segoe UI", system-ui, sans-serif; font-weight: 700;
        font-size: clamp(24px, 3.6vw, 44px); line-height: 1.08; letter-spacing: -.025em;
        max-width: 19ch; text-wrap: balance;
-       background: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%);
-       -webkit-background-clip: text; background-clip: text; color: transparent;
-       filter: drop-shadow(0 2px 10px rgba(4, 8, 7, .9)); }
+       background: var(--titre); -webkit-background-clip: text; background-clip: text;
+       color: transparent; filter: var(--titre-ombre); }
   h1 i { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400;
          font-size: 1.12em; letter-spacing: 0; padding-right: .08em;
-         background: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A);
-         -webkit-background-clip: text; background-clip: text; color: transparent; }
+         background: var(--titre-i); -webkit-background-clip: text; background-clip: text;
+         color: transparent; }
   /* Sous-titre et bouton d'écoute côte à côte, à gauche de la grenouille (--perchoir : la
      place qu'elle prend au bord droit, posée par son script) ; le bouton passe sous le
      sous-titre quand la place manque. */
@@ -175,8 +189,19 @@ new ResizeObserver(() => setHeight()).observe(bande);
 $(".spectro img").addEventListener("error", () => {
   $(".spectro").hidden = true; $(".legende").hidden = true; $("#ecouter").hidden = true;
 });
+// Thème de la page, clair ou sombre : `base` s'il est donné, sinon d'après la couleur du fond.
+function theme(t) {
+  if (!t) return;
+  let base = t.base;
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(t.backgroundColor || "");
+  if (!base && m) {
+    const [r, g, b] = m.slice(1).map(x => parseInt(x, 16));
+    base = 0.299 * r + 0.587 * g + 0.114 * b > 128 ? "light" : "dark";
+  }
+  if (base === "light" || base === "dark") document.documentElement.dataset.theme = base;
+}
 window.addEventListener("message", e => {
-  if (e.data && e.data.type === "streamlit:render") setHeight(true);
+  if (e.data && e.data.type === "streamlit:render") { theme(e.data.theme); setHeight(true); }
 });
 send("streamlit:componentReady", {apiVersion: 1});
 
