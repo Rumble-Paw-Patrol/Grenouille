@@ -76,6 +76,7 @@ MOTIFS = {
     "perle": "#DCEED2",  # granules blanches au bord des membres verts
     "lichen": "#76838A",  # taches claires de l'écorce, gris bleuté
     "creux": "#211819",  # creux sombres de l'écorce
+    "noeud": "#35262E",  # la bosse sombre, violacée, sous la main de la grenouille de droite
     "bouche": "#3C1428",  # ligne de la bouche, sous la lèvre blanche
 }
 OEIL = {"iris": "#C2C4D4", "pupille": "#07070B", "cercle": "#17131C", "paupiere": "dos"}
@@ -380,6 +381,21 @@ def suivre(pts, x):
     return np.interp(x, xs, ys)
 
 
+def semis(m, part, graine):
+    """Granules semées à la main plutôt qu'une sur deux : une part des pixels de m, prise au
+    hasard, sans que deux se touchent. Le tirage est fixé pixel par pixel sur le cadre : d'une
+    image de l'animation à l'autre, une granule ne bouge pas."""
+    rng = np.random.default_rng(graine)
+    ordre, garde = rng.random(m.shape), rng.random(m.shape) < part
+    pris = np.zeros(m.shape, bool)
+    js, iis = np.nonzero(m & garde)
+    for o in np.argsort(ordre[js, iis]):
+        j, i = js[o], iis[o]
+        if not pris[max(j - 1, 0) : j + 2, max(i - 1, 0) : i + 2].any():
+            pris[j, i] = True
+    return pris
+
+
 def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, lum=None, lie=()):
     """plan : fond (membres de l'autre côté, ce qui pend derrière la branche), corps, devant
     (membres proches) ; cernee : un contour la sépare de ce qu'elle recouvre ; volume : la forme
@@ -453,12 +469,22 @@ def branche(x, y):
     return np.abs(y - suivre(BRANCHE, x)) <= suivre(EPAISSEUR, x)
 
 
+# la petite bosse sombre de l'écorce, sous la main droite de la grenouille de droite
+BOSSE = (129.6, 52.4, 4.6, 3.0)
+
+
 def formes_branche(c, **_):
-    m = branche(c.X, c.Y)
-    d = decalque("branche", c, c.X, c.Y)
+    X, Y = c.X, c.Y
+    bosse = ellipse(*BOSSE, X, Y)
+    m = branche(X, Y) | bosse
+    d = decalque("branche", c, X, Y)
+    # la bosse se fond dans l'écorce à sa base, sur un pixel, au hasard
+    dessus = suivre(BRANCHE, X) - suivre(EPAISSEUR, X)
+    base = Y - dessus + 0.9 * np.random.default_rng(59).random(X.shape)
+    noeud = bosse & (base < 0.7)
     return (
         [forme("branche", m, "ecorce")],
-        {"lichen": m & (d == "l"), "creux": m & (d == "B")},
+        {"lichen": m & (d == "l") & ~noeud, "creux": m & (d == "B") & ~noeud, "noeud": noeud},
         None,
     )
 
@@ -654,7 +680,13 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     tache_pied = (np.abs(X - 154.4) < 0.55) & (np.abs(Y - 59.0) < 0.55)
     ombre_pied = (orteils_f | orteil_h | (plante & (rel < 0.45))) & sous_branche
     plante &= sous_branche & ~ombre_pied
+    # le tarse, derrière le pied, dans l'ombre de la branche : il relie le pied à la branche,
+    # qui sinon flotte dans le vide
+    tarse = membre([(152.2, 58.6), (152.0, 56.6), (151.8, 54.6)], [1.3, 1.5, 1.5], X, Y)
+    tarse &= sous_branche & ~plante & ~ombre_pied
+    clarte_tarse = 0.06 + 0.16 * np.clip((Y - 55.4) / 2.4, 0, 1)
     f = [
+        forme("tarse_fond", tarse, "fond", "fond", lum=clarte_tarse),
         forme("pied_fond", ombre_pied, "fond", "fond", cernee=True, lie=("plante",)),
         forme("plante", plante, "plante", "fond", lum=clarte_pied, lie=("pied_fond",)),
         forme("bras_fond", bras_haut_f, "fond", "fond", cernee=True, lie=("avant_bras_fond",)),
@@ -676,7 +708,10 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("tibia", tibia | genou, "membre", cernee=True),
         forme("orteils", orteils, "membre", "devant", cernee=True, lie=("tibia",)),
         forme("epaule", epaule_g & corps & ~bras_haut, "bras_pale", volume="bras"),
-        forme("bras", bras_haut, "bras_pale", "devant", cernee=True),
+        # la racine du bras sort de l'épaule sans contour ; plus loin, vers le coude, il passe
+        # devant le flanc
+        forme("bras", bras_haut, "bras_pale", "devant", cernee=True, lie=("bras_racine",)),
+        forme("bras_racine", bras_haut & (X < 141.6), "bras_pale", "devant", volume="bras"),
         forme("doigt_g", doigt_g, "membre", "devant", cernee=True, lie=("main",)),
         forme(
             "avant_bras", avant_bras & ~coude, "dos", "devant", cernee=True, lie=("bras", "coude")
@@ -717,9 +752,16 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     oeil["joue"] = corps & (yt > 33.4) & (yt < limite - 0.3) & (xt < 128.2) & (xt > 122.2)
     oeil["disques"] = disques_o | disques_m | disques_f | disque_g | disque_h
     oeil["coudes"] = ellipse(152.4, 39.6, 1.0, 0.7, X, Y) | ellipse(139.4, 45.8, 0.8, 0.7, X, Y)
-    oeil["ombres"] = (membre(pts_bh, [1.5, 1.4, 1.5], X, Y - 0.9) & corps & ~bras_haut) | (
-        cuisse & membre([(161.6, 40.6), (162.0, 43.6), (162.4, 46.8)], [2.6, 2.4, 2.0], X, Y)
+    # l'épaule, comme celle de la grenouille de gauche : éclairée dessus, une ombre dessous
+    bosse_epaule = epaule_g & corps & ~bras_haut
+    oeil["ombres"] = (
+        (membre(pts_bh, [1.5, 1.4, 1.5], X, Y - 0.9) & corps & ~bras_haut)
+        | (cuisse & membre([(161.6, 40.6), (162.0, 43.6), (162.4, 46.8)], [2.6, 2.4, 2.0], X, Y))
+        | (bosse_epaule & (Y > 41.7))
     )
+    oeil["reflets"] = bosse_epaule & (Y < 40.6)
+    # le flanc orangé, son avant rosé, la gorge blanche et l'épaule passent de l'un à l'autre
+    oeil["fondus"] = [(("flanc", "flanc_pale", "gorge", "epaule"), 3)]
     return f, motifs, oeil
 
 
@@ -802,9 +844,20 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     levre = dessous & (xt > 78.0) & (yt < limite + 0.75)
     bouche = dessous & (yt >= limite + 0.75) & (yt < limite + 1.25) & (xt > 79.0) & (xt < 99.4)
     # les côtés du ventre qui fuient : peau orangée, dans l'ombre
-    cote_d = dessous & (X < 67.4) & (Y > 49.0)
-    cote_g = dessous & (X > 84.2) & (Y > 50.0)
-    pli = dessous & ~cote_d & (Y > 58.6) & (X < 70.0)
+    # (limites ondulées : le fondu fera le reste)
+    onde_y = 0.6 * np.sin(Y * 1.7 + 0.5) + 0.35 * np.sin(Y * 3.9 + 2.0)
+    onde_x = 0.4 * np.sin(X * 1.9) + 0.25 * np.sin(X * 4.3 + 1.0)
+    cote_d = dessous & (X < 67.4 + onde_y) & (Y > 49.0)
+    cote_g = dessous & (X > 84.2 - onde_y) & (Y > 50.0)
+    pli = dessous & ~cote_d & (Y > 58.6 + onde_x) & (X < 70.0 + onde_y)
+    # et l'ombre des côtés qui fuient vient en pente, sans marche
+    pente = np.maximum.reduce(
+        [
+            np.clip((68.6 - X) / 3.2, 0, 1),
+            np.clip((X - 83.0) / 3.2, 0, 1) * np.clip((Y - 49.0) / 2.0, 0, 1),
+            np.clip((Y - 57.6) / 2.4, 0, 1) * np.clip((71.0 - X) / 2.0, 0, 1),
+        ]
+    )
     # patte arrière droite (à gauche) : la cuisse descend en diagonale vers la gauche jusqu'au
     # genou, vert et granuleux ; le tibia, gros, horizontal, revient du genou vers la droite et
     # passe derrière l'avant-bras droit ; deux gros orteils barrés s'enroulent sur la branche
@@ -931,7 +984,7 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         | barres_tibia
         | barres_cuisse,
         "tache": (d == "t") & ~cote_d & ~cote_g,
-        "tubercule": granules | (haut_bras & ((np.floor(X * ECHELLE) % 2) == 0)),
+        "tubercule": granules | semis(haut_bras, 0.7, 47),
         "bouche": bouche,
     }
     oeil = oeil_de(xt, yt, 87.2, 37.5, 4.1, 4.1, cligne, dome=(93.6, 34.9, 3.0, 1.6), pupille=0.1)
@@ -950,9 +1003,10 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # profondeur : les côtés du ventre, l'ombre de la mâchoire sur la gorge, le dessous du
     # ventre au-dessus de la branche, le tibia qui passe derrière l'avant-bras ; le bras droit
     # se lit sur le ventre par l'arête éclairée de son dessus et l'ombre franche qu'il porte
+    oeil["pente"] = pente * (dessous & ~levre)
+    oeil["fondus"] = [(("cotes", "ventre", "gorge"), 3)]
     oeil["ombres"] = (
-        (cote_d | cote_g | pli)
-        | (dessous & ~levre & (yt < limite + 2.2) & (xt > 74.0))
+        (dessous & ~levre & (yt < limite + 2.2) & (xt > 74.0))
         | (ventre & (Y > 58.4))
         | (tibia_d & (X > 60.4))
         | (epaule_d & (Y > 51.8))
@@ -1083,7 +1137,7 @@ def silhouette(c, f, motifs, oeil):
 # ------------------------------------------------------------------ parure
 # Ce que le décalque ne garde pas à cette taille : les marbrures violet-noir des membres
 # orangés (tigrés), en taches de deux ou trois pixels qui, sur un doigt, se lisent en bandes ;
-# le liseré de granules blanches au bord des membres verts, un pixel sur deux.
+# le liseré de granules blanches au bord des membres verts, semées au hasard.
 TIGRE_SAUF = {"tibia_d", "cuisse_d"}  # barres relevées une à une
 LISERE = {
     "avant_bras",
@@ -1105,7 +1159,7 @@ def parure(c, f, motifs, oeil):
     perle = vide.copy()
     bruit = _flou(np.random.default_rng(41).random((c.H, c.W)), 1)
     taches = bruit > np.quantile(bruit, 0.79)
-    pair = (np.arange(c.W)[None, :] + np.arange(c.H)[:, None]) % 2 == 0
+    alea = np.random.default_rng(43).random((c.H, c.W))
     for k, fo in enumerate(f):
         ici = num == k
         if fo["matiere"] in ("membre", "fond") and fo["nom"] not in TIGRE_SAUF:
@@ -1125,7 +1179,11 @@ def parure(c, f, motifs, oeil):
                 | _voisin(vert, 0, 1)
                 | _voisin(vert, 0, -1)
             )
-            perle |= ici & ~autour & ~contre_vert & pair
+            # au bord, et quelques-unes au deuxième rang : une rangée, pas un pointillé
+            libre = ici & ~autour & ~contre_vert
+            pres = _voisin(libre, 1, 0) | _voisin(libre, -1, 0) | _voisin(libre, 0, 1)
+            pres |= _voisin(libre, 0, -1)
+            perle |= semis(libre | (ici & autour & pres & (alea < 0.3)), 0.6, 44)
     return {**motifs, "barre": barre & ~perle, "tache": tache & ~barre & ~perle, "perle": perle}
 
 
@@ -1180,6 +1238,7 @@ RAMPES = {
     "perle": (-0.2, 0.04, 3, False),
     "lichen": (-0.14, 0.08, 4, False),
     "creux": (-0.04, 0.04, 2, False),
+    "noeud": (-0.1, 0.1, 4, False),
     "bouche": (-0.04, 0.08, 3, False),
 }
 
@@ -1251,6 +1310,15 @@ def details(c, f, motifs, oeil):
         lum[ici] = (0.5 + 1.6 * bord + 2.4 * face - 0.22 * (hauteur - 0.5))[ici]
         if fo["lum"] is not None:
             lum[ici] = fo["lum"][ici]
+    # fondus : les zones d'un même groupe (flanc, ventre, gorge) passent de l'une à l'autre ;
+    # d'abord le relief, lissé sur le groupe
+    groupes = [
+        (np.isin(num, [k for k, fo in enumerate(f) if fo["nom"] in noms]), r)
+        for noms, r in ([] if oeil is None else oeil.get("fondus", []))
+    ]
+    for u, _ in groupes:
+        lisse = _flou(lum * u, 2) / np.maximum(_flou(u.astype(float), 2), 1e-6)
+        lum[u] = lisse[u]
     # ombre de contact : la forme plus lointaine juste sous ou à droite d'une forme cernée
     devant = np.zeros((c.H, c.W), bool)
     for k, fo in enumerate(f):
@@ -1261,7 +1329,11 @@ def details(c, f, motifs, oeil):
             lum[ombre] -= 0.22
             devant |= m
     if oeil is not None:
-        lum[oeil["ombres"] & (num >= 0)] -= 0.2  # ombre du bras et de l'épaule sur le corps
+        # ombre du bras et de l'épaule sur le corps, au bord adouci ; ombre en pente des
+        # côtés qui fuient
+        lum -= (0.2 * _flou(oeil["ombres"].astype(float), 1) + 0.22 * oeil.get("pente", 0)) * (
+            num >= 0
+        )
         lum[oeil.get("creux", False) & (num >= 0)] -= 0.3  # ombres franches (sous un bras)
         lum[oeil.get("reflets", False) & (num >= 0)] += 0.28  # arête éclairée d'un bras
         lum[oeil["coudes"] & (num >= 0)] += 0.24  # coudes saillants
@@ -1292,6 +1364,31 @@ def details(c, f, motifs, oeil):
             sous = ici & ((plaques == v) if variantes else True)
             tons = np.array(rampe(coul, bas, haut, n, 0.014 * v), object)
             img[sous] = tons[idx[sous]]
+    # puis les couleurs : chaque pixel du groupe mêle les matières voisines, dans la part où
+    # elles l'entourent, la frontière rendue irrégulière par un bruit
+    bruit = _flou(np.random.default_rng(53).random((c.H, c.W)), 1) - 0.5
+    for u, r in groupes:
+        mats = sorted(set(mat[u]))
+        if len(mats) < 2:
+            continue
+        den = np.maximum(_flou(u.astype(float), r), 1e-6)
+        parts = {}
+        for n_, m in enumerate(mats):
+            pm = _flou((u & (mat == m)).astype(float), r) / den
+            parts[m] = np.clip(pm + 3.0 * pm * (1 - pm) * np.roll(bruit, 5 * n_, axis=1), 0, 1)
+        total = np.maximum(sum(parts.values()), 1e-6)
+        rgb = np.zeros((c.H, c.W, 3))
+        for m in mats:
+            bas, haut, n, variantes = RAMPES[m]
+            idx = (lum + grain) * (n - 1) + 0.5 + (c.trame - 0.5) * 0.55
+            idx = np.clip(np.floor(idx), 0, n - 1).astype(int)
+            for v in (-1, 0, 1) if variantes else (0,):
+                sous = (plaques == v) if variantes else np.ones((c.H, c.W), bool)
+                tons = rampe(MATIERES[m], bas, haut, n, 0.014 * v)
+                tons = np.array([[int(t[i : i + 2], 16) for i in (1, 3, 5)] for t in tons], float)
+                rgb[sous] += (parts[m] / total)[sous][:, None] * tons[idx[sous]]
+        for j, i in zip(*np.nonzero(u & np.isin(zone, mats)), strict=False):
+            img[j, i] = hexa_de(*(rgb[j, i] / 255), pas=6)
     # granules claires sur le vert (dos, tête, bras), à places fixes : un pixel plus clair,
     # son ombre dessous ; jamais blanc
     vert = (mat == "dos") & (zone == "dos")
