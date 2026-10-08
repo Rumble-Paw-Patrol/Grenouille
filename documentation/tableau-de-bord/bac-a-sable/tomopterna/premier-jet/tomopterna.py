@@ -1,9 +1,13 @@
-"""Sprite 8-bit de Callimedusa tomopterna (phyllomédusine tigrée), sur le modèle d'A. blanci.
+"""Premier jet, mis de côté : C. tomopterna en « mode espèce », dans la pose d'A. blanci.
 
-    uv run python documentation/tableau-de-bord/tomopterna.py
+    uv run python documentation/tableau-de-bord/bac-a-sable/tomopterna/premier-jet/tomopterna.py
+
+Fait avec l'ancien skill sprite-grenouille, d'une traite : Léonard le trouve réussi mais voulait
+la photo animée telle quelle (mode image), refaite par étapes à côté de ce dossier. Gardé tel
+quel ; il n'est relié à rien.
 
 Grenouille de profil, tournée vers le titre (à gauche), assise, accroupie, dessinée d'après une
-photo de deux C. tomopterna perchées sur une branche (auteur à créditer) : celle de droite, de
+photo de deux C. tomopterna perchées sur une branche, d'Olivier Louguet : celle de droite, de
 profil, pour la silhouette, la tête et l'œil, celle de gauche, de trois quarts, pour la gorge, le
 ventre et le bras proche. Posture et membres repris d'A. blanci (grenouille.py), validés par
 Léonard : patte arrière en Z (cuisse arrondie tournée vers nous, tibia long et bombé qui dépasse
