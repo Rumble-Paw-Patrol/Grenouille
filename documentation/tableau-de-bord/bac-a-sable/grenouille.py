@@ -428,16 +428,16 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # (en bas, à l'arrière, contre le sol), par-dessus la cuisse ; reflet de peau humide
     jambe = catmull(
         [
-            (32.48, 33.4),
-            (34.6, 31.6),
-            (37.69, 30.8),
-            (40.77, 30.9),
-            (44.3, 31.8),
-            (47.83, 33.4),
-            (51.0, 35.0),
-            (52.59, 35.9),
-            (53.65, 36.8),
-            (54.0, 38.0),
+            (32.48, 33.15),
+            (34.6, 31.1),
+            (37.69, 30.3),
+            (40.77, 30.4),
+            (44.3, 31.35),
+            (47.83, 32.6),
+            (51.0, 34.0),
+            (52.59, 34.9),
+            (53.65, 35.8),
+            (54.0, 37.2),
             (53.47, 39.2),
             (51.35, 38.8),
             (47.83, 38.8),
@@ -459,9 +459,9 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[jm & ~dans(jambe, X - 0.2, Y + 1.6)] = "S"
     g[jm & ~dans(jambe, X, Y + 0.7)] = "Z"
     g[jm & (np.abs((X - 43.0) + (Y - 37) * 0.3) < 0.7) & (n3 > 0.3) & (g == "O")] = "M"
-    g[ellipse(36.4, 32.4, 2.2, 0.5, X, Y, -0.1)] = "I"  # reflet au genou
+    g[ellipse(36.4, 31.9, 2.2, 0.5, X, Y, -0.1)] = "I"  # reflet au genou
     g[ellipse(53.4, 38.6, 0.9, 0.8, X, Y) & ~dans(jambe, X, Y + 1.0)] = "O"  # talon
-    g[ellipse(53.4, 38.2, 0.5, 0.4, X, Y)] = "H"
+    g[ellipse(53.2, 37.2, 0.5, 0.4, X, Y)] = "H"
     pli = np.zeros_like(jm)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         voisin_hors = ~np.roll(np.roll(jm, dy, 0), dx, 1)
