@@ -72,6 +72,8 @@ PALETTE = {
     "A": "#776647",  # cercle de l'œil, en bas
     "W": "#FFFFFF",  # reflet de l'œil
     "w": "#9FB4C0",  # second reflet, bleuté
+    "R": "#4A1418",  # intérieur de la gueule
+    "L": "#D2646C",  # langue au repos
 }
 UNITES = (57, 43)
 BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]])
@@ -217,10 +219,11 @@ def bruit(x, y, graine):
     return v - np.floor(v)
 
 
-def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien"):
+def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien", bouche=0.0, rentres=False):
     """Tons de base d'une image, le masque des membres (pied, tibia, bras, mains, avec
     leur contour) et celui de l'ombre de contact derrière le bras. Le style « nouveau »
-    sème moins de grain sur les membres et cerne leur côté lumière de brun."""
+    sème moins de grain sur les membres et cerne leur côté lumière de brun. « bouche » ouvre
+    la gueule (en unités, au bout du museau) ; « rentres » enfonce les yeux, comme pour avaler."""
     neuf = style == "nouveau"
     g = np.full((H, W), ".", dtype="<U1")
     # Tête baissée ou relevée : rotation de quelques degrés autour du cou, qui s'estompe
@@ -230,6 +233,14 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien"):
     px, py = 18.0, 9.5
     x = px + (X - px) * np.cos(a) - (Y - py) * np.sin(a)
     y = py + (X - px) * np.sin(a) + (Y - py) * np.cos(a)
+    # Bouche ouverte : sous le trait de la bouche, la mâchoire inférieure descend de « bouche »
+    # unités au bout du museau, de moins en moins jusque sous l'œil ; entre les deux, la gueule.
+    gueule = np.zeros((H, W), bool)
+    if bouche:
+        trait = np.interp(x, [0, 4, 7.5, 9.5], [8.75, 9.15, 9.7, 10.1])
+        ecart = bouche * np.clip((7.8 - x) / 6.0, 0, 1)
+        gueule = (y > trait) & (y < trait + ecart)
+        y = np.where(y >= trait + ecart, y - ecart, y)
     n1, n2, n3 = bruit(x, y, 1), bruit(x, y, 2), bruit(X, Y, 3)
     alea = random.Random(7)
 
@@ -540,15 +551,18 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien"):
 
     # --- l'autre œil : une simple bosse de peau sur le crâne, éclairée par-dessus et
     # soulignée d'une ombre à sa base, qui ne bouge pas quand l'œil visible cligne
-    dome = ellipse(8.4, 2.2, 2.5, 1.75, x, y)
+    dy_d = 0.6 if rentres else 0.0  # les yeux rentrés, la bosse s'efface un peu
+    dome = ellipse(8.4, 2.2 + dy_d, 2.5, 1.75, x, y)
     g[dome] = "O"
     g[dome & (n1 > 0.9)] = "H"
-    g[dome & ~ellipse(8.4, 2.5, 2.5, 1.75, x, y)] = "I"
-    g[dome & ellipse(7.9, 1.8, 1.3, 0.8, x, y) & ~ellipse(8.4, 2.5, 2.5, 1.75, x, y)] = "H"
-    g[dome & ~ellipse(8.4, 1.6, 2.5, 1.75, x, y)] = "S"
+    g[dome & ~ellipse(8.4, 2.5 + dy_d, 2.5, 1.75, x, y)] = "I"
+    g[
+        dome & ellipse(7.9, 1.8 + dy_d, 1.3, 0.8, x, y) & ~ellipse(8.4, 2.5 + dy_d, 2.5, 1.75, x, y)
+    ] = "H"
+    g[dome & ~ellipse(8.4, 1.6 + dy_d, 2.5, 1.75, x, y)] = "S"
 
     # --- l'œil visible : globe saillant, paupière supérieure en relief, pli dessous
-    cx, cy = 11.2, 8.4
+    cx, cy = 11.2, 8.4 + (0.7 if rentres else 0.0)
     oeil = ellipse(cx, cy, 3.8, 3.65, x, y)
     iris = ellipse(cx, cy, 2.9, 2.8, x, y)
     paup = ellipse(cx, cy - 0.5, 4.7, 4.5, x, y) & ~oeil & dedans
@@ -579,9 +593,21 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien"):
         ] = "e"
         g[ellipse(cx - 1.1, cy - 1.2, 0.85, 0.8, x, y)] = "W"
         g[ellipse(cx + 1.2, cy + 1.5, 0.4, 0.4, x, y)] = "w"
+    if rentres and not cligne:
+        # yeux rentrés pour avaler : le globe s'enfonce, les paupières se referment à moitié
+        bord = cy - 0.9 + 0.05 * (x - cx) ** 2
+        couvert = oeil & (y < bord)
+        g[couvert] = "O"
+        g[couvert & (y < cy - 2.2)] = "H"
+        g[oeil & (np.abs(y - bord) <= 0.45)] = "B"
+        g[oeil & (y > cy + 2.4)] = "f"
     # narine et bout du museau
     g[ellipse(2.1, 5.9, 0.4, 0.4, x, y)] = "B"
     g[ellipse(2.8, 4.0, 0.7, 0.5, x, y) & dedans] = "I"
+    if bouche:
+        # la gueule entrouverte, sombre, la langue au repos sur son plancher
+        g[gueule & dedans] = "R"
+        g[gueule & dedans & ~np.roll(gueule, -1, 0) & (x > 2.2) & (x < 6.8)] = "L"
 
     # où poser des pustules : la peau du corps restée visible (dos, flanc, cuisse, tibia, bras
     # proche), sauf la tête, les mains, les pieds, le bras du fond et l'ombre de contact
@@ -776,12 +802,12 @@ def pustules():
     return _PUSTULES
 
 
-def composer(gorge, souffle, cligne, tete):
+def composer(gorge, souffle, cligne, tete, bouche=0.0, rentres=False):
     """L'image finale : le corps du rendu « ancien », les membres et leur contour copiés tels
     quels du rendu « nouveau », le flanc derrière le bras assombri, pixel par pixel, et les
     pustules : un pixel de la couleur d'origine, plus clair, son ombre juste en dessous."""
-    rangs, membres, contact, peau = image(gorge, souffle, cligne, tete, "ancien")
-    neufs = image(gorge, souffle, cligne, tete, "nouveau")[0]
+    rangs, membres, contact, peau = image(gorge, souffle, cligne, tete, "ancien", bouche, rentres)
+    neufs = image(gorge, souffle, cligne, tete, "nouveau", bouche, rentres)[0]
     out = np.where(membres, nuancer(neufs, "nouveau"), nuancer(rangs, "ancien"))
     for j, i in zip(*np.nonzero(contact & (out != ".") & (out != "K")), strict=True):
         out[j, i] = assombrir(out[j, i])
