@@ -4,17 +4,17 @@
 
 Copie de ../grenouille.py dont la posture et les membres changent, d'après des photos
 d'Anomaloglossus (dont M. Dewynter). Patte arrière en Z de grenouille assise : cuisse arrondie,
-tournée vers nous, de la hanche au genou ; tibia long du genou au talon, qui passe sous la
-cuisse et dépasse nettement derrière la croupe ; tarse qui revient du talon vers l'avant, au
-sol, trois orteils longs en éventail. Bras pliés, coude ouvert, avant-bras un peu renflé en son
-milieu, plus fin au coude et au poignet, qui arrive sur le talon de la paume ; le bras droit
-part de la même épaule que le gauche, en arrière-plan, cerné là où le gauche passe devant, sa
-main plus haut et plus en arrière. Mains et pieds sont des gabarits posés au pixel près
-(ORTEILS, MAIN_PROCHE, MAIN_LOINTAINE) : paume étroite, trois doigts d'un pixel en éventail
-vers l'avant (diagonale haute, tout droit, diagonale basse), tracés en escalier pour que chaque
-pixel touche le suivant par un côté, disque clair au bout. Image de 120 × 86, sans rien contre
-ses bords. Écrit grenouille.json dans ce dossier (non suivi) ; le tableau de bord n'en lit
-rien.
+tournée vers nous, de la hanche au genou ; tibia long et bombé, surtout sur le dessus, du genou
+au talon arrondi, qui passe sous la cuisse et dépasse nettement derrière la croupe ; la croupe
+s'arrête derrière le tibia ; tarse qui revient du talon vers l'avant, au sol, trois orteils
+longs en éventail. Bras pliés, coude ouvert, avant-bras un peu renflé en son milieu, plus fin
+au coude et au poignet, qui arrive sur le talon de la paume ; le bras droit part de la même
+épaule que le gauche, en arrière-plan, cerné là où le gauche passe devant, sa main plus haut et
+plus en arrière. Mains et pieds sont des gabarits posés au pixel près (ORTEILS, MAIN_PROCHE,
+MAIN_LOINTAINE) : paume étroite, trois doigts d'un pixel en éventail vers l'avant (diagonale
+haute, tout droit, diagonale basse), tracés en escalier pour que chaque pixel touche le suivant
+par un côté, disque clair au bout. Image de 120 × 86, sans rien contre ses bords. Écrit
+grenouille.json dans ce dossier (non suivi) ; le tableau de bord n'en lit rien.
 
 Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
 de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de doré, bande sombre
@@ -133,27 +133,27 @@ ORTEILS = (
 MAIN_PROCHE = (
     (31, 77),
     [
-        "..IH.............",
-        "..HOOO...........",
-        ".....OO.....HOOS.",
-        "......O...HHHOOOS",
-        "IwOOHOOHOOOOOOOOS",
-        "HO....OOOOOOOOSS.",
-        "...IHOO...SOOSS..",
-        "...HO............",
+        ".....IH..........",
+        ".....HOOO........",
+        "........OO..HOOS.",
+        ".........OHHHOOOS",
+        "...IwOOHOOOOOOOOS",
+        "...HO....OOOOOSS.",
+        "......IHOOSOOSS..",
+        "......HO.........",
     ],
 )
 MAIN_LOINTAINE = (
     (27, 67),
     [
-        ".HO............",
-        ".SSSS......OSSZ",
-        "....SS...OOOSSZ",
-        ".....SOOSSSSSSZ",
-        "HOSOSSSSSSSSSZ.",
-        "SS...S..SSSZZ..",
-        "...HOS.........",
-        "...SS..........",
+        "....HO.........",
+        "....SSSS...OSSZ",
+        ".......SSOOOSSZ",
+        "........SOSSSSZ",
+        "...HOSOSSSSSSZ.",
+        "...SS...SSSZZ..",
+        "......HOS......",
+        "......SS.......",
     ],
 )
 
@@ -277,12 +277,10 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             (49.6, 25.0),
             (50.8, 28.8),
             (51.2, 33.0),
-            (50.8, 37.2),
-            (49.8, 40.4),
-            (48.2, 42.4),
-            (46.4, 42.6),
-            (44.4, 42.2),
-            (42.4, 39.0),
+            (50.4, 36.4),
+            (48.4, 37.6),
+            (44.4, 37.8),
+            (41.0, 37.0),
             (38, 35.0),
             (33, 33.2 + souffle),
             (29, 31.4 + souffle),
@@ -404,18 +402,20 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # son disque. Les plus lointains sont plus hauts et plus sombres.
     tarse = catmull(
         [
-            (57.0, 39.2),
-            (55.8, 40.2),
-            (51.0, 40.8),
-            (46.0, 41.0),
-            (42.0, 40.6),
+            (56.8, 38.0),
+            (55.0, 39.6),
+            (51.0, 40.4),
+            (46.0, 40.8),
+            (42.0, 40.4),
             (40.6, 39.8),
             (39.8, 40.6),
             (40.2, 41.8),
             (43.0, 42.4),
             (48.0, 42.4),
             (53.0, 42.0),
-            (56.2, 41.0),
+            (56.0, 41.2),
+            (57.6, 40.0),
+            (57.8, 38.8),
         ]
     )
     tm = dans(tarse, X, Y)
@@ -428,22 +428,25 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # (en bas, à l'arrière, contre le sol), par-dessus la cuisse ; reflet de peau humide
     jambe = catmull(
         [
-            (33.0, 33.2),
-            (37.0, 33.4),
-            (42.0, 34.0),
-            (47.0, 34.8),
-            (51.5, 35.6),
-            (55.0, 36.2),
-            (56.6, 37.0),
-            (56.4, 38.6),
-            (55.0, 39.2),
-            (51.0, 39.0),
-            (46.0, 38.8),
-            (41.0, 38.6),
-            (37.0, 38.3),
-            (34.0, 37.8),
-            (32.2, 36.8),
-            (31.6, 35.2),
+            (32.6, 33.6),
+            (35.0, 32.4),
+            (38.5, 31.9),
+            (42.0, 32.1),
+            (46.0, 33.0),
+            (50.0, 34.4),
+            (53.6, 35.6),
+            (55.4, 36.2),
+            (56.6, 36.8),
+            (57.0, 38.0),
+            (56.4, 39.2),
+            (54.0, 38.8),
+            (50.0, 38.8),
+            (45.0, 38.8),
+            (40.0, 38.6),
+            (36.0, 38.2),
+            (33.4, 37.4),
+            (31.8, 36.2),
+            (31.6, 34.6),
         ]
     )
     jm = dans(jambe, X, Y)
@@ -456,13 +459,14 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[jm & ~dans(jambe, X - 0.2, Y + 1.6)] = "S"
     g[jm & ~dans(jambe, X, Y + 0.7)] = "Z"
     g[jm & (np.abs((X - 45.0) + (Y - 37) * 0.3) < 0.7) & (n3 > 0.3) & (g == "O")] = "M"
-    g[ellipse(33.4, 34.6, 0.7, 1.0, X, Y, 0.3)] = "I"  # reflet au genou
-    g[ellipse(55.6, 37.4, 0.6, 0.5, X, Y)] = "H"  # talon
+    g[ellipse(36.4, 33.4, 2.2, 0.5, X, Y, -0.1)] = "I"  # reflet au genou
+    g[ellipse(56.2, 38.6, 0.9, 0.8, X, Y) & ~dans(jambe, X, Y + 1.0)] = "O"  # talon
+    g[ellipse(56.2, 38.2, 0.5, 0.4, X, Y)] = "H"
     pli = np.zeros_like(jm)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         voisin_hors = ~np.roll(np.roll(jm, dy, 0), dx, 1)
         voisin_dessous = np.roll(np.roll(sous_jambe, dy, 0), dx, 1)
-        pli |= jm & voisin_hors & voisin_dessous
+        pli |= jm & voisin_hors & voisin_dessous & (X < 55)  # pas de pli au talon
     g[pli] = "Z"
 
     # --- patte avant : sort du flanc sous la bande, coude en arrière, avant-bras plus
