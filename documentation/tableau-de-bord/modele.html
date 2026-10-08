@@ -7,7 +7,8 @@
    guyanaise » : fond de sous-bois la nuit, lueurs tirées de la palette du spectrogramme
    (inferno : braise, ambre, jaune pâle), panneaux en verre dépoli. Le bandeau est une fenêtre
    d'écoute : une tête de lecture balaie les 18 s du chant d'A. blanci (spectrogramme.py).
-   Sombre par défaut ; le thème clair garde le bandeau et la barre latérale de nuit. */
+   Sombre par défaut ; le thème clair passe aussi le bandeau et la barre latérale au jour
+   (seul le spectrogramme, une image inferno, reste sur fond noir). */
 :root {
   --fleche: color-mix(in srgb, var(--muted) 70%, var(--ink));
   --bg: #050B0A;
@@ -74,10 +75,39 @@
   --spot: rgba(200, 110, 20, .08); --ombre: 0 18px 40px -26px rgba(20, 50, 40, .45);
   --grain-op: .04; color-scheme: light;
 }
-/* Le bandeau et la barre latérale restent de nuit dans les deux thèmes : leurs encres sont fixes. */
+/* Bandeau et barre latérale : encres et fonds propres, qui suivent le thème. L'infobulle
+   reste de nuit dans les deux thèmes. */
 .side, .bande, #bulle {
   --nuit-ink: #E9F2EC; --nuit-muted: #93A89D; --nuit-ambre: #F5A53A; --nuit-or: #FFE08A;
-  --nuit-ligne: rgba(160, 210, 185, .16);
+  --nuit-ligne: rgba(160, 210, 185, .16); --nuit-survol: rgba(255, 255, 255, .05);
+  --nuit-fond-side: linear-gradient(180deg, rgba(6, 14, 12, .94), rgba(4, 9, 8, .97));
+  --nuit-fond-bande: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%);
+  --nuit-halo-1: rgba(228, 87, 63, .22); --nuit-halo-2: rgba(79, 216, 192, .10);
+  --nuit-titre: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%);
+  --nuit-titre-i: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A);
+  --nuit-titre-ombre: drop-shadow(0 2px 10px rgba(4, 8, 7, .9));
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) :is(.side, .bande) {
+    --nuit-ink: #11201A; --nuit-muted: #55675E; --nuit-ambre: #B9530D; --nuit-or: #A86F00;
+    --nuit-ligne: rgba(20, 70, 50, .14); --nuit-survol: rgba(20, 60, 45, .06);
+    --nuit-fond-side: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(237, 243, 239, .92));
+    --nuit-fond-bande: radial-gradient(120% 140% at 0% 0%, #F8E7DC 0%, #EEF3EF 46%, #E5EDE8 100%);
+    --nuit-halo-1: rgba(235, 120, 60, .16); --nuit-halo-2: rgba(30, 160, 140, .10);
+    --nuit-titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
+    --nuit-titre-i: linear-gradient(100deg, #A86F00, #B9530D 45%, #C2352A 80%, #8A1F5C);
+    --nuit-titre-ombre: none;
+  }
+}
+:root[data-theme="light"] :is(.side, .bande) {
+  --nuit-ink: #11201A; --nuit-muted: #55675E; --nuit-ambre: #B9530D; --nuit-or: #A86F00;
+  --nuit-ligne: rgba(20, 70, 50, .14); --nuit-survol: rgba(20, 60, 45, .06);
+  --nuit-fond-side: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(237, 243, 239, .92));
+  --nuit-fond-bande: radial-gradient(120% 140% at 0% 0%, #F8E7DC 0%, #EEF3EF 46%, #E5EDE8 100%);
+  --nuit-halo-1: rgba(235, 120, 60, .16); --nuit-halo-2: rgba(30, 160, 140, .10);
+  --nuit-titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
+  --nuit-titre-i: linear-gradient(100deg, #A86F00, #B9530D 45%, #C2352A 80%, #8A1F5C);
+  --nuit-titre-ombre: none;
 }
 
 * { box-sizing: border-box; }
@@ -109,7 +139,7 @@ h1, h2, h3, h4 { font-family: var(--f-display); text-wrap: balance; line-height:
 .shell { position: relative; z-index: 1; display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100%; }
 
 /* Barre latérale */
-.side { background: linear-gradient(180deg, rgba(6, 14, 12, .94), rgba(4, 9, 8, .97)); color: var(--nuit-ink); position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; overflow-y: auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 22px; border-right: 1px solid var(--nuit-ligne); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); scrollbar-width: thin; }
+.side { background: var(--nuit-fond-side); color: var(--nuit-ink); position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; overflow-y: auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 22px; border-right: 1px solid var(--nuit-ligne); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); scrollbar-width: thin; }
 .brand { display: flex; flex-direction: column; gap: 4px; padding-inline: 6px; }
 .brand b { font-family: var(--f-display); font-size: 21px; font-weight: 700; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
 .brand b::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, var(--nuit-or), var(--nuit-ambre) 55%, #E4573F); box-shadow: 0 0 14px var(--nuit-ambre), 0 0 2px var(--nuit-or); flex-shrink: 0; }
@@ -117,7 +147,7 @@ h1, h2, h3, h4 { font-family: var(--f-display); text-wrap: balance; line-height:
 .brand i { font-style: italic; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav a { position: relative; color: var(--nuit-muted); text-decoration: none; padding: 8px 12px; border-radius: 10px; font-size: 14px; font-weight: 500; display: flex; justify-content: space-between; gap: 8px; transition: color .2s, background .2s, transform .2s; }
-.nav a:hover { color: var(--nuit-ink); background: rgba(255, 255, 255, .05); transform: translateX(2px); }
+.nav a:hover { color: var(--nuit-ink); background: var(--nuit-survol); transform: translateX(2px); }
 .nav a.actif { color: var(--nuit-ink); background: linear-gradient(90deg, rgba(245, 165, 58, .18), rgba(245, 165, 58, .02)); box-shadow: inset 0 0 0 1px rgba(245, 165, 58, .22); }
 .nav a.actif::before { content: ""; position: absolute; left: -16px; top: 22%; bottom: 22%; width: 3px; border-radius: 0 3px 3px 0; background: linear-gradient(180deg, var(--nuit-or), var(--nuit-ambre), #E4573F); box-shadow: 0 0 12px var(--nuit-ambre); }
 .nav small { color: var(--nuit-muted); font-family: var(--f-mono); font-size: 11px; opacity: .8; }
@@ -129,12 +159,12 @@ h1, h2, h3, h4 { font-family: var(--f-display); text-wrap: balance; line-height:
 
 /* Colonne principale et bandeau */
 main { padding-inline: clamp(16px, 4vw, 56px); padding-block: 0 96px; min-width: 0; overflow-x: clip; }
-.bande { position: relative; isolation: isolate; overflow: hidden; margin-inline: calc(-1 * clamp(16px, 4vw, 56px)); background: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%); color: var(--nuit-ink); padding-inline: clamp(16px, 4vw, 56px); padding-block: clamp(30px, 5vw, 56px) 26px; display: grid; gap: 16px; border-bottom: 1px solid var(--nuit-ligne); }
-.bande::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(50% 80% at 92% 10%, rgba(228, 87, 63, .22), transparent 70%), radial-gradient(40% 60% at 70% 100%, rgba(79, 216, 192, .10), transparent 70%); }
+.bande { position: relative; isolation: isolate; overflow: hidden; margin-inline: calc(-1 * clamp(16px, 4vw, 56px)); background: var(--nuit-fond-bande); color: var(--nuit-ink); padding-inline: clamp(16px, 4vw, 56px); padding-block: clamp(30px, 5vw, 56px) 26px; display: grid; gap: 16px; border-bottom: 1px solid var(--nuit-ligne); }
+.bande::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(50% 80% at 92% 10%, var(--nuit-halo-1), transparent 70%), radial-gradient(40% 60% at 70% 100%, var(--nuit-halo-2), transparent 70%); }
 .bande .eyebrow { color: var(--nuit-or) !important; display: inline-flex; align-items: center; gap: 10px; }
 .bande .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #FF5A4E; box-shadow: 0 0 0 0 rgba(255, 90, 78, .6); }
-.bande h1 { font-size: clamp(26px, 4.2vw, 50px); font-weight: 700; line-height: 1.08; letter-spacing: -.025em; max-width: 22ch; background: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.bande h1 i { font-family: var(--f-serif); font-style: italic; font-weight: 400; font-size: 1.12em; letter-spacing: 0; padding-right: .08em; background: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bande h1 { font-size: clamp(26px, 4.2vw, 50px); font-weight: 700; line-height: 1.08; letter-spacing: -.025em; max-width: 22ch; background: var(--nuit-titre); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bande h1 i { font-family: var(--f-serif); font-style: italic; font-weight: 400; font-size: 1.12em; letter-spacing: 0; padding-right: .08em; background: var(--nuit-titre-i); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .bande p { margin: 0; color: var(--nuit-muted); max-width: 72ch; font-size: 16px; }
 /* Sous-titre et bouton d'écoute côte à côte, à gauche de la grenouille (--perchoir : la place
    qu'elle prend au bord droit, posée par son script) ; le bouton passe sous le sous-titre quand
@@ -154,7 +184,7 @@ main { padding-inline: clamp(16px, 4vw, 56px); padding-block: 0 96px; min-width:
 /* A. blanci en 8-bit (grenouille.py), perchée sur le spectrogramme, sous le titre qui la
    chevauche ; autour, une mosaïque de pixels ambrés qui scintille. Taille fixée par le script. */
 .bande .eyebrow, .bande h1, .bande p, .accroche { position: relative; z-index: 2; }
-.bande h1 { filter: drop-shadow(0 2px 10px rgba(4, 8, 7, .9)); }
+.bande h1 { filter: var(--nuit-titre-ombre); }
 .perchoir { position: relative; z-index: 1; height: 0; margin-bottom: -16px; pointer-events: none; }
 #grenouille { position: absolute; right: clamp(-8px, 2vw, 40px); bottom: 0; width: 448px; max-width: none; image-rendering: pixelated; image-rendering: crisp-edges; }
 @media (max-width: 700px) { .perchoir { height: auto; display: flex; justify-content: flex-end; } #grenouille { position: static; } .accroche { max-width: none; } }
