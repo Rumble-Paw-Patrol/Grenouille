@@ -88,7 +88,8 @@ uv run python documentation/tableau-de-bord/construire.py
 
 Publication avec l'outil Artifact : `file_path` = chemin absolu de `index.html`, `url` =
 l'URL ci-dessus (la lire d'abord avec `action: "read"` si cette session ne l'a ni lue ni
-publiée), `files` = contenu de `fichiers.json` avec chaque source en chemin absolu. Ne pas
+publiée), `files` = contenu de `fichiers.json` avec chaque source en chemin absolu (pour
+`chant.mp3`, `{from, contentType: "audio/mpeg"}` si l'outil ne devine pas le type). Ne pas
 passer `icon` ni `capabilities`.
 
 Puis noter la publication :

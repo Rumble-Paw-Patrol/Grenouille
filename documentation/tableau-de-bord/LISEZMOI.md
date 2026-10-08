@@ -18,7 +18,8 @@ depuis son menu « Partager » sur claude.ai.
 | `en_cours.yaml` | les chantiers de « En développement » | **Léonard, à la main** |
 | `structure.yaml` | la chaîne côté code (module, tests, commandes, état, enchaînement), lieux, cibles d'annotation, encodeurs suivis | Claude, skill `tableau-de-bord` |
 | `durees_chants.csv` | quartiles de la durée des chants des cinq espèces AnuraSet (signature des chants) | `durees_chants.py`, depuis `strong_labels.zip` d'AnuraSet |
-| `spectrogramme.jpg` | bandeau : un vrai chant d'A. blanci (Mataroni), 3,5–6,3 kHz | `spectrogramme.py` |
+| `spectrogramme.jpg` | bandeau : un vrai chant d'A. blanci (Molokoi, 18 s), 3–6 kHz | `spectrogramme.py` |
+| `chant.mp3` | bandeau : le même chant à écouter (bouton « Écouter le chant », la tête de lecture suit le son) ; sans lui, pas de bouton | `spectrogramme.py` (disque des enregistrements branché) |
 | `grenouille.json` | bandeau : A. blanci en 8-bit, 114 × 86 pixels, assise, perchée sur le spectrogramme sous le titre, sur une mosaïque de pixels ambrés (palette et 24 images : gorge, flanc, clignement, tête ; la page les enchaîne) | `grenouille.py`, d'après les photos de Benoît Villette et d'Arnaud Aury, et des photos d'Anomaloglossus (dont M. Dewynter) pour la posture |
 | `poste-annotation.png` | capture du poste d'annotation Streamlit, affichée en fin de section Annotation si elle existe | Léonard (capture d'écran) |
 | `annotations.json` | avancement des annotations, compté dans `data/db/blanci.sqlite` | `construire.py` |

@@ -3368,3 +3368,75 @@ de Léonard, 01/10/2026.
        négatives. Les autres files gardent l'enregistrement entier. Vérifié dans le navigateur
        sur une copie de la base : intervalle tracé, extrait 0,6–30,6 s enregistré, candidat
        suivant ouvert.
+
+## 2026-10-08 — Poste d'annotation aux couleurs du tableau de bord
+
+197. **Le poste prend l'habillage du tableau de bord** (Léonard, 08/10). Nuit guyanaise,
+     sombre seulement (le spectrogramme l'est) : fond de sous-bois à lueurs braise, sarcelle
+     et pourpre, panneau de gauche de nuit, titres en Unbounded, texte en Hanken Grotesk,
+     étiquettes des champs en JetBrains Mono capitales, accent ambre, bouton principal en
+     dégradé braise, formulaire et rubriques en verre dépoli, visualiseur encadré comme le
+     spectrogramme du bandeau. Dans le visualiseur : tête de lecture crème à lueur ambrée,
+     bande d'écoute en pointillés or, types d'intervalle aux couleurs des espèces du tableau.
+     Tout est dans `blanci/annotation/style.py` : le thème Streamlit est passé par `blanci
+     annotate` en variables `STREAMLIT_THEME_*` (une option inconnue de la version installée
+     est ignorée, là où un drapeau inconnu ferait échouer le lancement ; une variable déjà
+     posée garde la main), la feuille de style est injectée par `app.py`. Lancé par
+     `streamlit run` sans passer par `blanci annotate`, le poste garde la feuille de style
+     mais pas le thème (couleurs des cases, curseurs et menus). Pas d'animation de fond ni de
+     grain en surimpression : le navigateur garde ses forces pour le spectrogramme.
+
+198. **Poste : bandeau, mode d'emploi dans le panneau, couleurs qui parlent, déplacement au
+     clic droit** (Léonard, 08/10).
+     - **Bandeau** du tableau de bord en haut de page (`bandeau.py`) : « Poste d'annotation
+       d'*Anomaloglossus blanci* », A. blanci en 8-bit perchée sur le chant de Molokoi balayé
+       par la tête de lecture. Composant à part : la page, l'image et la grenouille
+       (`documentation/tableau-de-bord/`) sont servies une fois, rien n'est renvoyé à chaque
+       clic. Le surtitre au-dessus de l'enregistrement disparaît : le point rouge passe devant
+       son nom. Le fond reprend les lueurs du tableau de bord.
+     - **Mode d'emploi** : en tête du panneau de gauche, dans une fenêtre flottante qui déborde
+       sur la page. Colonnes Fonction puis Geste ; filtre dynamique et contraste expliqués
+       plus simplement.
+     - **« Type » devient « étiquette »** (le mot des labels). Les touches 1 à 4 choisissent
+       l'étiquette des prochains intervalles sans toucher à l'intervalle sélectionné ; un clic
+       sur une étiquette change celle de l'intervalle sélectionné s'il y en a un, sinon celle
+       des prochains. Pleine : prochains intervalles ; cerclée de blanc : intervalle
+       sélectionné. Couleurs (`style.LABEL_COLORS`, aussi sur la carte des embeddings) :
+       A. blanci vert, plusieurs bleu, incertaine jaune orangé, faux ami rouge.
+     - **Qualité en médailles** : A or, B argent, C bronze (boutons et pastilles).
+     - **« Dynamique » devient « Filtre dynamique »**, et le contraste revient à côté de lui sur
+       la deuxième ligne (les deux ne se séparent plus ; le micro du spectrogramme a sa ligne).
+     - **Se déplacer : clic droit + glisser**, à la place de Maj + clic gauche + glisser (les
+       flèches ← → restent pour le temps). Le menu du clic droit ne s'ouvre plus sur le
+       spectrogramme, ni au relâché d'un déplacement ; un clic droit n'efface plus
+       d'intervalle (Suppr ou la croix de la pastille). Vérifié dans Chromium sur le
+       visualiseur seul, avec un faux enregistrement.
+
+199. **Poste : bandeau sans cadre, mode d'emploi en haut de la page** (Léonard, 08/10).
+     - **Bandeau posé sur la page**, comme celui du tableau de bord, et non plus dans une
+       carte arrondie : d'un bord à l'autre de la colonne, il remonte jusqu'en haut de la
+       page, sous la barre de Streamlit, devenue transparente (elle se voile quand on fait
+       défiler la page), et finit sur un filet. Le fond, les lueurs et les marges sont
+       portés par le conteneur du composant (`style.py`), la page du composant reste
+       transparente : son texte s'aligne ainsi sur celui de la page. La colonne prend les
+       marges du tableau de bord. A. blanci reste à côté du texte jusqu'à 480 px de large.
+     - **Mode d'emploi en fenêtre surgissante** : elle s'ouvre en haut de la page, par-dessus
+       le panneau, au lieu de tomber sous le bouton et de sortir par le bas de l'écran ; si
+       l'écran est trop bas, elle défile.
+     - **Panneau de gauche** : « Grenouille » seul, sans sous-titre, comme sur le tableau de
+       bord.
+     Vérifié dans Chromium sur une maquette de la page de Streamlit 1.59 (structure et styles
+     relevés dans son code), pas dans Streamlit lui-même.
+
+200. **Le chant du bandeau s'écoute** (Léonard, 08/10), sur le tableau de bord comme sur le
+     poste. Un gros bouton « Écouter le chant » sous le titre, à droite du sous-titre et à
+     gauche de la grenouille (il passe sous le sous-titre quand la place manque). Le son part
+     de l'endroit où passe la tête de lecture et tourne en boucle avec elle, à la même vitesse
+     (18 s pour 18 s) ; pendant l'écoute, c'est l'horloge du son qui place la tête (Web Audio :
+     boucle sans blanc, et le serveur de Streamlit n'a pas besoin des requêtes partielles qu'un
+     simple lecteur audio demanderait pour partir du milieu). « Couper le son » rend la main au
+     balayage, là où il en est. Le son, `chant.mp3`, est écrit par `spectrogramme.py` avec
+     l'image (mêmes 18 s de Molokoi, passe-haut à 2 kHz sous tout ce que montre l'image, crête
+     à -1 dBFS, fondus de 20 ms) ; il faut le disque des enregistrements pour le produire, et
+     sans lui la page n'affiche pas de bouton. Vérifié dans Chromium avec un faux son (bips à
+     5 kHz) : le bouton paraît et se place, la tête suit le son puis reprend son balayage.

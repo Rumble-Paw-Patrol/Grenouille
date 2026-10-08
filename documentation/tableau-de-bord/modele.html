@@ -136,20 +136,39 @@ main { padding-inline: clamp(16px, 4vw, 56px); padding-block: 0 96px; min-width:
 .bande h1 { font-size: clamp(26px, 4.2vw, 50px); font-weight: 700; line-height: 1.08; letter-spacing: -.025em; max-width: 22ch; background: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .bande h1 i { font-family: var(--f-serif); font-style: italic; font-weight: 400; font-size: 1.12em; letter-spacing: 0; padding-right: .08em; background: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .bande p { margin: 0; color: var(--nuit-muted); max-width: 72ch; font-size: 16px; }
+/* Sous-titre et bouton d'écoute côte à côte, à gauche de la grenouille (--perchoir : la place
+   qu'elle prend au bord droit, posée par son script) ; le bouton passe sous le sous-titre quand
+   la place manque. */
+.accroche { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; max-width: calc(100% - var(--perchoir, 0px) - 16px); }
+.accroche p { flex: 1 1 320px; }
+.ecouter { flex: none; display: inline-flex; align-items: center; gap: 12px; height: 52px; padding: 0 24px 0 6px; border: 0; border-radius: 999px; cursor: pointer; font: 600 15.5px/1 var(--f-body); letter-spacing: .01em; color: #1A0B03; background: linear-gradient(100deg, #FFE08A 0%, #F5A53A 48%, #E4573F 100%); box-shadow: 0 0 0 1px rgba(255, 224, 138, .4) inset, 0 12px 34px -12px rgba(228, 87, 63, .8), 0 0 40px -14px rgba(245, 165, 58, .6); transition: transform .15s, filter .2s; }
+.ecouter:hover { transform: translateY(-1px); filter: brightness(1.07) saturate(1.05); }
+.ecouter:active { transform: none; filter: brightness(.96); }
+.ecouter:focus-visible { outline: 2px solid var(--nuit-or); outline-offset: 3px; }
+.ecouter .disque { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #120A06; color: #FFE08A; box-shadow: 0 0 0 1px rgba(255, 224, 138, .25); }
+.ecouter .lire { width: 15px; height: 15px; margin-left: 2px; fill: currentColor; }
+.ecouter .egaliseur { display: none; align-items: flex-end; gap: 3px; height: 15px; }
+.ecouter .egaliseur i { width: 3px; height: 100%; border-radius: 2px; background: currentColor; transform-origin: bottom; }
+.ecouter[aria-pressed="true"] .lire { display: none; }
+.ecouter[aria-pressed="true"] .egaliseur { display: flex; }
 /* A. blanci en 8-bit (grenouille.py), perchée sur le spectrogramme, sous le titre qui la
    chevauche ; autour, une mosaïque de pixels ambrés qui scintille. Taille fixée par le script. */
-.bande .eyebrow, .bande h1, .bande p { position: relative; z-index: 2; }
+.bande .eyebrow, .bande h1, .bande p, .accroche { position: relative; z-index: 2; }
 .bande h1 { filter: drop-shadow(0 2px 10px rgba(4, 8, 7, .9)); }
 .perchoir { position: relative; z-index: 1; height: 0; margin-bottom: -16px; pointer-events: none; }
 #grenouille { position: absolute; right: clamp(-8px, 2vw, 40px); bottom: 0; width: 448px; max-width: none; image-rendering: pixelated; image-rendering: crisp-edges; }
-@media (max-width: 700px) { .perchoir { height: auto; display: flex; justify-content: flex-end; } #grenouille { position: static; } }
+@media (max-width: 700px) { .perchoir { height: auto; display: flex; justify-content: flex-end; } #grenouille { position: static; } .accroche { max-width: none; } }
 .spectro { position: relative; border-radius: 12px; overflow: hidden; background: #000004; box-shadow: 0 0 0 1px rgba(255, 210, 120, .14), 0 30px 80px -30px rgba(228, 87, 63, .55), 0 0 60px -20px rgba(245, 165, 58, .35); }
 .spectro img { width: 100%; height: clamp(96px, 15vw, 210px); display: block; object-fit: fill; filter: saturate(1.15) contrast(1.06); }
 .spectro::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, .25), transparent 22%, transparent 78%, rgba(0, 0, 0, .35)), repeating-linear-gradient(90deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 10%); z-index: 1; }
 .spectro .tete-lecture { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; z-index: 2; background: linear-gradient(180deg, transparent, #FFF6DC 20%, #FFF6DC 80%, transparent); box-shadow: 0 0 12px 2px rgba(255, 224, 138, .8), 0 0 40px 8px rgba(245, 165, 58, .35); pointer-events: none; opacity: 0; }
+.spectro.joue .tete-lecture { opacity: 1; }
 .spectro .tete-lecture::before { content: ""; position: absolute; top: 0; bottom: 0; right: 2px; width: 90px; background: linear-gradient(90deg, transparent, rgba(255, 224, 138, .12)); }
 @media (prefers-reduced-motion: no-preference) {
   .spectro .tete-lecture { opacity: 1; animation: balayage 18s linear infinite; }
+  .ecouter .egaliseur i { animation: egaliseur .9s ease-in-out infinite alternate; }
+  .ecouter .egaliseur i:nth-child(2) { animation-delay: -.3s; } .ecouter .egaliseur i:nth-child(3) { animation-delay: -.6s; }
+  @keyframes egaliseur { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
   @keyframes balayage { from { left: 0; } to { left: 100%; } }
   .bande .eyebrow::before { animation: enregistre 1.8s ease-out infinite; }
   @keyframes enregistre { 0% { box-shadow: 0 0 0 0 rgba(255, 90, 78, .6); } 80%, 100% { box-shadow: 0 0 0 9px rgba(255, 90, 78, 0); } }
@@ -489,7 +508,13 @@ section.sous-vue .vue-tete h2 { font-size: clamp(19px, 2.1vw, 24px); }
     <header class="bande">
       <div class="eyebrow" style="color: var(--gold)">Tableau de bord du stage</div>
       <h1 id="titre"></h1>
-      <p id="objectif"></p>
+      <div class="accroche">
+        <p id="objectif"></p>
+        <button type="button" class="ecouter" id="ecouter" aria-pressed="false" hidden>
+          <span class="disque" aria-hidden="true"><svg class="lire" viewBox="0 0 16 16"><path d="M4.5 2.6v10.8L13.4 8z"/></svg><span class="egaliseur"><i></i><i></i><i></i></span></span>
+          <span class="libelle">Écouter le chant</span>
+        </button>
+      </div>
       <div class="perchoir" aria-hidden="true"><canvas id="grenouille"></canvas></div>
       <div class="spectro">
         <img src="spectrogramme.jpg" alt="Spectrogramme de 18 s d'un chant d'A. blanci enregistré à Molokoi, de 3 à 6 kHz : notes brèves et régulières vers 5 kHz">
@@ -729,6 +754,9 @@ $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
       // la tête reste où elle était avec le sprite de 96 pixels : ce qui dépasse à droite
       // (le tibia) mord sur la marge du bandeau (sans effet sur téléphone, où la toile est en flux)
       toile.style.right = `calc(clamp(-8px, 2vw, 40px) - ${(Math.max(0, G.largeur - 96) * p) / dpr}px)`;
+      // place qu'elle prend au bord droit, jusqu'au bord gauche du sprite : le sous-titre et le
+      // bouton d'écoute restent à sa gauche
+      $(".bande").style.setProperty("--perchoir", `calc(${toile.style.right} + ${((COL - DX) * p) / dpr}px)`);
     };
     let cligne = -9, prochainCligne = 2.5, tete = 1, prochaineTete = 4 + Math.random() * 3;
     function dessiner(t) {
@@ -772,6 +800,64 @@ $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
     }
   }
 }
+
+/* ---------- Le chant à l'écoute ----------
+   chant.mp3 (spectrogramme.py) : les 18 s du spectrogramme ; le bouton n'apparaît que si le
+   fichier est publié. Le son part de l'endroit où passe la tête de lecture et tourne en boucle
+   avec elle ; pendant l'écoute, c'est l'horloge du son qui la place (Web Audio : boucle sans
+   blanc, position exacte). « Couper le son » rend la main au balayage, là où il en est. */
+function ecoute(bouton, spectro) {
+  const tete = spectro.querySelector(".tete-lecture"), CYCLE = 18000; // ms, durée du balayage
+  let octets = null, ctx = null, tampon = null, source = null, gain = null, t0 = 0, depart = 0, occupe = false;
+  fetch("chant.mp3").then((r) => (r.ok ? r.arrayBuffer() : null)).then((b) => {
+    if (b && window.AudioContext && !spectro.hidden) { octets = b; bouton.hidden = false; }
+  }).catch(() => {});
+  // le balayage de la feuille de style (absent si l'on a demandé moins d'animations)
+  const balayage = () => tete.getAnimations().find((a) => a.animationName === "balayage");
+  const placer = (f) => { // f : fraction de l'extrait
+    const a = balayage();
+    if (a) a.currentTime = f * CYCLE; else tete.style.left = `${f * 100}%`;
+  };
+  const etat = (joue) => {
+    bouton.setAttribute("aria-pressed", String(joue));
+    bouton.querySelector(".libelle").textContent = joue ? "Couper le son" : "Écouter le chant";
+    spectro.classList.toggle("joue", joue);
+  };
+  function suivre() {
+    if (!source) return;
+    const d = tampon.duration, s = depart + Math.max(0, ctx.currentTime - t0 - (ctx.outputLatency || 0));
+    placer((s % d) / d);
+    requestAnimationFrame(suivre);
+  }
+  async function lancer() {
+    if (!ctx) { ctx = new AudioContext(); tampon = await ctx.decodeAudioData(octets); }
+    await ctx.resume();
+    const a = balayage();
+    depart = a ? (((a.currentTime || 0) % CYCLE) / CYCLE) * tampon.duration : 0;
+    if (a) a.pause();
+    gain = ctx.createGain(); gain.connect(ctx.destination);
+    source = ctx.createBufferSource(); source.buffer = tampon; source.loop = true; source.connect(gain);
+    t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t0); gain.gain.linearRampToValueAtTime(1, t0 + 0.04); // sans claquement
+    source.start(t0, depart);
+    etat(true); requestAnimationFrame(suivre);
+  }
+  function couper() {
+    const s = source, g = gain, t = ctx.currentTime;
+    source = null;
+    g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.04); s.stop(t + 0.05);
+    const a = balayage();
+    if (a) a.play();
+    etat(false);
+  }
+  bouton.addEventListener("click", async () => {
+    if (occupe) return;
+    if (source) { couper(); return; }
+    occupe = true;
+    try { await lancer(); } catch { bouton.hidden = true; } finally { occupe = false; }
+  });
+}
+ecoute($("#ecouter"), $(".spectro"));
 
 /* ---------- navigation ---------- */
 const nav = $("#nav");

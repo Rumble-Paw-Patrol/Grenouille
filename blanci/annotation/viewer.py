@@ -18,76 +18,139 @@ import json
 import tempfile
 from pathlib import Path
 
+from blanci.annotation.style import FONTS, LABEL_COLORS
 from blanci.inputs.labels import QUALITIES
 
 VIEWER_DIR = Path(tempfile.gettempdir()) / "blanci_viewer"
 KEEP_ASSETS = 40  # fichiers d'écoute gardés (les plus récents)
 
 HELP = """\
-| Geste | Effet |
+| Fonction | Geste |
 |---|---|
-| **Glisser** sur le spectrogramme | tracer un intervalle du type choisi en haut |
-| **1** à **4**, ou un bouton de type | type des prochains intervalles (dont faux ami), et \
-de l'intervalle sélectionné |
-| **Tirer le bord** d'un intervalle | l'ajuster (le curseur devient ↔) |
-| **Clic** sur un intervalle (ou sa pastille sous le spectrogramme) | le sélectionner |
-| **Clic droit** sur un intervalle, ou le sélectionner puis **Suppr** | l'effacer |
-| **Clic** (sans glisser) | placer la lecture à cet instant (elle reprend de là) |
-| **Espace** | lecture / pause |
-| **Molette** | zoom en temps autour du curseur |
-| **Maj + molette** | zoom en fréquence |
-| **Maj + glisser** | se déplacer (temps et fréquence) |
-| **← →** | se déplacer dans le temps |
-| **Double-clic**, ou « Vue de base » | revoir tout l'extrait, bande de 0 à 10 kHz |
-| **Tirer un pointillé** (curseur ↕) | déplacer une limite de la bande d'écoute |
+| Placer le lecteur à un instant précis | **Clic** sur le spectrogramme (sans glisser), ou clic \
+sur la piste audio |
+| Lecture / pause | **Barre d'espace** |
+| Zoom en temps autour du curseur | **Molette** |
+| Zoom en fréquence autour du curseur | **Maj + molette** |
+| Revenir à la vue de base (tout l'extrait, 0 à 10 kHz) | **Double-clic**, ou bouton « Vue de \
+base » |
+| Se déplacer dans le spectrogramme | **Clic droit + glisser** |
+| Se déplacer dans le temps | **Flèches ← →** du clavier |
+| Déplacer les frontières de la bande d'écoute | **Tirer le bord** de la bande (pointillé, \
+curseur ↕) |
+| Tracer un intervalle | **Clic gauche + glisser** sur le spectrogramme |
+| Choisir l'étiquette des prochains intervalles | Touches **1** à **4** du clavier, ou **clic** \
+sur une étiquette en haut (aucun intervalle sélectionné) |
+| Ajuster un intervalle | **Tirer son bord** (curseur ↔) |
+| Sélectionner un intervalle | **Clic** dessus, ou sur sa pastille sous le spectrogramme |
+| Modifier l'étiquette d'un intervalle | Une fois sélectionné, **clic** sur une étiquette en haut |
+| Supprimer un intervalle | Une fois sélectionné, touche **Suppr**, ou **clic** sur la petite \
+croix de sa pastille |
 
-La bande d'écoute, « N'écouter que la bande », le volume, la dynamique, le contraste et le
+La bande d'écoute, « n'écouter qu'elle », le volume, le filtre dynamique, le contraste et le
 micro du spectrogramme se règlent dans la barre au-dessus du spectrogramme et s'appliquent
 aussitôt ; ils sont gardés d'une séance à l'autre. Les touches agissent quand le
-spectrogramme a la main : cliquer dessus d'abord.
+spectrogramme a la main (liseré ambré) : cliquer dessus d'abord.
 
-**Dynamique** : écart en dB entre le haut et le bas de l'échelle de couleurs. Le haut est
-fixé pour l'extrait (niveau dépassé par 0,5 % du spectrogramme, par micro) ; tout ce qui est
-plus faible que le haut moins la dynamique est noir. 40 dB : seuls les sons forts
-ressortent, le bruit de fond disparaît ; 80 dB : les sons faibles apparaissent, mais le
-fond s'éclaircit. **Contraste** : assombrit les niveaux moyens (le bruit de fond) sans
-toucher aux plus forts, pour faire ressortir les notes ; 0 : échelle linéaire.
+**Filtre dynamique** : seuls les sons à moins de N dB des plus forts de l'extrait gardent une
+couleur, les plus faibles sont noirs. 40 dB : il ne reste que les chants forts, le bruit de
+fond disparaît ; 80 dB : les chants faibles apparaissent, le fond aussi.
+
+**Contraste** : assombrit les sons moyens (souvent le bruit de fond) sans toucher aux plus
+forts, pour que les notes ressortent. 0 : aucun effet.
 """
 
 INDEX = r"""<!doctype html>
 <html><head><meta charset="utf-8">
+<link rel="stylesheet" href="__FONTS__">
 <style>
-  body { margin: 0; font: 12px "Source Sans Pro", system-ui, sans-serif; color: #ddd;
-         background: #0e1117; }
-  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 0 4px; }
-  button, select, input { background: #262730; color: #ddd; border: 1px solid #444;
-                          border-radius: 4px; padding: 2px 6px; font: inherit; }
+  /* Couleurs et polices du tableau de bord (style.py) ; le cadre est posé par la page. */
+  :root { color-scheme: dark; --ink: #E9F2EC; --muted: #93A89D; --accent: #F5A53A;
+          --accent-2: #E4573F; --gold: #FFE08A; --line: rgba(160, 210, 185, .14);
+          --line-fort: rgba(160, 210, 185, .28); --surface-2: rgba(255, 255, 255, .055);
+          --mono: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+  body { margin: 0; padding: 10px 12px 12px; color: var(--ink); background: #08120F;
+         font: 12.5px "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  .bar { display: flex; gap: 6px 9px; align-items: center; flex-wrap: wrap; padding: 2px 0 7px; }
+  .duo { display: flex; gap: 9px; align-items: center; }  /* filtre et contraste, inséparables */
+  button, select, input { background: #0F1C18; color: var(--ink); border-radius: 8px;
+                          border: 1px solid var(--line-fort); padding: 3px 9px; font: inherit;
+                          transition: color .2s, border-color .2s, box-shadow .2s; }
   button { cursor: pointer; }
-  button:hover { border-color: #00e676; }
-  input[type=number] { width: 4.2em; }
-  input[type=range] { width: 90px; vertical-align: middle; padding: 0; }
-  .group { display: flex; gap: 4px; align-items: center; padding-right: 8px;
-           border-right: 1px solid #333; }
-  canvas { display: block; width: 100%; cursor: crosshair; outline: none; }
-  #status { color: #888; margin-left: auto; }
-  #players { display: flex; gap: 12px; margin-top: 4px; }
-  #players div { flex: 1; }
+  button:hover:not(:disabled) { border-color: var(--accent);
+                                box-shadow: 0 0 14px -4px var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  input:hover { border-color: var(--accent); }
+  input:focus { outline: none; border-color: var(--accent);
+                box-shadow: 0 0 0 3px rgba(255, 210, 110, .12); }
+  input[type=number] { width: 4.4em; font-family: var(--mono); font-size: 11.5px; }
+  input[type=range] { width: 80px; vertical-align: middle; padding: 0; border: 0; background: none;
+                      accent-color: var(--accent); box-shadow: none; }
+  input[type=checkbox] { accent-color: var(--accent); vertical-align: -2px; }
+  label { color: var(--muted); }
+  .group { display: flex; gap: 5px; align-items: center; padding-right: 9px;
+           border-right: 1px solid var(--line); }
+  .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted);
+         text-transform: uppercase; margin-right: 2px; }
+  .val { font-family: var(--mono); font-size: 11px; color: var(--ink); min-width: 3.2em; }
+  #contrastv { min-width: 1.2em; text-align: center; }
+  canvas { display: block; width: 100%; cursor: crosshair; outline: none; border-radius: 10px;
+           user-select: none; -webkit-user-select: none;
+           box-shadow: 0 0 0 1px rgba(255, 210, 120, .14); transition: box-shadow .2s; }
+  canvas:focus { box-shadow: 0 0 0 1px rgba(245, 165, 58, .7), 0 0 22px -8px var(--accent); }
+  #status { color: var(--muted); margin-left: auto; font-family: var(--mono); font-size: 11px; }
+  #players { display: flex; gap: 12px; margin-top: 8px; }
+  #players div { flex: 1; display: grid; gap: 3px; }
   #players audio { width: 100%; height: 32px; }
-  #players span { font-weight: 600; }
-  #players .playing span { color: #00e676; }
-  #list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; min-height: 4px; }
-  .chip { border: 1px solid #555; border-radius: 12px; padding: 2px 4px 2px 8px;
-          display: flex; gap: 4px; align-items: center; cursor: pointer; }
-  .chip.sel { border-color: #fff; }
-  .chip button { padding: 0 4px; }
-  .types button { border-width: 2px; }
-  .types button.on, .seg button.on { color: #000; font-weight: 600; }
-  .seg button.on { background: #ddd; }
+  #players span { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
+                  color: var(--muted); display: inline-flex; align-items: center; gap: 7px; }
+  #players span::before { content: ""; width: 7px; height: 7px; border-radius: 50%;
+                          background: currentColor; opacity: .5; }
+  #players .playing span { color: var(--gold); }
+  #players .playing span::before { opacity: 1; box-shadow: 0 0 8px currentColor; }
+  #list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; min-height: 4px; }
+  .chip { border: 1px solid #555; border-radius: 999px; padding: 2px 3px 2px 10px; font-size: 12px;
+          display: flex; gap: 4px; align-items: center; cursor: pointer;
+          transition: box-shadow .2s; }
+  .chip:hover { box-shadow: 0 0 14px -5px currentColor; }
+  .chip.sel { border-color: #fff; box-shadow: 0 0 0 1px #fff inset; }
+  .chip button { padding: 0 6px; border: 0; background: transparent; color: var(--muted);
+                 border-radius: 999px; }
+  .chip button:hover:not(:disabled) { color: #F07A63; box-shadow: none; }
+  .chip .q { font-weight: 700; }
+  .pills { display: flex; gap: 5px; flex-wrap: wrap; }
+  /* Étiquettes : pleine = celle des prochains intervalles, cerclée de blanc = celle de
+     l'intervalle sélectionné. */
+  .types button { border-width: 1.5px; border-radius: 999px; padding: 3px 11px; }
+  .types button.on { color: #0B0B0B; font-weight: 600; }
+  .types button.sel { outline: 2px solid #fff; outline-offset: 2px; }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--surface-2);
+         border: 1px solid var(--line); border-radius: 10px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); padding: 3px 10px;
+                border-radius: 7px; }
+  .seg button:hover:not(:disabled) { color: var(--ink); box-shadow: none; }
+  .seg button.on { background: linear-gradient(135deg, var(--accent), var(--accent-2));
+                   color: #1A0B03; font-weight: 600; box-shadow: 0 4px 16px -6px var(--accent-2); }
+  /* Qualité en médailles : A or, B argent, C bronze ; « — » (non dite) reste neutre. */
+  [data-q="A"] { --m: #F2C14E; --m1: #FFEDB0; --m2: #C8901A; }
+  [data-q="B"] { --m: #C9D2DA; --m1: #FAFCFD; --m2: #8E9AA5; }
+  [data-q="C"] { --m: #D9925A; --m1: #F5C59B; --m2: #9A5626; }
+  .medailles button[data-q], .chip .q { color: var(--m); font-weight: 700; }
+  .medailles button[data-q]:hover:not(:disabled) { color: var(--m1); }
+  .medailles button[data-q].on { background: linear-gradient(135deg, var(--m1), var(--m2));
+                                 color: #1A1206; box-shadow: 0 0 14px -3px var(--m2); }
+  .medailles button:not([data-q]).on { background: rgba(255, 255, 255, .14); color: var(--ink);
+                                       box-shadow: none; }
 </style></head><body>
 <div class="bar">
-  <span class="group types" id="ivbar">Type :</span>
-  <span class="group seg" id="qbar"
-        title="Qualité du chant : de l'intervalle sélectionné, et des prochains">Qualité :</span>
+  <span class="group types" id="ivbar"
+        title="Pleine : étiquette des prochains intervalles (touches 1 à 4).
+Cerclée de blanc : celle de l'intervalle sélectionné (un clic la change).">
+    <span class="lbl">Étiquette</span><span class="pills" id="ivbtns"></span></span>
+  <span class="group" id="qbar"
+        title="Qualité du chant : de l'intervalle sélectionné, et des prochains">
+    <span class="lbl">Qualité</span><span class="seg medailles" id="qbtns"></span></span>
   <span class="group">
     <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
     <label><input type="checkbox" id="follow" checked> Suivre</label>
@@ -95,18 +158,27 @@ INDEX = r"""<!doctype html>
   <span id="status"></span>
 </div>
 <div class="bar">
-  <span class="group">Bande
+  <span class="group"><span class="lbl">Bande</span>
     <input type="number" id="lo" min="0" max="24" step="0.1"> –
     <input type="number" id="hi" min="0" max="24" step="0.1"> kHz
     <label><input type="checkbox" id="bandonly"> n'écouter qu'elle</label></span>
-  <span class="group">Volume <input type="range" id="gain" min="0" max="30" step="1">
-    <span id="gainv"></span></span>
-  <span class="group" title="Écart entre le haut et le bas de l'échelle de couleurs">Dynamique
-    <input type="range" id="range" min="30" max="90" step="10"> <span id="rangev"></span></span>
-  <span class="group" title="Assombrit le bruit de fond, garde les sons forts">Contraste
-    <button id="cless">－</button> <span id="contrastv"></span>
-    <button id="cmore">＋</button></span>
-  <span class="group seg" id="chan">Spectrogramme</span>
+  <span class="group"><span class="lbl">Volume</span>
+    <input type="range" id="gain" min="0" max="30" step="1"> <span class="val" id="gainv"></span>
+  </span>
+  <span class="duo">
+    <span class="group" title="Seuls les sons à moins de N dB des plus forts gardent une couleur">
+      <span class="lbl">Filtre dynamique</span>
+      <input type="range" id="range" min="30" max="90" step="10">
+      <span class="val" id="rangev"></span>
+    </span>
+    <span class="group" title="Assombrit les sons moyens (bruit de fond), garde les plus forts">
+      <span class="lbl">Contraste</span> <button id="cless">－</button>
+      <span class="val" id="contrastv"></span> <button id="cmore">＋</button></span>
+  </span>
+</div>
+<div class="bar">
+  <span class="group"><span class="lbl">Spectrogramme</span><span class="seg" id="chan"></span>
+  </span>
 </div>
 <canvas id="c" tabindex="0"></canvas>
 <div id="list"></div>
@@ -116,9 +188,14 @@ const MAGMA = __MAGMA__;
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const M = {l: 44, r: 8, t: 8, b: 24};
-const PLAYHEAD = "#00e676";
-const COLORS = {blanci: [80, 170, 255], blanci_chorus: [200, 120, 255],
-                blanci_uncertain: [255, 170, 40], false_friend: [60, 230, 200]};
+// Couleurs du tableau de bord : tête de lecture crème à lueur ambrée, bande d'écoute en
+// pointillés or ; étiquettes des intervalles : `style.LABEL_COLORS`.
+const PLAYHEAD = "#FFF6DC", GLOW = "rgba(245, 165, 58, 0.9)", BAND = "rgba(255, 224, 138, 0.85)";
+const BG = "#08120F", AXIS = "#93A89D", TICK = "rgba(160, 210, 185, 0.35)";
+const MONO = '10.5px "JetBrains Mono", ui-monospace, Menlo, monospace';
+const COLORS = __COLORS__;
+const MEDALS = {A: "or : chant net", B: "argent : chant chevauché (pluie, bruit, autre espèce)",
+                C: "bronze : chant lointain"};
 const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
 let view = null, intervals = [], selected = -1, vmax = [], loading = 0, newLabel = null;
@@ -176,22 +253,26 @@ $("cless").onclick = () => setContrast(S.contrast - 1);
 $("cmore").onclick = () => setContrast(S.contrast + 1);
 function setChannel(c) { S.channel = c; showSettings(); saveSettings(); draw(); }
 
-// --- Type des intervalles : un bouton par type, toujours visibles -------------------------
+// --- Étiquette des intervalles : un bouton par étiquette, toujours visibles ---------------
+// Deux choses distinctes : l'étiquette des prochains intervalles (touches 1 à 4, ou un clic
+// quand rien n'est sélectionné) et celle de l'intervalle sélectionné (un clic la change, sans
+// toucher à celle des prochains).
 const rgb = label => COLORS[label] || [200, 200, 200];
 const labelName = code => (D.labels.find(([c]) => c === code) || [code, code])[1];
 function showTypes() {
-  const current = selected >= 0 ? intervals[selected].label : newLabel;
+  const current = selected >= 0 ? intervals[selected].label : null;
   [...$("ivbar").querySelectorAll("button")].forEach(b => {
-    const on = b.value === current;
+    const on = b.value === newLabel;
     b.classList.toggle("on", on);
+    b.classList.toggle("sel", b.value === current);
     b.style.background = on ? `rgb(${rgb(b.value)})` : `rgba(${rgb(b.value)}, 0.15)`;
+    b.style.boxShadow = on ? `0 0 16px -4px rgb(${rgb(b.value)})` : "";
   });
 }
-function setType(code) {  // type des prochains intervalles, et de l'intervalle sélectionné
-  newLabel = code;
-  if (selected >= 0 && intervals[selected].label !== code) {
-    intervals[selected].label = code; changed();
-  } else showTypes();
+function setNext(code) { newLabel = code; showTypes(); }  // prochains intervalles seulement
+function setType(code) {  // clic : l'intervalle sélectionné s'il y en a un, sinon les prochains
+  if (selected < 0) setNext(code);
+  else if (intervals[selected].label !== code) { intervals[selected].label = code; changed(); }
 }
 // Qualité : un intervalle a la sienne (un même extrait mêle chants nets et lointains).
 function showQualities() {
@@ -232,7 +313,8 @@ function render(args) {
     ["—", ...D.qualities].forEach((q, k) => {
       const b = document.createElement("button");
       b.value = k ? q : ""; b.textContent = q; b.onclick = () => setQuality(k ? q : null);
-      $("qbar").appendChild(b);
+      if (k) { b.dataset.q = q; b.title = MEDALS[q] ? `${q}, ${MEDALS[q]}` : q; }
+      $("qbtns").appendChild(b);
     });
     newLabel = D.labels[0][0];
     D.labels.forEach(([code, name], k) => {
@@ -240,7 +322,7 @@ function render(args) {
       b.value = code; b.textContent = name; b.title = `Touche ${k + 1}`;
       b.style.borderColor = `rgb(${rgb(code)})`;
       b.onclick = () => setType(code);
-      $("ivbar").appendChild(b);
+      $("ivbtns").appendChild(b);
     });
     D.audios.forEach((a, i) => {
       const b = document.createElement("button");
@@ -448,7 +530,7 @@ function moved() {  // vue changée : image étirée tout de suite, recalculée 
 function draw() {
   if (!D || !view) return;
   const w = canvas.clientWidth;
-  ctx.fillStyle = "#0e1117"; ctx.fillRect(0, 0, w, H());
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, w, H());
   if (buffers.length && vmax.length && settling && specView) {
     ctx.save(); ctx.beginPath(); ctx.rect(M.l, M.t, W(), PH()); ctx.clip();
     ctx.imageSmoothingEnabled = true;
@@ -460,15 +542,16 @@ function draw() {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(spec, M.l, M.t, W(), PH());
   } else {
-    ctx.fillStyle = "#888"; ctx.fillText("calcul du spectrogramme…", M.l + 10, M.t + 20);
+    ctx.fillStyle = AXIS; ctx.font = MONO;
+    ctx.fillText("calcul du spectrogramme…", M.l + 10, M.t + 20);
   }
   ctx.save();
   ctx.beginPath(); ctx.rect(M.l, M.t, W(), PH()); ctx.clip();
   (D.windows || []).forEach(win => {
     const x0 = xOf(win.t0), x1 = xOf(win.t1);
     if (win.current) {
-      ctx.fillStyle = "rgba(0, 255, 255, 0.13)"; ctx.fillRect(x0, M.t, x1 - x0, PH());
-      ctx.strokeStyle = "cyan"; ctx.lineWidth = 1.5;
+      ctx.fillStyle = "rgba(245, 165, 58, 0.10)"; ctx.fillRect(x0, M.t, x1 - x0, PH());
+      ctx.strokeStyle = "#F5A53A"; ctx.lineWidth = 1.5;
       ctx.strokeRect(x0, M.t + 0.5, x1 - x0, PH() - 1);
     } else if (!D.interval_mode) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.35)"; ctx.lineWidth = 1;
@@ -476,12 +559,12 @@ function draw() {
       ctx.moveTo(x1, M.t); ctx.lineTo(x1, M.t + PH()); ctx.stroke();
     }
     if (win.label) {
-      ctx.fillStyle = "rgba(80, 200, 120, 0.85)"; ctx.fillRect(x0, M.t, x1 - x0, 14);
-      ctx.fillStyle = "#000"; ctx.font = "11px system-ui";
+      ctx.fillStyle = "rgba(95, 211, 148, 0.85)"; ctx.fillRect(x0, M.t, x1 - x0, 14);
+      ctx.fillStyle = "#06130D"; ctx.font = '600 11px "Hanken Grotesk", system-ui, sans-serif';
       ctx.fillText(win.label, x0 + 3, M.t + 11, Math.max(x1 - x0 - 6, 1));
     }
     if (win.candidate) {
-      ctx.fillStyle = "#ffd60a"; ctx.fillRect(x0, M.t + PH() - 3, x1 - x0, 3);
+      ctx.fillStyle = "#FFE08A"; ctx.fillRect(x0, M.t + PH() - 3, x1 - x0, 3);
     }
   });
   const shown = drag && drag.mode === "draw" && drag.moved
@@ -496,7 +579,7 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(x0, M.t); ctx.lineTo(x0, M.t + PH());
     ctx.moveTo(x1, M.t); ctx.lineTo(x1, M.t + PH()); ctx.stroke();
   });
-  ctx.setLineDash([5, 4]); ctx.strokeStyle = "rgba(255, 255, 255, 0.85)"; ctx.lineWidth = 1.2;
+  ctx.setLineDash([5, 4]); ctx.strokeStyle = BAND; ctx.lineWidth = 1.2;
   S.band.forEach(f => {
     const y = yOf(f); ctx.beginPath(); ctx.moveTo(M.l, y); ctx.lineTo(M.l + W(), y); ctx.stroke();
   });
@@ -506,14 +589,15 @@ function draw() {
     const x = xOf(t);
     ctx.strokeStyle = "rgba(0, 0, 0, 0.7)"; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, M.t + PH()); ctx.stroke();
-    ctx.strokeStyle = PLAYHEAD; ctx.lineWidth = 2;
+    ctx.strokeStyle = PLAYHEAD; ctx.lineWidth = 2; ctx.shadowColor = GLOW; ctx.shadowBlur = 10;
     ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, M.t + PH()); ctx.stroke();
+    ctx.shadowBlur = 0;
   }
   ctx.restore();
   axes();
 }
 function axes() {
-  ctx.fillStyle = "#aaa"; ctx.strokeStyle = "#777"; ctx.lineWidth = 1; ctx.font = "11px system-ui";
+  ctx.fillStyle = AXIS; ctx.strokeStyle = TICK; ctx.lineWidth = 1; ctx.font = MONO;
   const ts = niceStep(view.t1 - view.t0, Math.max(2, W() / 90)), tm = minorStep(ts);
   for (let v = Math.ceil(view.t0 / tm) * tm; v <= view.t1 + 1e-9; v += tm) {
     const x = Math.round(xOf(v)) + 0.5, major = Math.abs(v / ts - Math.round(v / ts)) < 1e-6;
@@ -565,9 +649,14 @@ function list() {
     chip.className = "chip" + (i === selected ? " sel" : "");
     chip.style.background = `rgba(${rgb(iv.label)}, 0.18)`;
     chip.style.borderColor = i === selected ? "#fff" : `rgb(${rgb(iv.label)})`;
-    chip.title = "Sélectionner, puis un bouton de type pour le changer";
-    chip.append(`${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s · ${labelName(iv.label)}`
-                + (iv.quality ? ` · ${iv.quality}` : ""));
+    chip.title = "Sélectionner, puis cliquer une étiquette en haut pour la changer";
+    chip.append(`${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s · ${labelName(iv.label)}`);
+    if (iv.quality) {
+      const q = document.createElement("b");
+      q.className = "q"; q.dataset.q = iv.quality; q.textContent = iv.quality;
+      q.title = MEDALS[iv.quality] ? `Qualité ${iv.quality}, ${MEDALS[iv.quality]}` : "";
+      chip.append(" · ", q);
+    }
     const x = document.createElement("button");
     x.textContent = "×"; x.title = "Effacer";
     x.onclick = ev => { ev.stopPropagation(); remove(i); };
@@ -608,16 +697,21 @@ canvas.addEventListener("wheel", e => {
   else zoomTime(factor, tOf(localX(e)));
 }, {passive: false});
 
-let drag = null;
+// Clic gauche : tracer un intervalle, en tirer un bord, ou tirer une limite de la bande.
+// Clic droit + glisser : se déplacer. Le menu du clic droit ne s'ouvre pas sur le
+// spectrogramme, ni au relâché d'un déplacement (Windows l'ouvre là).
+let drag = null, noMenuUntil = 0;
 canvas.addEventListener("mousedown", e => {
-  if (e.button !== 0 || !D) return;
+  if ((e.button !== 0 && e.button !== 2) || !D || drag) return;
   canvas.focus();
   const x = localX(e), y = localY(e), t = tOf(x), line = bandLine(y);
-  const [i, edge] = D.interval_mode ? hit(x) : [-1, null];
+  const right = e.button === 2;
+  const [i, edge] = D.interval_mode && !right ? hit(x) : [-1, null];
   let mode = "pan";
-  if (line >= 0 && !e.shiftKey) mode = "band";
-  else if (D.interval_mode && !e.shiftKey) mode = edge ? "edge" : "draw";
-  drag = {mode, x: e.clientX, y: e.clientY, view: {...view}, moved: false, t, t2: t, i, edge, line};
+  if (!right && line >= 0) mode = "band";
+  else if (!right && D.interval_mode) mode = edge ? "edge" : "draw";
+  drag = {mode, right, x: e.clientX, y: e.clientY, view: {...view}, moved: false, t, t2: t, i,
+          edge, line};
 });
 canvas.addEventListener("mousemove", e => {
   if (drag || !D) return;
@@ -632,6 +726,7 @@ window.addEventListener("mousemove", e => {
   if (!drag.moved) return;
   const t = Math.min(Math.max(tOf(localX(e)), D.t0), D.t1);
   if (drag.mode === "pan") {
+    canvas.style.cursor = "grabbing";
     const dt = dx / W() * (drag.view.t1 - drag.view.t0);
     const df = dy / PH() * (drag.view.f1 - drag.view.f0);
     view = {t0: drag.view.t0 - dt, t1: drag.view.t1 - dt,
@@ -648,12 +743,16 @@ window.addEventListener("mousemove", e => {
   }
   draw();
 });
-window.addEventListener("mouseup", () => {
-  if (!drag) return;
+window.addEventListener("mouseup", e => {
+  if (!drag || (e.button === 2) !== drag.right) return;
   const d = drag; drag = null;
-  if (d.mode === "pan" && d.moved) { clearTimeout(settle); settling = false; draw(); return; }
+  if (d.right) noMenuUntil = performance.now() + 500;
+  if (d.mode === "pan" && d.moved) {
+    canvas.style.cursor = "crosshair"; clearTimeout(settle); settling = false; draw(); return;
+  }
   if (!d.moved) {
-    // Sélection par un clic seulement : un bouton de type change alors cet intervalle.
+    if (d.right) return;  // clic droit sans glisser : rien
+    // Sélection par un clic seulement : un clic sur une étiquette change alors cet intervalle.
     if (D.interval_mode) { selected = d.i; list(); }
     const p = players[active];  // la lecture reprendra de cet instant
     if (p && d.t >= D.t0 && d.t <= D.t1) p.currentTime = Math.max(0, d.t - D.audios[active].start);
@@ -672,16 +771,15 @@ window.addEventListener("mouseup", () => {
     if (iv.t1 - iv.t0 < 0.05) remove(d.i); else changed();
   }
 });
-canvas.addEventListener("contextmenu", e => {
-  if (!D || !D.interval_mode) return;
-  const [i] = hit(localX(e));
-  if (i >= 0) { e.preventDefault(); remove(i); }
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+window.addEventListener("contextmenu", e => {
+  if (drag || performance.now() < noMenuUntil) e.preventDefault();
 });
 canvas.addEventListener("dblclick", () => {
   view = {t0: D.t0, t1: D.t1, f0: 0, f1: Math.min(D.fview, fmax())}; draw();
 });
-// Les boutons de la barre ne prennent pas la main : Espace, Suppr et 1 à 4 restent au
-// spectrogramme.
+// Les boutons de la barre ne prennent pas la main : barre d'espace, Suppr et 1 à 4 restent
+// au spectrogramme.
 document.querySelectorAll(".bar").forEach(bar => bar.addEventListener("mousedown", e => {
   if (e.target.tagName === "BUTTON") e.preventDefault();
 }));
@@ -692,11 +790,11 @@ document.addEventListener("keydown", e => {
     e.preventDefault();
     const p = players[active]; if (p) (p.paused ? p.play() : p.pause());
   } else if (D && D.interval_mode && /^[1-9]$/.test(e.key) && D.labels[+e.key - 1]) {
-    setType(D.labels[+e.key - 1][0]);
+    setNext(D.labels[+e.key - 1][0]);
   } else if ((e.key === "Delete" || e.key === "Backspace") && selected >= 0) {
     remove(selected);
-  } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-    e.preventDefault();
+  } else if (view && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();  // un quart de la vue par appui
     const span = view.t1 - view.t0, s = (e.key === "ArrowLeft" ? -0.25 : 0.25) * span;
     view.t0 += s; view.t1 += s; clampView(); moved();
   }
@@ -706,6 +804,10 @@ window.addEventListener("message", e => {
   if (e.data && e.data.type === "streamlit:render") render(e.data.args);
 });
 window.addEventListener("resize", () => { if (D) resize(); });
+// Polices chargées après le premier dessin : graduations et hauteur de la barre à refaire.
+if (document.fonts) {
+  document.fonts.addEventListener("loadingdone", () => { if (D) { resize(); setHeight(); } });
+}
 send("streamlit:componentReady", {apiVersion: 1});
 </script></body></html>
 """
@@ -715,7 +817,12 @@ def _page() -> str:
     from matplotlib import colormaps
 
     magma = [[round(255 * c) for c in colormaps["magma"](i / 255)[:3]] for i in range(256)]
-    return INDEX.replace("__MAGMA__", json.dumps(magma))
+    colors = {k: [int(v[i : i + 2], 16) for i in (1, 3, 5)] for k, v in LABEL_COLORS.items()}
+    return (
+        INDEX.replace("__MAGMA__", json.dumps(magma))
+        .replace("__COLORS__", json.dumps(colors))
+        .replace("__FONTS__", FONTS)
+    )
 
 
 def _prepare() -> Path:
