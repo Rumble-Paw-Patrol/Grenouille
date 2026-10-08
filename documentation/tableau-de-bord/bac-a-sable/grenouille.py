@@ -1,4 +1,4 @@
-"""Bac à sable : A. blanci du bandeau, avec quelques grains qui font tache sur le ventre.
+"""Bac à sable : A. blanci du bandeau, avec des pustules sur le corps.
 
     uv run python documentation/tableau-de-bord/bac-a-sable/grenouille.py
 
@@ -10,10 +10,12 @@ flanc juste derrière le bras garde sa teinte, assombrie et un peu grisée (ombr
 haut du contour de la cuisse remonte vers la croupe, juste assez pour que la bande sombre du
 dos passe derrière la cuisse au lieu de s'arrêter d'elle-même. Le ventre est semé d'un grain
 plus dense mais discret : un cran plus clair ou plus sombre que le flanc alentour ; par-dessus,
-une douzaine de grains qui font tache, semés sur le flanc resté visible : points crème et
-pustules en relief. L'épaule s'attache en arrondi : un capuchon dont le pourtour tourne au
-jaune et se fond dans le flanc en tramage. Bouche et bande sombre comme dans le bandeau. Écrit
-grenouille.json dans ce dossier (non suivi) ; le tableau de bord n'en lit rien.
+une quarantaine de pustules sur tout le corps sauf la tête (dos, flanc, cuisse, tibia, bras) :
+un pixel de la couleur d'origine, plus clair, et son ombre juste en dessous ; leurs places sont
+tirées une fois, sur l'image au repos, pour ne pas bouger pendant l'animation. L'épaule
+s'attache en arrondi : un capuchon dont le pourtour tourne au jaune et se fond dans le flanc en
+tramage. Bouche et bande sombre comme dans le bandeau. Écrit grenouille.json dans ce dossier
+(non suivi) ; le tableau de bord n'en lit rien.
 
 Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
 de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de doré, bande sombre
@@ -59,7 +61,6 @@ PALETTE = {
     "J": "#F2C46A",  # haut de l'épaule, qui tourne au jaune
     "v": "#CE9561",  # grain clair du ventre : un cran plus clair que le flanc alentour
     "u": "#B57643",  # grain sombre du ventre : un cran plus sombre que le flanc alentour
-    "p": "#9E6436",  # ombre d'une pustule : deux crans plus sombre que le flanc alentour
     "T": "#F2CC98",  # lèvre
     "C": "#E8DCC4",  # gorge, ventre
     "g": "#CFC4AE",  # gorge grisée
@@ -582,27 +583,13 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien"):
     g[ellipse(2.1, 5.9, 0.4, 0.4, x, y)] = "B"
     g[ellipse(2.8, 4.0, 0.7, 0.5, x, y) & dedans] = "I"
 
-    # par-dessus, quelques grains qui font tache : des pustules en relief (reflet crème en
-    # haut à gauche, ombre en bas à droite) et des points crème isolés, loin des bords
-    # (semés à la fin, sur le flanc resté visible entre le bras, la cuisse et la bande)
-    visible = flanc & np.isin(g, ["F", "f", "v", "u"]) & ~contact
-    interieur = visible.copy()
-    for _ in range(2):
+    # où poser des pustules : la peau du corps restée visible (dos, flanc, cuisse, tibia, bras
+    # proche), sauf la tête, les mains, les pieds, le bras du fond et l'ombre de contact
+    peau = np.isin(g, list("IHOMSZFfvu")) & (X > 17.0) & ~contact
+    peau &= ~(orteils | proche | tm | (bras_loin & ~bras))
+    for _ in range(2):  # loin des bords
         for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            interieur &= np.roll(np.roll(visible, dy, 0), dx, 1)
-    places, tirage = [], random.Random(13)
-    candidats = list(zip(*np.nonzero(interieur), strict=True))
-    tirage.shuffle(candidats)
-    for j, i in candidats:
-        if all(abs(j - a) + abs(i - b) >= 6 for a, b in places):
-            places.append((j, i))
-        if len(places) == 12:
-            break
-    for k, (j, i) in enumerate(places):
-        g[j, i] = "C"
-        if k % 2 == 0:  # pustule de 2 × 2 : son ombre, dessous et à droite, la met en relief
-            g[j, i + 1] = "v"
-            g[j + 1, i] = g[j + 1, i + 1] = "p"
+            peau &= np.roll(np.roll(peau, dy, 0), dx, 1)
 
     # contour
     plein = g != "."
@@ -631,7 +618,7 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0, style="ancien"):
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         anneau |= np.roll(np.roll(membres, dy, 0), dx, 1)
     membres |= anneau & ~plein & autour
-    return ["".join(r) for r in g], membres, contact & ~membres
+    return ["".join(r) for r in g], membres, contact & ~membres, peau
 
 
 def rampe(n, h0, h1, s0, s1, l0, l1, dh=0.0):
@@ -659,7 +646,7 @@ _COMMUNES = {
         [rampe(7, 18, 24, 0.62, 0.55, 0.11, 0.33, dh) for dh in (-3, 0, 4)],
     ),
     "flanc": (
-        {"F": 0.45, "f": 0.78, "v": 0.45, "u": 0.45, "p": 0.45},
+        {"F": 0.45, "f": 0.78, "v": 0.45, "u": 0.45},
         [rampe(8, 22, 32, 0.45, 0.6, 0.42, 0.72, dh) for dh in (-4, 0, 6)],
     ),
     "creme": (
@@ -705,13 +692,19 @@ CODES = {
 }
 
 
-def assombrir(ch):
-    """Le même pixel dans l'ombre : sa teinte, plus sombre et un peu grisée."""
+def retoucher(ch, sombre=1.0, gris=1.0, clair=0.0):
+    """Le même pixel, de la même teinte, plus sombre (et grisé) ou plus clair."""
     hexa = PALETTE_NUANCES[ch]
     r, v, b = (int(hexa[k : k + 2], 16) / 255 for k in (1, 3, 5))
     t, cl, sa = colorsys.rgb_to_hls(r, v, b)
-    r, v, b = colorsys.hls_to_rgb(t, cl * 0.84, sa * 0.72)
+    cl = cl * sombre
+    r, v, b = colorsys.hls_to_rgb(t, cl + (1 - cl) * clair, sa * gris)
     return code(f"#{round(r * 255):02X}{round(v * 255):02X}{round(b * 255):02X}")
+
+
+def assombrir(ch):
+    """Le même pixel dans l'ombre de contact : sa teinte, plus sombre et un peu grisée."""
+    return retoucher(ch, sombre=0.84, gris=0.72)
 
 
 _K = np.array([1, 4, 6, 4, 1], float) / 16
@@ -754,21 +747,50 @@ def nuancer(rangs, style="ancien"):
         n = len(rampes[0])
         idx = np.clip(np.rint(final * (n - 1)), 0, n - 1).astype(int)
         # grains du ventre : la teinte du flanc alentour, un seul cran plus clair ou plus sombre
-        idx = np.clip(idx + (g == "v") - (g == "u") - 2 * (g == "p"), 0, n - 1)
+        idx = np.clip(idx + (g == "v") - (g == "u"), 0, n - 1)
         for v in range(len(rampes)):
             for i in range(n):
                 out[m & (idx == i) & (VARIANTE == v)] = CODES[style, nom, v, i]
     return out
 
 
+_PUSTULES = []
+
+
+def pustules():
+    """Places des pustules, tirées une fois sur l'image au repos pour qu'elles ne bougent pas
+    d'une image à l'autre : espacées, sur la peau du corps hors tête (voir image)."""
+    if not _PUSTULES:
+        peau = image()[3]
+        ok = (
+            peau
+            & np.roll(peau, -1, 0)
+            & np.roll(peau, -1, 1)
+            & np.roll(np.roll(peau, -1, 0), -1, 1)
+        )
+        candidats = list(zip(*np.nonzero(ok), strict=True))
+        random.Random(13).shuffle(candidats)
+        for j, i in candidats:
+            if all(abs(j - a) + abs(i - b) >= 7 for a, b in _PUSTULES):
+                _PUSTULES.append((int(j), int(i)))
+    return _PUSTULES
+
+
 def composer(gorge, souffle, cligne, tete):
     """L'image finale : le corps du rendu « ancien », les membres et leur contour copiés tels
-    quels du rendu « nouveau », et le flanc derrière le bras assombri, pixel par pixel."""
-    rangs, membres, contact = image(gorge, souffle, cligne, tete, "ancien")
-    neufs, _, _ = image(gorge, souffle, cligne, tete, "nouveau")
+    quels du rendu « nouveau », le flanc derrière le bras assombri, pixel par pixel, et les
+    pustules : un pixel de la couleur d'origine, plus clair, son ombre juste en dessous."""
+    rangs, membres, contact, peau = image(gorge, souffle, cligne, tete, "ancien")
+    neufs = image(gorge, souffle, cligne, tete, "nouveau")[0]
     out = np.where(membres, nuancer(neufs, "nouveau"), nuancer(rangs, "ancien"))
     for j, i in zip(*np.nonzero(contact & (out != ".") & (out != "K")), strict=True):
         out[j, i] = assombrir(out[j, i])
+    for j, i in pustules():
+        if peau[j, i] and peau[j + 1, i] and peau[j + 1, i + 1]:
+            out[j, i] = retoucher(out[j, i], clair=0.3)
+            out[j, i + 1] = retoucher(out[j, i + 1], clair=0.12)
+            out[j + 1, i] = retoucher(out[j + 1, i], sombre=0.78, gris=0.9)
+            out[j + 1, i + 1] = retoucher(out[j + 1, i + 1], sombre=0.85, gris=0.9)
     return ["".join(r) for r in out]
 
 
