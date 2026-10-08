@@ -3395,8 +3395,8 @@ de Léonard, 01/10/2026.
        clic. Le surtitre au-dessus de l'enregistrement disparaît : le point rouge passe devant
        son nom. Le fond reprend les lueurs du tableau de bord.
      - **Mode d'emploi** : en tête du panneau de gauche, dans une fenêtre flottante qui déborde
-       sur la page. Colonnes Fonction puis Geste ; plus de flèches ← → (personne ne s'en
-       servait) ; filtre dynamique et contraste expliqués plus simplement.
+       sur la page. Colonnes Fonction puis Geste ; filtre dynamique et contraste expliqués
+       plus simplement.
      - **« Type » devient « étiquette »** (le mot des labels). Les touches 1 à 4 choisissent
        l'étiquette des prochains intervalles sans toucher à l'intervalle sélectionné ; un clic
        sur une étiquette change celle de l'intervalle sélectionné s'il y en a un, sinon celle
@@ -3406,7 +3406,8 @@ de Léonard, 01/10/2026.
      - **Qualité en médailles** : A or, B argent, C bronze (boutons et pastilles).
      - **« Dynamique » devient « Filtre dynamique »**, et le contraste revient à côté de lui sur
        la deuxième ligne (les deux ne se séparent plus ; le micro du spectrogramme a sa ligne).
-     - **Se déplacer : clic droit + glisser** (Maj + clic gauche + glisser marche toujours).
-       Le menu du clic droit ne s'ouvre plus sur le spectrogramme, ni au relâché d'un
-       déplacement ; un clic droit n'efface plus d'intervalle (Suppr ou la croix de la
-       pastille). Vérifié dans Chromium sur le visualiseur seul, avec un faux enregistrement.
+     - **Se déplacer : clic droit + glisser**, à la place de Maj + clic gauche + glisser (les
+       flèches ← → restent pour le temps). Le menu du clic droit ne s'ouvre plus sur le
+       spectrogramme, ni au relâché d'un déplacement ; un clic droit n'efface plus
+       d'intervalle (Suppr ou la croix de la pastille). Vérifié dans Chromium sur le
+       visualiseur seul, avec un faux enregistrement.

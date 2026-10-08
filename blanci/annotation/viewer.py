@@ -34,7 +34,8 @@ sur la piste audio |
 | Zoom en fréquence autour du curseur | **Maj + molette** |
 | Revenir à la vue de base (tout l'extrait, 0 à 10 kHz) | **Double-clic**, ou bouton « Vue de \
 base » |
-| Se déplacer dans le spectrogramme | **Clic droit + glisser** (ou Maj + clic gauche + glisser) |
+| Se déplacer dans le spectrogramme | **Clic droit + glisser** |
+| Se déplacer dans le temps | **Flèches ← →** du clavier |
 | Déplacer les frontières de la bande d'écoute | **Tirer le bord** de la bande (pointillé, \
 curseur ↕) |
 | Tracer un intervalle | **Clic gauche + glisser** sur le spectrogramme |
@@ -697,18 +698,18 @@ canvas.addEventListener("wheel", e => {
 }, {passive: false});
 
 // Clic gauche : tracer un intervalle, en tirer un bord, ou tirer une limite de la bande.
-// Clic droit + glisser (ou Maj + clic gauche + glisser) : se déplacer. Le menu du clic droit
-// ne s'ouvre pas sur le spectrogramme, ni au relâché d'un déplacement (Windows l'ouvre là).
+// Clic droit + glisser : se déplacer. Le menu du clic droit ne s'ouvre pas sur le
+// spectrogramme, ni au relâché d'un déplacement (Windows l'ouvre là).
 let drag = null, noMenuUntil = 0;
 canvas.addEventListener("mousedown", e => {
   if ((e.button !== 0 && e.button !== 2) || !D || drag) return;
   canvas.focus();
   const x = localX(e), y = localY(e), t = tOf(x), line = bandLine(y);
-  const right = e.button === 2, pan = right || e.shiftKey;
-  const [i, edge] = D.interval_mode && !pan ? hit(x) : [-1, null];
+  const right = e.button === 2;
+  const [i, edge] = D.interval_mode && !right ? hit(x) : [-1, null];
   let mode = "pan";
-  if (!pan && line >= 0) mode = "band";
-  else if (!pan && D.interval_mode) mode = edge ? "edge" : "draw";
+  if (!right && line >= 0) mode = "band";
+  else if (!right && D.interval_mode) mode = edge ? "edge" : "draw";
   drag = {mode, right, x: e.clientX, y: e.clientY, view: {...view}, moved: false, t, t2: t, i,
           edge, line};
 });
@@ -792,6 +793,10 @@ document.addEventListener("keydown", e => {
     setNext(D.labels[+e.key - 1][0]);
   } else if ((e.key === "Delete" || e.key === "Backspace") && selected >= 0) {
     remove(selected);
+  } else if (view && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();  // un quart de la vue par appui
+    const span = view.t1 - view.t0, s = (e.key === "ArrowLeft" ? -0.25 : 0.25) * span;
+    view.t0 += s; view.t1 += s; clampView(); moved();
   }
 });
 
