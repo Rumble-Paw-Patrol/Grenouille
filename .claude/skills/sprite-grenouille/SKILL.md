@@ -79,8 +79,9 @@ remplit mal), sans anticrénelage, contour sombre d'un pixel autour de la silhou
 - **Pattes avant** : bras pliés, coude ouvert (~130°) qui dépasse un peu sous le ventre sans
   pointe exagérée ; avant-bras un peu renflé en son milieu, plus fin au coude et au poignet ;
   le poignet arrive sur le **talon de la paume** (en bas, à l'arrière de la main). **L'épaule
-  sort du flanc sans aucun trait** : sur ~3 unités, tramage ordonné (Bayer 4 × 4) entre flanc
-  et bras ; contour seulement là où le bras sort du corps. Lumière d'en haut à gauche : bord
+  s'attache en arrondi, sans aucun trait** : un capuchon un peu plus haut que large coiffe le
+  haut du bras, son pourtour tourne au jaune et se fond dans le flanc en tramage ordonné
+  (Bayer 4 × 4) ; contour seulement là où le bras sort du corps. Lumière d'en haut à gauche : bord
   avant éclairé, ombre du bord arrière. **Le bras de l'autre côté se voit** : même épaule, en
   arrière-plan, même profil en plus fin et plus sombre, cerné d'un contour là où le bras
   proche passe devant (effacer les restes isolés entre la gorge et le bras) ; sa main plus
@@ -97,6 +98,12 @@ remplit mal), sans anticrénelage, contour sombre d'un pixel autour de la silhou
   niveaux, en 3 variantes de teinte réparties par plaques (plus rouge, neutre, plus dorée),
   grain conservé — environ 80 couleurs. Léonard a jugé cette version « bien bien mieux » :
   ne jamais livrer la version à tons de base seule.
+- **Ombres de contact** (flanc derrière le bras) : le pixel de base, même teinte, assombri et
+  un peu grisé ; jamais des pixels d'une autre matière (brun foncé sur le flanc).
+- **Bande du dos** : elle ne s'arrête pas d'elle-même ; le haut de la cuisse remonte juste
+  assez vers la croupe pour la cacher, sans monter jusqu'au dos.
+- **Grain du ventre** : semé (environ un pixel sur quatre) mais doux, un seul cran de rampe
+  plus clair ou plus sombre que le flanc alentour ; pas de points blancs vifs.
 - **Détails** : grain de peau léger (pas de bruit sale), mouchetures, bords de bande
   effilochés, gorge mouchetée, barres discrètes sur la cuisse si l'espèce en a, reflets de
   peau humide (coude, cuisse, genou). Les motifs propres à l'espèce (bandes, taches,
