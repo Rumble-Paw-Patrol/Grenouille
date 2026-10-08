@@ -3385,3 +3385,28 @@ de Léonard, 01/10/2026.
      `streamlit run` sans passer par `blanci annotate`, le poste garde la feuille de style
      mais pas le thème (couleurs des cases, curseurs et menus). Pas d'animation de fond ni de
      grain en surimpression : le navigateur garde ses forces pour le spectrogramme.
+
+198. **Poste : bandeau, mode d'emploi dans le panneau, couleurs qui parlent, déplacement au
+     clic droit** (Léonard, 08/10).
+     - **Bandeau** du tableau de bord en haut de page (`bandeau.py`) : « Poste d'annotation
+       d'*Anomaloglossus blanci* », A. blanci en 8-bit perchée sur le chant de Molokoi balayé
+       par la tête de lecture. Composant à part : la page, l'image et la grenouille
+       (`documentation/tableau-de-bord/`) sont servies une fois, rien n'est renvoyé à chaque
+       clic. Le surtitre au-dessus de l'enregistrement disparaît : le point rouge passe devant
+       son nom. Le fond reprend les lueurs du tableau de bord.
+     - **Mode d'emploi** : en tête du panneau de gauche, dans une fenêtre flottante qui déborde
+       sur la page. Colonnes Fonction puis Geste ; plus de flèches ← → (personne ne s'en
+       servait) ; filtre dynamique et contraste expliqués plus simplement.
+     - **« Type » devient « étiquette »** (le mot des labels). Les touches 1 à 4 choisissent
+       l'étiquette des prochains intervalles sans toucher à l'intervalle sélectionné ; un clic
+       sur une étiquette change celle de l'intervalle sélectionné s'il y en a un, sinon celle
+       des prochains. Pleine : prochains intervalles ; cerclée de blanc : intervalle
+       sélectionné. Couleurs (`style.LABEL_COLORS`, aussi sur la carte des embeddings) :
+       A. blanci vert, plusieurs bleu, incertaine jaune orangé, faux ami rouge.
+     - **Qualité en médailles** : A or, B argent, C bronze (boutons et pastilles).
+     - **« Dynamique » devient « Filtre dynamique »**, et le contraste revient à côté de lui sur
+       la deuxième ligne (les deux ne se séparent plus ; le micro du spectrogramme a sa ligne).
+     - **Se déplacer : clic droit + glisser** (Maj + clic gauche + glisser marche toujours).
+       Le menu du clic droit ne s'ouvre plus sur le spectrogramme, ni au relâché d'un
+       déplacement ; un clic droit n'efface plus d'intervalle (Suppr ou la croix de la
+       pastille). Vérifié dans Chromium sur le visualiseur seul, avec un faux enregistrement.

@@ -27,8 +27,9 @@
   s'affiche (fenêtre suivante du découpage, sinon candidat suivant).
 - **Groupes** : une file tirée par groupes montre, groupe par groupe, ce qui a été entendu ; un
   groupe homogène s'étiquette en entier d'un clic (source « bulk »).
-- **Habillage** : celui du tableau de bord (`style.py`) ; le thème sombre de Streamlit est
-  passé par `blanci annotate`, la feuille de style est injectée ici.
+- **Habillage** : celui du tableau de bord (`style.py`, bandeau dans `bandeau.py`) ; le thème
+  sombre de Streamlit est passé par `blanci annotate`, la feuille de style est injectée ici.
+  Le mode d'emploi s'ouvre en haut du panneau de gauche.
 
 Toute la logique est dans `workbench.py` et `selection.py` ; ce fichier ne fait qu'afficher.
 """
@@ -36,6 +37,7 @@ Toute la logique est dans `workbench.py` et `selection.py` ; ce fichier ne fait 
 from __future__ import annotations
 
 import argparse
+import itertools
 import math
 import os
 import sys
@@ -45,7 +47,8 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from blanci.annotation.style import BRAND, CHART_COLORS, CSS, UNHEARD_COLOR, eyebrow
+from blanci.annotation.bandeau import bandeau
+from blanci.annotation.style import BRAND, CHART_COLORS, CSS, LABEL_COLORS, UNHEARD_COLOR
 from blanci.annotation.viewer import HELP, asset, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
@@ -258,7 +261,6 @@ def _map_page(cfg, con, encoder: str | None, config: Path | None) -> None:
 
     from blanci.annotation.selection import map_selection, write_queue
 
-    st.markdown(eyebrow("Poste d'annotation", "YAPAT maison"), unsafe_allow_html=True)
     st.subheader("Carte des embeddings")
     if encoder is None:
         st.info("Choisir un encodeur dans le panneau de gauche.")
@@ -274,7 +276,8 @@ def _map_page(cfg, con, encoder: str | None, config: Path | None) -> None:
     st.caption("Entourer une zone (cliquer-glisser), puis l'écouter. Couleur : label entendu.")
     heard = sorted(set(points["label"]) - {"non écouté"})
     domain = heard + ["non écouté"] * bool((points["label"] == "non écouté").any())
-    palette = [CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(heard))]
+    spare = itertools.cycle(CHART_COLORS)
+    palette = [LABEL_COLORS[x] if x in LABEL_COLORS else next(spare) for x in heard]
     chart = (
         alt.Chart(points)
         .mark_circle(size=16, opacity=0.7)
@@ -523,9 +526,9 @@ def _answer_form(con, target, form_key, annotator, channel, multiclass) -> bool:
 def _interval_caption(intervals) -> str:
     if not intervals:
         return (
-            "Aucun intervalle tracé : tout l'extrait sera négatif. Glisser sur le "
-            "spectrogramme là où A. blanci chante (ou un faux ami : bouton « faux ami » ou "
-            "touche 4 en haut à gauche, avant de tracer)."
+            "Aucun intervalle tracé : tout l'extrait sera négatif. Clic gauche + glisser sur le "
+            "spectrogramme là où A. blanci chante (un faux ami : étiquette « faux ami » ou "
+            "touche 4, avant de tracer)."
         )
     return f"{len(intervals)} intervalle(s) : " + " · ".join(
         f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)}{f', qualité {q}' if q else ''})"
@@ -597,6 +600,7 @@ def main() -> None:
         st.iframe(READONLY_MENUS, height=1)
     else:
         components.html(READONLY_MENUS, height=0)
+    bandeau()
     config = _config_file()
     cfg, con = _setup(config)
     _apply_pending_queue()
@@ -607,6 +611,9 @@ def main() -> None:
 
     with st.sidebar:
         st.markdown(BRAND, unsafe_allow_html=True)
+        # Fenêtre flottante, plus large que le panneau : le tableau des gestes y tient.
+        with st.popover("❓ Mode d'emploi : souris et clavier"):
+            st.markdown(HELP)
         st.header("Session")
         annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
         st.session_state["annotator"] = annotator
@@ -637,8 +644,8 @@ def main() -> None:
             "l'espèce.",
         )
         st.caption(
-            "Type d'intervalle (dont faux ami), bande d'écoute, volume, dynamique, contraste "
-            "et micro du spectrogramme : dans la barre au-dessus du spectrogramme."
+            "Étiquette et qualité des intervalles, bande d'écoute, volume, filtre dynamique, "
+            "contraste et micro du spectrogramme : dans la barre au-dessus du spectrogramme."
         )
         st.header("Méthode")
         window_mode = st.checkbox(
@@ -655,7 +662,6 @@ def main() -> None:
         _map_page(cfg, con, encoder, config)
         return
     if chosen is None:
-        st.markdown(eyebrow("Poste d'annotation"), unsafe_allow_html=True)
         st.info("Choisir une file, ou en générer une avec le mode de sélection.")
         return
 
@@ -680,13 +686,11 @@ def main() -> None:
     if done.notna().all():
         st.success("File terminée : tous les candidats ont été écoutés.")
 
-    with st.expander("❓ Mode d'emploi : souris et clavier"):
-        st.markdown(HELP)
     candidate = queue.iloc[pos].to_dict()
-    st.markdown(eyebrow("Poste d'annotation", _queue_name(chosen)), unsafe_allow_html=True)
-    st.subheader(
+    st.subheader(  # « en-ecoute » : la feuille de style met le point rouge devant
         f"{candidate['site']} · {candidate['mic_id']} · "
-        f"{local_time(candidate['start_utc'], offset_h)} (heure locale)"
+        f"{local_time(candidate['start_utc'], offset_h)} (heure locale)",
+        anchor="en-ecoute",
     )
     score = candidate.get("score")
     heard = done.iloc[pos]

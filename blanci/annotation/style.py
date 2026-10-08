@@ -9,7 +9,10 @@ Deux étages :
   version installée ne connaît pas est simplement ignorée, là où une option inconnue sur la
   ligne de commande ferait échouer le lancement.
 - `CSS` : feuille injectée par `app.py` à chaque affichage, pour ce que le thème ne règle pas
-  (fond, panneau de gauche, boutons, cartes, titres, cadre du visualiseur).
+  (fond, panneau de gauche, boutons, cartes, titres, cadres du bandeau et du visualiseur).
+- `LABEL_COLORS` : couleurs des étiquettes d'intervalle, pour le visualiseur et la carte.
+
+Le bandeau (titre, grenouille, spectrogramme) est un composant à part : `bandeau.py`.
 
 Pas d'animation de fond ni de grain en surimpression : c'est un poste de travail, le
 navigateur garde ses forces pour le spectrogramme.
@@ -57,18 +60,17 @@ THEME = {
     "sidebar.textColor": INK,
 }
 
-# Couleurs des classes sur la carte des embeddings (espèces du tableau de bord) ; les fenêtres
-# jamais écoutées restent grises.
-CHART_COLORS = (
-    "#5AA2F0",
-    "#3FC57D",
-    "#F29A3B",
-    "#B08CF2",
-    "#F06A5B",
-    "#4FD8C0",
-    "#FFE08A",
-    "#E4573F",
-)
+# Étiquettes des intervalles (boutons, intervalles et pastilles du visualiseur, carte des
+# embeddings) : A. blanci en vert, plusieurs en bleu, incertaine en jaune orangé, faux ami en
+# rouge.
+LABEL_COLORS = {
+    "blanci": "#3FC57D",
+    "blanci_chorus": "#5AA2F0",
+    "blanci_uncertain": "#F5B547",
+    "false_friend": "#F06A5B",
+}
+# Les autres classes sur la carte des embeddings ; les fenêtres jamais écoutées restent grises.
+CHART_COLORS = ("#B08CF2", "#4FD8C0", "#FFE08A", "#C0397A", "#E4573F", "#8DA197")
 UNHEARD_COLOR = "#4A5A52"
 
 
@@ -120,15 +122,16 @@ CSS = (
     var(--accent-3) 100%);
 }
 
-/* Fond : trois lueurs fixes (braise, sarcelle, pourpre) et le grain, sans animation. */
+/* Fond : les trois lueurs du tableau de bord (braise en haut à gauche, sarcelle en haut à
+   droite, pourpre en bas), mêmes teintes et mêmes places, fixes, et le grain. */
 .stApp {
   color-scheme: dark; color: var(--ink); font-family: var(--f-body);
   -webkit-font-smoothing: antialiased;
   background:
     __GRAIN__,
-    radial-gradient(38vmax 30vmax at 18% 8%, rgba(228, 87, 63, .13), transparent 70%),
-    radial-gradient(42vmax 34vmax at 92% 30%, rgba(79, 216, 192, .08), transparent 70%),
-    radial-gradient(40vmax 36vmax at 55% 105%, rgba(158, 42, 107, .13), transparent 70%),
+    radial-gradient(44vmax 36vmax at 10% -12%, rgba(228, 87, 63, .20), transparent 70%),
+    radial-gradient(46vmax 38vmax at 98% 14%, rgba(79, 216, 192, .13), transparent 70%),
+    radial-gradient(44vmax 40vmax at 57% 122%, rgba(158, 42, 107, .18), transparent 70%),
     var(--bg) !important;
   background-attachment: fixed !important;
 }
@@ -144,6 +147,14 @@ CSS = (
 }
 [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stBottom"] > div {
   background: transparent !important;
+}
+/* Le bandeau monte sous la barre du haut de Streamlit. */
+[data-testid="stMainBlockContainer"], .block-container { padding-top: 4.25rem !important; }
+/* Feuille de style et petit script des menus : hors du flux, sans laisser d'espace. */
+[data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] style),
+[data-testid="stElementContainer"]:has(iframe[srcdoc*="__blanciMenus"]) {
+  position: absolute !important; width: 1px; height: 1px; overflow: hidden; opacity: 0;
+  pointer-events: none;
 }
 .stApp ::selection { background: var(--accent); color: var(--accent-ink); }
 .stApp * { scrollbar-width: thin; scrollbar-color: var(--line-fort) transparent; }
@@ -177,19 +188,14 @@ CSS = (
   + [data-testid="stElementContainer"] [data-testid="stCaptionContainer"] p {
   font-family: var(--f-mono); font-size: 11.5px; line-height: 1.5;
 }
-
-/* Surtitre (au-dessus du titre) et marque (haut du panneau de gauche). */
-[data-testid="stElementContainer"]:has(.gr-eyebrow) { margin-bottom: -10px; }
-.gr-eyebrow {
-  display: inline-flex; align-items: center; gap: 10px;
-  font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--gold); font-weight: 500;
-}
-.gr-eyebrow::before {
-  content: ""; width: 8px; height: 8px; border-radius: 50%; background: #FF5A4E;
+/* Enregistrement en cours d'écoute : point rouge « on enregistre » devant son nom. */
+[data-testid="stMain"] :is(h3#en-ecoute, #en-ecoute h3)::before {
+  content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  margin: 0 13px 0 3px; vertical-align: .16em; background: #FF5A4E;
   box-shadow: 0 0 0 0 rgba(255, 90, 78, .6);
 }
-.gr-eyebrow b { color: var(--muted); font-weight: 500; }
+
+/* Marque (haut du panneau de gauche). */
 .gr-brand { display: flex; flex-direction: column; gap: 2px; padding: 0 2px 4px; }
 .gr-brand b {
   font-family: var(--f-display); font-size: 20px; font-weight: 700; letter-spacing: -.02em;
@@ -201,9 +207,10 @@ CSS = (
   box-shadow: 0 0 14px var(--accent), 0 0 2px var(--gold);
 }
 .gr-brand span { color: var(--muted); font-size: 12.5px; }
-.gr-brand i { font-family: var(--f-serif); font-size: 1.15em; color: var(--gold); }
 @media (prefers-reduced-motion: no-preference) {
-  .gr-eyebrow::before { animation: gr-enregistre 1.8s ease-out infinite; }
+  [data-testid="stMain"] :is(h3#en-ecoute, #en-ecoute h3)::before {
+    animation: gr-enregistre 1.8s ease-out infinite;
+  }
   @keyframes gr-enregistre {
     0% { box-shadow: 0 0 0 0 rgba(255, 90, 78, .6); }
     80%, 100% { box-shadow: 0 0 0 9px rgba(255, 90, 78, 0); }
@@ -212,8 +219,9 @@ CSS = (
 
 /* Panneau de gauche : nuit, comme la barre latérale du tableau de bord. */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, rgba(6, 14, 12, .97), rgba(4, 9, 8, .99)) !important;
+  background: linear-gradient(180deg, rgba(6, 14, 12, .94), rgba(4, 9, 8, .97)) !important;
   border-right: 1px solid var(--nuit-ligne) !important;
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
 }
 [data-testid="stSidebar"] > div, [data-testid="stSidebarContent"], [data-testid="stSidebarHeader"] {
   background: transparent !important;
@@ -265,7 +273,7 @@ CSS = (
 }
 .stApp input, .stApp textarea, .stApp [data-baseweb="select"] { color: var(--ink) !important; }
 .stApp input:disabled { color: var(--muted) !important; -webkit-text-fill-color: var(--muted); }
-[data-baseweb="popover"] [role="listbox"], [data-baseweb="popover"] ul {
+[data-baseweb="popover"] [role="listbox"] {
   background: var(--surface-solid) !important; border: 1px solid var(--line-fort);
   border-radius: 10px; box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .9);
 }
@@ -305,6 +313,20 @@ CSS = (
   color: var(--accent) !important;
 }
 .stApp button:disabled { opacity: .4; }
+/* Mode d'emploi : bouton sur toute la largeur du panneau ; sa fenêtre déborde sur la page,
+   assez large pour le tableau des gestes. */
+[data-testid="stSidebar"] [data-testid="stPopover"],
+[data-testid="stSidebar"] [data-testid="stPopover"] > div,
+[data-testid="stSidebar"] [data-testid="stPopover"] button { width: 100% !important; }
+[data-testid="stSidebar"] [data-testid="stPopover"] button { justify-content: flex-start; }
+[data-baseweb="popover"]:has([data-testid="stPopoverBody"]) { max-width: 94vw !important; }
+[data-testid="stPopoverBody"] {
+  width: min(780px, 90vw) !important; max-width: 90vw !important; max-height: 82vh;
+  overflow-y: auto; padding: 18px 22px !important;
+  background: rgba(10, 20, 17, .97) !important; border: 1px solid var(--line-fort) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 30px 80px -24px rgba(0, 0, 0, .95), 0 0 50px -24px var(--accent) !important;
+}
 .stApp button:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 3px; }
 
 /* Cartes en verre dépoli : formulaire de réponse, rubriques repliables. */
@@ -371,9 +393,14 @@ CSS = (
 }
 [data-testid="stMarkdownContainer"] strong { color: var(--ink); }
 
-/* Visualiseur : cadre du spectrogramme du bandeau (liseré or, lueur braise). */
-.stApp :is(iframe[title*="blanci_viewer"], iframe[data-testid="stCustomComponentV1"]) {
-  border-radius: 14px; background: var(--bg-2);
+/* Composants : le bandeau (cadre arrondi, lueur braise) et le visualiseur, encadré comme le
+   spectrogramme du bandeau (liseré or, lueur braise). */
+.stApp iframe[data-testid="stCustomComponentV1"] { border-radius: 14px; }
+.stApp iframe[title*="blanci_bandeau"] {
+  border-radius: 16px; box-shadow: 0 26px 70px -34px rgba(228, 87, 63, .55);
+}
+.stApp iframe[title*="blanci_viewer"] {
+  background: var(--bg-2);
   box-shadow: 0 0 0 1px rgba(255, 210, 120, .14), 0 30px 80px -30px rgba(228, 87, 63, .5),
     0 0 60px -24px rgba(245, 165, 58, .3);
 }
@@ -384,15 +411,4 @@ CSS = (
 )
 
 
-def eyebrow(text: str, detail: str = "") -> str:
-    """Surtitre à point rouge (« on enregistre ») ; `detail` en gris après un point médian."""
-    from html import escape
-
-    tail = f" <b>· {escape(detail)}</b>" if detail else ""
-    return f'<div class="gr-eyebrow">{escape(text)}{tail}</div>'
-
-
-BRAND = (
-    '<div class="gr-brand"><b>Grenouille</b>'
-    "<span>Poste d'annotation · <i>A. blanci</i></span></div>"
-)
+BRAND = '<div class="gr-brand"><b>Grenouille</b><span>Poste d\'annotation</span></div>'

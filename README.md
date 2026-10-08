@@ -81,7 +81,7 @@ annotation ─► inputs                                      les labels écout�
 | `heads/` | 3. têtes de détection | `head` (prototypes, logistique…), `attentive`, `proto_probe`, `gated`, `dann`, `pooling`, `losses`, `regularization/` (R1 à R84), `cluster` ; sans encodeur : `signal_processing` (rythme des notes), `baselines`, `detectors/` |
 | `combination/` | 4. combiner les modèles | `stacking`, `fusion` (fusion à deux niveaux), `ensemble` |
 | `evaluation/` | 5. mesurer | `evaluate` (plis par micro, AP, rappel, bootstrap, Wilson), `oof` (scores hors-pli), `benchmark`, `head_benchmark`, `full_benchmark`, `throughput`, `qc_calibration`, `anuraset` (archivé) |
-| `annotation/` | 6. boucle d'écoute | `selection`, `workbench`, `app` (poste d'annotation Streamlit), `viewer` (spectrogramme zoomable, tracé des intervalles) et `style` (habillage du tableau de bord) |
+| `annotation/` | 6. boucle d'écoute | `selection`, `workbench`, `app` (poste d'annotation Streamlit), `viewer` (spectrogramme zoomable, tracé des intervalles) `style` et `bandeau` (habillage du tableau de bord) |
 | `results/` | 7. sorties écologiques | `aggregate` (fenêtre → enregistrement → point), `activity` (courbes d'activité) |
 | `exploration/` | notebooks | `explore`, `explore_plots`, `attention_map` |
 | racine | interfaces | `cli` (commandes Typer ; AnuraSet regroupé sous `blanci anuraset …`), `service` (couche appelée par la CLI et par la future application) |
