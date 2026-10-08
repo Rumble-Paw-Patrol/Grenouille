@@ -10,7 +10,7 @@
     planche SPRITE.json SORTIE.html NOM "TEXTE"
         La planche de relecture (planche.html) avec le sprite intégré.
     controle SPRITE.json
-        Groupes de pixels qui ne tiennent pas au reste (contour exclu, voisins par un côté),
+        Groupes de pixels qui ne tiennent pas au reste (contour K et k exclu, voisins par un côté),
         image par image : un doigt, un orteil ou un talon détaché apparaît ici. Seul le bras
         de l'autre côté, cerné partout, peut légitimement faire un groupe à part.
 
@@ -98,7 +98,7 @@ def controle(fichier):
     s = json.load(open(fichier))
     for cle in sorted(s["images"]):
         g = rangees(s, cle)
-        plein = {(j, i) for j, r in enumerate(g) for i, c in enumerate(r) if c not in ".K"}
+        plein = {(j, i) for j, r in enumerate(g) for i, c in enumerate(r) if c not in ".Kk"}
         groupes, vus = [], set()
         for depart in sorted(plein):
             if depart in vus:

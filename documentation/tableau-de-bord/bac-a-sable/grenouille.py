@@ -1,21 +1,15 @@
-"""Bac à sable : sprite 8-bit d'A. blanci aux pattes revues, avant reprise dans le bandeau.
+"""Bac à sable : audit du sprite d'A. blanci (contour, bouche, grain, ombres, teintes).
 
     uv run python documentation/tableau-de-bord/bac-a-sable/grenouille.py
 
-Copie de ../grenouille.py dont la posture et les membres changent, d'après des photos
-d'Anomaloglossus (dont M. Dewynter). Patte arrière en Z de grenouille assise : cuisse arrondie,
-tournée vers nous, de la hanche au genou ; tibia long et bombé, surtout sur le dessus, qui
-descend légèrement du genou, levé, jusqu'au talon arrondi de la cheville, qui passe sous la
-cuisse et dépasse nettement derrière la croupe ; la croupe s'arrête derrière le tibia ; tarse
-qui revient du talon vers l'avant, au sol, trois orteils longs en éventail. Bras pliés, coude
-ouvert, avant-bras un peu renflé en son milieu, plus fin au coude et au poignet, qui arrive sur
-le talon de la paume ; le bras droit part de la même épaule que le gauche, en arrière-plan,
-cerné là où le gauche passe devant, sa main plus haut et plus en arrière. Mains et pieds sont
-des gabarits posés au pixel près (ORTEILS, MAIN_PROCHE, MAIN_LOINTAINE) : paume étroite, trois
-doigts d'un pixel en éventail vers l'avant (diagonale haute, tout droit, diagonale basse),
-tracés en escalier pour que chaque pixel touche le suivant par un côté, disque clair au bout.
-Image de 114 × 86, sans rien contre ses bords. Écrit grenouille.json dans ce dossier (non
-suivi) ; le tableau de bord n'en lit rien.
+Copie de ../grenouille.py (la version du bandeau) avec les corrections de l'audit :
+contour sélectif, brun chaud côté lumière (au-dessus et à gauche de la forme) et presque noir
+côté ombre et entre deux formes ; trait de la bouche brun sous la lèvre claire, du bout du
+museau au pli sous l'œil ; grain de peau moitié moins semé (moins de pixels isolés, sur le
+dos, le flanc et les pattes) ; ombre de contact sur le flanc juste derrière le bras ; rampes
+de couleur plus contrastées en teinte (ombres plus rouges, lumières plus dorées) et bande
+sombre un peu moins noire, pour se détacher du contour. Écrit grenouille.json dans ce
+dossier (non suivi) ; le tableau de bord n'en lit rien.
 
 Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
 de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de doré, bande sombre
@@ -46,7 +40,8 @@ import numpy as np
 
 ICI = Path(__file__).resolve().parent
 PALETTE = {
-    "K": "#24120A",  # contour
+    "K": "#24120A",  # contour, côté ombre et entre deux formes
+    "k": "#5A2B14",  # contour côté lumière (en haut et à gauche), brun chaud
     "I": "#F8C68A",  # reflet vif, peau brillante
     "H": "#E89F55",  # reflet
     "O": "#D07A35",  # dos orangé
@@ -322,8 +317,8 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # dos : grain de peau (granules claires et sombres), quelques taches, reflet le long du dos
     dos = dedans & (y < yb - e)
     g[dos] = "O"
-    g[dos & (n1 < 0.06)] = "M"
-    g[dos & (n1 > 0.94)] = "H"
+    g[dos & (n1 < 0.035)] = "M"
+    g[dos & (n1 > 0.97)] = "H"
     for _ in range(22):
         mx, my, r = alea.uniform(13, 38), alea.uniform(5, 22), alea.uniform(0.45, 0.85)
         g[ellipse(mx, my, r, r * 0.8, x, y) & dos & (n2 > 0.25)] = "M"
@@ -348,12 +343,14 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[joue & (n1 > 0.85)] = "H"
     flanc = dessous & (x >= 16)
     g[flanc] = "F"
-    g[flanc & (n1 > 0.72)] = "f"
-    g[flanc & (n2 > 0.96)] = "C"
-    g[flanc & (n2 < 0.05)] = "M"
+    g[flanc & (n1 > 0.84)] = "f"
+    g[flanc & (n2 > 0.975)] = "C"
+    g[flanc & (n2 < 0.03)] = "M"
     levre = dessous & (y <= yb + e + 0.8) & (x < 20)
     g[levre] = np.where(x[levre] < 9, "T", "C")
+    # trait de la bouche : sous la lèvre claire, du bout du museau au pli sous l'œil
     g[dessous & (y > yb + e + 0.8) & (y <= yb + e + 1.5) & (x < 9)] = "f"
+    g[dessous & (y > yb + e + 0.85) & (y <= yb + e + 1.3) & (x > 1.3) & (x < 7.8)] = "b"
     g[dessous & bas2 & (x >= 14)] = "C"
     g[dessous & bas2 & (x >= 14) & (n1 < 0.2)] = "g"
     g[dessous & bas1] = "c"
@@ -387,8 +384,8 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     cm = dans(cuisse, X, Y)
     avant = g != "."
     g[cm] = "O"
-    g[cm & (n3 < 0.1)] = "M"
-    g[cm & (n3 > 0.94)] = "H"
+    g[cm & (n3 < 0.06)] = "M"
+    g[cm & (n3 > 0.97)] = "H"
     g[cm & ~dans(cuisse, X + 0.4, Y - 2.4)] = "H"
     g[cm & ~dans(cuisse, X + 0.2, Y - 1.0)] = "I"
     g[cm & (np.abs((X - 43.0) + (Y - 30) * 0.3) < 0.7) & (n3 > 0.3)] = "M"  # barre
@@ -453,8 +450,8 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     jm = dans(jambe, X, Y)
     sous_jambe = g != "."
     g[jm] = "O"
-    g[jm & (n3 < 0.1)] = "M"
-    g[jm & (n3 > 0.95)] = "H"
+    g[jm & (n3 < 0.06)] = "M"
+    g[jm & (n3 > 0.97)] = "H"
     g[jm & ~dans(jambe, X + 0.4, Y - 1.4)] = "H"
     g[jm & ~dans(jambe, X + 0.2, Y - 0.7) & (X < 44)] = "I"
     g[jm & ~dans(jambe, X - 0.2, Y + 1.6)] = "S"
@@ -505,14 +502,28 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     trame = (BAYER4[(np.arange(H) % 4)[:, None], (np.arange(W) % 4)[None, :]] + 0.5) / 16
     bras = pa & ((trame < t) | ~corps_dessous)
     g[bras] = "O"
-    g[bras & (n3 < 0.1)] = "M"
-    g[bras & (n3 > 0.93)] = "f"
+    g[bras & (n3 < 0.06)] = "M"
+    g[bras & (n3 > 0.97)] = "f"
     # lumière d'en haut à gauche : bord avant éclairé, bord arrière dans l'ombre
     g[bras & ~dans(patte, X - 1.1, Y)] = "H"
     g[bras & ~dans(patte, X - 0.6, Y)] = "I"
     g[bras & ~dans(patte, X + 1.1, Y) & (Y > 21.0)] = "S"
     g[bras & ~dans(patte, X + 0.6, Y) & (Y > 22.0)] = "Z"
     g[ellipse(26.4, 30.6, 0.6, 0.9, X, Y, 0.4)] = "I"  # reflet au coude
+    # ombre de contact : le flanc juste derrière le bras, sous l'épaule
+    contact = corps_dessous & ~bras & (Y > 21.5) & (np.roll(bras, 1, 1) | np.roll(bras, 2, 1))
+    for clair, sombre in (
+        ("M", "Z"),
+        ("O", "S"),
+        ("H", "O"),
+        ("I", "H"),
+        ("S", "Z"),
+        ("f", "F"),
+        ("F", "M"),
+        ("C", "g"),
+        ("g", "c"),
+    ):
+        g[contact & (g == clair)] = sombre
     separer(g, bras, bras_loin & ~dedans)  # contour entre les deux bras
     g[miettes(bras_loin & ~dedans & ~bras & (g != "."))] = "."  # restes entre gorge et bras
     # main tournée vers l'intérieur : poignet, paume et trois doigts vers l'avant qui filent
@@ -566,8 +577,11 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[ellipse(2.8, 4.0, 0.7, 0.5, x, y) & dedans] = "I"
 
     # contour
+    # contour sélectif : brun chaud côté lumière (au-dessus et à gauche de la forme), presque
+    # noir côté ombre et partout où il sépare deux formes (entre deux doigts, deux pattes)
     plein = g != "."
     autour = np.zeros_like(plein)
+    eclaire, ombre = np.zeros_like(plein), np.zeros_like(plein)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         decale = np.roll(np.roll(plein, dy, 0), dx, 1)
         if dy == 1:
@@ -579,7 +593,12 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         if dx == -1:
             decale[:, -1] = False
         autour |= decale
+        if dy == -1 or dx == -1:
+            eclaire |= decale
+        else:
+            ombre |= decale
     g[~plein & autour] = "K"
+    g[~plein & eclaire & ~ombre] = "k"
     return ["".join(r) for r in g]
 
 
@@ -599,11 +618,11 @@ def rampe(n, h0, h1, s0, s1, l0, l1, dh=0.0):
 MATIERES = {
     "orange": (
         {"I": 1.0, "H": 0.78, "O": 0.55, "M": 0.34, "S": 0.32, "Z": 0.12},
-        [rampe(12, 17, 34, 0.66, 0.86, 0.22, 0.78, dh) for dh in (-4, 0, 5)],
+        [rampe(12, 13, 37, 0.66, 0.86, 0.22, 0.78, dh) for dh in (-4, 0, 5)],
     ),
     "bande": (
         {"B": 0.25, "b": 0.65},
-        [rampe(7, 18, 24, 0.62, 0.55, 0.11, 0.33, dh) for dh in (-3, 0, 4)],
+        [rampe(7, 16, 24, 0.6, 0.55, 0.14, 0.34, dh) for dh in (-3, 0, 4)],
     ),
     "flanc": (
         {"F": 0.45, "f": 0.78},
@@ -632,7 +651,7 @@ _K = np.array([1, 4, 6, 4, 1], float) / 16
 _YY, _XX = np.mgrid[0:H, 0:W]
 _LUMIERE = 0.07 * (0.5 - (_XX / W * 0.6 + _YY / H * 0.4))  # un peu plus clair en haut à gauche
 _v = np.sin(_XX * 12.9898 + _YY * 78.233) * 43758.5453
-_GRAIN = (_v - np.floor(_v) - 0.5) * 0.05
+_GRAIN = (_v - np.floor(_v) - 0.5) * 0.035
 _champ = np.kron(np.random.default_rng(11).random((H // 8 + 2, W // 8 + 2)), np.ones((8, 8)))
 
 
