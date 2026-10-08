@@ -4,17 +4,18 @@
 
 Copie de ../grenouille.py dont la posture et les membres changent, d'après des photos
 d'Anomaloglossus (dont M. Dewynter). Patte arrière en Z de grenouille assise : cuisse arrondie,
-tournée vers nous, de la hanche au genou ; tibia long et bombé, surtout sur le dessus, du genou
-au talon arrondi, qui passe sous la cuisse et dépasse nettement derrière la croupe ; la croupe
-s'arrête derrière le tibia ; tarse qui revient du talon vers l'avant, au sol, trois orteils
-longs en éventail. Bras pliés, coude ouvert, avant-bras un peu renflé en son milieu, plus fin
-au coude et au poignet, qui arrive sur le talon de la paume ; le bras droit part de la même
-épaule que le gauche, en arrière-plan, cerné là où le gauche passe devant, sa main plus haut et
-plus en arrière. Mains et pieds sont des gabarits posés au pixel près (ORTEILS, MAIN_PROCHE,
-MAIN_LOINTAINE) : paume étroite, trois doigts d'un pixel en éventail vers l'avant (diagonale
-haute, tout droit, diagonale basse), tracés en escalier pour que chaque pixel touche le suivant
-par un côté, disque clair au bout. Image de 114 × 86, sans rien contre ses bords. Écrit
-grenouille.json dans ce dossier (non suivi) ; le tableau de bord n'en lit rien.
+tournée vers nous, de la hanche au genou ; tibia long et bombé, surtout sur le dessus, qui
+descend légèrement du genou, levé, jusqu'au talon arrondi de la cheville, qui passe sous la
+cuisse et dépasse nettement derrière la croupe ; la croupe s'arrête derrière le tibia ; tarse
+qui revient du talon vers l'avant, au sol, trois orteils longs en éventail. Bras pliés, coude
+ouvert, avant-bras un peu renflé en son milieu, plus fin au coude et au poignet, qui arrive sur
+le talon de la paume ; le bras droit part de la même épaule que le gauche, en arrière-plan,
+cerné là où le gauche passe devant, sa main plus haut et plus en arrière. Mains et pieds sont
+des gabarits posés au pixel près (ORTEILS, MAIN_PROCHE, MAIN_LOINTAINE) : paume étroite, trois
+doigts d'un pixel en éventail vers l'avant (diagonale haute, tout droit, diagonale basse),
+tracés en escalier pour que chaque pixel touche le suivant par un côté, disque clair au bout.
+Image de 114 × 86, sans rien contre ses bords. Écrit grenouille.json dans ce dossier (non
+suivi) ; le tableau de bord n'en lit rien.
 
 Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
 de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de doré, bande sombre
@@ -368,19 +369,19 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # elle dépasse ; le tibia la recouvre par-dessous. Pli là où elle touche le corps
     cuisse = catmull(
         [
-            (33.4, 30.0),
-            (36.0, 27.6),
-            (40.0, 26.2),
-            (44.4, 26.4),
-            (48.0, 28.0),
-            (50.0, 30.4),
+            (33.4, 29.07),
+            (36.0, 26.81),
+            (40.0, 25.63),
+            (44.4, 26.07),
+            (48.0, 27.87),
+            (50.0, 30.38),
             (50.4, 33.0),
-            (48.6, 35.0),
-            (44.0, 35.8),
-            (39.0, 35.6),
-            (35.0, 35.0),
-            (32.6, 34.0),
-            (32.2, 32.0),
+            (48.6, 34.9),
+            (44.0, 35.45),
+            (39.0, 34.97),
+            (35.0, 34.15),
+            (32.6, 33.02),
+            (32.2, 31.0),
         ]
     )
     cm = dans(cuisse, X, Y)
@@ -391,7 +392,7 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[cm & ~dans(cuisse, X + 0.4, Y - 2.4)] = "H"
     g[cm & ~dans(cuisse, X + 0.2, Y - 1.0)] = "I"
     g[cm & (np.abs((X - 43.0) + (Y - 30) * 0.3) < 0.7) & (n3 > 0.3)] = "M"  # barre
-    g[ellipse(39.6, 27.8, 2.0, 0.5, X, Y, -0.1)] = "I"  # reflet de la peau humide
+    g[ellipse(39.6, 27.2, 2.0, 0.5, X, Y, -0.05)] = "I"  # reflet de la peau humide
     bord = np.zeros_like(cm)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         bord |= cm & ~np.roll(np.roll(cm, dy, 0), dx, 1) & np.roll(np.roll(avant, dy, 0), dx, 1)
@@ -428,25 +429,25 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # (en bas, à l'arrière, contre le sol), par-dessus la cuisse ; reflet de peau humide
     jambe = catmull(
         [
-            (32.48, 33.15),
-            (34.6, 31.1),
-            (37.69, 30.3),
-            (40.77, 30.4),
-            (44.3, 31.35),
-            (47.83, 32.6),
-            (51.0, 34.0),
-            (52.59, 34.9),
-            (53.65, 35.8),
+            (32.48, 32.19),
+            (34.6, 30.23),
+            (37.69, 29.57),
+            (40.77, 29.81),
+            (44.3, 30.92),
+            (47.83, 32.32),
+            (51.0, 33.87),
+            (52.59, 34.84),
+            (53.65, 35.78),
             (54.0, 37.2),
-            (53.47, 39.2),
-            (51.35, 38.8),
-            (47.83, 38.8),
-            (43.42, 38.8),
-            (39.01, 38.6),
-            (35.48, 38.2),
-            (33.19, 37.4),
-            (31.78, 36.2),
-            (31.6, 34.6),
+            (53.47, 39.18),
+            (51.35, 38.68),
+            (47.83, 38.52),
+            (43.42, 38.33),
+            (39.01, 37.93),
+            (35.48, 37.37),
+            (33.19, 36.47),
+            (31.78, 35.21),
+            (31.6, 33.6),
         ]
     )
     jm = dans(jambe, X, Y)
@@ -459,15 +460,18 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[jm & ~dans(jambe, X - 0.2, Y + 1.6)] = "S"
     g[jm & ~dans(jambe, X, Y + 0.7)] = "Z"
     g[jm & (np.abs((X - 43.0) + (Y - 37) * 0.3) < 0.7) & (n3 > 0.3) & (g == "O")] = "M"
-    g[ellipse(36.4, 31.9, 2.2, 0.5, X, Y, -0.1)] = "I"  # reflet au genou
-    g[ellipse(53.4, 38.6, 0.9, 0.8, X, Y) & ~dans(jambe, X, Y + 1.0)] = "O"  # talon
-    g[ellipse(53.2, 37.2, 0.5, 0.4, X, Y)] = "H"
+    g[ellipse(36.4, 31.1, 2.2, 0.5, X, Y, -0.05)] = "I"  # reflet au genou
     pli = np.zeros_like(jm)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         voisin_hors = ~np.roll(np.roll(jm, dy, 0), dx, 1)
         voisin_dessous = np.roll(np.roll(sous_jambe, dy, 0), dx, 1)
         pli |= jm & voisin_hors & voisin_dessous & (X < 52)  # pas de pli au talon
     g[pli] = "Z"
+    # cheville : talon arrondi, assez épais, qui joint le bout du tibia au tarse
+    talon = ellipse(53.9, 38.9, 1.3, 1.15, X, Y)
+    g[talon] = "O"
+    g[talon & ~ellipse(53.9, 39.5, 1.3, 1.15, X, Y)] = "H"
+    g[talon & ~ellipse(53.9, 38.4, 1.3, 1.15, X, Y)] = "S"
 
     # --- patte avant : sort du flanc sous la bande, coude en arrière, avant-bras plus
     # épais près du coude, poignet fin
