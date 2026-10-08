@@ -3,6 +3,9 @@ sur un vrai chant (spectrogramme balayé par une tête de lecture), mosaïque de
 
 Composant Streamlit à part, comme le visualiseur : la page et ses fichiers sont servis une
 fois, l'animation continue d'un clic à l'autre (rien n'est renvoyé à chaque réexécution).
+Il est posé sur la page sans cadre : son fond (dégradé de nuit, lueurs, filet du bas) et ses
+marges sont ceux du conteneur, dans la feuille de style du poste (`style.py`) ; la page du
+composant reste transparente.
 L'image et la grenouille sont celles du tableau de bord (`documentation/tableau-de-bord/`,
 produites par `spectrogramme.py` et `grenouille.py`), recopiées à côté de la page quand elles
 changent ; sans elles, le bandeau garde son titre.
@@ -25,22 +28,17 @@ INDEX = r"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
 <link rel="stylesheet" href="__FONTS__">
 <style>
-  /* Le bandeau du tableau de bord (modele.html), resserré pour laisser la place au poste. */
-  :root { color-scheme: dark; --ink: #E9F2EC; --muted: #93A89D; --ambre: #F5A53A;
-          --or: #FFE08A; --ligne: rgba(160, 210, 185, .16);
-          --mono: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+  /* Le bandeau du tableau de bord (modele.html), resserré pour laisser la place au poste. Pas
+     de color-scheme sombre : différent de celui du cadre, il rendrait son fond opaque. */
+  :root { --ink: #E9F2EC; --muted: #93A89D; --mono: "JetBrains Mono", ui-monospace, Menlo,
+          monospace; }
   [hidden] { display: none !important; }
   html, body { margin: 0; background: transparent; }
   body { color: var(--ink); font: 15px/1.55 "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
          -webkit-font-smoothing: antialiased; }
-  .bande { position: relative; isolation: isolate; overflow: hidden; border-radius: 16px;
-           border: 1px solid var(--ligne); display: grid; gap: 12px;
-           padding: clamp(18px, 2.4vw, 28px) clamp(16px, 3vw, 36px) 12px;
-           background: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%,
-                                        #040807 100%); }
-  .bande::before { content: ""; position: absolute; inset: 0; z-index: -1;
-    background: radial-gradient(50% 80% at 92% 10%, rgba(228, 87, 63, .22), transparent 70%),
-                radial-gradient(40% 60% at 70% 100%, rgba(79, 216, 192, .10), transparent 70%); }
+  /* Ni fond ni bord : ils sont au conteneur, sur la page. */
+  .bande { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 12px;
+           padding: clamp(8px, 1.4vw, 16px) 0 22px; }
   h1, p { position: relative; z-index: 2; margin: 0; }
   h1 { font-family: "Unbounded", "Segoe UI", system-ui, sans-serif; font-weight: 700;
        font-size: clamp(24px, 3.6vw, 44px); line-height: 1.08; letter-spacing: -.025em;
@@ -52,13 +50,16 @@ INDEX = r"""<!doctype html>
          font-size: 1.12em; letter-spacing: 0; padding-right: .08em;
          background: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A);
          -webkit-background-clip: text; background-clip: text; color: transparent; }
-  p { color: var(--muted); max-width: 62ch; }
-  /* A. blanci perchée sur le spectrogramme, sous le titre qui la chevauche. */
+  p { color: var(--muted); max-width: min(62ch, calc(100% - 240px)); }  /* pas sous la grenouille */
+  /* A. blanci perchée sur le spectrogramme, sous le titre qui la chevauche, calée au bord
+     droit du cadre (sur le tableau de bord, son tibia mord sur la marge de la page, que le
+     cadre du composant ne couvre pas). */
   .perchoir { position: relative; z-index: 1; height: 0; margin-bottom: -12px;
               pointer-events: none; }
-  #grenouille { position: absolute; right: clamp(-8px, 2vw, 40px); bottom: 0; max-width: none;
+  #grenouille { position: absolute; right: 0; bottom: 0; max-width: none;
                 image-rendering: pixelated; image-rendering: crisp-edges; }
-  @media (max-width: 640px) {
+  @media (max-width: 480px) {
+    p { max-width: none; }
     .perchoir { height: auto; display: flex; justify-content: flex-end; }
     #grenouille { position: static; }
   }
@@ -163,9 +164,6 @@ function grenouille(G) {
     p = Math.max(1, Math.floor(2 * dpr));
     toile.width = COL * p; toile.height = LIG * p;
     toile.style.width = (COL * p / dpr) + "px"; toile.style.height = (LIG * p / dpr) + "px";
-    // ce qui dépasse à droite du sprite de 96 pixels (le tibia) mord sur la marge du bandeau
-    const tibia = (Math.max(0, G.largeur - 96) * p) / dpr;
-    toile.style.right = `calc(clamp(-8px, 2vw, 40px) - ${tibia}px)`;
   };
   let cligne = -9, prochainCligne = 2.5, tete = 1, prochaineTete = 4 + Math.random() * 3;
   function dessiner(t) {

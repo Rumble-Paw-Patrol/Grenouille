@@ -3411,3 +3411,19 @@ de Léonard, 01/10/2026.
        spectrogramme, ni au relâché d'un déplacement ; un clic droit n'efface plus
        d'intervalle (Suppr ou la croix de la pastille). Vérifié dans Chromium sur le
        visualiseur seul, avec un faux enregistrement.
+
+199. **Poste : bandeau sans cadre, mode d'emploi en haut de la page** (Léonard, 08/10).
+     - **Bandeau posé sur la page**, comme celui du tableau de bord, et non plus dans une
+       carte arrondie : d'un bord à l'autre de la colonne, il remonte jusqu'en haut de la
+       page, sous la barre de Streamlit, devenue transparente (elle se voile quand on fait
+       défiler la page), et finit sur un filet. Le fond, les lueurs et les marges sont
+       portés par le conteneur du composant (`style.py`), la page du composant reste
+       transparente : son texte s'aligne ainsi sur celui de la page. La colonne prend les
+       marges du tableau de bord. A. blanci reste à côté du texte jusqu'à 480 px de large.
+     - **Mode d'emploi en fenêtre surgissante** : elle s'ouvre en haut de la page, par-dessus
+       le panneau, au lieu de tomber sous le bouton et de sortir par le bas de l'écran ; si
+       l'écran est trop bas, elle défile.
+     - **Panneau de gauche** : « Grenouille » seul, sans sous-titre, comme sur le tableau de
+       bord.
+     Vérifié dans Chromium sur une maquette de la page de Streamlit 1.59 (structure et styles
+     relevés dans son code), pas dans Streamlit lui-même.

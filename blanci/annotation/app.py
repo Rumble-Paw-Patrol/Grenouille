@@ -29,7 +29,7 @@
   groupe homogène s'étiquette en entier d'un clic (source « bulk »).
 - **Habillage** : celui du tableau de bord (`style.py`, bandeau dans `bandeau.py`) ; le thème
   sombre de Streamlit est passé par `blanci annotate`, la feuille de style est injectée ici.
-  Le mode d'emploi s'ouvre en haut du panneau de gauche.
+  Le mode d'emploi est en tête du panneau de gauche et s'ouvre en haut de la page.
 
 Toute la logique est dans `workbench.py` et `selection.py` ; ce fichier ne fait qu'afficher.
 """

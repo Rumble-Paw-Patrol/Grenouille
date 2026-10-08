@@ -113,6 +113,7 @@ CSS = (
   --ok: #5FD394; --ok-soft: rgba(95, 211, 148, .13); --warn: #F5B547;
   --warn-soft: rgba(245, 181, 71, .13); --bad: #F07A63; --bad-soft: rgba(240, 122, 99, .14);
   --nuit-ligne: rgba(160, 210, 185, .16);
+  --marge: clamp(16px, 4vw, 56px);
   --ombre: 0 20px 50px -24px rgba(0, 0, 0, .8), 0 1px 0 rgba(255, 255, 255, .04) inset;
   --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
   --f-serif: "Instrument Serif", Georgia, serif;
@@ -141,15 +142,54 @@ CSS = (
   background: var(--flamme); box-shadow: 0 0 12px var(--accent); pointer-events: none;
 }
 [data-testid="stDecoration"] { display: none; }
-[data-testid="stHeader"] {
-  background: rgba(5, 11, 10, .55) !important;
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+/* Barre du haut de Streamlit : transparente en haut de page, le bandeau passe dessous comme
+   en haut du tableau de bord ; elle se voile dès qu'on fait défiler la page (sans animation
+   liée au défilement, dans Firefox, elle reste transparente). Pas de !important sur le fond :
+   il l'emporterait sur l'animation. */
+.stApp { timeline-scope: --gr-defile; }
+.stApp section.stMain { scroll-timeline: --gr-defile block; }
+.stApp [data-testid="stHeader"] { background: transparent; }
+@supports (animation-timeline: scroll()) {
+  .stApp [data-testid="stHeader"] {
+    animation: gr-voile linear both; animation-timeline: --gr-defile;
+    animation-range: 0 140px;
+  }
+  @keyframes gr-voile {
+    from {
+      background-color: rgba(5, 11, 10, 0);
+      backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0);
+    }
+    to {
+      background-color: rgba(5, 11, 10, .72);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    }
+  }
 }
 [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stBottom"] > div {
   background: transparent !important;
 }
-/* Le bandeau monte sous la barre du haut de Streamlit. */
-[data-testid="stMainBlockContainer"], .block-container { padding-top: 4.25rem !important; }
+/* Colonne principale : marges du tableau de bord. */
+[data-testid="stMainBlockContainer"], .block-container {
+  padding-top: 4.25rem !important; padding-inline: var(--marge) !important;
+}
+/* Bandeau : posé sur la page comme celui du tableau de bord, pas dans un cadre. Il va d'un
+   bord à l'autre de la colonne et remonte jusqu'en haut de la page, sous la barre de
+   Streamlit (transparente), avec le fond, les lueurs et le filet du bas du tableau de bord.
+   Le composant n'y met que le texte, la grenouille et le spectrogramme, sur fond transparent,
+   aux marges de la page. */
+.stMain [data-testid="stElementContainer"]:has(iframe[title*="blanci_bandeau"]) {
+  position: relative; isolation: isolate; overflow: hidden; box-sizing: border-box;
+  width: calc(100% + 2 * var(--marge)) !important; max-width: none !important;
+  margin: -4.25rem calc(-1 * var(--marge)) 6px !important;
+  padding: 3.5rem var(--marge) 0;
+  background: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%);
+  border-bottom: 1px solid var(--nuit-ligne);
+}
+.stMain [data-testid="stElementContainer"]:has(iframe[title*="blanci_bandeau"])::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(50% 80% at 92% 10%, rgba(228, 87, 63, .22), transparent 70%),
+    radial-gradient(40% 60% at 70% 100%, rgba(79, 216, 192, .10), transparent 70%);
+}
 /* Feuille de style et petit script des menus : hors du flux, sans laisser d'espace. */
 [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] style),
 [data-testid="stElementContainer"]:has(iframe[srcdoc*="__blanciMenus"]) {
@@ -196,7 +236,7 @@ CSS = (
 }
 
 /* Marque (haut du panneau de gauche). */
-.gr-brand { display: flex; flex-direction: column; gap: 2px; padding: 0 2px 4px; }
+.gr-brand { padding: 0 2px 4px; }
 .gr-brand b {
   font-family: var(--f-display); font-size: 20px; font-weight: 700; letter-spacing: -.02em;
   color: var(--ink); display: flex; align-items: center; gap: 10px;
@@ -206,7 +246,6 @@ CSS = (
   background: radial-gradient(circle at 35% 35%, var(--gold), var(--accent) 55%, var(--accent-2));
   box-shadow: 0 0 14px var(--accent), 0 0 2px var(--gold);
 }
-.gr-brand span { color: var(--muted); font-size: 12.5px; }
 @media (prefers-reduced-motion: no-preference) {
   [data-testid="stMain"] :is(h3#en-ecoute, #en-ecoute h3)::before {
     animation: gr-enregistre 1.8s ease-out infinite;
@@ -313,16 +352,22 @@ CSS = (
   color: var(--accent) !important;
 }
 .stApp button:disabled { opacity: .4; }
-/* Mode d'emploi : bouton sur toute la largeur du panneau ; sa fenêtre déborde sur la page,
-   assez large pour le tableau des gestes. */
+/* Mode d'emploi : bouton sur toute la largeur du panneau. Sa fenêtre s'ouvre comme une
+   fenêtre surgissante, en haut de la page et non sous le bouton (elle sortait par le bas de
+   l'écran) : par-dessus le panneau, elle déborde sur la page, assez large pour le tableau des
+   gestes, et défile toute seule si l'écran est trop bas. Un clic à côté ou Échap la ferme.
+   Streamlit la place par des styles en ligne (position, décalage), d'où les !important. */
 [data-testid="stSidebar"] [data-testid="stPopover"],
 [data-testid="stSidebar"] [data-testid="stPopover"] > div,
 [data-testid="stSidebar"] [data-testid="stPopover"] button { width: 100% !important; }
 [data-testid="stSidebar"] [data-testid="stPopover"] button { justify-content: flex-start; }
-[data-baseweb="popover"]:has([data-testid="stPopoverBody"]) { max-width: 94vw !important; }
 [data-testid="stPopoverBody"] {
-  width: min(780px, 90vw) !important; max-width: 90vw !important; max-height: 82vh;
-  overflow-y: auto; padding: 18px 22px !important;
+  position: fixed !important; top: 12px !important; left: 12px !important;
+  right: auto !important; bottom: auto !important; transform: none !important;
+  margin: 0 !important; z-index: 1000001 !important;
+  width: min(800px, calc(100vw - 24px)) !important;
+  max-width: none !important; max-height: calc(100dvh - 24px) !important;
+  overflow-y: auto !important; padding: 18px 22px !important;
   background: rgba(10, 20, 17, .97) !important; border: 1px solid var(--line-fort) !important;
   border-radius: 14px !important;
   box-shadow: 0 30px 80px -24px rgba(0, 0, 0, .95), 0 0 50px -24px var(--accent) !important;
@@ -393,11 +438,11 @@ CSS = (
 }
 [data-testid="stMarkdownContainer"] strong { color: var(--ink); }
 
-/* Composants : le bandeau (cadre arrondi, lueur braise) et le visualiseur, encadré comme le
+/* Composants : le bandeau, sans cadre (voir plus haut), et le visualiseur, encadré comme le
    spectrogramme du bandeau (liseré or, lueur braise). */
 .stApp iframe[data-testid="stCustomComponentV1"] { border-radius: 14px; }
 .stApp iframe[title*="blanci_bandeau"] {
-  border-radius: 16px; box-shadow: 0 26px 70px -34px rgba(228, 87, 63, .55);
+  width: 100% !important; border-radius: 0; vertical-align: top;
 }
 .stApp iframe[title*="blanci_viewer"] {
   background: var(--bg-2);
@@ -411,4 +456,4 @@ CSS = (
 )
 
 
-BRAND = '<div class="gr-brand"><b>Grenouille</b><span>Poste d\'annotation</span></div>'
+BRAND = '<div class="gr-brand"><b>Grenouille</b></div>'
