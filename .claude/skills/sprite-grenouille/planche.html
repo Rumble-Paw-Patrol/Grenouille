@@ -74,8 +74,9 @@ const G = /*SPRITE*/null;
 // images codées par plages : « O12 » = douze pixels de la couleur O
 const IMG = Object.fromEntries(Object.entries(G.images).map(([k, rangs]) =>
   [k, rangs.map((r) => [...r.matchAll(/(\D)(\d+)/g)].map((m) => [m[1], +m[2]]))]));
-// en pixels du sprite, cadre à la taille du sprite (96 × 80 → 128 × 88) ; mosaïque en tuiles de 2
-const DX = 24, DY = 8, TUILE = 2, COL = G.largeur + 32, LIG = G.hauteur + DY;
+// en pixels du sprite : cadre à la taille du sprite, 24 pixels de marge à gauche et à droite,
+// quelle que soit sa largeur ; mosaïque en tuiles de 2
+const DX = 24, DY = 8, TUILE = 2, COL = G.largeur + 2 * DX, LIG = G.hauteur + DY;
 // centre et rayons de la mosaïque, en tuiles : (38, 24) et (30, 21) pour un sprite de 96 × 80
 const CX = (DX + G.largeur * 0.54) / TUILE, CY = (DY + G.hauteur / 2) / TUILE;
 const RX = G.largeur * 0.625 / TUILE, RY = G.hauteur * 0.525 / TUILE;
