@@ -9,6 +9,11 @@ en_cours:
     etat: termine
     detail: >-
       Confection des sections de benchmark sur AnuraSet du tableau de bord : encodeurs et têtes à la carte, amorçage d'un site neuf. Plus le temps d'encodage du corpus ONF.
+  - titre: Façonnement du poste d'annotation
+    etat: termine
+    detail: >-
+      Software d'annotation d'enregistrements audio à part entière, on labelise les intervalles ou A. Blanci chante au sein de l'enregistrement.
+    suite: Vérification de mes label par Élodie Courtois et Benoit Villette
   - titre: Annotation de mes données
     etat: en_cours
     detail: >-
@@ -17,11 +22,6 @@ en_cours:
       Partition des points et files tirées par plan (DECISIONS n° 196) : annoter le lot 1
       (424 extraits de 30 s), puis le jeu de test (250 enregistrements entiers). Ensuite,
       préparer la validation par k-fold.
-  - titre: Façonnement du poste d'annotation
-    etat: en_cours
-    detail: >-
-      Software d'annotation d'enregistrements audio à part entière, on labelise les intervalles ou A. Blanci chante au sein de l'enregistrement.
-    suite: Vérification de mes label par Élodie Courtois et Benoit Villette
   - titre: Extraction des embeddings des modèles de fondation
     etat: en_cours
     detail: >-
