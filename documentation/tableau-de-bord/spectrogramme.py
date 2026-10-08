@@ -11,8 +11,8 @@ page ; le poste d'annotation les reprend dans son bandeau). Fenêtre 3–6 kHz :
 07/10/2026).
 
 Le son : les mêmes 18 s, que la tête de lecture du bandeau balaie en même temps qu'on les
-entend (bouton « Écouter le chant »). Passe-haut à 2 kHz (le vent et les grondements, sous tout
-ce que montre l'image), crête ramenée à -1 dBFS pour qu'on entende le chant sans monter le
+entend (bouton « Écouter le chant »). Passe-bande 4–5 kHz (le chant seul, sans ce qui chante
+autour ; Léonard, 08/10/2026), crête ramenée à -1 dBFS pour qu'on entende le chant sans monter le
 volume, fondus de 20 ms aux deux bouts (la page le joue en boucle, sans claquement).
 """
 
@@ -39,7 +39,7 @@ SOURCE = (
 DEBUT_S, FIN_S = 27.0, 45.0
 SORTIE = ICI / "spectrogramme.jpg"
 SON = ICI / "chant.mp3"
-PASSE_HAUT_HZ = 2000
+PASSE_BANDE_HZ = (4000, 5000)
 BANDE = (3000, 6000)
 # Réglages du poste d'annotation (viewer.py) : dynamique en dB sous le maximum, et contraste,
 # courbe en puissance d'exposant 1 + 0,35 × contraste sur l'échelle (Léonard, 07/10/2026).
@@ -51,7 +51,7 @@ def ecrire_son(wav: np.ndarray, sr: int) -> None:
     """Le même extrait en MP3 (lu par tous les navigateurs ; libsndfile 1.1 ou plus)."""
     if "MP3" not in sf.available_formats():
         raise SystemExit("libsndfile sans MP3 : mettre à jour soundfile (0.12 ou plus)")
-    son = sosfilt(butter(4, PASSE_HAUT_HZ, "highpass", fs=sr, output="sos"), wav - wav.mean())
+    son = sosfilt(butter(4, PASSE_BANDE_HZ, "bandpass", fs=sr, output="sos"), wav - wav.mean())
     son *= 10 ** (-1 / 20) / max(float(np.max(np.abs(son))), 1e-9)
     rampe = np.linspace(0, 1, round(0.02 * sr))
     son[: rampe.size] *= rampe

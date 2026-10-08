@@ -3436,7 +3436,7 @@ de Léonard, 01/10/2026.
      boucle sans blanc, et le serveur de Streamlit n'a pas besoin des requêtes partielles qu'un
      simple lecteur audio demanderait pour partir du milieu). « Couper le son » rend la main au
      balayage, là où il en est. Le son, `chant.mp3`, est écrit par `spectrogramme.py` avec
-     l'image (mêmes 18 s de Molokoi, passe-haut à 2 kHz sous tout ce que montre l'image, crête
+     l'image (mêmes 18 s de Molokoi, passe-bande 4–5 kHz pour n'entendre que le chant, crête
      à -1 dBFS, fondus de 20 ms) ; il faut le disque des enregistrements pour le produire, et
      sans lui la page n'affiche pas de bouton. Vérifié dans Chromium avec un faux son (bips à
      5 kHz) : le bouton paraît et se place, la tête suit le son puis reprend son balayage.
