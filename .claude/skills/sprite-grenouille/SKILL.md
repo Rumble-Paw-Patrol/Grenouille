@@ -104,6 +104,10 @@ remplit mal), sans anticrénelage, contour sombre d'un pixel autour de la silhou
   assez vers la croupe pour la cacher, sans monter jusqu'au dos.
 - **Grain du ventre** : semé (environ un pixel sur quatre) mais doux, un seul cran de rampe
   plus clair ou plus sombre que le flanc alentour ; pas de points blancs vifs.
+- **Pustules** : une quarantaine, sur tout le corps sauf la tête (ni mains, ni pieds, ni bras
+  du fond) : un pixel de la couleur d'origine, plus clair, et son ombre juste en dessous,
+  posés après les nuances, espacés, à des places tirées une fois (elles ne bougent pas
+  d'une image à l'autre). Jamais de pixel blanc.
 - **Détails** : grain de peau léger (pas de bruit sale), mouchetures, bords de bande
   effilochés, gorge mouchetée, barres discrètes sur la cuisse si l'espèce en a, reflets de
   peau humide (coude, cuisse, genou). Les motifs propres à l'espèce (bandes, taches,
