@@ -665,7 +665,11 @@ def main() -> None:
         st.info("Choisir une file, ou en générer une avec le mode de sélection.")
         return
 
-    queue = load_candidates(chosen, con)
+    try:
+        queue = load_candidates(chosen, con)
+    except ValueError as exc:
+        st.error(str(exc))
+        return
     if queue.empty:
         st.warning("File vide.")
         return

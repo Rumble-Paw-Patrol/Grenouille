@@ -247,6 +247,13 @@ def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
         raise ValueError(f"{Path(path).name} : colonne recording_id absente")
     queue = queue.drop(columns=[c for c in ("path", "site", "mic_id", "start_utc") if c in queue])
     recordings = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
+    missing = ~queue["recording_id"].isin(recordings["recording_id"])
+    if missing.any():
+        raise ValueError(
+            f"{Path(path).name} : {int(missing.sum())} enregistrement(s) sur {len(queue)} absents "
+            f"de la base ({len(recordings)} enregistrements) — mauvaise base, ou `blanci ingest` "
+            "pas encore lancé ?"
+        )
     queue = queue.merge(recordings, on="recording_id", how="left")
     for column, default in (("offset_s", 0.0), ("dur_s", 3.0), ("score", np.nan)):
         if column not in queue:
