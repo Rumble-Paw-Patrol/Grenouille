@@ -13,14 +13,14 @@ au coude et au poignet, qui arrive sur le talon de la paume ; le bras droit part
 plus en arrière. Mains et pieds sont des gabarits posés au pixel près (ORTEILS, MAIN_PROCHE,
 MAIN_LOINTAINE) : paume étroite, trois doigts d'un pixel en éventail vers l'avant (diagonale
 haute, tout droit, diagonale basse), tracés en escalier pour que chaque pixel touche le suivant
-par un côté, disque clair au bout. Image de 120 × 86, sans rien contre ses bords. Écrit
+par un côté, disque clair au bout. Image de 114 × 86, sans rien contre ses bords. Écrit
 grenouille.json dans ce dossier (non suivi) ; le tableau de bord n'en lit rien.
 
 Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
 de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de doré, bande sombre
 du museau au flanc, gorge claire, longue patte avant aux doigts fins, cuisse repliée et
-arrière-train posé presque au sol. Les formes sont décrites dans un repère de 60 × 43 unités
-et tracées sur une grille de 120 × 86 pixels (deux pixels par unité), sans anticrénelage, puis
+arrière-train posé presque au sol. Les formes sont décrites dans un repère de 57 × 43 unités
+et tracées sur une grille de 114 × 86 pixels (deux pixels par unité), sans anticrénelage, puis
 cernées d'un contour, avec 22 tons de base.
 
 Une passe de nuances (nuancer) affine ensuite chaque matière (peau orangée, bande sombre,
@@ -68,7 +68,7 @@ PALETTE = {
     "W": "#FFFFFF",  # reflet de l'œil
     "w": "#9FB4C0",  # second reflet, bleuté
 }
-UNITES = (60, 43)
+UNITES = (57, 43)
 BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]])
 ECHELLE = 2
 W, H = UNITES[0] * ECHELLE, UNITES[1] * ECHELLE
@@ -402,20 +402,20 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # son disque. Les plus lointains sont plus hauts et plus sombres.
     tarse = catmull(
         [
-            (56.8, 38.0),
-            (55.0, 39.6),
-            (51.0, 40.4),
-            (46.0, 40.8),
-            (42.0, 40.4),
+            (53.97, 38.0),
+            (52.47, 39.6),
+            (49.15, 40.4),
+            (44.99, 40.8),
+            (41.66, 40.4),
             (40.6, 39.8),
             (39.8, 40.6),
             (40.2, 41.8),
-            (43.0, 42.4),
-            (48.0, 42.4),
-            (53.0, 42.0),
-            (56.0, 41.2),
-            (57.6, 40.0),
-            (57.8, 38.8),
+            (42.49, 42.4),
+            (46.65, 42.4),
+            (50.81, 42.0),
+            (53.3, 41.2),
+            (54.63, 40.0),
+            (54.8, 38.8),
         ]
     )
     tm = dans(tarse, X, Y)
@@ -428,24 +428,24 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # (en bas, à l'arrière, contre le sol), par-dessus la cuisse ; reflet de peau humide
     jambe = catmull(
         [
-            (32.6, 33.6),
-            (35.0, 32.4),
-            (38.5, 31.9),
-            (42.0, 32.1),
-            (46.0, 33.0),
-            (50.0, 34.4),
-            (53.6, 35.6),
-            (55.4, 36.2),
-            (56.6, 36.8),
-            (57.0, 38.0),
-            (56.4, 39.2),
-            (54.0, 38.8),
-            (50.0, 38.8),
-            (45.0, 38.8),
-            (40.0, 38.6),
-            (36.0, 38.2),
-            (33.4, 37.4),
-            (31.8, 36.2),
+            (32.48, 33.4),
+            (34.6, 31.6),
+            (37.69, 30.8),
+            (40.77, 30.9),
+            (44.3, 31.8),
+            (47.83, 33.4),
+            (51.0, 35.0),
+            (52.59, 35.9),
+            (53.65, 36.8),
+            (54.0, 38.0),
+            (53.47, 39.2),
+            (51.35, 38.8),
+            (47.83, 38.8),
+            (43.42, 38.8),
+            (39.01, 38.6),
+            (35.48, 38.2),
+            (33.19, 37.4),
+            (31.78, 36.2),
             (31.6, 34.6),
         ]
     )
@@ -455,18 +455,18 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[jm & (n3 < 0.1)] = "M"
     g[jm & (n3 > 0.95)] = "H"
     g[jm & ~dans(jambe, X + 0.4, Y - 1.4)] = "H"
-    g[jm & ~dans(jambe, X + 0.2, Y - 0.7) & (X < 46)] = "I"
+    g[jm & ~dans(jambe, X + 0.2, Y - 0.7) & (X < 44)] = "I"
     g[jm & ~dans(jambe, X - 0.2, Y + 1.6)] = "S"
     g[jm & ~dans(jambe, X, Y + 0.7)] = "Z"
-    g[jm & (np.abs((X - 45.0) + (Y - 37) * 0.3) < 0.7) & (n3 > 0.3) & (g == "O")] = "M"
-    g[ellipse(36.4, 33.4, 2.2, 0.5, X, Y, -0.1)] = "I"  # reflet au genou
-    g[ellipse(56.2, 38.6, 0.9, 0.8, X, Y) & ~dans(jambe, X, Y + 1.0)] = "O"  # talon
-    g[ellipse(56.2, 38.2, 0.5, 0.4, X, Y)] = "H"
+    g[jm & (np.abs((X - 43.0) + (Y - 37) * 0.3) < 0.7) & (n3 > 0.3) & (g == "O")] = "M"
+    g[ellipse(36.4, 32.4, 2.2, 0.5, X, Y, -0.1)] = "I"  # reflet au genou
+    g[ellipse(53.4, 38.6, 0.9, 0.8, X, Y) & ~dans(jambe, X, Y + 1.0)] = "O"  # talon
+    g[ellipse(53.4, 38.2, 0.5, 0.4, X, Y)] = "H"
     pli = np.zeros_like(jm)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         voisin_hors = ~np.roll(np.roll(jm, dy, 0), dx, 1)
         voisin_dessous = np.roll(np.roll(sous_jambe, dy, 0), dx, 1)
-        pli |= jm & voisin_hors & voisin_dessous & (X < 55)  # pas de pli au talon
+        pli |= jm & voisin_hors & voisin_dessous & (X < 52)  # pas de pli au talon
     g[pli] = "Z"
 
     # --- patte avant : sort du flanc sous la bande, coude en arrière, avant-bras plus
