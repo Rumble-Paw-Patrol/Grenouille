@@ -1,12 +1,26 @@
 {
  "compte": {
-  "entrainement": 0,
+  "entrainement": 1,
   "positifs_entrainement": 0,
   "evaluation": 0,
   "positifs_evaluation": 0
  },
- "sites": [],
- "micros": [],
- "compte_le": "2026-10-07",
+ "sites": [
+  [
+   "Kaw",
+   "entrainement",
+   1,
+   0
+  ]
+ ],
+ "micros": [
+  [
+   "Kaw",
+   "SMA13599",
+   1,
+   0
+  ]
+ ],
+ "compte_le": "2026-10-08",
  "source": "base locale"
 }
