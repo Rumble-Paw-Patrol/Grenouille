@@ -42,6 +42,7 @@ import itertools
 import math
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -389,12 +390,25 @@ def _candidate_strip(queue, done, chosen, key, offset_h) -> None:
     )
 
 
-@st.cache_data(max_entries=6, show_spinner="Lecture de l'enregistrement…")
-def _media(full: str, offset_s: float = 0.0, dur_s: float = math.inf) -> dict:
-    """Enregistrement entier (ou l'extrait [offset_s, offset_s + dur_s]), des deux micros,
-    rangé à côté du visualiseur et gardé en cache : changer de fenêtre ou tracer un
-    intervalle ne relit pas le disque. Le spectrogramme, le volume et la bande d'écoute se
-    font dans le navigateur."""
+@st.cache_resource
+def _prefetcher() -> tuple[ThreadPoolExecutor, dict]:
+    """Un fil de lecture en arrière-plan et les lectures lancées, par (fichier, début, durée)."""
+    return ThreadPoolExecutor(max_workers=1, thread_name_prefix="prefetch"), {}
+
+
+def _prefetch(full: str, extract: tuple[float, float] | None = None) -> None:
+    """Lit à l'avance le candidat suivant pendant qu'on écoute celui-ci : quand on l'ouvre,
+    `_media` reprend le résultat au lieu de relire le disque. Une seule lecture d'avance."""
+    pool, pending = _prefetcher()
+    spans = [(0.0, math.inf)] + ([extract] if extract else [])
+    todo = [(full, o, d) for o, d in spans if (full, o, d) not in pending]
+    for stale in [k for k in pending if k not in todo and k[0] != full]:
+        pending.pop(stale, None)
+    for args in todo:
+        pending[args] = pool.submit(_build_media, *args)
+
+
+def _build_media(full: str, offset_s: float, dur_s: float) -> dict:
     full = Path(full)
     clips = {c: read_clip(full.parent, full.name, offset_s, dur_s, 0.0, c) for c in CHANNELS}
     wav, sr, start = clips[0]
@@ -406,6 +420,21 @@ def _media(full: str, offset_s: float = 0.0, dur_s: float = math.inf) -> dict:
             for c, (w, rate, s0) in clips.items()
         ],
     }
+
+
+@st.cache_data(max_entries=6, show_spinner="Lecture de l'enregistrement…")
+def _media(full: str, offset_s: float = 0.0, dur_s: float = math.inf) -> dict:
+    """Enregistrement entier (ou l'extrait [offset_s, offset_s + dur_s]), des deux micros,
+    rangé à côté du visualiseur et gardé en cache : changer de fenêtre ou tracer un
+    intervalle ne relit pas le disque. Le spectrogramme, le volume et la bande d'écoute se
+    font dans le navigateur. Reprend la lecture d'avance (`_prefetch`) si elle existe."""
+    ahead = _prefetcher()[1].pop((full, offset_s, dur_s), None)
+    if ahead is not None:
+        try:
+            return ahead.result()
+        except Exception:  # lecture d'avance ratée : on relit, l'erreur éventuelle remontera
+            pass
+    return _build_media(full, offset_s, dur_s)
 
 
 # Streamlit < 1.37 : sans fragment, toute la page se réaffiche.
@@ -853,6 +882,17 @@ def main() -> None:
         "◀ Candidat précédent", disabled=before == pos, on_click=_goto, args=(key, before)
     )
     nav[1].button("Candidat suivant ▶", disabled=after == pos, on_click=_goto, args=(key, after))
+
+    # Chargement d'avance du candidat suivant, pendant qu'on écoute celui-ci.
+    if media is not None and after != pos:
+        upcoming = queue.iloc[after].to_dict()
+        next_full = locate(str(upcoming["path"]), raw, extra)
+        if next_full is not None and str(next_full) != str(full):
+            planned_next = upcoming.get("source") == "plan" and not window_mode
+            _prefetch(
+                str(next_full),
+                (float(upcoming["offset_s"]), float(upcoming["dur_s"])) if planned_next else None,
+            )
 
 
 main()
