@@ -831,13 +831,24 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         disques_m |= d
     # le pouce, quatrième doigt, court et gros, part vers l'arrière, collé à la branche
     pouce = membre([(64.8, 64.8), (65.9, 63.5), (66.7, 62.5)], [0.85, 0.85, 0.9], X, Y)
-    # patte arrière gauche (le membre le plus à droite) : en arrière-plan, à l'ombre ; elle
-    # s'attache derrière le cou, dont la ligne droite la coupe, passe derrière le bras gauche,
-    # granuleuse, bordée de vert ; deux de ses orteils, à grands disques, s'enroulent sur la
-    # branche, les autres sont cachés par le bras
-    pts_p, r_p = [(91.6, 45.4), (93.2, 50.6), (94.4, 54.2), (94.8, 56.6)], [2.0, 2.2, 1.8, 1.4]
-    patte_g = membre(pts_p, r_p, X, Y)
-    patte_g_vert = bord(pts_p, r_p, X, Y, 1.0, 0.0) & (Y < 55)
+    # patte arrière gauche (le membre le plus à droite), au troisième plan, à l'ombre : le
+    # tibia, granuleux, bordé de vert, monte à la verticale de la branche ; au genou, un angle,
+    # la cuisse repart en diagonale vers le haut et la gauche et s'efface derrière le bras et
+    # derrière le cou ; deux de ses orteils, à grands disques, s'enroulent sur la branche
+    contour_p = [
+        (89.2, 45.6),
+        (95.6, 48.3),
+        (96.5, 50.2),
+        (96.6, 54.6),
+        (96.0, 56.9),
+        (93.6, 57.4),
+        (93.0, 55.0),
+        (92.8, 51.8),
+        (91.4, 50.6),
+        (89.2, 49.4),
+    ]
+    patte_g = dans(contour_p, X, Y)
+    patte_g_vert = patte_g & ~dans(contour_p, X + 1.0, Y) & (Y < 55)
     orteils_g, disques_pg = np.zeros(X.shape, bool), np.zeros(X.shape, bool)
     for pts in (
         [(95.4, 57.2), (96.6, 58.6), (97.4, 60.4)],
@@ -846,9 +857,10 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         o, d = doigt(c, pts)
         orteils_g |= o
         disques_pg |= d
-    # bras gauche : devant ; il vient vers nous et paraît court ; barré, bordé de vert, il
-    # s'arrête au niveau de la branche ; on voit surtout ses trois longs doigts, dont un part
-    # vers la gauche sur la branche
+    # bras gauche : au deuxième plan, derrière le corps, devant la patte arrière ; il vient vers
+    # nous et paraît court ; barré, bordé de vert, il sort de derrière le ventre et s'arrête au
+    # niveau de la branche ; on voit surtout ses trois longs doigts, dont un part vers la
+    # gauche sur la branche
     pts_b, r_b = [(88.6, 49.2), (89.4, 52.4), (90.0, 55.8), (90.4, 58.0)], [1.2, 1.35, 1.4, 1.2]
     bras_g = membre(pts_b, r_b, X, Y)
     bras_g_vert = bord(pts_b, r_b, X, Y, -0.9, 0.0)
@@ -870,6 +882,8 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("genou_d", genou_d, "dos", "fond", cernee=True),
         forme("patte_g", patte_g | orteils_g, "fond", "fond", cernee=True),
         forme("patte_g_vert", patte_g_vert, "dos", "fond", volume="patte_g"),
+        forme("bras_g", bras_g | main_g, "membre", "corps", cernee=True),
+        forme("bras_g_vert", bras_g_vert, "dos", "corps", volume="bras_g"),
         forme("corps", corps | ellipse(93.6, 34.9, 3.0, 1.6, xt, yt), "dos"),
         forme("ventre", ventre, "ventre"),
         forme("cotes", (cote_d | cote_g | pli) & ~levre, "flanc", volume="corps"),
@@ -881,8 +895,6 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("dessous_bras", dessous_bras, "membre", "devant", volume="bras_haut_d"),
         forme("avant_bras_d", avant_bras_d, "dos", "devant", cernee=True),
         forme("main_d", main_d, "membre", "devant", cernee=True),
-        forme("bras_g", bras_g | main_g, "membre", "devant", cernee=True),
-        forme("bras_g_vert", bras_g_vert, "dos", "devant", volume="bras_g"),
     ]
     d = decalque("gauche", c, xt, yt)
     granules = genou_d & (np.random.default_rng(37).random(X.shape) < 0.22)
