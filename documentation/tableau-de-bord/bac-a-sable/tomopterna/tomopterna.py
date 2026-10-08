@@ -17,8 +17,8 @@ découpé par la branche.
 
 Une étape par rendu, sur les mêmes formes (modèle du skill sprite-grenouille, modele.py) :
 silhouette (trois gris selon le plan, contour, œil), aplats (une couleur par matière et par
-motif), details (volume, nuances, marbrures, grain, œil brillant), animation (24 images par
-grenouille : gorge, flanc, paupière, tête). Écrit <sprite>_<etape>.json et la composition
+motif), details (volume, nuances, marbrures, grain, œil brillant), animation (36 images par
+grenouille : gorge, flanc, paupière, tête, regard). Écrit <sprite>_<etape>.json et la composition
 scene_<etape>.json, que lit la planche du skill.
 """
 
@@ -506,7 +506,7 @@ def epaule(c, cx, cy, rx, ry):
     return (r <= 1) & (c.trame < np.clip((1 - r) / 0.45, 0, 1))
 
 
-def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
+def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0, regard=0.0):
     X, Y = c.X, c.Y
     xt, yt = tete_tournee(c, DROITE["pivot"], 1, tete)
     # tête plus petite et museau plus long : le crâne passe bas, l'œil globuleux dépasse
@@ -741,7 +741,15 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         "bouche": bouche,
     }
     oeil = oeil_de(
-        xt, yt, 131.3, 31.5, 3.5, 3.5, cligne, dome=(127.0, 30.0, 1.4, 1.0), pupille=-0.24
+        xt,
+        yt,
+        131.3,
+        31.5,
+        3.5,
+        3.5,
+        cligne,
+        dome=(127.0, 30.0, 1.4, 1.0),
+        pupille=-0.24 + 0.46 * regard,  # regard 1 : elle détourne les yeux, vers l'arrière
     )
     oeil["narine"] = ellipse(122.9, 32.9, 0.4, 0.35, xt, yt)
     oeil["dome_globe"] = ellipse(127.2, 29.6, 0.85, 0.55, xt, yt)
@@ -770,7 +778,7 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
 GAUCHE = {"cadre": (96, 60, 110, 90), "pivot": (78.0, 42.0), "sens": -1}
 
 
-def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
+def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0, regard=0.0):
     X, Y = c.X, c.Y
     xt, yt = tete_tournee(c, GAUCHE["pivot"], -1, tete)
     # lignes marquées : museau tronqué, mâchoire droite ; le dos, relevé sur la photo, fait un
@@ -987,7 +995,17 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         "tubercule": granules | semis(haut_bras, 0.7, 47),
         "bouche": bouche,
     }
-    oeil = oeil_de(xt, yt, 87.2, 37.5, 4.1, 4.1, cligne, dome=(93.6, 34.9, 3.0, 1.6), pupille=0.1)
+    oeil = oeil_de(
+        xt,
+        yt,
+        87.2,
+        37.5,
+        4.1,
+        4.1,
+        cligne,
+        dome=(93.6, 34.9, 3.0, 1.6),
+        pupille=0.1 - 0.44 * regard,  # regard 1 : elle détourne les yeux, vers la gauche
+    )
     oeil["narine"] = ellipse(96.8, 38.2, 0.4, 0.35, xt, yt)
     # l'autre œil dépasse du crâne : on voit un peu de son globe pâle et de sa pupille
     oeil["dome_globe"] = ellipse(95.4, 34.9, 1.4, 1.2, xt, yt)
@@ -1511,11 +1529,13 @@ def oeil_details(img, oeil, num):
     if oeil["ferme"]:
         ligne = -0.15 - 0.12 * u * u
         img[m] = "#A9A3B8"  # membrane pâle, translucide
-        ii, jj = np.arange(img.shape[1])[None, :], np.arange(img.shape[0])[:, None]
-        maille = ((ii + jj) % 4 == 0) ^ ((ii - jj) % 4 == 0)  # réseau lâche, en losanges
-        img[m & maille & (v > ligne + 0.3) & (u * u + v * v < 0.7)] = (
-            "#B49C6E"  # réticulation dorée
-        )
+        # réticulation dorée : les bords de petites cellules irrégulières (un réseau, pas une
+        # grille), attachées à l'œil, qui suivent donc la tête
+        graines = np.random.default_rng(61).uniform(-1, 1, (7, 2))
+        d2 = (u[..., None] - graines[:, 0]) ** 2 + (v[..., None] - graines[:, 1]) ** 2
+        cellule = np.argmin(d2, axis=-1)
+        maille = (cellule != np.roll(cellule, -1, 1)) | (cellule != np.roll(cellule, -1, 0))
+        img[m & maille & (v > ligne + 0.28) & (u * u + v * v < 0.8)] = "#B49C6E"
         img[m & (v > 0.72)] = "#8A8498"
         img[m & (v < ligne)] = vert[4]  # paupière supérieure
         img[m & (v < ligne - 0.4)] = vert[5]
@@ -1578,13 +1598,15 @@ def produire(etape, nom):
     cadre, formes = SPRITES[nom]
     c = Cadre(*cadre)
     if etape == "animation" and nom != "branche":
+        # clés « gorge flanc œil tête regard » ; œil fermé : pas de regard
         images = {}
         for g in (0, 1):
             for s in (0, 1):
                 for k in (0, 1):
                     for t in (-1, 0, 1):
-                        args = formes(c, g * 0.9, s * 0.7, bool(k), t)
-                        images[f"{g}{s}{k}{t + 1}"] = RENDUS["details"](c, *args)
+                        for r in (0,) if k else (0, 1):
+                            args = formes(c, g * 0.9, s * 0.7, bool(k), t, float(r))
+                            images[f"{g}{s}{k}{t + 1}{r}"] = RENDUS["details"](c, *args)
         return c, coder(c, images)
     rendu = RENDUS["details" if etape == "animation" else etape]
     return c, coder(c, {"0001": rendu(c, *formes(c))})

@@ -1,0 +1,432 @@
+<title>Tomopterna au-dessus de l'eau</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Une colonne : la mare en grand, cadrée comme un tirage (le même cadre sombre dans les deux
+   thèmes) ; sous elle les commandes, puis ce qu'il faut regarder et la fiche de l'espèce. */
+:root {
+  --bg: #EDF0E6; --surface: #F8F9F3; --ink: #18211A; --muted: #586656; --line: rgba(24, 50, 30, .16);
+  --accent: #A4501A; --accent-ink: #FFFFFF; --cadre: rgba(24, 50, 30, .28); --tirage: #06090A; --legende: #8E9C8B;
+  --f-display: "Young Serif", Georgia, "Times New Roman", serif;
+  --f-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0A100D; --surface: #111A15; --ink: #E2EADF; --muted: #93A493; --line: rgba(170, 210, 180, .16); --accent: #EE9A4E; --accent-ink: #1C0D03; --cadre: rgba(170, 210, 180, .22); color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0A100D; --surface: #111A15; --ink: #E2EADF; --muted: #93A493; --line: rgba(170, 210, 180, .16); --accent: #EE9A4E; --accent-ink: #1C0D03; --cadre: rgba(170, 210, 180, .22); color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+.page { max-width: 960px; margin: 0 auto; padding-inline: 16px; padding-block: 36px 64px; display: grid; gap: 22px; }
+.tete { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: clamp(27px, 4.2vw, 44px); letter-spacing: -.01em; line-height: 1.1; margin: 0; text-wrap: balance; }
+h1 i { font-style: italic; }
+.chapo { margin: 0; color: var(--muted); max-width: 64ch; }
+.scene { justify-self: center; width: 100%; max-width: 928px; padding: clamp(8px, 2vw, 16px); border-radius: 6px; background: var(--tirage); box-shadow: 0 0 0 1px var(--cadre), 0 18px 40px -24px rgba(0, 0, 0, .55); }
+.scene canvas { display: block; width: 100%; max-width: 896px; height: auto; margin: 0 auto; aspect-ratio: 448 / 303; image-rendering: pixelated; image-rendering: crisp-edges; cursor: crosshair; touch-action: manipulation; }
+.legende { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding-top: 10px; font-family: var(--f-mono); font-size: 11.5px; color: var(--legende); }
+.barre { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+button { font: inherit; font-size: 14px; font-weight: 700; border-radius: 999px; padding: 6px 16px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.principal { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.aide { flex: 1 1 240px; min-width: 0; font-size: 13.5px; color: var(--muted); }
+.bas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 26px 44px; padding-top: 8px; }
+.bas section { min-width: 0; display: grid; gap: 10px; align-content: start; }
+h2 { font-family: var(--f-display); font-weight: 400; font-size: 19px; margin: 0; }
+.notes { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14.5px; }
+.notes li::marker { color: var(--accent); }
+.notes a { color: var(--accent); }
+.chiffre { font-family: var(--f-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.pied { margin: 0; font-size: 13px; color: var(--muted); max-width: 88ch; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+
+<div class="page">
+  <header class="tete">
+    <div class="eyebrow">Bac à sable · étapes 4 et 5 · d'après une photo d'Olivier Louguet</div>
+    <h1>Deux <i>C. tomopterna</i> au-dessus de l'eau</h1>
+    <p class="chapo">La photo entière, repeinte au pixel : deux rainettes-singes tigrées face à face sur une branche, et leur reflet. Elles respirent, leur gorge palpite, elles clignent de leur paupière inférieure dorée, se regardent, se détournent un instant et reviennent. Touchez l'eau pour y faire un rond, l'air pour lâcher un moucheron, une grenouille pour la faire cligner.</p>
+  </header>
+
+  <figure class="scene" style="margin: 0">
+    <canvas id="scene" width="448" height="303" role="img" aria-label="Scène en pixel art : deux rainettes-singes tigrées, vertes aux pattes orangées barrées de violet, face à face sur une branche au-dessus d'une eau brune, devant des roseaux flous ; leur reflet ondule dans l'eau."></canvas>
+    <figcaption class="legende"><span>448 × 303 px · 12 images/s</span><span id="etat">repos</span></figcaption>
+  </figure>
+
+  <div class="barre">
+    <button type="button" id="pause" aria-pressed="false">Pause</button>
+    <button type="button" id="goutte" class="principal">Une goutte</button>
+    <button type="button" id="moucheron">Un moucheron</button>
+    <span class="aide" id="aide">Les gouttes tombent aussi seules, de la branche et du pied qui pend.</span>
+  </div>
+
+  <div class="bas">
+    <section>
+      <h2>À regarder</h2>
+      <ul class="notes">
+        <li>Le clignement dure <span class="chiffre">0,13 s</span> : la paupière inférieure, une membrane lilas réticulée d'or, remonte sur l'œil et rejoint la paupière verte.</li>
+        <li>Le reflet est recalculé à chaque image depuis les sprites : un miroir autour de la ligne d'eau, décalé de <span class="chiffre">2 px</span>, assombri et teinté par l'eau, qui ondule d'autant plus qu'il est loin de la branche. Les grenouilles, qu'on voit d'en dessous dans l'eau, y paraissent plus hautes d'un cinquième, comme sur la photo.</li>
+        <li>Une goutte qui tombe de la branche rejoint à la surface son reflet, qui monte à sa rencontre ; le rond s'élargit et trouble le reflet.</li>
+        <li>Un moucheron passe : la plus proche le suit de l'œil et de la tête, puis revient vers l'autre.</li>
+        <li>La respiration : le flanc se gonfle <span class="chiffre">1,3 s</span> toutes les <span class="chiffre">3,2 s</span> ; la gorge palpite par moments. Chacune a ses rythmes, décalés.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>L'espèce</h2>
+      <ul class="notes">
+        <li><i>Callimedusa tomopterna</i> (autrefois <i>Phyllomedusa</i>), en anglais <i>barred leaf frog</i> ou <i>tiger-striped tree frog</i> : du haut bassin amazonien (Bolivie, Pérou, Équateur, Colombie) à l'Amazonie brésilienne et aux Guyanes, jusqu'à <span class="chiffre">500 m</span>.</li>
+        <li>Arboricole, dans la forêt tropicale intacte, sur les arbres autour des mares temporaires de la saison des pluies.</li>
+        <li>Nocturne : elle dort le jour. La nuit, les mâles chantent et toutes chassent. Ici il fait jour : elles suivent les moucherons des yeux sans les chasser, et ne chantent pas.</li>
+        <li>Les œufs sont pondus sur des feuilles qui pendent au-dessus de l'eau dormante ; les têtards se développent dans l'eau, dessous.</li>
+        <li>Préoccupation mineure pour l'UICN, mais l'espèce souffre localement de la perte de son habitat. Source : <a href="https://en.wikipedia.org/wiki/Callimedusa_tomopterna" target="_blank" rel="noopener">Wikipedia</a>.</li>
+      </ul>
+    </section>
+  </div>
+
+  <p class="pied">D'après une photo d'Olivier Louguet, qui n'est pas reproduite ici. Tout est dessiné au pixel : les grenouilles et la branche décalquées sur la photo, forme par forme (36 images par grenouille : gorge, flanc, paupière, tête, regard), et le décor repeint d'après des relevés de la photo (une grille de couleurs grossière et la place des roseaux clairs), en rampes tramées. Le reflet, les rides, les gouttes et les moucherons sont calculés dans la page.</p>
+</div>
+
+<script>
+"use strict";
+const D = /*DONNEES*/null;
+const G = D.geo;
+
+/* ---------- réglages, en pixels de la toile ---------- */
+const W = 448, H = 303, PAS = 1 / 12;   // 12 images par seconde
+const EAU = 126;                        // l'eau, recalculée à chaque image, commence ici
+const PROCHE = 160;                     // l'eau proche, où ondulent les reflets
+const AIR = 150;                        // au-dessus, un toucher lâche un moucheron
+
+const toile = document.getElementById("scene"), ctx = toile.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- petits outils ---------- */
+const creer = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const rnd = (a, b) => a + Math.random() * (b - a);
+const borne = (v, a, b) => Math.max(a, Math.min(b, v));
+const axe = (x) => G.axe[0] + G.axe[1] * x;   // la ligne d'eau sous la branche
+
+/* ---------- les sprites, décodés une fois (plages « lettre + longueur ») ---------- */
+function decoder(sp) {
+  const pal = {};
+  for (const [c, h] of Object.entries(sp.palette)) pal[c] = hex(h);
+  const out = {};
+  for (const [cle, rangs] of Object.entries(sp.images)) {
+    const c = creer(sp.largeur, sp.hauteur), x = c.getContext("2d");
+    const im = x.createImageData(sp.largeur, sp.hauteur), d = im.data;
+    rangs.forEach((r, y) => {
+      let i = 0;
+      for (const [, ch, n] of r.matchAll(/(\D)(\d+)/g)) {
+        const k = +n;
+        if (ch !== ".") {
+          const col = pal[ch];
+          for (let q = 0; q < k; q++) {
+            const o = (y * sp.largeur + i + q) * 4;
+            d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+          }
+        }
+        i += k;
+      }
+    });
+    x.putImageData(im, 0, 0);
+    out[cle] = c;
+  }
+  return out;
+}
+
+const SB = D.sprites.branche, BRANCHE = decoder(SB)["0001"];
+const GR = ["gauche", "droite"].map((nom) => {
+  const sp = D.sprites[nom], [ox, oy, sens] = G.yeux[nom];
+  return {
+    nom, x: sp.x, y: sp.y, w: sp.largeur, h: sp.hauteur, img: decoder(sp),
+    oeil: { x: ox, y: oy, sens },                    // sens : +1 si l'autre est à sa droite
+    phase: rnd(0, 3.2), gorgeA: rnd(1, 6), clins: [], prochainClin: rnd(1.5, 4.5),
+    tete: 1, teteA: rnd(3, 7), regardA: rnd(5, 11), regardFin: 0, suit: null,
+    cle: "00010",
+  };
+});
+
+/* le reflet de la branche ne bouge pas : calculé une fois, colonne par colonne (l'eau est un
+   peu plus basse à droite, la branche s'éloigne) */
+const REFL_BRANCHE = creer(W, H);
+{
+  const src = BRANCHE.getContext("2d").getImageData(0, 0, SB.largeur, SB.hauteur).data;
+  const rc = REFL_BRANCHE.getContext("2d"), im = rc.createImageData(W, H), d = im.data;
+  for (let i = 0; i < SB.largeur; i++) {
+    const x = SB.x + i, xr = x + G.dx, R = Math.round(2 * axe(x));
+    if (xr < 0 || xr >= W) continue;
+    for (let j = 0; j < SB.hauteur; j++) {
+      const s = (j * SB.largeur + i) * 4;
+      if (!src[s + 3]) continue;
+      const yr = R - (SB.y + j);
+      if (yr < 0 || yr >= H) continue;
+      const o = (yr * W + xr) * 4;
+      d[o] = src[s]; d[o + 1] = src[s + 1]; d[o + 2] = src[s + 2]; d[o + 3] = 255;
+    }
+  }
+  rc.putImageData(im, 0, 0);
+}
+
+const REFL = creer(W, H), rctx = REFL.getContext("2d");
+rctx.imageSmoothingEnabled = false;
+const FOND = creer(W, H), fctx = FOND.getContext("2d");
+let FOND_D = null;
+const SORTIE = ctx.createImageData(W, H - EAU);
+const GRAIN = new Float32Array(W * H).map(() => Math.random());   // texture fixe de l'eau
+
+/* ---------- la vie : moucherons, gouttes, ronds, éclats de lumière ---------- */
+const MOUCHES = [], GOUTTES = [], RONDS = [], ECLATS = [];
+let temps = 0, prochaineGoutte = 2.5, prochaineMouche = 5;
+
+function lacher(x, y) {
+  if (MOUCHES.length >= 4) MOUCHES.shift();
+  MOUCHES.push({ x, y, vx: rnd(-10, 10), vy: rnd(-6, 6), t0: temps, vie: rnd(12, 24), g: rnd(0, 100) });
+}
+function goutte(i = Math.floor(rnd(0, G.gouttes.length))) {
+  const [x, y] = G.gouttes[i];
+  GOUTTES.push({ x: Math.round(x), y, y0: y, vy: 0, t0: temps, perle: rnd(0.5, 1.1), tombe: false });
+}
+function rond(x, y, force = 1) {
+  if (RONDS.length > 7) RONDS.shift();
+  RONDS.push({ x, y, t0: temps, max: rnd(22, 30) * force });
+  for (const g of GR) if (Math.abs(g.oeil.x - x) < 70) { g.tete = 0; g.teteA = temps + rnd(1.2, 2.2); }
+}
+
+function avancerMouches(dt) {
+  for (const m of MOUCHES) {
+    const age = temps - m.t0;
+    m.vx += (Math.sin(temps * 1.7 + m.g) * 34 + rnd(-30, 30)) * dt;
+    m.vy += (Math.cos(temps * 1.3 + m.g * 2) * 22 + rnd(-24, 24)) * dt;
+    if (age > m.vie) m.vy -= 40 * dt;                         // il s'en va, vers le haut
+    else {
+      if (m.y > 140) m.vy -= 60 * dt;
+      if (m.y < 18) m.vy += 60 * dt;
+      if (m.x < 16) m.vx += 60 * dt;
+      if (m.x > W - 16) m.vx -= 60 * dt;
+    }
+    m.vx *= 0.96; m.vy *= 0.96;
+    m.x += m.vx * dt; m.y += m.vy * dt;
+  }
+  for (let i = MOUCHES.length - 1; i >= 0; i--) if (MOUCHES[i].y < -6 || MOUCHES[i].x < -8 || MOUCHES[i].x > W + 8) MOUCHES.splice(i, 1);
+}
+
+function avancerGouttes(dt) {
+  for (let i = GOUTTES.length - 1; i >= 0; i--) {
+    const g = GOUTTES[i];
+    if (!g.tombe) { if (temps - g.t0 > g.perle) g.tombe = true; continue; }
+    g.vy += 420 * dt; g.y += g.vy * dt;
+    const impact = axe(g.x);
+    if (g.y >= impact) {
+      rond(g.x, impact, 0.9);
+      ECLATS.push({ x: g.x, y: impact - 1, t0: temps, vie: 0.18, eclabousse: true });
+      for (const gr of GR) if (Math.abs(gr.oeil.x - g.x) < 30) gr.prochainClin = temps;
+      GOUTTES.splice(i, 1);
+    }
+  }
+}
+
+/* ---------- les rythmes de chaque grenouille ---------- */
+function avancerGrenouille(g) {
+  const t = temps;
+  const s = ((t + g.phase) % 3.2) < 1.3 ? 1 : 0;                     // flanc gonflé
+  if (t > g.gorgeA + 2.4) g.gorgeA = t + rnd(5.5, 8.5);              // gorge qui palpite
+  const dg = t - g.gorgeA, gg = dg >= 0 && dg < 2.4 && (dg % 0.6) < 0.3 ? 1 : 0;
+  if (t >= g.prochainClin) {                                          // paupière
+    g.clins.push(t);
+    if (Math.random() < 0.25) g.clins.push(t + 0.38);
+    g.prochainClin = t + rnd(3, 7.5);
+  }
+  g.clins = g.clins.filter((c) => t < c + 0.17);
+  const k = g.clins.some((c) => t >= c) ? 1 : 0;
+  // le moucheron le plus proche, s'il passe à portée
+  let m = null, best = 95;
+  for (const mo of MOUCHES) { const d = Math.hypot(mo.x - g.oeil.x, mo.y - g.oeil.y); if (d < best) { best = d; m = mo; } }
+  let r = 0;
+  if (m) {
+    const cote = Math.sign(m.x - g.oeil.x) * g.oeil.sens;            // < 0 : derrière elle
+    r = cote < 0 && Math.abs(m.x - g.oeil.x) > 4 ? 1 : 0;
+    g.tete = m.y < g.oeil.y - 16 ? 2 : m.y > g.oeil.y + 24 ? 0 : 1;
+    g.teteA = t + rnd(1, 2.5);
+  } else {
+    if (t >= g.teteA) {                                               // tête baissée ou relevée
+      if (g.tete === 1) { g.tete = Math.random() < 0.5 ? 0 : 2; g.teteA = t + rnd(1.6, 4); }
+      else { g.tete = 1; g.teteA = t + rnd(4, 9); }
+    }
+    if (t >= g.regardA) { g.regardFin = t + rnd(0.8, 2.2); g.regardA = t + rnd(7, 15); }
+    r = t < g.regardFin ? 1 : 0;                                      // se détourne, revient
+  }
+  g.cle = `${gg}${s}${k}${g.tete}${k ? 0 : r}`;
+}
+
+function avancer(dt) {
+  temps += dt;
+  if (temps >= prochaineGoutte) { goutte(); prochaineGoutte = temps + rnd(2.2, 5.5); }
+  if (temps >= prochaineMouche) { if (MOUCHES.length < 2) lacher(Math.random() < 0.5 ? -4 : W + 4, rnd(30, 120)); prochaineMouche = temps + rnd(9, 18); }
+  if (Math.random() < 0.6) ECLATS.push({ x: rnd(0, W), y: rnd(EAU + 4, H - 4), t0: temps, vie: rnd(0.6, 1.6), long: Math.round(rnd(2, 6)) });
+  avancerMouches(dt);
+  avancerGouttes(dt);
+  for (const g of GR) avancerGrenouille(g);
+  for (let i = RONDS.length - 1; i >= 0; i--) if (1 + (temps - RONDS[i].t0) * 9 > RONDS[i].max) RONDS.splice(i, 1);
+  for (let i = ECLATS.length - 1; i >= 0; i--) if (temps - ECLATS[i].t0 > ECLATS[i].vie) ECLATS.splice(i, 1);
+}
+
+/* ---------- le dessin ---------- */
+function reflets() {
+  rctx.setTransform(1, 0, 0, 1, 0, 0);
+  rctx.clearRect(0, 0, W, H);
+  rctx.drawImage(REFL_BRANCHE, 0, 0);
+  // les grenouilles : miroir autour de la ligne d'eau, accroché à la branche, étiré
+  for (const g of GR) {
+    const k = G.etire[g.nom], yc = G.contact[g.nom], ycr = 2 * axe(G.centre[g.nom]) - yc;
+    rctx.setTransform(1, 0, 0, -k, G.dx, ycr + k * yc);
+    rctx.drawImage(g.img[g.cle], g.x, g.y);
+  }
+  rctx.setTransform(1, 0, 0, 1, 0, 0);
+  rctx.fillStyle = "#CBD8D0";
+  for (const g of GOUTTES) {
+    const yr = Math.round(2 * axe(g.x) - (g.tombe ? g.y : g.y0 + 1));
+    rctx.fillRect(g.x + G.dx, yr, 1, 1);
+  }
+  rctx.fillStyle = "#241D1B";
+  for (const m of MOUCHES) rctx.fillRect(Math.round(m.x) + G.dx, Math.round(2 * axe(m.x) - m.y), 1, 1);
+}
+
+function eau(t) {
+  const R = rctx.getImageData(0, 0, W, H).data, F = FOND_D.data, O = SORTIE.data;
+  const actifs = RONDS.map((r) => {
+    const rr = 1 + (t - r.t0) * 9;
+    return { x: r.x, y: r.y, r: rr, a: Math.min(1, 1.25 * (1 - rr / r.max)) };
+  });
+  for (let y = EAU; y < H; y++) {
+    const prof = y - PROCHE;
+    const amp = prof > 0 ? Math.min(1.6, prof / 40) : 0;
+    const dxL = prof > 0
+      ? Math.round(Math.sin(y * 0.9 + t * 2.1) * amp + Math.sin(y * 0.23 + 1.3 - t * 0.8) * Math.min(1, prof / 70))
+      : 0;
+    const force = 0.8 - 0.24 * Math.min(1, Math.max(0, prof) / 140);
+    for (let x = 0; x < W; x++) {
+      let sx = x - dxL, lum = 0;
+      for (const r of actifs) {
+        const ex = (x - r.x) / r.r, ey = (y - r.y) / (r.r * 0.28);
+        if (Math.abs(ex) > 1.4 || Math.abs(ey) > 1.4) continue;
+        const e = Math.hypot(ex, ey);
+        const crete = Math.exp(-(((e - 1) * r.r / 1.3) ** 2)) + 0.55 * Math.exp(-(((e - 0.62) * r.r / 1.3) ** 2));
+        const creux = Math.exp(-(((e - 0.82) * r.r / 1.1) ** 2));
+        lum += (crete * 72 - creux * 34) * r.a;
+        sx += Math.round(Math.sign(x - r.x) * (crete + creux) * 2.6 * r.a);
+      }
+      // rides lentes : des lignes de lumière qui avancent sur l'eau proche
+      if (prof > 0) lum += 6 * Math.sin(y * 0.75 - t * 1.4 + GRAIN[y * W + x] * 1.2);
+      lum = Math.round(lum / 6) * 6;
+      const f = (y * W + x) * 4, o = ((y - EAU) * W + x) * 4;
+      let cr = F[f], cg = F[f + 1], cb = F[f + 2];
+      sx = borne(sx, 0, W - 1);
+      const s = (y * W + sx) * 4;
+      if (R[s + 3]) {
+        cr = cr * (1 - force) + R[s] * 0.74 * force;
+        cg = cg * (1 - force) + R[s + 1] * 0.72 * force;
+        cb = cb * (1 - force) + R[s + 2] * 0.6 * force;
+      }
+      O[o] = cr + lum; O[o + 1] = cg + lum; O[o + 2] = cb + lum * 0.85; O[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(SORTIE, 0, EAU);
+}
+
+function dessiner() {
+  reflets();
+  ctx.drawImage(FOND, 0, 0, W, EAU, 0, 0, W, EAU);
+  eau(temps);
+  // éclats de lumière sur l'eau, et l'éclaboussure d'une goutte
+  for (const e of ECLATS) {
+    const a = Math.sin(Math.PI * (temps - e.t0) / e.vie);
+    if (e.eclabousse) {
+      ctx.fillStyle = `rgba(214,226,218,${0.9 * a})`;
+      ctx.fillRect(e.x - 1, e.y - 1, 1, 1); ctx.fillRect(e.x + 1, e.y - 1, 1, 1); ctx.fillRect(e.x, e.y - 2, 1, 1);
+    } else {
+      ctx.fillStyle = `rgba(196,206,176,${0.22 * a})`;
+      ctx.fillRect(Math.round(e.x), Math.round(e.y), e.long, 1);
+    }
+  }
+  ctx.drawImage(BRANCHE, SB.x, SB.y);
+  for (const g of GR) ctx.drawImage(g.img[g.cle], g.x, g.y);
+  // gouttes : une perle qui grossit sous la branche, puis tombe
+  for (const g of GOUTTES) {
+    ctx.fillStyle = "#D6E4DC";
+    if (!g.tombe) {
+      ctx.fillRect(g.x, Math.round(g.y0), 1, 1);
+      if (temps - g.t0 > g.perle * 0.5) ctx.fillRect(g.x, Math.round(g.y0) + 1, 1, 1);
+    } else {
+      ctx.fillRect(g.x, Math.round(g.y), 1, 1);
+      ctx.fillStyle = "rgba(214,228,220,.45)";
+      ctx.fillRect(g.x, Math.round(g.y) - 1, 1, 1);
+    }
+  }
+  // moucherons : un corps sombre, des ailes claires qui battent
+  const bat = Math.floor(temps * 12) % 2;
+  for (const m of MOUCHES) {
+    const x = Math.round(m.x), y = Math.round(m.y);
+    ctx.fillStyle = "#1E1816"; ctx.fillRect(x, y, 1, 2);
+    ctx.fillStyle = "rgba(226,234,224,.85)";
+    if (bat) { ctx.fillRect(x - 1, y - 1, 1, 1); ctx.fillRect(x + 1, y - 1, 1, 1); }
+    else { ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1); }
+  }
+  const etat = document.getElementById("etat");
+  const yeux = GR.map((g) => (g.cle[2] === "1" ? "cligne" : g.cle[4] === "1" ? "détourne les yeux" : "regarde l'autre"));
+  etat.textContent = `gauche : ${yeux[0]} · droite : ${yeux[1]}`;
+}
+
+/* ---------- la boucle : 12 images par seconde ---------- */
+let enPause = calme, dernier = null, acc = 0;
+function boucle(ms) {
+  if (dernier === null) dernier = ms;
+  const dt = Math.min(0.25, (ms - dernier) / 1000);
+  dernier = ms;
+  if (!enPause) {
+    acc += dt;
+    let pas = false;
+    while (acc >= PAS) { acc -= PAS; avancer(PAS); pas = true; }
+    if (pas) dessiner();
+  }
+  requestAnimationFrame(boucle);
+}
+
+/* ---------- commandes ---------- */
+const boutonPause = document.getElementById("pause");
+function pause(v) {
+  enPause = v;
+  boutonPause.textContent = v ? "Reprendre" : "Pause";
+  boutonPause.setAttribute("aria-pressed", String(v));
+}
+boutonPause.addEventListener("click", () => pause(!enPause));
+document.getElementById("goutte").addEventListener("click", () => { goutte(); if (enPause) pause(false); });
+document.getElementById("moucheron").addEventListener("click", () => { lacher(Math.random() < 0.5 ? -4 : W + 4, rnd(30, 110)); if (enPause) pause(false); });
+toile.addEventListener("pointerdown", (e) => {
+  const b = toile.getBoundingClientRect();
+  const x = ((e.clientX - b.left) / b.width) * W, y = ((e.clientY - b.top) / b.height) * H;
+  for (const g of GR) {                         // une grenouille touchée cligne
+    const i = Math.floor(x - g.x), j = Math.floor(y - g.y);
+    if (i >= 0 && j >= 0 && i < g.w && j < g.h && g.img[g.cle].getContext("2d").getImageData(i, j, 1, 1).data[3]) {
+      g.prochainClin = temps; if (enPause) pause(false); return;
+    }
+  }
+  if (y > AIR) rond(x, y, 1.1); else lacher(x, y);
+  if (enPause) pause(false);
+});
+
+const image = new Image();
+image.onload = () => {
+  fctx.drawImage(image, 0, 0);
+  FOND_D = fctx.getImageData(0, 0, W, H);
+  if (calme) document.getElementById("aide").textContent = "Mouvement réduit : la scène est fixe. « Reprendre » l'anime.";
+  pause(calme);
+  dessiner();
+  requestAnimationFrame(boucle);
+};
+image.src = D.fond;
+</script>
