@@ -403,7 +403,7 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # son disque. Les plus lointains sont plus hauts et plus sombres.
     tarse = catmull(
         [
-            (53.97, 38.0),
+            (52.97, 38.0),
             (52.47, 39.6),
             (49.15, 40.4),
             (44.99, 40.8),
@@ -414,9 +414,9 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             (42.49, 42.4),
             (46.65, 42.4),
             (50.81, 42.0),
-            (53.3, 41.2),
-            (54.63, 40.0),
-            (54.8, 38.8),
+            (52.3, 41.2),
+            (53.63, 40.0),
+            (53.8, 38.8),
         ]
     )
     tm = dans(tarse, X, Y)
@@ -468,10 +468,10 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         pli |= jm & voisin_hors & voisin_dessous & (X < 52)  # pas de pli au talon
     g[pli] = "Z"
     # cheville : talon arrondi, assez épais, qui joint le bout du tibia au tarse
-    talon = ellipse(53.9, 38.9, 1.3, 1.15, X, Y)
+    talon = ellipse(52.9, 38.9, 1.3, 1.15, X, Y)
     g[talon] = "O"
-    g[talon & ~ellipse(53.9, 39.5, 1.3, 1.15, X, Y)] = "H"
-    g[talon & ~ellipse(53.9, 38.4, 1.3, 1.15, X, Y)] = "S"
+    g[talon & ~ellipse(52.9, 39.5, 1.3, 1.15, X, Y)] = "H"
+    g[talon & ~ellipse(52.9, 38.4, 1.3, 1.15, X, Y)] = "S"
 
     # --- patte avant : sort du flanc sous la bande, coude en arrière, avant-bras plus
     # épais près du coude, poignet fin
