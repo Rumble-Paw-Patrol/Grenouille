@@ -29,8 +29,10 @@ OUVERTURES = {1: 1.0, 2: 1.9}  # bouche entrouverte, ouverte (unités, au bout d
 
 
 def images():
+    """Palette et images codées ; la palette se remplit au fil des images calculées."""
     if "--page" in sys.argv and (ICI / "chasse.json").exists():  # ne refaire que décor et page
-        return json.loads((ICI / "chasse.json").read_text(encoding="utf-8"))["grenouille"]["images"]
+        g = json.loads((ICI / "chasse.json").read_text(encoding="utf-8"))["grenouille"]
+        return g["palette"], g["images"]
     out = {}
     for t in range(5):
         tete = t - 2
@@ -41,16 +43,19 @@ def images():
             out[f"R{g}{t}"] = grenouille.composer(g * 0.9, 0.0, False, tete, 0.0, True)
         for b, ouverture in OUVERTURES.items():
             out[f"B{b}{t}"] = grenouille.composer(0.0, 0.0, False, tete, ouverture)
-    return {cle: [grenouille.plages(r) for r in rangs] for cle, rangs in out.items()}
+    return grenouille.PALETTE_NUANCES, {
+        cle: [grenouille.plages(r) for r in rangs] for cle, rangs in out.items()
+    }
 
 
 if __name__ == "__main__":
+    palette, codees = images()
     donnees = {
         "grenouille": {
-            "palette": grenouille.PALETTE_NUANCES,
+            "palette": palette,
             "largeur": grenouille.W,
             "hauteur": grenouille.H,
-            "images": images(),
+            "images": codees,
         },
         "decor": decor.calques()[0],
         # en unités du repère de la grenouille (2 pixels par unité)
