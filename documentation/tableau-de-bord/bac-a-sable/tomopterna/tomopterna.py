@@ -65,6 +65,7 @@ MATIERES = {
     "disque": "#E3A862",  # disques des doigts, plus clairs
     "plante": "#E2A866",  # plante du pied, claire
     "bras_pale": "#D4C3CA",  # face interne du bras, pâle, tachetée
+    "cuisse_jaune": "#E2B04A",  # intérieur de la cuisse, jaune
     "fond": "#B86E3E",  # membres de l'autre côté, un peu moins éclairés
     "ecorce": "#4A3B32",
 }
@@ -376,11 +377,12 @@ def suivre(pts, x):
     return np.interp(x, xs, ys)
 
 
-def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, lum=None):
+def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, lum=None, lie=()):
     """plan : fond (membres de l'autre côté, ce qui pend derrière la branche), corps, devant
     (membres proches) ; cernee : un contour la sépare de ce qu'elle recouvre ; volume : la forme
     dont elle prend le relief (le flanc prend celui du corps) ; lum : la clarté imposée pixel
-    par pixel (un gabarit relevé sur la photo), au lieu du relief calculé."""
+    par pixel (un gabarit relevé sur la photo), au lieu du relief calculé ; lie : les formes
+    qu'elle continue sans frontière (l'avant-bras et le bras, au coude)."""
     return {
         "nom": nom,
         "masque": masque,
@@ -389,6 +391,7 @@ def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, lum=Non
         "cernee": cernee,
         "volume": volume or nom,
         "lum": lum,
+        "lie": lie,
     }
 
 
@@ -460,40 +463,6 @@ def formes_branche(c, **_):
 # ------------------------------------------------------------------ la grenouille de droite
 # de profil, tournée vers la gauche
 DROITE = {"cadre": (236, 50, 104, 80), "pivot": (138.0, 36.0), "sens": 1}
-
-# pied droit de la grenouille de droite, sous la branche, relevé au pixel sur la photo réduite :
-# (coin haut gauche sur la toile, rangées). Z, S, O : du plus sombre au plus clair (le pied qui
-# part en diagonale, dans l'ombre) ; H, I : la plante, claire, en éventail, et le disque de
-# l'orteil qui part dans le vide à droite ; K : la tache sombre
-PIED_DROIT = (
-    (296, 113),
-    [
-        "...............SKKKKOZ..",
-        "........ZKKZSSZOKKKKZ...",
-        ".......ZKZZSOOKZZKKKSKS.",
-        "...SKZSZZSSSHSKZZKZSZ...",
-        "..ZKZSSSSSIHOKKSZKZZSS..",
-        "..SZSOOOOOIIOKKSZKSSZ...",
-        "..SKZOOHOHOOOKKZZS......",
-        "..SZKOHHHHHHHOSSHIO.....",
-        "...OKOIHHHHIHIIHIII.....",
-        "...SOOHOHOOHHIIHIII.....",
-        "....SOSOOOOOOHHOHIH.....",
-    ],
-)
-CLARTE_PIED = {"Z": 0.05, "S": 0.25, "O": 0.45, "H": 0.75, "I": 0.98, "K": 0.1}
-
-
-def gabarit(c, gab):
-    """Les pixels d'un gabarit posé sur la toile, par code : {code: masque du cadre}."""
-    (x0, y0), rangs = gab
-    out = {}
-    for dj, rang in enumerate(rangs):
-        for di, ch in enumerate(rang):
-            j, i = y0 + dj - c.y0, x0 + di - c.x0
-            if ch != "." and 0 <= j < c.H and 0 <= i < c.W:
-                out.setdefault(ch, np.zeros((c.H, c.W), bool))[j, i] = True
-    return out
 
 
 def bord(pts, rayons, X, Y, dx, dy):
@@ -576,8 +545,8 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     gorge_ = dessous & (xt < 135.6)
     # ligne de la mâchoire : la lèvre blanche et la bouche sombre dessous, du museau jusqu'au-
     # dessus de l'épaule
-    levre = dessous & (yt < limite + 0.75) & (xt < 141.5)
-    bouche = dessous & (yt >= limite + 0.75) & (yt < limite + 1.25) & (xt > 122.0) & (xt < 140.4)
+    levre = dessous & (yt < limite + 0.75) & (xt < 139.6)
+    bouche = dessous & (yt >= limite + 0.75) & (yt < limite + 1.25) & (xt > 122.0) & (xt < 138.6)
     alea = np.random.default_rng(29).random(X.shape)
     avant = dessous & ~gorge_ & (xt < 141.0 + 1.2 * np.sin(yt * 2.1) + 0.6 * (yt - 41) + 1.6 * alea)
     # patte arrière gauche : la cuisse, verte, en arrière du tibia mais devant le postérieur, se
@@ -618,9 +587,11 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     avant_bras = membre(
         [(152.4, 40.0), (151.6, 44.6), (149.8, 49.6), (148.6, 52.6)], [1.5, 2.2, 1.8, 1.2], X, Y
     )
-    pts_bh = [(141.4, 40.7), (146.0, 40.5), (151.6, 40.2)]
-    bras_haut = membre(pts_bh, [1.0, 0.85, 0.95], X, Y)
-    epaule_g = epaule(c, 140.8, 41.1, 1.6, 1.4)
+    pts_bh = [(138.6, 40.7), (145.0, 40.5), (152.0, 40.2)]
+    bras_haut = membre(pts_bh, [1.05, 0.85, 1.0], X, Y)
+    epaule_g = epaule(c, 138.0, 41.1, 1.7, 1.4)
+    # le coude : la pointe de l'avant-bras, pâle comme le bras, s'y fond sans frontière
+    coude = avant_bras & ellipse(152.4, 40.0, 1.7, 1.2, X, Y)
     main, disques_m = ellipse(146.8, 53.2, 1.5, 1.0, X, Y), np.zeros(X.shape, bool)
     for pts in (
         [(146.0, 52.8), (143.4, 51.8), (140.8, 51.6)],
@@ -647,25 +618,42 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         o, d = doigt(c, pts)
         main_fond |= o
         disques_f |= d
-    # pied droit, sous la branche : relevé au pixel (PIED_DROIT), découpé par la branche
-    pied = gabarit(c, PIED_DROIT)
-    vide = np.zeros(X.shape, bool)
+    # pied droit, sous la branche, dans l'ombre : la plante claire en éventail ; un orteil monte
+    # derrière la branche, un autre part en diagonale vers le haut et la droite, derrière elle
+    # aussi ; le troisième file à l'horizontale vers la droite, dans le vide, avec son disque
     sous_branche = ~branche(X, Y)
-    ombre_pied = (pied.get("Z", vide) | pied.get("S", vide) | pied.get("O", vide)) & sous_branche
-    plante = (pied.get("H", vide) | pied.get("I", vide)) & sous_branche
-    clarte_pied = np.zeros(X.shape)
-    for ch, val in CLARTE_PIED.items():
-        clarte_pied[pied.get(ch, vide)] = val
+    plante = dans(
+        [
+            (149.8, 58.0),
+            (151.2, 57.4),
+            (154.2, 57.6),
+            (155.4, 58.8),
+            (155.4, 60.8),
+            (154.0, 61.9),
+            (151.2, 61.9),
+            (149.6, 61.0),
+        ],
+        X,
+        Y,
+    )
+    orteils_f = np.zeros(X.shape, bool)
+    for pts in (
+        [(150.8, 58.4), (151.0, 56.6), (151.2, 54.6)],
+        [(153.2, 58.2), (154.6, 56.6), (156.0, 55.0)],
+    ):
+        orteils_f |= doigt(c, pts)[0] & ~doigt(c, pts)[1]  # bouts cachés derrière la branche
+    orteil_h, disque_h = doigt(c, [(154.8, 60.2), (156.6, 60.3), (158.2, 60.4)])
+    # fond de la plante plus sombre (le pied part dans l'ombre, en bas à gauche), éventail
+    # de stries claires vers le bas
+    rel = np.clip((X - 149.6) / 6.0, 0, 1) * 0.5 + np.clip((Y - 57.6) / 4.4, 0, 1) * 0.5
+    stries = (np.floor(np.arctan2(Y - 56.0, X - 152.4) * 9) % 2) * 0.12
+    clarte_pied = np.clip(0.15 + 0.8 * rel + stries, 0, 1)
+    tache_pied = (np.abs(X - 154.4) < 0.55) & (np.abs(Y - 59.0) < 0.55)
+    ombre_pied = (orteils_f | orteil_h | (plante & (rel < 0.45))) & sous_branche
+    plante &= sous_branche & ~ombre_pied
     f = [
-        forme(
-            "pied_fond",
-            ombre_pied | (pied.get("K", vide) & sous_branche),
-            "fond",
-            "fond",
-            cernee=True,
-            lum=clarte_pied,
-        ),
-        forme("plante", plante, "plante", "fond", lum=clarte_pied),
+        forme("pied_fond", ombre_pied, "fond", "fond", cernee=True, lie=("plante",)),
+        forme("plante", plante, "plante", "fond", lum=clarte_pied, lie=("pied_fond",)),
         forme("bras_fond", bras_haut_f, "fond", "fond", cernee=True),
         forme("avant_bras_fond", avant_bras_f | main_fond, "fond", "fond", cernee=True),
         forme("corps", corps | ellipse(127.0, 30.0, 1.4, 1.0, xt, yt), "dos"),
@@ -673,13 +661,17 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("flanc_pale", avant, "flanc_pale", volume="corps"),
         forme("gorge", gorge_ & ~levre, "gorge", volume="corps"),
         forme("levre", levre, "levre", volume="corps"),
-        forme("cuisse", cuisse, "dos", cernee=True),
+        forme("cuisse", cuisse, "cuisse_jaune", cernee=True),
+        forme("cuisse_vert", cuisse & (X > 164.7), "dos", volume="cuisse"),
         forme("tibia", tibia | genou, "membre", cernee=True),
         forme("orteils", orteils, "membre", "devant", cernee=True),
         forme("epaule", epaule_g & corps & ~bras_haut, "bras_pale", volume="bras"),
         forme("bras", bras_haut, "bras_pale", "devant", cernee=True),
         forme("doigt_g", doigt_g, "membre", "devant", cernee=True),
-        forme("avant_bras", avant_bras, "dos", "devant", cernee=True),
+        forme(
+            "avant_bras", avant_bras & ~coude, "dos", "devant", cernee=True, lie=("bras", "coude")
+        ),
+        forme("coude", coude, "bras_pale", "devant", cernee=True, lie=("bras", "avant_bras")),
         forme("main", main, "membre", "devant", cernee=True),
     ]
     d = decalque("droite", c, xt, yt)
@@ -688,9 +680,17 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     pair = (np.floor(X * ECHELLE) + np.floor(Y * ECHELLE)) % 2 == 0
     rangee = dessous & ~gorge_ & ~levre & (yt < limite + 0.5) & (xt < 155) & pair
     granules = genou & (np.random.default_rng(31).random(X.shape) < 0.2) & (X < 163.0)
+    rayures = (
+        cuisse
+        & (X < 164.7)
+        & (
+            (np.abs(Y - 41.4 - 0.12 * (X - 158)) < 0.42)
+            | (np.abs(Y - 43.5 - 0.12 * (X - 158)) < 0.45)
+            | (np.abs(Y - 45.7 - 0.1 * (X - 158)) < 0.42)
+        )
+    )
     motifs = {
-        "barre": ((d == "B") & ~levre & ~bouche & ~(cuisse & ~tibia & ~genou))
-        | (pied.get("K", vide) & sous_branche),
+        "barre": ((d == "B") & ~levre & ~bouche & ~cuisse) | rayures | tache_pied,
         "tache": d == "t",
         "tubercule": rangee | granules,
         "bouche": bouche,
@@ -705,10 +705,10 @@ def formes_droite(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     oeil["arete"] = membre([(122.6, 32.2), (125.2, 31.3), (127.6, 30.8)], [0.3] * 3, xt, yt)
     oeil["arete"] |= ellipse(123.0, 32.5, 0.6, 0.35, xt, yt)
     oeil["joue"] = corps & (yt > 33.4) & (yt < limite - 0.3) & (xt < 128.2) & (xt > 122.2)
-    oeil["disques"] = disques_o | disques_m | disques_f | disque_g
-    oeil["coudes"] = ellipse(152.6, 39.8, 1.0, 0.8, X, Y) | ellipse(139.4, 45.8, 0.8, 0.7, X, Y)
+    oeil["disques"] = disques_o | disques_m | disques_f | disque_g | disque_h
+    oeil["coudes"] = ellipse(152.4, 39.6, 1.0, 0.7, X, Y) | ellipse(139.4, 45.8, 0.8, 0.7, X, Y)
     oeil["ombres"] = (membre(pts_bh, [1.5, 1.4, 1.5], X, Y - 0.9) & corps & ~bras_haut) | (
-        cuisse & ~membre([(161.6, 40.6), (162.0, 43.6)], [2.6, 2.4], X, Y) & (X < 161)
+        cuisse & membre([(161.6, 40.6), (162.0, 43.6), (162.4, 46.8)], [2.6, 2.4, 2.0], X, Y)
     )
     return f, motifs, oeil
 
@@ -721,9 +721,9 @@ GAUCHE = {"cadre": (96, 60, 110, 90), "pivot": (78.0, 42.0), "sens": -1}
 def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     X, Y = c.X, c.Y
     xt, yt = tete_tournee(c, GAUCHE["pivot"], -1, tete)
-    # lignes marquées, presque droites : dos, museau tronqué, mâchoire ; polygone simple, sans
-    # lissage. Le ventre fuit à gauche derrière l'avant-bras droit et à droite derrière la
-    # patte arrière gauche
+    # lignes marquées : museau tronqué, mâchoire droite ; le dos, relevé sur la photo, fait un
+    # léger dos-d'âne du crâne au bras. Le ventre, moins gros, s'arrête au-dessus de la branche
+    # et fuit à gauche derrière l'avant-bras droit, à droite derrière la patte arrière gauche
     corps = dans(
         [
             (99.9, 41.8),
@@ -735,24 +735,25 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
             (92.4, 34.7),
             (90.2, 33.8),
             (87.0, 33.2),
-            (84.0, 33.6),
-            (82.4, 34.4),
-            (66.6, 45.4),
-            (65.0, 47.8),
+            (84.0, 33.4),
+            (79.7, 35.0),
+            (75.5, 37.5),
+            (71.3, 40.8),
+            (68.0, 44.2),
+            (65.1, 47.9),
             (64.6, 50.4),
             (64.4, 54.0),
-            (64.6, 58.0),
-            (65.6, 61.4),
-            (67.4, 62.6),
-            (70.0, 63.2 + souffle * 0.3),
-            (73.0, 63.0 + souffle * 0.6),
-            (77.0, 61.8 + souffle * 0.6),
-            (80.6, 60.6 + souffle * 0.4),
-            (83.4, 59.2),
-            (86.4, 58.4),
-            (88.4, 55.8),
-            (89.2, 52.2),
-            (89.6, 49.0 + gorge * 0.3),
+            (64.8, 57.6),
+            (66.0, 59.6),
+            (68.4, 60.4 + souffle * 0.3),
+            (72.0, 60.7 + souffle * 0.5),
+            (76.0, 60.3 + souffle * 0.5),
+            (80.0, 59.5 + souffle * 0.4),
+            (83.4, 58.3),
+            (85.4, 56.4),
+            (86.4, 53.4),
+            (87.0, 50.6),
+            (88.0, 48.6 + gorge * 0.3),
             (91.0, 46.6 + gorge * 0.9),
             (94.5, 45.3 + gorge),
             (97.4, 44.0 + gorge * 0.5),
@@ -781,9 +782,9 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     levre = dessous & (xt > 78.0) & (yt < limite + 0.75)
     bouche = dessous & (yt >= limite + 0.75) & (yt < limite + 1.25) & (xt > 79.0) & (xt < 99.4)
     # les côtés du ventre qui fuient : peau orangée, dans l'ombre
-    cote_d = dessous & (X < 67.6) & (Y > 49.0)
-    cote_g = dessous & (X > 84.4) & (Y > 50.4)
-    pli = dessous & ~cote_d & (Y > 59.4) & (X < 71.0)
+    cote_d = dessous & (X < 67.4) & (Y > 49.0)
+    cote_g = dessous & (X > 84.2) & (Y > 50.0)
+    pli = dessous & ~cote_d & (Y > 58.6) & (X < 70.0)
     # patte arrière droite (à gauche) : la cuisse descend en diagonale vers la gauche jusqu'au
     # genou, vert et granuleux ; le tibia, gros, horizontal, revient du genou vers la droite et
     # passe derrière l'avant-bras droit ; deux gros orteils barrés s'enroulent sur la branche
@@ -795,19 +796,20 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     orteils_d = membre([(56.2, 61.6), (56.5, 66.0), (56.7, 70.2)], [1.15, 1.2, 1.05], X, Y)
     orteils_d |= membre([(59.4, 61.8), (59.7, 66.2), (60.0, 70.6)], [1.15, 1.2, 1.05], X, Y)
     disques_od = ellipse(56.8, 70.8, 1.3, 1.0, X, Y) | ellipse(60.1, 71.4, 1.3, 1.0, X, Y)
-    # bras droit : l'avant-bras, vert, descend du coude (en haut à gauche) à la main ; le bras,
-    # fin, part du coude à l'horizontale et s'implante dans l'épaule, une boule orangée
-    avant_bras_d = membre([(63.2, 50.6), (62.9, 57.5), (63.1, 64.4)], [1.7, 1.65, 1.5], X, Y)
-    pts_bh = [(64.4, 50.0), (65.8, 50.1), (67.2, 50.3)]
-    bras_haut_d = membre(pts_bh, [0.6, 0.55, 0.6], X, Y)
-    epaule_d = ellipse(66.8, 52.3, 1.7, 1.5, X, Y)
-    # barres noires : trois en travers du tibia, trois en travers de la cuisse
     barres_tibia = tibia_d & (
         (np.abs(X - 56.4) < 0.55) | (np.abs(X - 58.7) < 0.6) | (np.abs(X - 60.8) < 0.45)
     )
     barres_cuisse = cuisse_d & (
         (np.abs(X - 61.2 + (Y - 53.0) * 0.75) < 0.5) | (np.abs(X - 58.6 + (Y - 55.2) * 0.75) < 0.5)
     )
+    # bras droit : l'avant-bras, vert, descend du coude (en haut à gauche) à la main ; le bras,
+    # fin, part du coude à l'horizontale et passe sur le ventre, du même motif que lui, jusqu'à
+    # l'épaule, une boule discrète au milieu de la grenouille
+    avant_bras_d = membre([(63.2, 50.6), (62.9, 57.5), (63.1, 64.4)], [1.7, 1.65, 1.5], X, Y)
+    pts_bh = [(63.6, 50.1), (68.0, 50.4), (72.4, 50.9)]
+    bras_haut_d = membre(pts_bh, [1.0, 0.9, 1.1], X, Y) & ~avant_bras_d
+    epaule_d = epaule(c, 73.8, 51.4, 1.8, 1.5)
+    dessous_bras = bras_haut_d & (X < 67.8) & ~membre(pts_bh, [1.0, 0.9, 1.1], X, Y + 0.7)
     main_d, disques_m = ellipse(64.9, 65.6, 1.5, 1.1, X, Y), np.zeros(X.shape, bool)
     for pts in (
         [(65.4, 65.4), (69.4, 65.2), (73.4, 66.0)],
@@ -819,27 +821,30 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         disques_m |= d
     # le pouce, quatrième doigt, court et gros, part vers l'arrière, collé à la branche
     pouce = membre([(64.8, 64.8), (65.9, 63.5), (66.7, 62.5)], [0.85, 0.85, 0.9], X, Y)
-    # patte arrière gauche (à droite), en arrière-plan, à l'ombre : colonne barrée bordée de vert
-    # qui descend vers la branche ; deux orteils, un vers la gauche, un vers le bas
-    pts_j, r_j = [(88.6, 50.6), (89.8, 56.0), (90.8, 62.0)], [1.3, 1.45, 1.25]
+    # patte arrière gauche (à droite), en arrière-plan, à l'ombre : elle sort de derrière le
+    # cou (on ne voit pas où elle s'attache) et descend vers la branche, barrée, bordée de
+    # vert ; deux orteils, un vers la gauche, un vers le bas
+    pts_j, r_j = [(88.0, 46.4), (89.4, 52.0), (90.0, 56.4), (90.8, 62.0)], [1.3, 1.35, 1.45, 1.25]
     jambe_g = membre(pts_j, r_j, X, Y)
     jambe_g_vert = bord(pts_j, r_j, X, Y, -0.9, 0.0)
     orteil_g1, disque_g1 = doigt(c, [(89.8, 61.6), (86.4, 63.6), (83.2, 64.9)])
     orteil_g2, disque_g2 = doigt(c, [(90.4, 62.2), (89.4, 64.6), (88.6, 66.6)])
     # bras gauche (à droite), devant : il vient vers nous et paraît court ; l'avant-bras
-    # granuleux, bordé de vert, descend du coude à la main, qui a trois longs doigts
-    pts_ab, r_ab = [(90.4, 48.0), (93.4, 51.0), (94.6, 55.0), (93.8, 59.0)], [1.7, 2.2, 1.7, 1.3]
+    # granuleux, bordé de vert, s'arrête au niveau de la branche ; on voit surtout ses trois
+    # longs doigts, posés sur la branche
+    pts_ab, r_ab = [(90.4, 48.0), (93.2, 50.8), (94.4, 54.2), (94.4, 56.8)], [1.7, 2.1, 1.7, 1.3]
     avant_bras_g = membre(pts_ab, r_ab, X, Y)
-    avant_bras_g_vert = bord(pts_ab, r_ab, X, Y, 1.0, 0.0) & (Y < 56)
-    main_g, disques_g = ellipse(93.8, 60.4, 1.4, 1.0, X, Y), np.zeros(X.shape, bool)
+    avant_bras_g_vert = bord(pts_ab, r_ab, X, Y, 1.0, 0.0) & (Y < 55)
+    main_g, disques_g = ellipse(94.6, 57.8, 1.4, 1.0, X, Y), np.zeros(X.shape, bool)
     for pts in (
-        [(94.4, 60.2), (96.0, 60.0), (97.3, 60.4)],
-        [(94.2, 61.0), (94.4, 62.4), (94.4, 63.8)],
-        [(93.2, 61.0), (92.2, 63.4), (91.6, 66.2)],
+        [(95.2, 57.6), (96.4, 58.6), (97.4, 60.4)],
+        [(94.8, 58.6), (95.0, 61.0), (95.2, 63.4)],
+        [(93.8, 58.6), (92.6, 61.2), (91.8, 63.8)],
     ):
         o, d = doigt(c, pts)
         main_g |= o
         disques_g |= d
+    ventre = dessous & ~gorge_ & ~levre & ~cote_d & ~cote_g & ~pli
     f = [
         forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True),
         forme("cuisse_d_vert", cuisse_d_vert, "dos", "fond", volume="cuisse_d"),
@@ -849,31 +854,29 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("jambe_g", jambe_g | orteil_g1 | orteil_g2, "fond", "fond", cernee=True),
         forme("jambe_g_vert", jambe_g_vert, "dos", "fond", volume="jambe_g"),
         forme("corps", corps | ellipse(93.4, 34.4, 3.4, 1.9, xt, yt), "dos"),
-        forme(
-            "ventre",
-            dessous & ~gorge_ & ~levre & ~cote_d & ~cote_g & ~pli,
-            "ventre",
-            volume="corps",
-        ),
+        forme("ventre", ventre, "ventre"),
         forme("cotes", (cote_d | cote_g | pli) & ~levre, "flanc", volume="corps"),
         forme("gorge", gorge_ & ~levre, "gorge", volume="corps"),
         forme("levre", levre, "levre", volume="corps"),
-        forme("epaule_d", epaule_d, "membre", cernee=True),
         forme("pouce", pouce, "membre", cernee=True),
+        forme("epaule_d", epaule_d & ventre & ~bras_haut_d, "ventre", "devant"),
+        forme("bras_haut_d", bras_haut_d & ~dessous_bras, "ventre", "devant"),
+        forme("dessous_bras", dessous_bras, "membre", "devant", volume="bras_haut_d"),
         forme("avant_bras_d", avant_bras_d, "dos", "devant", cernee=True),
-        forme("bras_haut_d", bras_haut_d, "bras_pale", "devant"),
         forme("main_d", main_d, "membre", "devant", cernee=True),
         forme("avant_bras_g", avant_bras_g | main_g, "membre", "devant", cernee=True),
         forme("avant_bras_g_vert", avant_bras_g_vert, "dos", "devant", volume="avant_bras_g"),
     ]
     d = decalque("gauche", c, xt, yt)
     granules = genou_d & (np.random.default_rng(37).random(X.shape) < 0.22)
+    # granules blanches sur le dessus du bras, près du coude
+    haut_bras = bras_haut_d & ~membre(pts_bh, [1.0, 0.9, 1.1], X, Y - 0.6) & (X < 69.0)
     motifs = {
         "barre": ((d == "B") & ~levre & ~genou_d & ~bras_haut_d & ~avant_bras_d & ~tibia_d)
         | barres_tibia
         | barres_cuisse,
         "tache": (d == "t") & ~cote_d & ~cote_g,
-        "tubercule": granules,
+        "tubercule": granules | (haut_bras & ((np.floor(X * ECHELLE) % 2) == 0)),
         "bouche": bouche,
     }
     oeil = oeil_de(xt, yt, 87.15, 37.9, 3.75, 3.8, cligne, dome=(93.4, 34.4, 3.4, 1.9), pupille=0.1)
@@ -888,11 +891,22 @@ def formes_gauche(c, gorge=0.0, souffle=0.0, cligne=False, tete=0):
     )
     oeil["joue"] = corps & (yt > 39.6) & (yt < limite - 0.3) & (xt > 90.0)
     oeil["disques"] = disques_m | disques_g | disques_od | disque_g1 | disque_g2
-    oeil["coudes"] = ellipse(90.6, 47.9, 1.0, 0.8, X, Y) | ellipse(62.6, 50.2, 1.0, 0.7, X, Y)
+    oeil["coudes"] = (
+        ellipse(90.6, 47.9, 1.0, 0.8, X, Y) | ellipse(62.6, 50.2, 1.0, 0.7, X, Y) | haut_bras
+    )
+    # profondeur : les côtés du ventre, l'ombre de la mâchoire sur la gorge, le dessous du
+    # ventre au-dessus de la branche, le tibia qui passe derrière l'avant-bras ; le bras droit
+    # se lit sur le ventre par l'arête éclairée de son dessus et l'ombre franche qu'il porte
     oeil["ombres"] = (
         (cote_d | cote_g | pli)
-        | (membre(pts_bh, [1.5, 1.4, 1.5], X, Y - 0.9) & corps & ~bras_haut_d)
+        | (dessous & ~levre & (yt < limite + 2.2) & (xt > 74.0))
+        | (ventre & (Y > 58.4))
         | (tibia_d & (X > 60.4))
+        | (epaule_d & (Y > 51.8))
+    )
+    oeil["creux"] = membre(pts_bh, [1.0, 0.9, 1.1], X, Y - 1.2) & ventre & ~bras_haut_d & ~epaule_d
+    oeil["reflets"] = (bras_haut_d & ~membre(pts_bh, [1.0, 0.9, 1.1], X, Y - 0.7)) | (
+        epaule_d & (Y < 50.8)
     )
     return f, motifs, oeil
 
@@ -953,7 +967,8 @@ def contour(img, f, num):
             continue
         mm = np.pad(fo["masque"] & (num == k), 1)
         autour = mm[:-2, 1:-1] | mm[2:, 1:-1] | mm[1:-1, :-2] | mm[1:-1, 2:]
-        img[autour & plein & (num < k) & (num >= 0)] = CONTOUR
+        libres = np.isin(num, [i for i, g in enumerate(f) if g["nom"] in fo["lie"]])
+        img[autour & plein & (num < k) & (num >= 0) & ~libres] = CONTOUR
     return miettes(img)
 
 
@@ -1018,7 +1033,7 @@ def aplats(c, f, motifs, oeil):
     for nom, coul in MATIERES.items():
         img[mat == nom] = coul
     if oeil is not None:
-        img[oeil["disques"] & (num >= 0)] = MATIERES["disque"]
+        img[oeil["disques"] & np.isin(mat, ["membre", "fond"])] = MATIERES["disque"]
     for nom, m in motifs.items():
         img[m & (num >= 0)] = MOTIFS[nom]
     img = contour(img, f, num)
@@ -1049,6 +1064,7 @@ RAMPES = {
     "fond": (-0.2, 0.1, 7, True),
     "plante": (-0.16, 0.1, 5, False),
     "bras_pale": (-0.24, 0.1, 7, True),
+    "cuisse_jaune": (-0.24, 0.14, 7, True),
     "gorge": (-0.26, 0.1, 8, True),
     "ventre": (-0.26, 0.1, 8, True),
     "levre": (-0.14, 0.06, 4, False),
@@ -1139,6 +1155,8 @@ def details(c, f, motifs, oeil):
             devant |= m
     if oeil is not None:
         lum[oeil["ombres"] & (num >= 0)] -= 0.2  # ombre du bras et de l'épaule sur le corps
+        lum[oeil.get("creux", False) & (num >= 0)] -= 0.3  # ombres franches (sous un bras)
+        lum[oeil.get("reflets", False) & (num >= 0)] += 0.28  # arête éclairée d'un bras
         lum[oeil["coudes"] & (num >= 0)] += 0.24  # coudes saillants
         lum[oeil["arete"] & (num >= 0)] += 0.26  # arête du museau, rebord de la narine
         lum[oeil["joue"] & ~oeil["arete"]] -= 0.08  # joue, sous l'arête
@@ -1148,7 +1166,7 @@ def details(c, f, motifs, oeil):
     ).astype(int)
     zone = mat.copy()
     if oeil is not None:
-        zone[oeil["disques"] & (num >= 0)] = "disque"
+        zone[oeil["disques"] & np.isin(mat, ["membre", "fond"])] = "disque"
     for nom, m in motifs.items():
         zone[m & (num >= 0)] = nom
     couleurs = {**MATIERES, **MOTIFS}
