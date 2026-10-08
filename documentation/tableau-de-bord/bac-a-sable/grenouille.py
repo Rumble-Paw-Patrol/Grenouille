@@ -14,8 +14,11 @@ une quarantaine de pustules sur tout le corps sauf la tête (dos, flanc, cuisse,
 un pixel de la couleur d'origine, plus clair, et son ombre juste en dessous ; leurs places sont
 tirées une fois, sur l'image au repos, pour ne pas bouger pendant l'animation. L'épaule
 s'attache en arrondi : un capuchon dont le pourtour tourne au jaune et se fond dans le flanc en
-tramage. Bouche et bande sombre comme dans le bandeau. Écrit grenouille.json dans ce dossier
-(non suivi) ; le tableau de bord n'en lit rien.
+tramage. Bouche et bande sombre comme dans le bandeau. Deux réglages servent la scène de chasse
+(chasse/) : bouche ouvre la gueule au bout du museau (fond sombre, langue rose) et rentres
+enfonce l'œil sous des paupières mi-closes, comme pour avaler ; à zéro, l'image est pixel pour
+pixel celle du tableau de bord. Écrit grenouille.json dans ce dossier (non suivi) ; le tableau
+de bord n'en lit rien.
 
 Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
 de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de doré, bande sombre

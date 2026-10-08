@@ -20,14 +20,14 @@
 :root[data-theme="dark"] { --bg: #070D0B; --surface: #0F1815; --ink: #E5EEE7; --muted: #92A79B; --line: rgba(160, 210, 185, .16); --accent: #F2A64A; --accent-ink: #1A0B03; --cadre: rgba(160, 210, 185, .22); color-scheme: dark; }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
-.page { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 32px 64px; display: grid; gap: 20px; }
+.page { max-width: 1056px; margin: 0 auto; padding-inline: 16px; padding-block: 32px 64px; display: grid; gap: 20px; }
 .tete { display: grid; gap: 8px; }
 .eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
 h1 { font-family: var(--f-display); font-weight: 500; font-size: clamp(24px, 3.4vw, 38px); letter-spacing: -.02em; line-height: 1.15; margin: 0; text-wrap: balance; }
 h1 i { font-family: var(--f-serif); font-style: italic; font-weight: 400; font-size: 1.16em; letter-spacing: 0; }
 .chapo { margin: 0; color: var(--muted); max-width: 66ch; }
-.scene { border-radius: 14px; overflow: hidden; border: 1px solid var(--cadre); background: #050A08; }
-.scene canvas { display: block; width: 100%; height: auto; aspect-ratio: 256 / 144; image-rendering: pixelated; image-rendering: crisp-edges; cursor: crosshair; touch-action: manipulation; }
+.scene { justify-self: center; max-width: 100%; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--cadre); background: #050A08; }
+.scene canvas { display: block; max-width: 100%; height: auto; aspect-ratio: 256 / 144; image-rendering: pixelated; image-rendering: crisp-edges; cursor: crosshair; touch-action: manipulation; }
 .barre { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .horloge { display: inline-flex; align-items: baseline; gap: 10px; min-width: 15ch; }
 .horloge time { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 500; letter-spacing: .02em; }
@@ -42,7 +42,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .bas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 24px 40px; padding-top: 6px; }
 .bas section { min-width: 0; display: grid; gap: 10px; align-content: start; }
 .bas h2 { font-family: var(--f-display); font-weight: 500; font-size: 15px; letter-spacing: -.01em; margin: 0; }
-.carnet { list-style: none; margin: 0; padding: 0; font-family: var(--f-mono); font-size: 12.5px; display: grid; gap: 3px; min-height: 9.5em; }
+.carnet { list-style: none; margin: 0; padding: 0; font-family: var(--f-mono); font-size: 12.5px; display: grid; align-content: start; gap: 3px; min-height: 9.5em; }
 .carnet li { display: grid; grid-template-columns: 5.5ch minmax(0, 1fr); gap: 12px; color: var(--muted); }
 .carnet li:first-child { color: var(--ink); }
 .carnet time { color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -55,7 +55,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   <header class="tete">
     <div class="eyebrow">Bac à sable · cadeau</div>
     <h1><i>A. blanci</i> à la chasse</h1>
-    <p class="chapo">Une journée dans la litière, en accéléré : 24 heures en 2 min 20. Le jour, elle chasse les moucherons. Au crépuscule, elle suit les lucioles des yeux sans jamais y toucher. La nuit, elle dort. Touchez la scène pour lâcher un moucheron.</p>
+    <p class="chapo">Une journée dans la litière, en accéléré : 24 heures en 2 min 20. Le jour, elle chasse les moucherons. Au crépuscule, elle suit les lucioles des yeux sans jamais y toucher. La nuit, elle dort. Promenez la souris devant elle : elle chasse le moucheron que vous portez (au doigt, touchez la scène pour en lâcher un).</p>
   </header>
 
   <div class="scene"><canvas id="scene" width="256" height="144" role="img" aria-label="Scène en pixel art : A. blanci assise sur une feuille morte dans le sous-bois guyanais, qui chasse des moucherons le jour et dort la nuit sous les lucioles."></canvas></div>
@@ -66,6 +66,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     <button type="button" id="moucheron" class="principal">Lâcher un moucheron</button>
     <button type="button" id="averse">Averse</button>
     <button type="button" id="pause" aria-pressed="false">Pause</button>
+    <button type="button" id="son" aria-pressed="false">Son</button>
     <span class="compteur" id="compteur">attrapés <b>0</b> · ratés <b>0</b></span>
   </div>
 
@@ -81,12 +82,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         <li>Pour avaler, elle rentre les yeux dans la tête et sa gorge palpite. Les grenouilles s'aident de leurs globes oculaires pour pousser la proie vers l'œsophage.</li>
         <li>Elle rate environ un coup sur quatre, et cligne deux fois quand c'est le cas.</li>
         <li>Les lucioles l'intéressent mais elle n'y touche pas : beaucoup sont défendues par des toxines que fuient la plupart des prédateurs. Leur lueur, elle, éclaire sa peau.</li>
-        <li><i>Anomaloglossus</i> est un genre diurne : la nuit, elle dort, et un moucheron qui frôle sa bouche suffit à la réveiller. Sous l'averse, une goutte près de l'œil la fait cligner.</li>
+        <li><i>Anomaloglossus</i> est un genre diurne : la nuit, elle dort, et un moucheron qui frôle sa bouche suffit à la réveiller. Sous l'averse, une goutte près de l'œil la fait cligner ; après, la fougère s'égoutte sur son dos.</li>
+        <li>Vers midi, un morpho bleu traverse parfois le sous-bois : bien trop grand pour elle, elle se contente de le suivre des yeux.</li>
+        <li>Avec le son : le feuillage, la pluie, les cigales du soir, les grillons la nuit, et le claquement de la langue.</li>
       </ul>
     </section>
   </div>
 
-  <p class="pied">Tout est dessiné au pixel. La grenouille vient du script du tableau de bord : 60 images calculées pour la scène (cinq angles de tête, bouche entrouverte et ouverte, yeux rentrés). Le sous-bois et la feuille morte sont calculés en Python, en trois calques à la résolution du sprite (256 × 144) ; la lumière, les insectes, la langue et la pluie le sont dans la page.</p>
+  <p class="pied">Tout est dessiné au pixel. La grenouille vient du script du tableau de bord : 60 images calculées pour la scène (cinq angles de tête, bouche entrouverte et ouverte, yeux rentrés). Le sous-bois et la feuille morte sont calculés en Python, en trois calques à la résolution du sprite (256 × 144) ; la lumière, les insectes, le morpho, la langue et la pluie le sont dans la page. Le son est synthétisé à la volée, sans aucun enregistrement.</p>
 </div>
 
 <script>
@@ -188,6 +191,12 @@ const RAYONS = creer(W, H);
   }
   x.putImageData(im, 0, 0);
 })();
+function teinter(src, couleur) {
+  const c = creer(src.width, src.height), x = c.getContext("2d");
+  x.drawImage(src, 0, 0); x.globalCompositeOperation = "source-in"; x.fillStyle = couleur; x.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+const RAYONS_OR = teinter(RAYONS, "#FFAE58"), RAYONS_LUNE = teinter(RAYONS, "#9DB8F0");
 const LUMG = creer(G.largeur, G.hauteur), lumg = LUMG.getContext("2d");
 const LUMS = creer(W, H), lums = LUMS.getContext("2d");
 
@@ -202,25 +211,44 @@ function secondesDe(h) {
   for (const g of SEGMENTS) { let hh2 = h; if (hh2 < g.de) hh2 += 24; if (hh2 >= g.de && hh2 < g.a) return s + ((hh2 - g.de) / (g.a - g.de)) * g.duree; s += g.duree; }
   return 0;
 }
-const CIEL = [[0, "#2A3564"], [4.8, "#2C3868"], [5.6, "#55557F"], [6.1, "#C29099"], [6.6, "#F0D0B4"], [7.4, "#FFF3E2"], [12, "#FFFFFF"], [16.6, "#FFF1DA"], [17.5, "#F7C792"], [18.2, "#D69488"], [18.7, "#8C6E9E"], [19.3, "#454A7E"], [21, "#2C3766"], [24, "#2A3564"]].map(([h, c]) => [h, hex(c)]);
+const CIEL = [[0, "#33406C"], [4.8, "#33406D"], [5.6, "#55557F"], [6.1, "#C29099"], [6.6, "#F0D0B4"], [7.4, "#FFF3E2"], [12, "#FFFFFF"], [16.6, "#FFF1DA"], [17.5, "#F7C792"], [18.2, "#D69488"], [18.7, "#8C6E9E"], [19.3, "#4A5084"], [21, "#36426F"], [24, "#33406C"]].map(([h, c]) => [h, hex(c)]);
 function ambiance(h) {
   for (let k = 1; k < CIEL.length; k++) if (h <= CIEL[k][0]) { const [h0, c0] = CIEL[k - 1], [h1, c1] = CIEL[k], t = (h - h0) / (h1 - h0); return c0.map((v, i) => mix(v, c1[i], t)); }
   return CIEL[0][1];
 }
 const facteurJour = (h) => lisse(6.4, 8.0, h) * (1 - lisse(16.6, 18.0, h));
 const facteurNuit = (h) => Math.max(lisse(18.4, 19.6, h), 1 - lisse(5.2, 6.3, h));
+const cloche = (h, c, l) => Math.exp(-(((h - c) / l) ** 2));
+const facteurOr = (h) => Math.max(cloche(h, 6.95, 0.5), cloche(h, 17.75, 0.55));   // lumière rasante, dorée
 const soirLucioles = (h) => Math.max(lisse(17.9, 18.9, h), 1 - lisse(4.6, 5.8, h));
 
 /* ---------- état ---------- */
 let s = secondesDe(8.0), t = 0, enPause = calme;
 const etat = { pris: 0, rates: 0, serie: 0 };
-const moucherons = [], lucioles = [], gouttes = [], eclats = [], reflets = [], etincelles = [];
+const moucherons = [], lucioles = [], gouttes = [], eclats = [], reflets = [];
+// le morpho bleu, au pixel : ailes ouvertes (dessus bleu), à demi, relevées (dessous brun, ocelle)
+const MORPHO = {
+  bleu: [".bbb.....bbb.", "bBBBb...bBBBb", "bBLBBbkbBBLBb", ".bBBBBkBBBBb.", "..bBBBkBBBb..", "..bBBbkbBBb..", "...bb...bb..."],
+  mi:   [".............", "...bb...bb...", "..bBBb.bBBb..", "..bBLBkBLBb..", "...bBBkBBb...", "....bbkbb....", "............."],
+  brun: [".....nnn.....", "....nNNNn....", "....nNoNNn...", ".....nNNNk...", ".....nNoNk...", "......nnn....", "............."],
+};
+const MORPHO_C = { b: "#173C78", B: "#2E8BEA", L: "#A8E2FF", k: "#17110C", n: "#4E3826", N: "#8A6440", o: "#D2A862" };
+const MORPHO_I = {};
+for (const [nom, rangs] of Object.entries(MORPHO)) {
+  const c = creer(13, 7), x = c.getContext("2d");
+  rangs.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== ".") { x.fillStyle = MORPHO_C[ch]; x.fillRect(i, j, 1, 1); } }));
+  MORPHO_I[nom] = c;
+}
+let morpho = null, prochainMorpho = 0;
+const chutes = [];                                   // feuilles qui tombent de la canopée
+const egout = { jusqua: 0, debut: 0 };               // gouttes au bout de la fougère, après l'averse
+const BOUT_FOUGERE = [196, 21];
 const lointaines = Array.from({ length: 28 }, () => ({ x: fixe() * W, y: 18 + fixe() * 92, ph: fixe() * 6.3, v: 0.6 + fixe() * 1.6 }));
 const taches = Array.from({ length: 5 }, () => ({ x: 70 + fixe() * 180, y: 104 + fixe() * 38, vx: (fixe() - 0.5) * 3, ph: fixe() * 6 }));
 const bokehs = Array.from({ length: 9 }, () => ({ x: fixe() * W, y: 10 + fixe() * 90, vx: (fixe() - 0.5) * 1.6, ph: fixe() * 6 }));
-const pluie = { force: 0, jusqua: -1, prochaine: secondesDe(23.2) };
+const pluie = { force: 0, jusqua: -1, prochaine: secondesDe(14.2) };
 const rana = { etat: "repos", depuis: 0, cran: 2, cible: 2, prochainCran: 0, cligne: -9, prochainCligne: 2, prochaineTete: 5, eveillee: true, nuitEveil: 0, langue: null, prochaineFrappe: 0 };
-let dernierLucioles = false, journee = 0;
+let dernierLucioles = false, dernierCigales = false;
 
 const carnet = document.getElementById("carnet");
 function noter(texte) {
@@ -248,6 +276,13 @@ function voler(p, dt, vitesse, raideur) {
 function majMoucheron(p, dt, bouche) {
   p.age += dt;
   if (p.prise) return;
+  if (p === pointeur.m) {
+    const a = t * 7 + p.ph, cx = pointeur.x + Math.cos(a) * 2.6, cy = pointeur.y - 1 + Math.sin(a * 1.3) * 1.8;
+    p.vx = (cx - p.x) * 9; p.vy = (cy - p.y) * 9;
+    p.x += (cx - p.x) * Math.min(1, dt * 9) + Math.sin(t * 23 + p.ph) * 0.3; p.y += (cy - p.y) * Math.min(1, dt * 9);
+    p.y = borne(p.y, 4, sol(p.x) - 2); p.age = 0;
+    return;
+  }
   if (t > p.prochain) {
     if (p.age > p.vie) { p.cx = -30; p.cy = rnd(20, 70); }
     else if (Math.random() < 0.45) { p.cx = bouche[0] - rnd(12, 40); p.cy = bouche[1] + rnd(-20, 18); }
@@ -321,18 +356,20 @@ function majGrenouille(dt, h) {
 
   // où regarder : la proie la plus proche devant elle, sinon une luciole, sinon un peu au hasard
   if (r.eveillee && r.etat !== "langue" && r.etat !== "avale") {
-    const vue = proieEnVue(moucherons, 96), luc = vue.p ? null : proieEnVue(lucioles.filter((l) => l.eclat > 0.05 || l.age < 99), 84);
-    const cib = vue.p || (luc && luc.p);
-    if (cib) r.cible = 2 + borne(Math.round((vue.p ? vue.angle : luc.angle) / 0.17), -2, 2);
+    const vue = proieEnVue(moucherons, 96), mor = vue.p || !morpho ? null : proieEnVue([morpho], 140);
+    const luc = vue.p || (mor && mor.p) ? null : proieEnVue(lucioles.filter((l) => l.eclat > 0.05 || l.age < 99), 84);
+    const suivie = vue.p ? vue : mor && mor.p ? mor : luc && luc.p ? luc : null;
+    if (suivie) r.cible = 2 + borne(Math.round(suivie.angle / 0.17), -2, 2);
     else if (t > r.prochaineTete) { r.cible = r.cible !== 2 ? 2 : Math.random() < 0.5 ? 1 : 3; r.prochaineTete = t + (r.cible === 2 ? rnd(4, 9) : rnd(1.6, 4)); }
     // viser puis frapper, seulement les moucherons (les lucioles sont toxiques)
     if (r.etat === "repos" && vue.p && vue.d < PORTEE && t > r.prochaineFrappe) { r.etat = "vise"; r.depuis = t; r.duree = rnd(0.12, 0.3); r.proie = vue.p; }
     if (r.etat === "vise" && (r.proie.prise || !moucherons.includes(r.proie))) r.etat = "repos";
     if (r.etat === "vise" && t - r.depuis > r.duree && r.cran === r.cible) {
-      const p = r.proie, A = point(GEO.bouche, r.cran), cx = p.x + p.vx * 0.08, cy = p.y + p.vy * 0.08;
+      const p = r.proie, A = point(GEO.bouche, r.cran), ecart = Math.random() < 0.25 ? rnd(6.5, 9) : 0, an = rnd(0, 6.3);
+      const cx = p.x + p.vx * 0.08 + Math.cos(an) * ecart, cy = p.y + p.vy * 0.08 + Math.sin(an) * ecart;
       const d = Math.hypot(cx - A[0], cy - A[1]);
       if (d > PORTEE + 4) r.etat = "repos";
-      else { r.etat = "langue"; r.depuis = t; r.langue = { cx, cy, p, prise: false, ouverture: 1, tiree: false }; }
+      else { r.etat = "langue"; r.depuis = t; r.langue = { cx, cy, p, prise: false, ouverture: 1, tiree: false }; sonLangue(); }
     }
   } else if (!r.eveillee) r.cible = 1;
   if (t > r.prochainCran && r.cran !== r.cible && r.etat !== "langue") { r.cran += Math.sign(r.cible - r.cran); r.prochainCran = t + 0.1; }
@@ -352,9 +389,8 @@ function majGrenouille(dt, h) {
       r.prochaineFrappe = t + rnd(0.5, 1.1);
       if (L.prise) {
         moucherons.splice(moucherons.indexOf(L.p), 1);
-        etat.pris++; etat.serie++; compter(); r.etat = "avale"; r.depuis = t;
-        const A = point(GEO.bouche, r.cran);
-        for (let k = 0; k < 6; k++) etincelles.push({ x: A[0] + rnd(-2, 6), y: A[1] + rnd(-3, 2), vx: rnd(-6, 8), vy: rnd(-16, -6), vie: rnd(0.35, 0.6) });
+        if (L.p === pointeur.m) { pointeur.m = null; pointeur.prochain = t + 1.2; }
+        etat.pris++; etat.serie++; compter(); r.etat = "avale"; r.depuis = t; sonGlup();
         noter(etat.serie >= 3 ? `moucheron attrapé, ${etat.serie} de suite` : "moucheron attrapé, avalé les yeux rentrés");
       } else {
         etat.rates++; etat.serie = 0; compter(); r.etat = "rate"; r.depuis = t; noter("raté, le moucheron s'échappe");
@@ -374,27 +410,116 @@ function majPluie(dt, h) {
   if (pluie.jusqua < 0 && Math.abs(s - pluie.prochaine) < dt * 1.5) lancerAverse(8 + Math.random() * 4, false);
   const voulue = t < pluie.jusqua ? 1 : 0;
   pluie.force = borne(pluie.force + (voulue - pluie.force) * dt * 0.8, 0, 1);
-  if (pluie.jusqua > 0 && t > pluie.jusqua && pluie.force < 0.05) { pluie.jusqua = -1; noter("fin de l'averse, la feuille ruisselle"); }
-  const n = pluie.force * 95 * dt;
-  for (let k = 0; k < n + (Math.random() < n % 1 ? 1 : 0); k++) gouttes.push({ x: rnd(0, W + 40), y: -3, vy: rnd(150, 190), vx: -26 });
+  if (pluie.jusqua > 0 && t > pluie.jusqua && pluie.force < 0.05) { pluie.jusqua = -1; egout.jusqua = t + 16; egout.debut = t; noter("fin de l'averse, la fougère s'égoutte"); }
+  const n = pluie.force * 210 * dt;
+  for (let k = 0; k < n + (Math.random() < n % 1 ? 1 : 0); k++) { const prof = Math.random() < 0.5 ? 1 : Math.random(); gouttes.push({ x: rnd(0, W + 40), y: -3, vy: mix(120, 190, prof), vx: -26, prof }); }
+  // au bout de la fronde, une goutte grossit puis tombe, toutes les deux secondes environ
+  if (t < egout.jusqua && t - egout.debut > 1.8) { gouttes.push({ x: BOUT_FOUGERE[0], y: BOUT_FOUGERE[1] + 1, vx: 0, vy: 15, ay: 320, prof: 1 }); egout.debut = t + rnd(-0.4, 0.4); }
   const oeil = point(GEO.oeil, rana.cran);
   for (let i = gouttes.length - 1; i >= 0; i--) {
     const g = gouttes[i];
+    if (g.ay) g.vy += g.ay * dt;
     g.x += g.vx * dt; g.y += g.vy * dt;
     if (surGrenouille(cleCourante, g.x, g.y)) {
       reflets.push({ x: Math.round(g.x), y: Math.round(g.y), vie: 0.14 });
       for (let k = 0; k < 2; k++) eclats.push({ x: g.x, y: g.y, vx: rnd(-14, 14), vy: rnd(-22, -8), vie: 0.22 });
       if (rana.eveillee && rana.etat === "repos" && Math.hypot(g.x - oeil[0], g.y - oeil[1]) < 9) rana.cligne = t;
       gouttes.splice(i, 1);
-    } else if (g.y >= sol(g.x)) {
-      for (let k = 0; k < 3; k++) eclats.push({ x: g.x, y: sol(g.x) - 1, vx: rnd(-16, 16), vy: rnd(-26, -10), vie: 0.25 });
+    } else if (g.y >= mix(113, sol(g.x), g.prof)) {
+      const n = g.prof > 0.6 ? 3 : 1, f = mix(0.4, 1, g.prof);
+      for (let k = 0; k < n; k++) eclats.push({ x: g.x, y: g.y - 1, vx: rnd(-16, 16) * f, vy: rnd(-26, -10) * f, vie: 0.25 * f });
       gouttes.splice(i, 1);
     }
   }
 }
+function majMorpho(dt, h) {
+  if (!morpho && h > 8.5 && h < 15.5 && t > prochainMorpho && pluie.force < 0.2 && Math.random() < dt * 0.05) {
+    const versGauche = Math.random() < 0.6;
+    morpho = { x: versGauche ? W + 8 : -10, y: rnd(30, 60), sens: versGauche ? -1 : 1, base: 0, ph: rnd(0, 6), plane: 0, cycle: 0 };
+    morpho.base = morpho.y; prochainMorpho = t + rnd(40, 70);
+    noter("un morpho bleu traverse le sous-bois");
+  }
+  if (!morpho) return;
+  const m = morpho;
+  m.x += m.sens * 19 * dt;
+  m.cycle += dt;
+  if (m.plane > 0) m.plane -= dt; else if (Math.random() < dt * 0.5) m.plane = rnd(0.35, 0.7);
+  m.y = m.base + Math.sin(t * 1.1 + m.ph) * 9 + (m.plane > 0 ? 0 : Math.sin(m.cycle * 15.7) * 1.2);
+  if (m.x < -14 || m.x > W + 14) morpho = null;
+}
 function lancerAverse(duree, demandee) {
-  pluie.jusqua = t + duree; pluie.prochaine = secondesDe(Math.random() < 0.5 ? rnd(21, 26) : rnd(13.5, 15.5));
+  pluie.jusqua = t + duree; pluie.prochaine = secondesDe(Math.random() < 0.35 ? rnd(21, 26) : rnd(13.5, 15.5));
   noter(demandee ? "averse soudaine" : "averse");
+}
+
+/* ---------- le son, sur demande : pluie, cigales du soir, grillons la nuit, la langue ---------- */
+const son = { ac: null, actif: false };
+const cigales = (h) => cloche(h, 18.1, 0.33);
+function demarrerSon() {
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  const maitre = ac.createGain(); maitre.gain.value = 0; maitre.connect(ac.destination);
+  const blanc = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate), d = blanc.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const bruit = (vers) => { const b = ac.createBufferSource(); b.buffer = blanc; b.loop = true; b.loopStart = Math.random(); b.connect(vers); b.start(); };
+  const filtre = (type, f, q, vers) => { const n = ac.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; n.connect(vers); return n; };
+  const gain = (v, vers) => { const g = ac.createGain(); g.gain.value = v; g.connect(vers); return g; };
+  // le feuillage qui bruisse, toujours, très bas
+  bruit(filtre("lowpass", 700, 0.7, gain(0.09, maitre)));
+  // la pluie : crépitement et grondement sourd
+  const pluieG = gain(0, maitre);
+  bruit(filtre("bandpass", 2400, 0.45, pluieG));
+  bruit(filtre("lowpass", 380, 0.7, gain(0.9, pluieG)));
+  // les cigales du soir : un bruit aigu, battu par une modulation rapide
+  const cigaleG = gain(0, maitre), bat = gain(0.5, cigaleG);
+  bruit(filtre("bandpass", 5400, 5, bat));
+  const mod = ac.createOscillator(); mod.frequency.value = 86; mod.connect(gain(0.5, bat.gain)); mod.start();
+  // trois grillons, chacun sa note, sa cadence et sa place dans l'espace
+  const grillons = [[4350, 0.62, -0.6], [4900, 0.47, 0.4], [3950, 0.8, 0.8]].map(([f, per, pan]) => {
+    const p = ac.createStereoPanner ? ac.createStereoPanner() : null; if (p) { p.pan.value = pan; p.connect(maitre); }
+    return { f, per, sortie: p || maitre, prochain: ac.currentTime + Math.random() };
+  });
+  Object.assign(son, { ac, maitre, blanc, pluieG, cigaleG, grillons });
+}
+function majSon(h) {
+  if (!son.actif) return;
+  const ac = son.ac, now = ac.currentTime, nuit = facteurNuit(h);
+  son.pluieG.gain.setTargetAtTime(0.32 * pluie.force, now, 0.3);
+  son.cigaleG.gain.setTargetAtTime(0.028 * cigales(h) * (1 - pluie.force), now, 0.4);
+  for (const g of son.grillons) {
+    if (g.prochain < now) g.prochain = now + 0.05;
+    while (g.prochain < now + 0.25) {            // une stridulation : trois impulsions brèves
+      const v = 0.08 * nuit * (1 - 0.7 * pluie.force);
+      if (v > 0.002) for (let k = 0; k < 3; k++) {
+        const t0 = g.prochain + k * 0.034, o = ac.createOscillator(), e = ac.createGain();
+        o.frequency.value = g.f; e.gain.setValueAtTime(0, t0); e.gain.linearRampToValueAtTime(v, t0 + 0.004); e.gain.linearRampToValueAtTime(0, t0 + 0.018);
+        o.connect(e); e.connect(g.sortie); o.start(t0); o.stop(t0 + 0.02);
+      }
+      g.prochain += g.per * rnd(0.85, 1.15);
+    }
+  }
+}
+function sonLangue() {                          // un claquement humide, vers le grave
+  if (!son.actif) return;
+  const ac = son.ac, t0 = ac.currentTime, b = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  b.buffer = son.blanc; f.type = "bandpass"; f.Q.value = 4;
+  f.frequency.setValueAtTime(3400, t0); f.frequency.exponentialRampToValueAtTime(700, t0 + 0.09);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
+  b.connect(f); f.connect(g); g.connect(son.maitre); b.start(t0); b.stop(t0 + 0.13);
+}
+function sonGlup() {                            // la proie avalée
+  if (!son.actif) return;
+  const ac = son.ac, t0 = ac.currentTime + 0.05, o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.setValueAtTime(190, t0); o.frequency.exponentialRampToValueAtTime(70, t0 + 0.12);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+  o.connect(g); g.connect(son.maitre); o.start(t0); o.stop(t0 + 0.18);
+}
+function basculerSon() {
+  if (!son.ac) demarrerSon();
+  son.actif = !son.actif;
+  const now = son.ac.currentTime;
+  if (son.actif) { son.ac.resume(); son.maitre.gain.setTargetAtTime(0.8, now, 0.4); }
+  else son.maitre.gain.setTargetAtTime(0, now, 0.15);
+  bSon.textContent = son.actif ? "Couper le son" : "Son"; bSon.setAttribute("aria-pressed", String(son.actif));
 }
 
 /* ---------- une image de la scène ---------- */
@@ -404,7 +529,8 @@ function maj(dt) {
   // moucherons : de jour, un à trois ; la nuit, seulement ceux qu'on lâche
   const jour = h > 6.2 && h < 19.2;
   if (jour && moucherons.length < 3 && Math.random() < dt * (moucherons.length ? 0.22 : 0.6) && pluie.force < 0.5) moucherons.push(moucheron());
-  for (let i = moucherons.length - 1; i >= 0; i--) { const p = moucherons[i]; majMoucheron(p, dt, A); if (p.x < -20 && p.age > 3 && !p.prise) moucherons.splice(i, 1); }
+  if (!jour) for (const p of moucherons) if (!p.lache && p.age < p.vie) p.vie = p.age;   // à la nuit, ils s'en vont
+  for (let i = moucherons.length - 1; i >= 0; i--) { const p = moucherons[i]; majMoucheron(p, dt, A); if (p.x < -20 && p.age > 3 && !p.prise && p !== pointeur.m) moucherons.splice(i, 1); }
   // lucioles : elles s'allument au crépuscule et s'éteignent à l'aube
   const voulu = Math.round(6 * soirLucioles(h));
   if (lucioles.length < voulu && Math.random() < dt * 0.9) lucioles.push(luciole());
@@ -414,19 +540,33 @@ function maj(dt) {
     if ((p.x < -12 || p.x > W + 12) && p.age > 4) lucioles.splice(i, 1);
   }
   if (voulu > 0 && !dernierLucioles) noter("premières lucioles dans le sous-bois");
+  const chantent = cigales(h) > 0.5;
+  if (chantent && !dernierCigales) noter("les cigales du soir, toutes ensemble");
+  dernierCigales = chantent;
   dernierLucioles = voulu > 0;
+  porter();
   majGrenouille(dt, h);
   majPluie(dt, h);
-  for (const liste of [eclats, reflets, etincelles]) for (let i = liste.length - 1; i >= 0; i--) {
+  majSon(h);
+  for (const liste of [eclats, reflets]) for (let i = liste.length - 1; i >= 0; i--) {
     const e = liste[i]; e.vie -= dt; if (e.vx !== undefined) { e.x += e.vx * dt; e.y += e.vy * dt; e.vy += 70 * dt; }
     if (e.vie <= 0) liste.splice(i, 1);
   }
   for (const b of taches) { b.x += b.vx * dt; if (b.x < 60) b.vx = Math.abs(b.vx); if (b.x > 256) b.vx = -Math.abs(b.vx); }
   for (const b of bokehs) { b.x = (b.x + b.vx * dt + W + 20) % (W + 20) - 10; }
+  majMorpho(dt, h);
+  // de temps en temps, une feuille se détache de la canopée
+  if (h > 6.5 && h < 18.5 && Math.random() < dt * 0.09) chutes.push({ x: rnd(30, 250), y: -3, x0: 0, ph: rnd(0, 6.3), sol: rnd(112, 119), pose: 0, c: Math.random() < 0.5 ? "#8A5A2E" : "#A66B34" });
+  for (let i = chutes.length - 1; i >= 0; i--) {
+    const f = chutes[i];
+    if (f.pose) { f.pose -= dt; if (f.pose <= 0) chutes.splice(i, 1); continue; }
+    f.y += 11 * dt; f.x += Math.sin(t * 1.7 + f.ph) * 9 * dt - 2 * dt;
+    if (f.y >= f.sol) { f.y = f.sol; f.pose = 2.5; }
+  }
 }
 
 function dessiner() {
-  const { h, nom } = heureDe(s), amb = ambiance(h), jour = facteurJour(h), nuit = facteurNuit(h);
+  const { h, nom } = heureDe(s), amb = ambiance(h), jour = facteurJour(h), nuit = facteurNuit(h), lueur = 1 - 0.9 * jour;
   const ambP = pluie.force ? amb.map((v, i) => mix(v, [128, 142, 160][i], pluie.force * 0.35)) : amb;
   cleCourante = cleGrenouille();
   ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
@@ -436,6 +576,18 @@ function dessiner() {
   for (const b of bokehs) { ctx.globalAlpha = (0.07 + 0.05 * Math.sin(t * 0.8 + b.ph)) * (0.35 + 0.65 * jour); ctx.drawImage(BOKEH, Math.round(b.x - 8), Math.round(b.y - 8)); }
   ctx.globalAlpha = 0.09 * jour * (0.75 + 0.25 * Math.sin(t * 0.35)); ctx.drawImage(RAYONS, 0, 0);
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  for (const f of chutes) {
+    ctx.globalAlpha = f.pose ? Math.min(1, f.pose) : 1; ctx.fillStyle = f.c;
+    if (f.pose || Math.floor(t * 4 + f.ph) % 2) ctx.fillRect(Math.round(f.x) - 1, Math.round(f.y), 3, 1);
+    else { ctx.fillRect(Math.round(f.x), Math.round(f.y) - 1, 1, 1); ctx.fillRect(Math.round(f.x) - 1, Math.round(f.y), 1, 1); }
+  }
+  ctx.globalAlpha = 1;
+  if (morpho) {
+    const m = morpho, ph = m.plane > 0 ? 0 : Math.floor(m.cycle * 10) % 4, nom = ["bleu", "mi", "brun", "mi"][ph];
+    ctx.save(); ctx.translate(Math.round(m.x), Math.round(m.y));
+    if (m.sens > 0) ctx.scale(-1, 1);
+    ctx.drawImage(MORPHO_I[nom], -6, -3); ctx.restore();
+  }
   ctx.drawImage(SOLC, 0, 0);
   // la grenouille, les insectes, la langue
   ctx.drawImage(IMG[cleCourante], FX, FY);
@@ -446,58 +598,90 @@ function dessiner() {
   for (const b of taches) { ctx.globalAlpha = 0.16 * jour * (0.6 + 0.4 * Math.sin(t * 2.3 + b.ph) * Math.sin(t * 0.9 + b.ph * 2)); ctx.drawImage(TACHE, Math.round(b.x - 11), Math.round(b.y - 11)); }
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
   // pluie
-  ctx.fillStyle = "rgba(200, 220, 240, 0.55)";
-  for (const g of gouttes) ctx.fillRect(Math.round(g.x), Math.round(g.y), 1, 3);
+  for (const g of gouttes) { ctx.fillStyle = `rgba(200, 220, 240, ${(0.25 + 0.35 * g.prof).toFixed(2)})`; ctx.fillRect(Math.round(g.x), Math.round(g.y), 1, g.prof > 0.6 ? 3 : 2); }
   ctx.fillStyle = "rgba(210, 228, 245, 0.8)";
   for (const e of eclats) ctx.fillRect(Math.round(e.x), Math.round(e.y), 1, 1);
   ctx.drawImage(AVANT, 0, 0);
+  if (t < egout.jusqua) {
+    const k = borne((t - egout.debut) / 1.8, 0, 1);
+    ctx.fillStyle = `rgba(214, 232, 246, ${(0.35 + 0.55 * k).toFixed(2)})`; ctx.fillRect(BOUT_FOUGERE[0], BOUT_FOUGERE[1], 1, k > 0.6 ? 2 : 1);
+  }
   // l'heure du jour sur toute la scène
   ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = rgba(ambP); ctx.fillRect(0, 0, W, H);
-  // lumières : lucioles lointaines, halos, lueur des lucioles sur la grenouille et sur la feuille
+  // lumières : soleil rasant, lune, lucioles lointaines, halos, lueur des lucioles sur elle et sur la feuille
   ctx.globalCompositeOperation = "lighter";
+  const or = facteurOr(h) * (1 - pluie.force), lune = nuit * (1 - 0.8 * pluie.force);
+  if (or > 0.02) {
+    ctx.globalAlpha = 0.2 * or; ctx.drawImage(RAYONS_OR, 0, 0); ctx.globalAlpha = 1;
+    const g = ctx.createRadialGradient(222, 0, 0, 222, 0, 170);
+    g.addColorStop(0, `rgba(255, 150, 70, ${(0.2 * or).toFixed(3)})`); g.addColorStop(1, "rgba(255, 150, 70, 0)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  // rose de l'aube et violet du crépuscule, qui tombent de la trouée
+  const rose = Math.max(cloche(h, 6.15, 0.35), cloche(h, 18.5, 0.4)) * (1 - pluie.force);
+  if (rose > 0.02) {
+    const g = ctx.createRadialGradient(214, -10, 0, 214, -10, 190);
+    g.addColorStop(0, `rgba(190, 96, 160, ${(0.2 * rose).toFixed(3)})`); g.addColorStop(1, "rgba(190, 96, 160, 0)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  if (lune > 0.02) {
+    ctx.globalAlpha = 0.12 * lune * (0.8 + 0.2 * Math.sin(t * 0.3)); ctx.drawImage(RAYONS_LUNE, 0, 0); ctx.globalAlpha = 1;
+    voiler(IMG[cleCourante], lumg, LUMG, FX, FY, `rgba(120, 150, 215, ${(0.09 * lune).toFixed(3)})`);
+  }
   for (const l of lointaines) {
     const a = nuit * Math.max(0, Math.sin(t * l.v + l.ph)) ** 6; if (a < 0.03) continue;
     ctx.fillStyle = `rgba(255, 214, 102, ${(a * 0.9).toFixed(3)})`; ctx.fillRect(Math.round(l.x), Math.round(l.y), 1, 1);
   }
   for (const p of lucioles) {
-    if (p.eclat < 0.03) continue;
-    ctx.globalAlpha = p.eclat * 0.55; ctx.drawImage(HALO, Math.round(p.x - 9), Math.round(p.y - 9));
-    ctx.globalAlpha = p.eclat * 0.8; ctx.drawImage(HALO2, Math.round(p.x - 4), Math.round(p.y - 4));
+    const e = p.eclat * lueur; if (e < 0.03) continue;
+    ctx.globalAlpha = e * 0.55; ctx.drawImage(HALO, Math.round(p.x - 9), Math.round(p.y - 9));
+    ctx.globalAlpha = e * 0.8; ctx.drawImage(HALO2, Math.round(p.x - 4), Math.round(p.y - 4));
     ctx.globalAlpha = 1;
-    eclairer(p, IMG[cleCourante], lumg, LUMG, FX, FY, 34);
-    eclairer(p, SOLC, lums, LUMS, 0, 0, 24);
+    eclairer(p.x, p.y, e, IMG[cleCourante], lumg, LUMG, FX, FY, 34);
+    eclairer(p.x, p.y, e, SOLC, lums, LUMS, 0, 0, 24);
   }
   ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
   for (const r of reflets) ctx.fillRect(r.x, r.y, 1, 1);
-  for (const e of etincelles) { ctx.fillStyle = `rgba(255, 224, 138, ${borne(e.vie * 2, 0, 1).toFixed(2)})`; ctx.fillRect(Math.round(e.x), Math.round(e.y), 1, 1); }
+  if (nuit > 0.2) {                                  // la nuit, la lune accroche les ailes des moucherons
+    ctx.fillStyle = `rgba(150, 175, 230, ${(0.55 * nuit).toFixed(2)})`;
+    for (const p of moucherons) ctx.fillRect(Math.round(p.x), Math.round(p.y) - 1, 1, 1);
+  }
   ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
   // corps et lanternes des lucioles, par-dessus
   for (const p of lucioles) {
     const x = Math.round(p.x), y = Math.round(p.y);
     ctx.fillStyle = rgba(amb.map((v) => v * 0.12)); ctx.fillRect(x - 1, y, 2, 1);
-    ctx.fillStyle = rgba([mix(70, 255, p.eclat), mix(64, 244, p.eclat), mix(30, 160, p.eclat)]); ctx.fillRect(x + 1, y, 1, 1);
-    if (p.eclat > 0.5) ctx.fillRect(x + 1, y + 1, 1, 1);
+    const e = p.eclat * lueur;
+    ctx.fillStyle = rgba([mix(70, 255, e), mix(64, 244, e), mix(30, 160, e)]); ctx.fillRect(x + 1, y, 1, 1);
+    if (e > 0.5) ctx.fillRect(x + 1, y + 1, 1, 1);
   }
   // l'horloge sous la scène
   horloge.textContent = hh(h); phase.textContent = pluie.force > 0.3 ? `${nom} · pluie` : nom;
   if (document.activeElement !== curseur) curseur.value = String(Math.floor(((s % CYCLE) + CYCLE) % CYCLE * 10));
 }
-function eclairer(p, source, c, C, ox, oy, rayon) {
-  const lx = p.x - ox, ly = p.y - oy;
+function eclairer(px, py, e, source, c, C, ox, oy, rayon) {
+  const lx = px - ox, ly = py - oy;
   if (lx < -rayon || ly < -rayon || lx > C.width + rayon || ly > C.height + rayon) return;
   c.globalCompositeOperation = "source-over"; c.clearRect(0, 0, C.width, C.height); c.drawImage(source, 0, 0);
   c.globalCompositeOperation = "source-in";
   const g = c.createRadialGradient(lx, ly, 0, lx, ly, rayon);
-  g.addColorStop(0, `rgba(255, 196, 92, ${(0.55 * p.eclat).toFixed(3)})`); g.addColorStop(1, "rgba(255, 196, 92, 0)");
+  g.addColorStop(0, `rgba(255, 196, 92, ${(0.55 * e).toFixed(3)})`); g.addColorStop(1, "rgba(255, 196, 92, 0)");
   c.fillStyle = g; c.fillRect(0, 0, C.width, C.height);
   ctx.drawImage(C, ox, oy);
 }
+function voiler(source, c, C, ox, oy, couleur) {
+  c.globalCompositeOperation = "source-over"; c.clearRect(0, 0, C.width, C.height); c.drawImage(source, 0, 0);
+  c.globalCompositeOperation = "source-in"; c.fillStyle = couleur; c.fillRect(0, 0, C.width, C.height);
+  ctx.drawImage(C, ox, oy);
+}
 function dessinerMoucheron(p) {
-  const x = Math.round(p.x), y = Math.round(p.y), haut = Math.floor(t * 30 + p.ph * 5) % 2 === 0;
-  ctx.fillStyle = "#1E1712"; ctx.fillRect(x, y, 2, 1);
-  ctx.fillStyle = "#3A2E22"; ctx.fillRect(x - 1, y, 1, 1);
-  ctx.fillStyle = "rgba(225, 233, 240, 0.8)";
-  if (haut) { ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x + 1, y - 2, 1, 1); } else { ctx.fillRect(x + 1, y - 1, 2, 1); }
+  const x = Math.round(p.x), y = Math.round(p.y), haut = Math.floor(t * 34 + p.ph * 5) % 2 === 0;
+  const gauche = p.vx < -2;                          // la tête du côté où il va
+  ctx.fillStyle = "#15100C"; ctx.fillRect(x - 1, y, 3, 1);
+  ctx.fillStyle = "#3B2A1C"; ctx.fillRect(gauche ? x + 1 : x - 1, y, 1, 1);
+  ctx.fillStyle = "rgba(232, 240, 246, 0.9)";
+  if (haut) { ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(gauche ? x + 1 : x - 1, y - 2, 1, 1); }
+  else { ctx.fillStyle = "rgba(232, 240, 246, 0.6)"; ctx.fillRect(x - 1, y - 1, 3, 1); }
 }
 function dessinerLangue() {
   const A = point(GEO.bouche, rana.cran), B = tipLangue();
@@ -515,28 +699,53 @@ function dessinerLangue() {
 
 /* ---------- commandes ---------- */
 const horloge = document.getElementById("horloge"), phase = document.getElementById("phase"), curseur = document.getElementById("heure");
-const bPause = document.getElementById("pause");
-function lacher(x, y) { if (moucherons.length < 6) moucherons.push(moucheron(x, y)); }
+const bPause = document.getElementById("pause"), bSon = document.getElementById("son");
+bSon.addEventListener("click", basculerSon);
+function lacher(x, y) { if (moucherons.length < 7) { const m = moucheron(x, y); m.lache = true; moucherons.push(m); return m; } return null; }
+// la souris porte un moucheron : il suit le pointeur sur la scène, un clic le laisse filer ;
+// au doigt, toucher la scène en lâche un à cet endroit
+const pointeur = { dedans: false, x: 0, y: 0, m: null, prochain: 0 };
+const enScene = (e) => { const r = toile.getBoundingClientRect(); return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H]; };
+function relacher() { if (pointeur.m) { pointeur.m.prochain = 0; pointeur.m = null; } }
+function porter() {
+  if (!pointeur.dedans || pointeur.m || t < pointeur.prochain) return;
+  pointeur.m = lacher(pointeur.x, pointeur.y);
+}
 document.getElementById("moucheron").addEventListener("click", () => lacher(-4, rnd(40, 100)));
 document.getElementById("averse").addEventListener("click", () => { if (pluie.jusqua < 0) lancerAverse(10, true); else pluie.jusqua = t; });
 bPause.addEventListener("click", () => {
-  enPause = !enPause; bPause.textContent = enPause ? "Reprendre" : "Pause"; bPause.setAttribute("aria-pressed", String(enPause));
+  enPause = !enPause; if (son.ac && son.actif) son.ac[enPause ? "suspend" : "resume"]();
+  bPause.textContent = enPause ? "Reprendre" : "Pause"; bPause.setAttribute("aria-pressed", String(enPause));
 });
 curseur.addEventListener("input", () => { s = +curseur.value / 10; });
+toile.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "mouse") return;
+  [pointeur.x, pointeur.y] = enScene(e); pointeur.dedans = true; porter();
+});
+toile.addEventListener("pointerleave", () => { pointeur.dedans = false; relacher(); });
 toile.addEventListener("pointerdown", (e) => {
-  const r = toile.getBoundingClientRect(), x = ((e.clientX - r.left) / r.width) * W, y = ((e.clientY - r.top) / r.height) * H;
-  if (x < FX + 4 || y < FY - 4) lacher(x, y);
+  const [x, y] = enScene(e);
+  if (e.pointerType === "mouse") { relacher(); pointeur.prochain = t + 0.5; return; }
+  if (!surGrenouille(cleCourante, x, y)) lacher(x, y);
 });
 
-/* ---------- boucle : 60 images par seconde pour les insectes, 12 pour la grenouille ---------- */
-moucherons.push(moucheron(88, 70));
+/* ---------- boucle ---------- */
+moucherons.push(moucheron(18, 58));                // le premier arrive de la gauche
+rana.prochaineFrappe = 2.5;
 if (calme) { bPause.textContent = "Reprendre"; bPause.setAttribute("aria-pressed", "true"); s = secondesDe(8.4); }
-let dernier = performance.now(), pasGrenouille = 0;
+let dernier = performance.now();
 function boucle(ms) {
   const dt = Math.min(0.05, (ms - dernier) / 1000); dernier = ms;
   if (!enPause) { s = (s + dt) % CYCLE; t += dt; maj(dt); }
   dessiner();
   requestAnimationFrame(boucle);
 }
+const cadre = toile.parentElement;
+function ajuster() {
+  const dpr = devicePixelRatio || 1, place = document.querySelector(".barre").clientWidth, k = Math.floor((place * dpr) / W);
+  toile.style.width = `${k >= 2 ? (W * k) / dpr : place}px`;
+}
+new ResizeObserver(ajuster).observe(cadre.parentElement);
+ajuster();
 decorPret.then(() => { dessiner(); requestAnimationFrame(boucle); });
 </script>

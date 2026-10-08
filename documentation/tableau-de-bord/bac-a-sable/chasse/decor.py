@@ -25,8 +25,8 @@ from PIL import Image, ImageDraw
 
 ICI = Path(__file__).resolve().parent
 W, H = 256, 144
-FX, FY = 136, 46                     # coin haut gauche de la grenouille (114 × 86)
-SOL = FY + 84                        # rangée de ses pieds
+FX, FY = 136, 46  # coin haut gauche de la grenouille (114 × 86)
+SOL = FY + 84  # rangée de ses pieds
 X, Y = np.meshgrid(np.arange(W, dtype=float), np.arange(H, dtype=float))
 _B = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], float)
 BAYER = (_B[Y.astype(int) % 4, X.astype(int) % 4] + 0.5) / 16
@@ -34,7 +34,7 @@ HASARD = np.random.default_rng(20261008)
 
 
 def hexa(h):
-    return np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], float)
+    return np.array([int(h[i : i + 2], 16) for i in (1, 3, 5)], float)
 
 
 def rampe(v, couleurs, seuil=None):
@@ -79,11 +79,18 @@ def courbe(pts, n=12):
     p = [pts[0], *pts, pts[-1]]
     out = []
     for i in range(1, len(p) - 2):
-        p0, p1, p2, p3 = (np.array(q, float) for q in p[i - 1:i + 3])
+        p0, p1, p2, p3 = (np.array(q, float) for q in p[i - 1 : i + 3])
         for k in range(n):
             t = k / n
-            out.append(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
-                              + (3 * p1 - p0 - 3 * p2 + p3) * t**3))
+            out.append(
+                0.5
+                * (
+                    2 * p1
+                    + (p2 - p0) * t
+                    + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+                    + (3 * p1 - p0 - 3 * p2 + p3) * t**3
+                )
+            )
     out.append(np.array(pts[-1], float))
     return np.array(out)
 
@@ -91,7 +98,7 @@ def courbe(pts, n=12):
 def trait(pts, epaisseur=1.0):
     """Masque d'un trait le long d'une polyligne (distance au segment le plus proche)."""
     d = np.full((H, W), np.inf)
-    for a, b in zip(pts[:-1], pts[1:]):
+    for a, b in zip(pts[:-1], pts[1:], strict=False):
         ab = b - a
         l2 = max(float(ab @ ab), 1e-9)
         t = np.clip(((X - a[0]) * ab[0] + (Y - a[1]) * ab[1]) / l2, 0, 1)
@@ -111,14 +118,48 @@ def flou(m, r):
 
 
 # ---------------------------------------------------------------- les rampes
-BRUME = ["#13241A", "#182C1F", "#1E3524", "#253F2A", "#2D4A30", "#365537", "#40603D", "#4A6B43",
-         "#55764A", "#618152", "#6F8C5B", "#7F9865", "#91A570", "#A6B47D"]
+BRUME = [
+    "#13241A",
+    "#182C1F",
+    "#1E3524",
+    "#253F2A",
+    "#2D4A30",
+    "#365537",
+    "#40603D",
+    "#4A6B43",
+    "#55764A",
+    "#618152",
+    "#6F8C5B",
+    "#7F9865",
+    "#91A570",
+    "#A6B47D",
+]
 CIEL = ["#9FB574", "#BCCB8C", "#D8DFA8", "#EEEDC6"]
-ECORCE = ["#0A120D", "#0F1913", "#142119", "#1A2A1F", "#223426", "#2C402F", "#384C37",
-          "#46593F", "#566A4A", "#687C57"]
+ECORCE = [
+    "#0A120D",
+    "#0F1913",
+    "#142119",
+    "#1A2A1F",
+    "#223426",
+    "#2C402F",
+    "#384C37",
+    "#46593F",
+    "#566A4A",
+    "#687C57",
+]
 MOUSSE = ["#2A4020", "#37522A", "#476633", "#5A7A3B", "#728F45", "#8CA452"]
-LITIERE = ["#1B150E", "#251B12", "#312316", "#3D2C1A", "#4A341E", "#573D22", "#654626",
-           "#734F2A", "#80592F", "#8C6435"]
+LITIERE = [
+    "#1B150E",
+    "#251B12",
+    "#312316",
+    "#3D2C1A",
+    "#4A341E",
+    "#573D22",
+    "#654626",
+    "#734F2A",
+    "#80592F",
+    "#8C6435",
+]
 
 
 def ellipses(nb, centre, rayon, taille, graine):
@@ -154,7 +195,11 @@ def palme(base, portee, angles, graine, foliole=5.0):
             tg = tg / (np.linalg.norm(tg) + 1e-9)
             for sens in (-1, 1):
                 nrm = np.array([-tg[1], tg[0]]) * sens
-                lg_f = foliole * (0.6 + 0.4 * math.sin(math.pi * j / len(ligne))) * rng.uniform(0.8, 1.1)
+                lg_f = (
+                    foliole
+                    * (0.6 + 0.4 * math.sin(math.pi * j / len(ligne)))
+                    * rng.uniform(0.8, 1.1)
+                )
                 bout = p + (nrm * 0.55 + np.array([0, 1.0]) * 0.8 + tg * 0.3) * lg_f
                 m |= trait(np.array([p, bout]), 1.0)[0]
     return m
@@ -175,21 +220,31 @@ def fond():
         v = np.where(m, val, v)
 
     # troncs lointains, à peine plus sombres que la brume
-    for x0, l, pente, d in [(30, 3, 0.02, 0.09), (49, 2, -0.01, 0.07), (88, 4, 0.015, 0.11),
-                            (120, 2, -0.02, 0.07), (152, 3, 0.01, 0.09), (178, 5, -0.01, 0.12),
-                            (197, 2, 0.02, 0.07), (244, 4, 0.0, 0.11)]:
+    for x0, lg, pente, d in [
+        (30, 3, 0.02, 0.09),
+        (49, 2, -0.01, 0.07),
+        (88, 4, 0.015, 0.11),
+        (120, 2, -0.02, 0.07),
+        (152, 3, 0.01, 0.09),
+        (178, 5, -0.01, 0.12),
+        (197, 2, 0.02, 0.07),
+        (244, 4, 0.0, 0.11),
+    ]:
         bord = x0 + pente * Y + 0.8 * np.sin(Y * 0.045 + x0)
-        m = (X >= bord) & (X < bord + l) & (Y < 116)
-        poser(m, vb - d + 0.04 * (X - bord > l - 1.5))
+        m = (X >= bord) & (X < bord + lg) & (Y < 116)
+        poser(m, vb - d + 0.04 * (X - bord > lg - 1.5))
     # une palme lointaine à gauche, une autre derrière la croupe
-    poser(palme((74, 116), 40, [(2.5, 1.0), (2.0, 0.9), (1.25, 0.75), (0.7, 0.95)], 3) & (Y < 117), vb - 0.13)
+    poser(
+        palme((74, 116), 40, [(2.5, 1.0), (2.0, 0.9), (1.25, 0.75), (0.7, 0.95)], 3) & (Y < 117),
+        vb - 0.13,
+    )
     poser(palme((236, 118), 30, [(2.3, 0.9), (1.6, 0.7), (0.9, 0.85)], 4) & (Y < 118), vb - 0.12)
     # deux troncs à mi-distance, plus sombres, liseré de lumière à droite, racines évasées
-    for x0, l, pente in [(62, 6, 0.03), (208, 10, -0.025)]:
+    for x0, lg, pente in [(62, 6, 0.03), (208, 10, -0.025)]:
         bord = x0 + pente * Y + 1.1 * np.sin(Y * 0.035 + x0)
         evase = 5 * lisse(98, 118, Y) ** 2
-        m = (X >= bord - evase) & (X < bord + l + evase) & (Y < 118)
-        lum_t = (X - bord + evase) / (l + 2 * evase)
+        m = (X >= bord - evase) & (X < bord + lg + evase) & (Y < 118)
+        lum_t = (X - bord + evase) / (lg + 2 * evase)
         poser(m, vb - 0.32 + 0.12 * lisse(0.6, 1.0, lum_t) + 0.04 * (n2 - 0.5))
     # une liane qui pend de la canopée, et ses feuilles en cœur
     liane = courbe([(116, 0), (111, 14), (114, 30), (109, 46), (107, 58)], 8)
@@ -212,8 +267,10 @@ def fond():
     vc = 0.07 + 0.08 * lisse(2, 24, Y) + 0.08 * lum + 0.05 * (dessus > 0.4)
     poser(can, vc)
     img = rampe(v, BRUME)
-    trous = ciel & ~can
-    img = np.where(trous[..., None], rampe(0.1 + 0.8 * lum - 0.05 * Y + 0.1 * (n2 - 0.5), CIEL), img)
+    trous = ciel & ~can & ((bruit(4, 21) < 0.25 + 0.9 * lum) | (X > 150))
+    img = np.where(
+        trous[..., None], rampe(0.1 + 0.8 * lum - 0.05 * Y + 0.1 * (n2 - 0.5), CIEL), img
+    )
 
     # la litière au loin : un tapis brun noyé dans la brume, semé de feuilles
     sol_loin = Y >= 114 + 1.5 * np.sin(X * 0.05) + 1.0 * np.sin(X * 0.13 + 1)
@@ -222,7 +279,11 @@ def fond():
     for _ in range(170):
         cx, cy = rng.uniform(-8, W + 8), rng.uniform(112, 146)
         prof = (cy - 112) / 32
-        rx, ry, an = (2.5 + 4.5 * prof) * rng.uniform(0.7, 1.3), 0.9 + 1.2 * prof, rng.uniform(-0.4, 0.4)
+        rx, ry, an = (
+            (2.5 + 4.5 * prof) * rng.uniform(0.7, 1.3),
+            0.9 + 1.2 * prof,
+            rng.uniform(-0.4, 0.4),
+        )
         dx, dy = X - cx, Y - cy
         u = (dx * math.cos(an) + dy * math.sin(an)) / rx
         w = (-dx * math.sin(an) + dy * math.cos(an)) / ry
@@ -235,7 +296,9 @@ def fond():
     for sx, sy, hs in [(78, 114, 9), (126, 113, 6), (168, 114, 8), (232, 116, 5)]:
         semis |= (np.abs(X - sx - 0.15 * (sy - Y)) < 0.5) & (Y > sy - hs) & (Y <= sy)
         for cote in (-1, 1):
-            semis |= ((X - sx - 0.15 * hs - cote * 2.2) ** 2 / 5 + (Y - sy + hs + 0.6 * cote) ** 2 / 1.1) < 1
+            semis |= (
+                (X - sx - 0.15 * hs - cote * 2.2) ** 2 / 5 + (Y - sy + hs + 0.6 * cote) ** 2 / 1.1
+            ) < 1
     brun = np.where(semis[..., None], rampe(vb - 0.16, BRUME), brun)
     sol_loin |= semis
     voile = (1 - lisse(112, 134, Y))[..., None] * 0.72
@@ -249,16 +312,20 @@ def fond():
     contre = (X < haut_lame) & (Y > 50) & (Y < 133 + 0.04 * X)
     tronc = (X < bord) | contre
     stries = np.sin(X * 1.7 + 5 * bruit(10, 5)) * 0.5 + 0.5
-    ve = 0.26 + 0.16 * stries ** 3 + 0.06 * (bruit(4, 6) - 0.5) + 0.08 * lisse(0, 14, X)
-    ve += 0.34 * lisse(-2.5, -0.5, X - bord) * (X < bord) * (Y < 66)       # liseré du tronc
+    ve = 0.26 + 0.16 * stries**3 + 0.06 * (bruit(4, 6) - 0.5) + 0.08 * lisse(0, 14, X)
+    ve += 0.34 * lisse(-2.5, -0.5, X - bord) * (X < bord) * (Y < 66)  # liseré du tronc
     face = contre & (X >= bord)
-    ve = np.where(face, 0.36 - 0.18 * lisse(96, 132, Y) + 0.14 * stries ** 3 + 0.05 * (bruit(4, 7) - 0.5), ve)
+    ve = np.where(
+        face, 0.36 - 0.18 * lisse(96, 132, Y) + 0.14 * stries**3 + 0.05 * (bruit(4, 7) - 0.5), ve
+    )
     arete = contre & (X >= haut_lame - 2.2)
     ve = np.where(arete, 0.7, ve)
     img = np.where(tronc[..., None], rampe(ve, ECORCE), img)
     # la mousse sur l'arête du contrefort et en plaques sur le tronc
     nm = bruit(5, 8, 2)
-    mousse = tronc & ((contre & (X >= haut_lame - 3.6) & (nm > 0.42)) | ((nm > 0.66) & (X < bord) & (Y > 70)))
+    mousse = tronc & (
+        (contre & (X >= haut_lame - 3.6) & (nm > 0.42)) | ((nm > 0.66) & (X < bord) & (Y > 70))
+    )
     vm = 0.25 + 0.55 * lisse(0.42, 0.8, nm) + 0.25 * (X >= haut_lame - 1.4)
     img = np.where(mousse[..., None], rampe(vm, MOUSSE), img)
     return img.astype(np.uint8), tronc, haut_lame
@@ -268,8 +335,22 @@ def fond():
 # nervure : du bout (à gauche) au pétiole (sous la croupe, hors champ à droite) ; vue d'un peu
 # au-dessus du sol, la moitié lointaine de la feuille paraît plus étroite que la moitié proche
 NERVURE = courbe([(40, 133), (100, 131.4), (160, 129.6), (215, 127.6), (275, 125.4)], 10)
-FEUILLE = ["#25120A", "#36190D", "#482211", "#5A2C15", "#6B371A", "#7B421F", "#8A4E25",
-           "#985A2C", "#A56734", "#B1743D", "#BC8248", "#C69055", "#D09F63", "#DAAE75"]
+FEUILLE = [
+    "#25120A",
+    "#36190D",
+    "#482211",
+    "#5A2C15",
+    "#6B371A",
+    "#7B421F",
+    "#8A4E25",
+    "#985A2C",
+    "#A56734",
+    "#B1743D",
+    "#BC8248",
+    "#C69055",
+    "#D09F63",
+    "#DAAE75",
+]
 
 
 def feuille_geo():
@@ -303,18 +384,20 @@ def sol():
         for cote, f in ((-1, 0.68), (1, 1.0)):
             pts = []
             for s_ in np.linspace(0, 1, 6):
-                tt = tk - 0.04 * s_ ** 1.3
+                tt = tk - 0.04 * s_**1.3
                 x_ = a[0] + (b[0] - a[0]) * tt
                 hl_ = 13.0 * math.sin(math.pi * min(max(tt, 0), 1)) ** 0.55
                 y_ = np.interp(x_, NERVURE[:, 0], NERVURE[:, 1]) + cote * f * hl_ * 0.84 * s_
                 pts.append((x_, y_))
             nerv |= trait(np.array(pts), 0.9)[0]
     v = np.where(nerv & dedans & (r < 0.86), v + 0.17, v)
-    v = np.where(np.abs(d) < 0.55, 0.88 - 0.1 * (t < 0.15), v)    # nervure centrale, claire
-    v = np.where((d >= 0.55) & (d < 1.5), v - 0.12, v)             # et son ombre
+    v = np.where(np.abs(d) < 0.55, 0.88 - 0.1 * (t < 0.15), v)  # nervure centrale, claire
+    v = np.where((d >= 0.55) & (d < 1.5), v - 0.12, v)  # et son ombre
     couleur = rampe(v, FEUILLE)
     # deux trous rongés
-    trous = (((X - 96) / 2.6) ** 2 + ((Y - 135) / 1.4) ** 2 < 1) | (((X - 128) / 1.6) ** 2 + ((Y - 124.5) / 0.9) ** 2 < 1)
+    trous = (((X - 96) / 2.6) ** 2 + ((Y - 135) / 1.4) ** 2 < 1) | (
+        ((X - 128) / 1.6) ** 2 + ((Y - 124.5) / 0.9) ** 2 < 1
+    )
     couleur = np.where(trous[..., None], hexa("#1B120A"), couleur)
     # ombre de la grenouille : large et douce sous le corps, dense sous les pieds et la main
     o = np.exp(-(((X - (FX + 66)) / 48) ** 2) - (((Y - (SOL + 0.5)) / 3.4) ** 2)) * 0.6
@@ -331,8 +414,11 @@ def sol():
     rgba[..., 3] = dedans * 255
 
     # litière proche, dans l'ombre : trois feuilles devant la grande
-    for cx, cy, rx, ry, an, val in [(26, 142, 15, 3.0, 0.06, 0.40), (122, 145, 13, 2.6, 0.03, 0.30),
-                                    (206, 146, 11, 2.6, -0.05, 0.26)]:
+    for cx, cy, rx, ry, an, val in [
+        (26, 142, 15, 3.0, 0.06, 0.40),
+        (122, 145, 13, 2.6, 0.03, 0.30),
+        (206, 146, 11, 2.6, -0.05, 0.26),
+    ]:
         dx, dy = X - cx, Y - cy
         u = (dx * math.cos(an) + dy * math.sin(an)) / rx
         w = (-dx * math.sin(an) + dy * math.cos(an)) / ry
@@ -351,7 +437,9 @@ def sol():
             rgba[top - 1, cx + i] = [*hexa("#E5904A" if i < 0 else "#C76A30"), 255]
         if lg > 1:
             rgba[top - 1, cx - lg + 1] = [*hexa("#F2B070"), 255]
-    sol_y = np.array([int(np.argmax(rgba[:, x, 3] > 0)) if rgba[:, x, 3].any() else 139 for x in range(W)])
+    sol_y = np.array(
+        [int(np.argmax(rgba[:, x, 3] > 0)) if rgba[:, x, 3].any() else 139 for x in range(W)]
+    )
     return rgba.astype(np.uint8), sol_y
 
 
@@ -412,13 +500,14 @@ def grenouille_rgba(cle="0002"):
     pal = {c: hexa(h) for c, h in d["palette"].items()}
     out = np.zeros((d["hauteur"], d["largeur"], 4), np.uint8)
     import re
+
     for y, r in enumerate(d["images"][cle]):
         i = 0
         for ch, n in re.findall(r"(\D)(\d+)", r):
             n = int(n)
             if ch != ".":
-                out[y, i:i + n, :3] = pal[ch]
-                out[y, i:i + n, 3] = 255
+                out[y, i : i + n, :3] = pal[ch]
+                out[y, i : i + n, 3] = 255
             i += n
     return out
 
