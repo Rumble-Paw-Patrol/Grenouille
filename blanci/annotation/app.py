@@ -27,6 +27,8 @@
   s'affiche (fenêtre suivante du découpage, sinon candidat suivant).
 - **Groupes** : une file tirée par groupes montre, groupe par groupe, ce qui a été entendu ; un
   groupe homogène s'étiquette en entier d'un clic (source « bulk »).
+- **Habillage** : celui du tableau de bord (`style.py`) ; le thème sombre de Streamlit est
+  passé par `blanci annotate`, la feuille de style est injectée ici.
 
 Toute la logique est dans `workbench.py` et `selection.py` ; ce fichier ne fait qu'afficher.
 """
@@ -43,6 +45,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
+from blanci.annotation.style import BRAND, CHART_COLORS, CSS, UNHEARD_COLOR, eyebrow
 from blanci.annotation.viewer import HELP, asset, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
@@ -255,6 +258,7 @@ def _map_page(cfg, con, encoder: str | None, config: Path | None) -> None:
 
     from blanci.annotation.selection import map_selection, write_queue
 
+    st.markdown(eyebrow("Poste d'annotation", "YAPAT maison"), unsafe_allow_html=True)
     st.subheader("Carte des embeddings")
     if encoder is None:
         st.info("Choisir un encodeur dans le panneau de gauche.")
@@ -268,13 +272,20 @@ def _map_page(cfg, con, encoder: str | None, config: Path | None) -> None:
         st.error(str(exc))
         return
     st.caption("Entourer une zone (cliquer-glisser), puis l'écouter. Couleur : label entendu.")
+    heard = sorted(set(points["label"]) - {"non écouté"})
+    domain = heard + ["non écouté"] * bool((points["label"] == "non écouté").any())
+    palette = [CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(heard))]
     chart = (
         alt.Chart(points)
         .mark_circle(size=16, opacity=0.7)
         .encode(
             x=alt.X("x", axis=None),
             y=alt.Y("y", axis=None),
-            color=alt.Color("label", legend=alt.Legend(title="label")),
+            color=alt.Color(
+                "label",
+                legend=alt.Legend(title="label"),
+                scale=alt.Scale(domain=domain, range=palette + [UNHEARD_COLOR]),
+            ),
             tooltip=["site", "recording_id", "offset_s", "label"],
         )
         .add_params(alt.selection_interval(name="zone"))
@@ -580,8 +591,8 @@ def _missing_recording(cfg, path: str) -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Annotation blanci", layout="wide")
-    st.markdown(NO_GREY, unsafe_allow_html=True)
+    st.set_page_config(page_title="Annotation blanci", page_icon="🐸", layout="wide")
+    st.markdown(NO_GREY + "\n" + CSS, unsafe_allow_html=True)
     if hasattr(st, "iframe"):  # `components.html` est retiré des Streamlit récents
         st.iframe(READONLY_MENUS, height=1)
     else:
@@ -595,6 +606,7 @@ def main() -> None:
     spectro_default = int(cfg["audio"]["channel"] == 1)
 
     with st.sidebar:
+        st.markdown(BRAND, unsafe_allow_html=True)
         st.header("Session")
         annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
         st.session_state["annotator"] = annotator
@@ -643,6 +655,7 @@ def main() -> None:
         _map_page(cfg, con, encoder, config)
         return
     if chosen is None:
+        st.markdown(eyebrow("Poste d'annotation"), unsafe_allow_html=True)
         st.info("Choisir une file, ou en générer une avec le mode de sélection.")
         return
 
@@ -670,6 +683,7 @@ def main() -> None:
     with st.expander("❓ Mode d'emploi : souris et clavier"):
         st.markdown(HELP)
     candidate = queue.iloc[pos].to_dict()
+    st.markdown(eyebrow("Poste d'annotation", _queue_name(chosen)), unsafe_allow_html=True)
     st.subheader(
         f"{candidate['site']} · {candidate['mic_id']} · "
         f"{local_time(candidate['start_utc'], offset_h)} (heure locale)"

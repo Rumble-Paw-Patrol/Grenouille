@@ -3368,3 +3368,20 @@ de Léonard, 01/10/2026.
        négatives. Les autres files gardent l'enregistrement entier. Vérifié dans le navigateur
        sur une copie de la base : intervalle tracé, extrait 0,6–30,6 s enregistré, candidat
        suivant ouvert.
+
+## 2026-10-08 — Poste d'annotation aux couleurs du tableau de bord
+
+197. **Le poste prend l'habillage du tableau de bord** (Léonard, 08/10). Nuit guyanaise,
+     sombre seulement (le spectrogramme l'est) : fond de sous-bois à lueurs braise, sarcelle
+     et pourpre, panneau de gauche de nuit, titres en Unbounded, texte en Hanken Grotesk,
+     étiquettes des champs en JetBrains Mono capitales, accent ambre, bouton principal en
+     dégradé braise, formulaire et rubriques en verre dépoli, visualiseur encadré comme le
+     spectrogramme du bandeau. Dans le visualiseur : tête de lecture crème à lueur ambrée,
+     bande d'écoute en pointillés or, types d'intervalle aux couleurs des espèces du tableau.
+     Tout est dans `blanci/annotation/style.py` : le thème Streamlit est passé par `blanci
+     annotate` en variables `STREAMLIT_THEME_*` (une option inconnue de la version installée
+     est ignorée, là où un drapeau inconnu ferait échouer le lancement ; une variable déjà
+     posée garde la main), la feuille de style est injectée par `app.py`. Lancé par
+     `streamlit run` sans passer par `blanci annotate`, le poste garde la feuille de style
+     mais pas le thème (couleurs des cases, curseurs et menus). Pas d'animation de fond ni de
+     grain en surimpression : le navigateur garde ses forces pour le spectrogramme.

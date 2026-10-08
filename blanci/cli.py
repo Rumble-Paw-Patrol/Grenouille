@@ -1892,15 +1892,20 @@ def _plan_queues(con, cfg: dict[str, Any]) -> None:
 
 @app.command()
 def annotate(ctx: typer.Context) -> None:
-    """Ouvre le poste d'annotation dans le navigateur (groupe `app` : uv sync --group app)."""
+    """Ouvre le poste d'annotation dans le navigateur (groupe `app` : uv sync --group app),
+    avec le thème du tableau de bord (`annotation/style.py`) ; une variable STREAMLIT_THEME_…
+    déjà posée garde la main."""
+    import os
     import subprocess
+
+    from blanci.annotation.style import theme_env
 
     app_file = Path(__file__).parent / "annotation" / "app.py"
     command = [sys.executable, "-m", "streamlit", "run", str(app_file), "--"]
     config = ctx.parent.params.get("config") if ctx.parent else None
     if config:
         command += ["--config", str(Path(config).resolve())]
-    raise typer.Exit(subprocess.call(command))
+    raise typer.Exit(subprocess.call(command, env={**theme_env(), **os.environ}))
 
 
 @app.command("label")
