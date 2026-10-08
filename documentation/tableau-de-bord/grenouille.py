@@ -3,10 +3,21 @@
     uv run python documentation/tableau-de-bord/grenouille.py
 
 Grenouille de profil, tournée vers le titre (à gauche), dessinée d'après les photos d'A. blanci
-de Benoît Villette et d'Arnaud Aury : museau court, grand œil noir cerclé de doré, bande sombre
-du museau au flanc, gorge claire, longue patte avant aux doigts fins, cuisse repliée et
-arrière-train posé presque au sol. Les formes sont décrites dans un repère de 48 × 40 unités
-et tracées sur une grille de 96 × 80 pixels (deux pixels par unité), sans anticrénelage, puis
+de Benoît Villette et d'Arnaud Aury pour la tête, la robe et les couleurs, et d'après des
+photos d'Anomaloglossus (dont M. Dewynter) pour la posture et les membres : museau court,
+grand œil noir cerclé de doré, bande sombre du museau au flanc, gorge claire. Assise,
+accroupie : patte arrière en Z, cuisse arrondie tournée vers nous, tibia long et bombé
+(surtout sur le dessus) qui descend légèrement du genou, levé, au talon arrondi de la
+cheville, passe sous la cuisse et dépasse derrière la croupe ; tarse qui revient du talon vers
+l'avant, au sol, trois orteils longs en éventail. Bras pliés, coude ouvert, avant-bras un peu
+renflé en son milieu, qui arrive sur le talon de la paume ; le bras droit part de la même
+épaule que le gauche, en arrière-plan, cerné là où le gauche passe devant, sa main plus haut
+et plus en arrière. Mains et pieds sont des gabarits posés au pixel près (ORTEILS,
+MAIN_PROCHE, MAIN_LOINTAINE) : paume étroite, trois doigts d'un pixel en éventail vers l'avant,
+tracés en escalier pour que chaque pixel touche le suivant par un côté, disque clair au bout.
+
+Les formes sont décrites dans un repère de 57 × 43 unités et tracées sur une grille de
+114 × 86 pixels (deux pixels par unité), sans anticrénelage, rien contre les bords, puis
 cernées d'un contour, avec 22 tons de base.
 
 Une passe de nuances (nuancer) affine ensuite chaque matière (peau orangée, bande sombre,
@@ -18,7 +29,7 @@ gagnent des teintes intermédiaires, le relief garde son grain : environ 80 coul
 Une image par combinaison gorge (gonflée ou non) × flanc (gonflé ou non) × clignement ×
 tête (baissée, droite, relevée) : la page les enchaîne pour que la grenouille respire, cligne
 et bouge un peu la tête. Écrit grenouille.json (palette, taille et images codées par
-plages : « O12 » = douze pixels de la couleur O), lu par construire.py.
+plages : « O12 » = douze pixels de la couleur O), au format que lit construire.py.
 """
 
 import colorsys
@@ -41,12 +52,12 @@ PALETTE = {
     "B": "#4A230E",  # bande sombre
     "b": "#6E3818",  # bord de la bande
     "F": "#C2804A",  # flanc
-    "f": "#D9A574",  # flanc clair, doigts
-    "T": "#F2CC98",  # lèvre, pelotes des doigts
+    "f": "#D9A574",  # flanc clair
+    "T": "#F2CC98",  # lèvre
     "C": "#E8DCC4",  # gorge, ventre
     "g": "#CFC4AE",  # gorge grisée
     "c": "#ADA08A",  # ventre ombré, points de la gorge
-    "q": "#C8B49A",  # dessous des orteils
+    "q": "#C8B49A",  # ventre grisé
     "E": "#0B0705",  # œil
     "e": "#22150E",  # bas du globe de l'œil
     "G": "#C9A05A",  # cercle doré de l'œil
@@ -54,7 +65,7 @@ PALETTE = {
     "W": "#FFFFFF",  # reflet de l'œil
     "w": "#9FB4C0",  # second reflet, bleuté
 }
-UNITES = (48, 40)
+UNITES = (57, 43)
 BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]])
 ECHELLE = 2
 W, H = UNITES[0] * ECHELLE, UNITES[1] * ECHELLE
@@ -100,11 +111,90 @@ def ellipse(cx, cy, rx, ry, x, y, rot=0.0):
     return ((dx * c + dy * s) / rx) ** 2 + ((-dx * s + dy * c) / ry) ** 2 <= 1
 
 
-def segment(a, b, larg, x, y):
-    (ax, ay), (bx, by) = a, b
-    vx, vy = bx - ax, by - ay
-    t = np.clip(((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy), 0, 1)
-    return np.hypot(x - ax - t * vx, y - ay - t * vy) <= larg / 2
+# Mains et pieds, dessinés au pixel près (tons de base ; « . » = rien ; « w » = reflet
+# bleuté de peau humide sur un disque). Chaque doigt : phalanges d'un pixel, articulation
+# plus claire, disque terminal de 2 × 2 plus clair que le doigt, un pixel vide entre deux
+# doigts (le contour le noircit). Les doigts lointains sont plus sombres et plus hauts.
+ORTEILS = (
+    (58, 78),
+    [
+        "........HHSSOS..........",
+        "........SO...SSSSOSSSSS.",
+        "..wI....................",
+        "..HOOOOOOHOOOOOHOOOOOO..",
+        "..................SSSSS.",
+        "............wI.....HHHH.",
+        "............HOOOOHOOOOO.",
+    ],
+)
+MAIN_PROCHE = (
+    (31, 77),
+    [
+        ".....IH..........",
+        ".....HOOO........",
+        "........OO..HOOS.",
+        ".........OHHHOOOS",
+        "...IwOOHOOOOOOOOS",
+        "...HO....OOOOOSS.",
+        "......IHOOSOOSS..",
+        "......HO.........",
+    ],
+)
+MAIN_LOINTAINE = (
+    (27, 67),
+    [
+        "....HO.........",
+        "....SSSS...OSSZ",
+        ".......SSOOOSSZ",
+        "........SOSSSSZ",
+        "...HOSOSSSSSSZ.",
+        "...SS...SSSZZ..",
+        "......HOS......",
+        "......SS.......",
+    ],
+)
+
+
+def poser(g, gabarit):
+    """Pose un gabarit de pixels ; renvoie le masque des pixels posés."""
+    (i0, j0), rangs = gabarit
+    m = np.zeros(g.shape, bool)
+    for dj, rang in enumerate(rangs):
+        for di, ton in enumerate(rang):
+            if ton != ".":
+                g[j0 + dj, i0 + di] = ton
+                m[j0 + dj, i0 + di] = True
+    return m
+
+
+def separer(g, dessus, dessous):
+    """Un pixel vide, que le contour noircit, entre ce qui est devant (`dessus`) et ce
+    qui est derrière (`dessous`) : la main proche se détache de la main lointaine."""
+    voisin = np.zeros_like(dessus)
+    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        voisin |= np.roll(np.roll(dessus, dy, 0), dx, 1)
+    g[voisin & dessous & ~dessus] = "."
+
+
+def miettes(m, n=12):
+    """Groupes de pixels de m (4-connexes) de moins de n pixels : restes isolés à effacer."""
+    out, vu = np.zeros_like(m), np.zeros_like(m)
+    for j0, i0 in zip(*np.nonzero(m), strict=True):
+        if vu[j0, i0]:
+            continue
+        pile, groupe = [(j0, i0)], []
+        vu[j0, i0] = True
+        while pile:
+            j, i = pile.pop()
+            groupe.append((j, i))
+            for a, b in ((j + 1, i), (j - 1, i), (j, i + 1), (j, i - 1)):
+                if 0 <= a < m.shape[0] and 0 <= b < m.shape[1] and m[a, b] and not vu[a, b]:
+                    vu[a, b] = True
+                    pile.append((a, b))
+        if len(groupe) < n:
+            for j, i in groupe:
+                out[j, i] = True
+    return out
 
 
 def suivre(pts, x):
@@ -131,15 +221,34 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     n1, n2, n3 = bruit(x, y, 1), bruit(x, y, 2), bruit(X, Y, 3)
     alea = random.Random(7)
 
-    # --- pied arrière, à plat vers l'avant (la jambe est tracée plus bas, sur la cuisse)
-    pied = catmull([(46.4, 37.6), (46.6, 39.3), (40, 39.4), (35, 39.3), (35, 38.4), (40, 38.2)])
-    pm = dans(pied, X, Y)
-    g[pm] = "F"
-    g[pm & ~dans(pied, X, Y - 0.6)] = "f"
-    g[pm & ~dans(pied, X, Y + 0.6)] = "q"
-    for bout in [(29.6, 39.0), (31.2, 39.5), (33.0, 39.6)]:
-        g[segment((35.6, 38.9), bout, 0.6, X, Y)] = "f"
-        g[ellipse(*bout, 0.45, 0.45, X, Y)] = "T"
+    # --- bras droit, de l'autre côté : on le voit sous la gorge, devant le bras gauche,
+    # dans l'ombre ; sa main se pose un peu plus loin, donc un peu plus haut
+    loin = catmull(
+        [
+            (19.0, 18.2),
+            (22.6, 18.4),
+            (24.0, 23.0),
+            (25.0, 26.8),
+            (25.2, 28.4),
+            (24.61, 29.4),
+            (23.01, 32.31),
+            (21.6, 33.9),
+            (20.66, 34.9),
+            (19.14, 33.9),
+            (19.6, 32.6),
+            (20.49, 30.69),
+            (21.6, 29.2),
+            (22.59, 27.95),
+            (21.6, 25.4),
+            (19.6, 21.6),
+        ]
+    )
+    lm = dans(loin, X, Y)
+    g[lm] = "S"
+    g[lm & (n3 < 0.12)] = "Z"
+    g[lm & ~dans(loin, X - 0.9, Y)] = "O"
+    g[lm & ~dans(loin, X + 0.6, Y)] = "Z"
+    bras_loin = lm | poser(g, MAIN_LOINTAINE)
 
     # --- corps et tête : la bosse de l'autre œil dépasse du crâne
     corps = catmull(
@@ -157,14 +266,23 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             (21, 7.8),
             (25.5, 10.1),
             (30, 12.8),
-            (34, 15.8),
-            (37, 19),
-            (39.5, 22.5),
-            (40, 30),
-            (35, 31.5),
-            (31.5, 31.6 + souffle),
-            (28, 31 + souffle),
-            (25, 29),
+            (34, 14.8),
+            (38, 16.6),
+            (41.5, 18.2),
+            (44.6, 20.0),
+            (47.4, 22.2),
+            (49.6, 25.0),
+            (50.8, 28.8),
+            (51.2, 33.0),
+            (50.4, 36.4),
+            (48.4, 37.6),
+            (44.4, 37.8),
+            (41.0, 37.0),
+            (38, 35.0),
+            (33, 33.2 + souffle),
+            (29, 31.4 + souffle),
+            (26, 29.2 + souffle * 0.6),
+            (23.6, 26.4),
             (22.4, 24.6),
             (19.4, 20.6),
             (16.6, 17.8),
@@ -188,9 +306,12 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         (29, 18.0),
         (34, 21.0),
         (38, 23.4),
+        (42, 24.6),
+        (46, 25.8),
+        (50, 27.4),
     ]
     yb = suivre(bande, x) + (n2 - 0.5) * 0.35 * (x > 15)  # bord irrégulier sur le flanc
-    e = np.where(x < 7.5, 0.6, np.where(x < 18, 1.0, 1.25))
+    e = np.where(x < 7.5, 0.6, np.where(x < 18, 1.0, 1.25)) * np.clip((48 - x) / 4, 0, 1)
     haut1, haut2 = ~dans(corps, x, y - 0.6), ~dans(corps, x, y - 1.3)
     bas1, bas2 = ~dans(corps, x, y + 0.6), ~dans(corps, x, y + 1.6)
 
@@ -232,77 +353,143 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[dessous & bas2 & (x >= 14)] = "C"
     g[dessous & bas2 & (x >= 14) & (n1 < 0.2)] = "g"
     g[dessous & bas1] = "c"
+    # arrière-train : postérieur posé au sol et croupe, dans l'ombre, sans ventre clair
+    croupe = dedans & (x > 44) & (y > yb + e)
+    g[croupe] = "O"
+    g[croupe & (n1 < 0.08)] = "M"
+    g[croupe & (y > 31)] = "S"
+    g[dedans & (x > 40) & (y > 36)] = "S"
     g[tete_ & bas1] = "g"
 
-    # --- cuisse : orange marbré, deux barres sombres, peau brillante, pli au bord du corps
-    cuisse = ellipse(38.4, 27.6, 7.7, 7.0, X, Y, -0.22)
-    d = (X - 36.5) * 0.5 + (Y - 25) * 0.85
+    # --- cuisse : longue, du genou (à l'avant) vers l'arrière, couchée sur la croupe dont
+    # elle dépasse ; le tibia la recouvre par-dessous. Pli là où elle touche le corps
+    cuisse = catmull(
+        [
+            (33.4, 29.07),
+            (36.0, 26.81),
+            (40.0, 25.63),
+            (44.4, 26.07),
+            (48.0, 27.87),
+            (50.0, 30.38),
+            (50.4, 33.0),
+            (48.6, 34.9),
+            (44.0, 35.45),
+            (39.0, 34.97),
+            (35.0, 34.15),
+            (32.6, 33.02),
+            (32.2, 31.0),
+        ]
+    )
+    cm = dans(cuisse, X, Y)
     avant = g != "."
-    g[cuisse] = "O"
-    g[cuisse & (d < -2.4)] = "H"
-    g[cuisse & (d < -4.6)] = "I"
-    g[cuisse & (d > 4.6)] = "S"
-    g[cuisse & (d > 6.8)] = "Z"
-    axe = (X - 38.4) * 0.8 - (Y - 27.6) * 0.6  # le long de la cuisse, du genou à la hanche
-    barres = cuisse & ((np.abs(axe + 2.2) < 0.7) | (np.abs(axe - 2.6) < 0.7)) & (n3 > 0.35)
-    g[barres] = np.where(d[barres] > 4.6, "Z", "M")
-    g[cuisse & (n3 < 0.08) & (d < 4.6)] = "M"
-    g[cuisse & (n3 > 0.95) & (d < 2)] = "H"
-    g[ellipse(34.8, 23.4, 0.9, 0.5, X, Y, -0.5)] = "I"  # reflet de la peau humide
-    bord = np.zeros_like(cuisse)
+    g[cm] = "O"
+    g[cm & (n3 < 0.1)] = "M"
+    g[cm & (n3 > 0.94)] = "H"
+    g[cm & ~dans(cuisse, X + 0.4, Y - 2.4)] = "H"
+    g[cm & ~dans(cuisse, X + 0.2, Y - 1.0)] = "I"
+    g[cm & (np.abs((X - 43.0) + (Y - 30) * 0.3) < 0.7) & (n3 > 0.3)] = "M"  # barre
+    g[ellipse(39.6, 27.2, 2.0, 0.5, X, Y, -0.05)] = "I"  # reflet de la peau humide
+    bord = np.zeros_like(cm)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        voisin_hors = ~np.roll(np.roll(cuisse, dy, 0), dx, 1)
-        voisin_corps = np.roll(np.roll(avant, dy, 0), dx, 1)
-        bord |= cuisse & voisin_hors & voisin_corps
+        bord |= cm & ~np.roll(np.roll(cm, dy, 0), dx, 1) & np.roll(np.roll(avant, dy, 0), dx, 1)
     g[bord] = "Z"
 
-    # --- jambe : du genou, à l'avant du bas de la cuisse, jusqu'au talon. Elle passe
-    # par-dessus la cuisse (et devant le ventre), soulignée d'un pli sombre là où elle la
-    # recouvre ; bord du haut éclairé, dessous dans l'ombre.
+    # --- pied : le tarse part du talon, à l'arrière contre le sol, et file vers l'avant
+    # sous le tibia ; trois orteils longs et fins s'en écartent vers l'avant, chacun avec
+    # son disque. Les plus lointains sont plus hauts et plus sombres.
+    tarse = catmull(
+        [
+            (52.97, 38.0),
+            (52.47, 39.6),
+            (49.15, 40.4),
+            (44.99, 40.8),
+            (41.66, 40.4),
+            (40.6, 39.8),
+            (39.8, 40.6),
+            (40.2, 41.8),
+            (42.49, 42.4),
+            (46.65, 42.4),
+            (50.81, 42.0),
+            (52.3, 41.2),
+            (53.63, 40.0),
+            (53.8, 38.8),
+        ]
+    )
+    tm = dans(tarse, X, Y)
+    g[tm] = "O"
+    g[tm & ~dans(tarse, X, Y - 0.6)] = "H"
+    g[tm & ~dans(tarse, X, Y + 0.6)] = "S"
+    poser(g, ORTEILS)
+
+    # --- tibia : au premier plan, grosse masse ronde du genou (en haut, à l'avant) au talon
+    # (en bas, à l'arrière, contre le sol), par-dessus la cuisse ; reflet de peau humide
     jambe = catmull(
         [
-            (30.2, 30.8),
-            (33, 30.9),
-            (38.5, 32.4),
-            (44, 34.4),
-            (46.6, 35.8),
-            (46.6, 38.4),
-            (43, 38.9),
-            (37.5, 37.4),
-            (31.4, 34.6),
-            (29.8, 32.6),
+            (32.48, 32.19),
+            (34.6, 30.23),
+            (37.69, 29.57),
+            (40.77, 29.81),
+            (44.3, 30.92),
+            (47.83, 32.32),
+            (51.0, 33.87),
+            (52.59, 34.84),
+            (53.65, 35.78),
+            (54.0, 37.2),
+            (53.47, 39.18),
+            (51.35, 38.68),
+            (47.83, 38.52),
+            (43.42, 38.33),
+            (39.01, 37.93),
+            (35.48, 37.37),
+            (33.19, 36.47),
+            (31.78, 35.21),
+            (31.6, 33.6),
         ]
     )
     jm = dans(jambe, X, Y)
     sous_jambe = g != "."
     g[jm] = "O"
-    g[jm & (n3 < 0.12)] = "M"
-    g[jm & ~dans(jambe, X, Y - 1.2)] = "H"
-    g[jm & ~dans(jambe, X, Y + 1.2)] = "S"
-    g[jm & ~dans(jambe, X, Y + 0.6)] = "Z"
-    g[ellipse(33.2, 32.0, 1.0, 0.45, X, Y, 0.25)] = "I"  # reflet au genou
+    g[jm & (n3 < 0.1)] = "M"
+    g[jm & (n3 > 0.95)] = "H"
+    g[jm & ~dans(jambe, X + 0.4, Y - 1.4)] = "H"
+    g[jm & ~dans(jambe, X + 0.2, Y - 0.7) & (X < 44)] = "I"
+    g[jm & ~dans(jambe, X - 0.2, Y + 1.6)] = "S"
+    g[jm & ~dans(jambe, X, Y + 0.7)] = "Z"
+    g[jm & (np.abs((X - 43.0) + (Y - 37) * 0.3) < 0.7) & (n3 > 0.3) & (g == "O")] = "M"
+    g[ellipse(36.4, 31.1, 2.2, 0.5, X, Y, -0.05)] = "I"  # reflet au genou
     pli = np.zeros_like(jm)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         voisin_hors = ~np.roll(np.roll(jm, dy, 0), dx, 1)
         voisin_dessous = np.roll(np.roll(sous_jambe, dy, 0), dx, 1)
-        pli |= jm & voisin_hors & voisin_dessous & (Y < 37.6)
+        pli |= jm & voisin_hors & voisin_dessous & (X < 52)  # pas de pli au talon
     g[pli] = "Z"
+    # cheville : talon arrondi, assez épais, qui joint le bout du tibia au tarse
+    talon = ellipse(52.9, 38.9, 1.3, 1.15, X, Y)
+    g[talon] = "O"
+    g[talon & ~ellipse(52.9, 39.5, 1.3, 1.15, X, Y)] = "H"
+    g[talon & ~ellipse(52.9, 38.4, 1.3, 1.15, X, Y)] = "S"
 
-    # --- patte avant : sort du flanc sous la bande, coude en arrière, longue main fine
+    # --- patte avant : sort du flanc sous la bande, coude en arrière, avant-bras plus
+    # épais près du coude, poignet fin
     patte = catmull(
         [
-            (18.4, 17.6),
-            (23.6, 18.2),
-            (25.0, 22.6),
-            (25.0, 26.8),
-            (23.6, 29.8),
-            (21.8, 33.0),
-            (20.8, 36.2),
-            (17.8, 36.2),
-            (18.4, 32.4),
-            (19.8, 29.0),
-            (20.6, 26.2),
-            (19.6, 22.6),
+            (18.6, 17.6),
+            (23.2, 18.2),
+            (25.6, 23.0),
+            (27.6, 27.8),
+            (28.5, 30.2),
+            (28.3, 31.2),
+            (27.4, 33.4),
+            (26.35, 36.0),
+            (25.0, 38.4),
+            (23.5, 40.6),
+            (21.7, 39.8),
+            (22.4, 37.6),
+            (23.25, 34.6),
+            (24.4, 32.0),
+            (25.7, 29.8),
+            (23.4, 27.0),
+            (20.8, 22.6),
         ]
     )
     pa = dans(patte, X, Y)
@@ -321,20 +508,13 @@ def image(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     g[bras & ~dans(patte, X - 0.6, Y)] = "I"
     g[bras & ~dans(patte, X + 1.1, Y) & (Y > 21.0)] = "S"
     g[bras & ~dans(patte, X + 0.6, Y) & (Y > 22.0)] = "Z"
-    g[ellipse(22.6, 26.6, 0.5, 0.9, X, Y, 0.3)] = "I"  # reflet au coude
-    main = catmull([(16.6, 36.0), (20.8, 35.8), (21.4, 37.4), (19.6, 38.2), (16.4, 38.0)])
-    mm = dans(main, X, Y)
-    g[mm] = "f"
-    g[mm & ~dans(main, X, Y + 0.6)] = "q"
-    g[mm & ~dans(main, X, Y - 0.6)] = "H"
-    for base, bout in [
-        ((17.4, 37.4), (13.0, 38.9)),
-        ((18.2, 37.7), (15.4, 39.5)),
-        ((19.3, 37.8), (18.4, 39.6)),
-        ((20.6, 37.6), (21.9, 39.3)),
-    ]:
-        g[segment(base, bout, 0.6, X, Y)] = "f"
-        g[ellipse(*bout, 0.45, 0.45, X, Y)] = "T"
+    g[ellipse(26.4, 30.6, 0.6, 0.9, X, Y, 0.4)] = "I"  # reflet au coude
+    separer(g, bras, bras_loin & ~dedans)  # contour entre les deux bras
+    g[miettes(bras_loin & ~dedans & ~bras & (g != "."))] = "."  # restes entre gorge et bras
+    # main tournée vers l'intérieur : poignet, paume et trois doigts vers l'avant qui filent
+    # un peu vers le fond (gabarit MAIN_PROCHE)
+    proche = poser(g, MAIN_PROCHE)
+    separer(g, proche, bras_loin & ~proche)
 
     # --- l'autre œil : une simple bosse de peau sur le crâne, éclairée par-dessus et
     # soulignée d'une ombre à sa base, qui ne bouge pas quand l'œil visible cligne

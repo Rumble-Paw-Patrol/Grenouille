@@ -700,9 +700,10 @@ $("#objectif").textContent = C.projet.objectif;
 $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
 
 /* ---------- A. blanci en 8-bit ----------
-   Sprite de grenouille.py (96 × 80 pixels, images codées par plages : « O12 » = douze pixels
-   de la couleur O), perché sur le spectrogramme dans une toile de 128 × 88 pixels, sur une
-   mosaïque de tuiles ambrées de 2 × 2 qui scintillent. Elle respire (flanc), sa gorge
+   Sprite de grenouille.py (taille lue dans les données, 114 × 86 pixels ; images codées par
+   plages : « O12 » = douze pixels de la couleur O), perché sur le spectrogramme dans une toile
+   de 32 pixels de plus en largeur et 8 en hauteur, sur une mosaïque de tuiles ambrées de 2 × 2
+   qui scintillent. Elle respire (flanc), sa gorge
    palpite, elle cligne, et de temps en temps elle baisse ou relève un peu la tête. */
 {
   const G = D.grenouille, toile = $("#grenouille");
@@ -710,8 +711,11 @@ $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
   else {
     const IMG = Object.fromEntries(Object.entries(G.images).map(([k, rangs]) =>
       [k, rangs.map((r) => [...r.matchAll(/(\D)(\d+)/g)].map((m) => [m[1], +m[2]]))]));
-    const COL = 128, LIG = 88, DX = 24, DY = 8, TUILE = 2, ctx = toile.getContext("2d");
+    const DX = 24, DY = 8, TUILE = 2, COL = G.largeur + 32, LIG = G.hauteur + DY, ctx = toile.getContext("2d");
     const NC = COL / TUILE, NL = LIG / TUILE;
+    // centre et rayons de la mosaïque, en tuiles : (38, 24) et (30, 21) pour un sprite de 96 × 80
+    const CX = (DX + G.largeur * 0.54) / TUILE, CY = (DY + G.hauteur / 2) / TUILE;
+    const RX = G.largeur * 0.625 / TUILE, RY = G.hauteur * 0.525 / TUILE;
     const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const phases = Array.from({ length: NC * NL }, () => [Math.random() * 6.28, 0.6 + Math.random() * 1.6]);
     let p = 1;
@@ -722,13 +726,16 @@ $("#maj").textContent = `mis à jour le ${dateFr(String(D.genere.date))}`;
       p = Math.max(1, Math.floor(cible * dpr));
       toile.width = COL * p; toile.height = LIG * p;
       toile.style.width = (COL * p / dpr) + "px"; toile.style.height = (LIG * p / dpr) + "px";
+      // la tête reste où elle était avec le sprite de 96 pixels : ce qui dépasse à droite
+      // (le tibia) mord sur la marge du bandeau (sans effet sur téléphone, où la toile est en flux)
+      toile.style.right = `calc(clamp(-8px, 2vw, 40px) - ${(Math.max(0, G.largeur - 96) * p) / dpr}px)`;
     };
     let cligne = -9, prochainCligne = 2.5, tete = 1, prochaineTete = 4 + Math.random() * 3;
     function dessiner(t) {
       ctx.clearRect(0, 0, toile.width, toile.height);
       const q = p * TUILE, jeu = Math.max(1, Math.round(q / 7));
       for (let y = 0; y < NL; y++) for (let x = 0; x < NC; x++) {
-        const d = Math.hypot((x - 38) / 30, (y - 24) / 21);
+        const d = Math.hypot((x - CX) / RX, (y - CY) / RY);
         if (d >= 1) continue;
         const [ph, v] = phases[y * NC + x];
         const a = (1 - d) * (1 - d) * (calme ? 0.16 : 0.1 + 0.1 * Math.sin(t * v + ph));
