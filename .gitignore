@@ -21,3 +21,6 @@ documentation/*.xlsx
 # Tableau de bord : produit par documentation/tableau-de-bord/construire.py.
 documentation/tableau-de-bord/index.html
 documentation/tableau-de-bord/fichiers.json
+# Dashboard claude.ai : produits par documentation/tableau-de-bord/dashboard/donnees.py et images.py.
+documentation/tableau-de-bord/dashboard/donnees/
+documentation/tableau-de-bord/dashboard/page/*.css

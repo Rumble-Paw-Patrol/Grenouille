@@ -1,0 +1,658 @@
+<link rel="stylesheet" href="bandeau.css">
+<link rel="stylesheet" href="poste.css">
+<style>
+#dash-root { --gb-ambre: #E39A2E; --gb-boucle: #D08A1E; }
+.gb { position: relative; display: grid; gap: var(--cds-gap-lg); min-width: 0; padding-bottom: var(--cds-pad-xl); font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); line-height: 1.5; color: var(--color-fg); }
+.gb * { box-sizing: border-box; }
+.gb :where(h1, h2, h3, h4, p, ol, ul, dl, dd, figure) { margin: 0; }
+.gb :where(ol, ul) { padding-left: 1.2em; }
+.gb a { color: inherit; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; }
+.gb code { font-size: .92em; padding: 0 .3em; border-radius: 4px; background: color-mix(in srgb, var(--color-fg) 7%, transparent); }
+.gb .gb-num, .gb .n { font-variant-numeric: tabular-nums; }
+.gb [data-dash-source-state=empty] { color: transparent; }
+.gb [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+
+/* Bandeau : la nuit guyanaise, le chant d'A. blanci et la grenouille 8-bit perchée dessus */
+.gb-bandeau { position: relative; isolation: isolate; overflow: hidden; display: grid; gap: 14px; border-radius: var(--cds-radius); padding: clamp(18px, 3.5vw, 40px) clamp(16px, 3.5vw, 40px) clamp(14px, 2vw, 22px); background: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%); color: #E9F2EC; }
+.gb-bandeau::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(50% 80% at 92% 10%, rgba(228, 87, 63, .22), transparent 70%), radial-gradient(40% 60% at 70% 100%, rgba(79, 216, 192, .10), transparent 70%); }
+.gb-bandeau-texte { position: relative; z-index: 2; display: grid; gap: 10px; align-content: start; padding-right: var(--gb-perchoir, 0px); min-height: var(--gb-grenouille-h, 0px); }
+.gb-surtitre { display: inline-flex; align-items: center; gap: 10px; font-size: var(--cds-font-size-caption); letter-spacing: .08em; text-transform: uppercase; color: #FFE08A; }
+.gb-surtitre::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #FF5A4E; }
+.gb-titre { max-width: 22ch; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: clamp(26px, 3.6vw, 46px); line-height: 1.1; letter-spacing: -.01em; background: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gb-titre i { padding-right: .06em; background: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gb-objectif { max-width: 62ch; color: #C5D3CB; }
+.gb-stage { font-size: var(--cds-font-size-caption); color: #93A89D; }
+.gb-stage a { color: #FFE08A; }
+.gb-perchoir { position: relative; z-index: 1; justify-self: end; height: 0; margin-bottom: -14px; pointer-events: none; }
+.gb-perchoir > * { position: absolute; }
+.gb-lueur, .gb-sprite { image-rendering: pixelated; }
+.gb-sprite { background-repeat: no-repeat; }
+.gb-bandeau.gb-etroit .gb-perchoir { height: var(--gb-grenouille-h); margin: -6px 0 -14px auto; width: var(--gb-grenouille-w); }
+.gb-spectro { position: relative; height: clamp(80px, 12vw, 170px); overflow: hidden; border-radius: 10px; background-color: #000004; background-size: 100% 100%; box-shadow: 0 0 0 1px rgba(255, 210, 120, .14), 0 30px 80px -30px rgba(228, 87, 63, .55), 0 0 60px -20px rgba(245, 165, 58, .35); }
+.gb-spectro::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, .25), transparent 22%, transparent 78%, rgba(0, 0, 0, .35)), repeating-linear-gradient(90deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 10%); }
+.gb-bande-f { position: absolute; left: 0; right: 0; top: 16.7%; height: 36.7%; z-index: 1; border-block: 1px dashed rgba(255, 224, 138, .85); pointer-events: none; }
+.gb-tete-lecture { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; z-index: 2; opacity: 0; pointer-events: none; background: linear-gradient(180deg, transparent, #FFF6DC 20%, #FFF6DC 80%, transparent); box-shadow: 0 0 12px 2px rgba(255, 224, 138, .8), 0 0 40px 8px rgba(245, 165, 58, .35); }
+.gb-axe { position: absolute; left: 8px; z-index: 2; padding: 2px 6px; border-radius: 4px; font-size: 10.5px; line-height: 1.2; color: #FFF0C8; background: rgba(0, 0, 0, .45); }
+.gb-spectro-legende { font-size: var(--cds-font-size-caption); color: #93A89D; }
+@media (prefers-reduced-motion: no-preference) {
+  .gb-tete-lecture { opacity: 1; animation: gb-balayage 18s linear infinite; }
+  @keyframes gb-balayage { from { left: 0; } to { left: 100%; } }
+}
+
+/* En-tête de page, onglets */
+.gb-accroche { font-size: var(--cds-font-size-heading); color: var(--color-fg-muted); }
+.gb-accroche b { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+.gb-onglets, .gb-sous-onglets { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
+.gb-onglets { border-bottom: 1px solid var(--color-border-line); }
+.gb-onglet { flex: none; appearance: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 8px 12px; background: none; font: inherit; color: var(--color-fg-muted); white-space: nowrap; cursor: pointer; }
+.gb-onglet:hover { color: var(--color-fg); }
+.gb-onglet[aria-selected="true"] { color: var(--color-fg); border-bottom-color: var(--color-fg); }
+.gb-sous-onglets { gap: 6px; margin-top: calc(-1 * var(--cds-gap-sm)); }
+.gb-sous-onglets[hidden] { display: none; }
+.gb-sous-onglet { flex: none; appearance: none; font: inherit; font-size: var(--cds-font-size-caption); padding: 4px 12px; border-radius: 999px; border: 1px solid var(--color-border-line); background: none; color: var(--color-fg-muted); cursor: pointer; white-space: nowrap; }
+.gb-sous-onglet[aria-current="page"] { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
+
+/* Pages et cartes */
+.gb-page { display: grid; gap: var(--cds-gap-md); min-width: 0; }
+.gb-page[hidden] { display: none; }
+.gb-page-tete { display: grid; gap: 4px; }
+.gb-page-tete h2 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); line-height: 1.2; }
+.gb-page-tete p { max-width: 80ch; color: var(--color-fg-muted); }
+.gb-surtitre-page { font-size: var(--cds-font-size-caption); letter-spacing: .06em; text-transform: uppercase; color: var(--color-fg-muted); }
+.gb-grille { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+.gb-carte { display: grid; gap: var(--cds-gap-sm); align-content: start; min-width: 0; padding: var(--cds-pad-lg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-panel); }
+.gb-carte > h3, .gb-carte-tete h3 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); line-height: 1.3; }
+.gb-carte-tete { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.gb-carte h4 { font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); letter-spacing: .05em; text-transform: uppercase; color: var(--color-fg-muted); margin-top: 6px; }
+.gb-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.gb-texte { max-width: 80ch; }
+.gb-pleine { grid-column: 1 / -1; }
+
+/* Tuiles */
+.gb-tuiles { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); }
+.gb-tuile { display: grid; gap: 4px; align-content: start; padding: var(--cds-pad-md) var(--cds-pad-lg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-panel); }
+.gb-tuile-titre { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.gb-grand { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); line-height: 1.15; font-variant-numeric: tabular-nums; }
+.gb-grand small { font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); color: var(--color-fg-muted); }
+.gb-tuile-sous { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+
+/* Tableaux */
+.gb-defile { overflow: auto; min-width: 0; }
+.gb-defile.gb-haut { max-height: 28rem; }
+.gb-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-body); }
+.gb-table th { position: sticky; top: 0; z-index: 1; padding: 6px 10px; text-align: left; vertical-align: bottom; font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); background: var(--color-panel); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+.gb-table td { padding: 6px 10px; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, var(--color-border-line) 60%, transparent); }
+.gb-table tfoot td { border-bottom: 0; border-top: 1px solid var(--color-border-line); font-weight: var(--cds-font-weight-medium); }
+.gb-table .n { text-align: right; white-space: nowrap; }
+.gb-table th button { appearance: none; border: 0; padding: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+.gb-table th button::after { content: " ↕"; opacity: .35; }
+.gb-table th[aria-sort="ascending"] button::after { content: " ↑"; opacity: 1; }
+.gb-table th[aria-sort="descending"] button::after { content: " ↓"; opacity: 1; }
+.gb-table tr[data-clic] { cursor: pointer; }
+.gb-table tr[data-clic]:hover td { background: color-mix(in srgb, var(--color-fg) 4%, transparent); }
+.gb-table-etat { height: 3rem; }
+.gb-barre-cell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.gb-barre-cell i { display: inline-block; height: 8px; border-radius: 4px; background: var(--gb-ambre); }
+.gb-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+
+/* Pastilles d'état, choix, segments */
+.gb-etat { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 999px; font-size: var(--cds-font-size-caption); white-space: nowrap; color: var(--color-fg-muted); background: color-mix(in srgb, currentColor 12%, transparent); }
+.gb-etat::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.gb-etat:is([data-etat="fait"], [data-etat="terminé"], [data-etat="fini"]) { color: var(--color-ok); }
+.gb-etat:is([data-etat="en cours"]) { color: var(--color-warn); }
+.gb-etat:is([data-etat="bloqué"]) { color: var(--color-bad); }
+.gb-controles { display: flex; flex-wrap: wrap; align-items: end; gap: var(--cds-gap-sm) var(--cds-gap-lg); }
+.gb-champ { display: grid; gap: 4px; min-width: 0; }
+.gb-champ > span { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.gb-seg { display: inline-flex; border: 1px solid var(--color-border-line); border-radius: 8px; overflow: hidden; }
+.gb-seg button { appearance: none; border: 0; padding: 4px 10px; background: none; font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); cursor: pointer; white-space: nowrap; }
+.gb-seg button + button { border-left: 1px solid var(--color-border-line); }
+.gb-seg button[aria-pressed="true"] { background: var(--color-fg); color: var(--color-bg); }
+.gb-puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.gb-choix { display: inline-flex; align-items: center; gap: 6px; appearance: none; padding: 3px 10px; border: 1px solid var(--color-border-line); border-radius: 999px; background: none; font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); cursor: pointer; }
+.gb-choix i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.gb-choix[aria-pressed="true"] { color: var(--color-fg); border-color: var(--color-fg); background: color-mix(in srgb, var(--color-fg) 6%, transparent); }
+.gb-lien-btn { appearance: none; border: 0; padding: 0; background: none; font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.gb-select, .gb-recherche { font: inherit; font-size: var(--cds-font-size-caption); padding: 4px 8px; border: 1px solid var(--color-border-line); border-radius: 8px; background: var(--color-panel); color: var(--color-fg); max-width: 100%; }
+.gb-recherche { width: min(100%, 26rem); }
+.gb-legende { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.gb-legende span { display: inline-flex; align-items: center; gap: 6px; }
+.gb-legende i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.gb-legende i.gb-trait { width: 18px; height: 2px; border-radius: 1px; }
+.gb-legende i.gb-tirets { width: 18px; height: 0; border-radius: 0; border-top: 2px dashed currentColor; }
+.gb-legende i.gb-anneau { border-radius: 50%; border: 2px solid var(--color-fg); }
+
+/* Graphiques */
+.gb-graphe { position: relative; min-width: 0; }
+.gb-graphe svg { display: block; overflow: visible; }
+.gb svg text { fill: var(--color-fg-muted); font-size: 12px; font-family: var(--font-anthropic-sans); }
+.gb svg text.fort { fill: var(--color-fg); font-weight: 500; }
+.gb svg .gb-grille-l { stroke: var(--cds-chart-grid); stroke-width: 1; }
+.gb svg .gb-axe-l { stroke: var(--cds-chart-axis); stroke-width: 1; }
+.gb-echec { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: inherit; height: 100%; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.gb-echec i { width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+.gb-bulle { position: absolute; z-index: 20; max-width: 320px; padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); background: var(--cds-surface-popover); box-shadow: var(--cds-shadow-popover); font-size: var(--cds-font-size-caption); pointer-events: none; }
+.gb-bulle-titre { color: var(--cds-text-secondary); }
+.gb-bulle-ligne { display: flex; align-items: baseline; gap: 6px; }
+.gb-bulle-ligne i { width: 8px; height: 8px; border-radius: 2px; flex: none; transform: translateY(-1px); }
+.gb-vide { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+
+/* Vue d'ensemble, chantiers, commits */
+.gb-criteres { display: grid; gap: 8px; padding-left: 0 !important; list-style: none; counter-reset: rang; }
+.gb-criteres li { display: grid; grid-template-columns: 1.8rem 1fr; gap: 2px 8px; counter-increment: rang; }
+.gb-criteres li::before { content: counter(rang); grid-row: span 2; font-family: var(--font-anthropic-serif); font-size: var(--cds-font-size-heading); color: var(--color-fg-muted); }
+.gb-criteres span { color: var(--color-fg-muted); }
+.gb-chantiers { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); min-height: 8rem; }
+.gb-chantier { gap: 8px; }
+.gb-chantier .gb-etat { justify-self: start; }
+
+/* Données */
+.gb-boite-heures { min-height: 14rem; }
+
+/* Chaîne de traitement */
+.gb-chaine-boite { container-type: inline-size; min-width: 0; }
+.gb-flux { position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 46px 18px; min-height: 9rem; padding: 4px 2px 8px; }
+.gb-liens { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.gb-liens path { fill: none; stroke: var(--color-fg-muted); stroke-width: 1.5; }
+.gb-liens path.boucle { stroke: var(--gb-boucle); stroke-width: 2; }
+.gb-liens path.option { stroke-dasharray: 4 4; opacity: .7; }
+.gb-noeud { position: relative; z-index: 1; display: grid; gap: 2px; align-content: start; min-width: 0; padding: 8px 10px; border: 1px solid var(--color-border-line); border-radius: 10px; background: var(--color-panel); font: inherit; text-align: left; color: var(--color-fg); cursor: pointer; }
+.gb-noeud b { display: flex; align-items: center; gap: 6px; font-weight: var(--cds-font-weight-medium); font-size: var(--cds-font-size-caption); line-height: 1.3; }
+.gb-noeud b i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.gb-noeud small { font-size: 11px; color: var(--color-fg-muted); line-height: 1.3; }
+.gb-noeud .gb-suites { display: none; }
+.gb-noeud.option { border-style: dashed; }
+.gb-noeud[aria-pressed="true"] { border-color: var(--color-fg); box-shadow: 0 0 0 1px var(--color-fg); }
+@container (max-width: 760px) {
+  .gb-flux { grid-template-columns: 1fr; gap: 6px; }
+  .gb-noeud { grid-column: auto !important; grid-row: auto !important; }
+  .gb-liens { display: none; }
+  .gb-noeud .gb-suites { display: block; }
+}
+.gb-detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: var(--cds-font-size-caption); }
+.gb-detail dt { color: var(--color-fg-muted); }
+.gb-detail { min-height: 12rem; }
+
+/* Annotation */
+.gb-avancement { display: grid; gap: 14px; min-height: 8rem; }
+.gb-av { display: grid; gap: 4px; }
+.gb-av-tete { display: flex; justify-content: space-between; gap: 12px; font-size: var(--cds-font-size-caption); }
+.gb-av-tete b { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-heading); font-variant-numeric: tabular-nums; }
+.gb-av-piste { height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--color-fg) 10%, transparent); overflow: hidden; }
+.gb-av-piste i { display: block; height: 100%; min-width: 3px; border-radius: 5px; background: var(--gb-ambre); }
+.gb-donuts { display: flex; flex-wrap: wrap; gap: 10px; min-height: 8rem; }
+.gb-donut { display: grid; justify-items: center; gap: 2px; padding: 10px 14px; border: 1px solid var(--color-border-line); border-radius: 12px; background: none; font: inherit; color: var(--color-fg); text-align: center; }
+button.gb-donut { cursor: pointer; }
+.gb-donut[aria-pressed="true"] { border-color: var(--color-fg); }
+.gb-donut small { font-size: 11px; color: var(--color-fg-muted); }
+.gb-etapes { display: grid; gap: 10px; padding-left: 0 !important; list-style: none; counter-reset: etape; }
+.gb-etapes li { display: grid; grid-template-columns: 1.8rem 1fr; gap: 0 8px; counter-increment: etape; }
+.gb-etapes li::before { content: counter(etape); display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; font-size: var(--cds-font-size-caption); background: color-mix(in srgb, var(--color-fg) 9%, transparent); }
+.gb-etapes p { color: var(--color-fg-muted); }
+.gb-principes { display: grid; gap: 8px; }
+.gb-principes li::marker { color: var(--color-fg-muted); }
+.gb-deux-col { display: grid; gap: 10px 22px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); padding-left: 0 !important; list-style: none; }
+.gb-deux-col strong { display: block; }
+.gb-deux-col span { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.gb-poste-img { aspect-ratio: 1200 / 750; width: 100%; border-radius: 10px; border: 1px solid var(--color-border-line); background-size: cover; background-position: top left; }
+
+/* AnuraSet */
+.gb-plis { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)); gap: 3px; font-size: 11.5px; text-align: center; min-height: 6rem; }
+.gb-plis span { padding: 4px 2px; border-radius: 5px; }
+.gb-plis .t { color: var(--color-fg-muted); text-align: left; padding-right: 8px; }
+.gb-plis .appr { background: color-mix(in srgb, var(--color-fg) 8%, transparent); color: var(--color-fg-muted); }
+.gb-plis .test { background: var(--gb-ambre); color: #1B1206; font-weight: 600; }
+.gb-minute { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; }
+.gb-minute span { height: 26px; border-radius: 5px; border: 1px solid var(--color-border-line); background: color-mix(in srgb, var(--color-fg) 5%, transparent); }
+.gb-minute span.pos { background: var(--color-ok); border-color: transparent; opacity: .85; }
+.gb-minute span.max { outline: 2px solid var(--gb-ambre); outline-offset: 2px; }
+.gb-intro { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); align-items: start; }
+.gb-intro > div { display: grid; gap: 10px; min-width: 0; }
+.gb-conseil { padding: 10px 14px; border-left: 3px solid var(--gb-ambre); background: color-mix(in srgb, var(--gb-ambre) 8%, transparent); border-radius: 0 8px 8px 0; }
+.gb-matrice-boite { min-height: 14rem; }
+.gb-matrice { border-collapse: separate; border-spacing: 3px; font-size: var(--cds-font-size-caption); width: 100%; }
+.gb-matrice th { font-weight: var(--cds-font-weight-medium); text-align: center; color: var(--color-fg-muted); }
+.gb-matrice th.site button { display: grid; gap: 1px; width: 100%; padding: 6px 4px; border: 1px solid var(--color-border-line); border-radius: 8px; background: none; font: inherit; color: var(--color-fg); cursor: pointer; }
+.gb-matrice th.site button small { color: var(--color-fg-muted); font-weight: 400; }
+.gb-matrice th.site button span { font-size: 10.5px; color: var(--color-fg-muted); font-weight: 400; }
+.gb-matrice th.site button[aria-pressed="true"] { border-color: var(--gb-ambre); box-shadow: 0 0 0 1px var(--gb-ambre); }
+.gb-matrice td { padding: 6px 8px; border-radius: 6px; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gb-matrice td.esp { text-align: left; }
+.gb-matrice td.esp i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.gb-matrice td.esp em { display: block; font-size: 11px; color: var(--color-fg-muted); }
+.gb-matrice td.cel strong { display: block; font-weight: 500; }
+.gb-matrice td.cel small { font-size: 10.5px; color: var(--color-fg-muted); }
+.gb-matrice td.absente { color: var(--color-fg-muted); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-fg) 7%, transparent) 0 4px, transparent 4px 8px); }
+.gb-matrice td.hors { opacity: .35; }
+.gb-signature { min-height: 16rem; }
+
+/* Têtes et amorçage */
+.gb-zone-tetes { min-height: 16rem; }
+.gb-zone-tetes .gb-defile svg { min-width: 600px; }
+.gb-courbes { min-height: 20rem; }
+
+/* Bibliographie */
+.gb-biblio { display: grid; gap: var(--cds-gap-md); min-height: 10rem; }
+.gb-biblio h3 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+.gb-biblio ul { display: grid; gap: 12px; padding-left: 0; list-style: none; }
+.gb-biblio li { display: grid; gap: 2px; max-width: 90ch; }
+.gb-biblio li p { color: var(--color-fg-muted); }
+.gb-biblio li .gb-liens-ref { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--cds-font-size-caption); }
+</style>
+
+<div class="gb" id="gb">
+  <header class="gb-bandeau" id="bandeau">
+    <div class="gb-bandeau-texte">
+      <div class="gb-surtitre">Tableau de bord du stage</div>
+      <h1 class="gb-titre">Outil de détection automatique d'<i>Anomaloglossus blanci</i></h1>
+      <p class="gb-objectif">Développement d'un détecteur acoustique d'<i>A. blanci</i> en apprentissage continu capable de généraliser à de nouveaux points d'écoute jamais vus.</p>
+      <p class="gb-stage">Stage de fin d'études · Office National des Forêts de Guyane · du 15/09/2026 au 14/03/2027 · Léonard Laplace-Palette · <a href="https://github.com/Rumble-Paw-Patrol/Grenouille" target="_blank" rel="noopener">Dépôt GitHub</a></p>
+    </div>
+    <div class="gb-perchoir" aria-hidden="true"><canvas class="gb-lueur"></canvas><div class="gb-sprite"></div></div>
+    <div class="gb-spectro gb-spectro-img" role="img" aria-label="Spectrogramme de 18 s d'un chant d'A. blanci enregistré à Molokoi, de 3 à 6 kHz : notes brèves et régulières vers 5 kHz">
+      <span class="gb-bande-f" id="bande-blanci" data-source="reperes"></span>
+      <span class="gb-tete-lecture"></span>
+      <span class="gb-axe" style="top:6px">6 kHz</span>
+      <span class="gb-axe" style="bottom:6px">3 kHz</span>
+    </div>
+    <p class="gb-spectro-legende">Chant d'<i>A. blanci</i> enregistré à Molokoi le 26/02/2024, 18 s : notes de <span class="dash-skeleton" data-source="reperes" data-field="valeur" data-where="cle=blanci_note_s" data-fmt="fr2">—</span> s · bande <span class="dash-skeleton" data-source="reperes" data-field="valeur" data-where="cle=blanci_bande_basse_khz" data-fmt="fr1">—</span>–<span class="dash-skeleton" data-source="reperes" data-field="valeur" data-where="cle=blanci_bande_haute_khz" data-fmt="fr1">—</span> kHz en pointillés</p>
+  </header>
+
+  <p class="gb-accroche" id="accroche">Premier lot d'annotation : <b><span class="dash-skeleton" data-source="annotation_avancement" data-field="annotes" data-where="jeu=total" data-fmt="entier">—</span></b> enregistrements annotés sur ≈ <b><span class="dash-skeleton" data-source="annotation_avancement" data-field="cible" data-where="jeu=total" data-fmt="entier">—</span></b> prévus. Encodeurs ayant fini d'encoder le corpus : <b><span class="dash-skeleton" data-source="encodage_bilan" data-field="finis" data-row="0" data-fmt="entier">—</span></b> sur <b><span class="dash-skeleton" data-source="encodage_bilan" data-field="encodeurs" data-row="0" data-fmt="entier">—</span></b>.</p>
+
+  <nav class="gb-onglets" role="tablist" aria-label="Pages du tableau de bord">
+    <button type="button" class="gb-onglet" role="tab" id="onglet-vue" data-page="vue">Vue d'ensemble</button>
+    <button type="button" class="gb-onglet" role="tab" id="onglet-en-cours" data-page="en-cours">En développement</button>
+    <button type="button" class="gb-onglet" role="tab" id="onglet-donnees" data-page="donnees">Données</button>
+    <button type="button" class="gb-onglet" role="tab" id="onglet-chaine" data-page="chaine">Chaîne de traitement</button>
+    <button type="button" class="gb-onglet" role="tab" id="onglet-annotation" data-page="annotation">Annotation</button>
+    <button type="button" class="gb-onglet" role="tab" id="onglet-encodage" data-page="encodage">Temps d'encodage</button>
+    <button type="button" class="gb-onglet" role="tab" id="onglet-anuraset" data-page="anuraset">AnuraSet</button>
+    <button type="button" class="gb-onglet" role="tab" id="onglet-rapports" data-page="rapports">Rapports</button>
+    <button type="button" class="gb-onglet" role="tab" id="onglet-biblio" data-page="biblio">Bibliographie</button>
+  </nav>
+  <nav class="gb-sous-onglets" id="sous-onglets" aria-label="Pré-benchmark AnuraSet" hidden>
+    <button type="button" class="gb-sous-onglet" data-page="anuraset">Le jeu réduit</button>
+    <button type="button" class="gb-sous-onglet" data-page="encodeurs">1 · Encodeurs</button>
+    <button type="button" class="gb-sous-onglet" data-page="tetes">2 · Explorateur des têtes</button>
+    <button type="button" class="gb-sous-onglet" data-page="amorcage">3 · Amorcer un site</button>
+  </nav>
+
+  <!-- ============================== Vue d'ensemble ============================== -->
+  <section class="gb-page" id="vue" hidden>
+    <div class="gb-page-tete"><h2>Vue d'ensemble</h2><p>État d'avancement du projet et critères de choix du détecteur.</p></div>
+    <div class="gb-tuiles">
+      <div class="gb-tuile" id="tuile-audio">
+        <span class="gb-tuile-titre">Audio de l'ONF</span>
+        <span class="gb-grand"><span class="dash-skeleton" data-source="corpus" data-field="heures" data-row="0" data-fmt="entier">—</span> h</span>
+        <span class="gb-tuile-sous"><span class="dash-skeleton" data-source="corpus" data-field="enregistrements" data-row="0" data-fmt="entier">—</span> enregistrements de 2 min · <span class="dash-skeleton" data-source="corpus" data-field="sites" data-row="0" data-fmt="entier">—</span> sites</span>
+      </div>
+      <div class="gb-tuile" id="tuile-fenetres">
+        <span class="gb-tuile-titre">Fenêtres de 5 s à encoder</span>
+        <span class="gb-grand"><span class="dash-skeleton" data-source="fenetres" data-field="total" data-where="fenetre=5 s" data-fmt="millions">—</span> <small>millions</small></span>
+        <span class="gb-tuile-sous">avec un chevauchement de <span class="dash-skeleton" data-source="fenetres" data-field="pas" data-where="fenetre=5 s" data-fmt="texte">—</span></span>
+      </div>
+      <div class="gb-tuile" id="tuile-annotation">
+        <span class="gb-tuile-titre">Premier lot d'annotation</span>
+        <span class="gb-grand"><span class="dash-skeleton" data-source="annotation_avancement" data-field="annotes" data-where="jeu=total" data-fmt="entier">—</span> <small>/ ≈ <span class="dash-skeleton" data-source="annotation_avancement" data-field="cible" data-where="jeu=total" data-fmt="entier">—</span> écoutes</small></span>
+        <span class="gb-tuile-sous"><span class="dash-skeleton" data-source="annotation_avancement" data-field="cible" data-where="jeu=entraînement" data-fmt="entier">—</span> extraits de 30 s (entraînement) · <span class="dash-skeleton" data-source="annotation_avancement" data-field="cible" data-where="jeu=évaluation" data-fmt="entier">—</span> enregistrements entiers de 2 min (test)</span>
+      </div>
+      <div class="gb-tuile" id="tuile-encodage">
+        <span class="gb-tuile-titre">Corpus encodé</span>
+        <span class="gb-grand"><span class="dash-skeleton" data-source="encodage_bilan" data-field="finis" data-row="0" data-fmt="entier">—</span> <small>encodeur(s) sur <span class="dash-skeleton" data-source="encodage_bilan" data-field="encodeurs" data-row="0" data-fmt="entier">—</span></small></span>
+        <span class="gb-tuile-sous"><span class="dash-skeleton" data-source="encodage" data-field="nom" data-where="encodeur=perch_v2" data-fmt="texte">—</span> : <span class="dash-skeleton" data-source="encodage" data-field="heures" data-where="encodeur=perch_v2" data-fmt="entier">—</span> h sur le processeur i5</span>
+      </div>
+      <div class="gb-tuile" id="tuile-encodeur">
+        <span class="gb-tuile-titre">Encodeur en tête</span>
+        <span class="gb-grand">Perch 2.0</span>
+        <span class="gb-tuile-sous">Se démarque a priori devant BirdNET 2.4 · BirdNET 3.0 en preview · AP par site sur AnuraSet : <span class="dash-skeleton" data-source="encodeurs" data-field="ap_site_meilleure" data-where="encodeur=perch_v2" data-fmt="fr2">—</span></span>
+      </div>
+    </div>
+    <div class="gb-grille">
+      <div class="gb-carte" id="criteres">
+        <h3>Critères de choix du détecteur</h3>
+        <p class="gb-note">Critères appliqués dans cet ordre.</p>
+        <ol class="gb-criteres">
+          <li><strong>Droit d'utilisation</strong><span>poids publics et licence qui permet l'usage commercial* par l'ONF</span></li>
+          <li><strong>Performance</strong><span>AP et rappel</span></li>
+          <li><strong>Facilité d'utilisation</strong><span>application de bureau Windows sans écriture de code par les naturalistes</span></li>
+          <li><strong>Durée d'encodage</strong><span>si possible en heures pour une campagne d'écoute d'une semaine sur CPU de l'ONF</span></li>
+        </ol>
+        <p class="gb-note">* Le caractère « usage commercial » est encore flou : reste à établir si l'utilisation du détecteur par l'ONF, établissement public à caractère industriel et commercial, tombe sous les clauses « non commerciales » de certaines licences de poids (CC BY-NC notamment).</p>
+      </div>
+      <div class="gb-carte" id="chantiers-resume-carte">
+        <h3>En développement</h3>
+        <p class="gb-note">Cliquer un chantier pour son détail.</p>
+        <div class="gb-defile">
+          <table class="gb-table" id="chantiers-resume" data-source="chantiers" data-row-key="titre">
+            <thead><tr><th data-field="titre">Chantier</th><th data-field="etat">État</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== En développement ============================== -->
+  <section class="gb-page" id="en-cours" hidden>
+    <div class="gb-page-tete"><h2>En développement</h2><p>Ce qui est sur la table en ce moment, et ce qui a bougé dans le dépôt.</p></div>
+    <div class="gb-chantiers" id="chantiers-cartes" data-source="chantiers"></div>
+    <div class="gb-carte" id="commits-carte">
+      <h3>Derniers changements du dépôt</h3>
+      <p class="gb-note">Commits poussés sur main, numérotés depuis le premier : ce sont les numéros à donner à /audit-n-from.</p>
+      <div class="gb-defile gb-haut">
+        <table class="gb-table" id="commits" data-source="commits" data-row-key="numero">
+          <thead><tr><th class="n" data-field="numero">N°</th><th data-field="date">Date</th><th data-field="message">Changement</th><th data-field="commit">Commit</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== Données ============================== -->
+  <section class="gb-page" id="donnees" hidden>
+    <div class="gb-page-tete"><h2>Données</h2><p>Inventaire des enregistrements de l'ONF (2 min, toutes les 30 min de 5 h à 20 h, 48 kHz stéréo). L'audio reste sur les disques, jamais dans le dépôt.</p></div>
+    <div class="gb-grille">
+      <div class="gb-carte" id="heures-carte">
+        <h3>Heures d'audio par site</h3>
+        <p class="gb-note">Les enregistrements durent tous 2 min. Les relevés 2026 sont rattachés à leur site de 2023.</p>
+        <div class="gb-legende"><span><i id="leg-2023"></i>Phénologie 2023 : deux points d'écoute par site, suivis un an</span><span><i id="leg-2026"></i>Campagne 2026 : environ cent cinquante points d'écoute, une semaine au pic d'activité</span></div>
+        <div class="gb-graphe gb-boite-heures" id="heures-sites" data-source="inventaire"></div>
+      </div>
+      <div class="gb-carte" id="inventaire-carte">
+        <h3>Inventaire</h3>
+        <p class="gb-note">Enregistrements, heures d'audio et volume par site et par campagne.</p>
+        <div class="gb-defile">
+          <table class="gb-table" id="inventaire" data-source="inventaire" data-row-key="site">
+            <thead><tr><th data-field="jeu">Campagne</th><th data-field="site">Site</th><th class="n" data-field="enregistrements">Enregistrements</th><th class="n" data-field="heures">Heures</th><th class="n" data-field="go">Go</th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr><td>Total</td><td></td><td class="n"><span class="dash-skeleton" data-source="corpus" data-field="enregistrements" data-row="0" data-fmt="entier">—</span></td><td class="n"><span class="dash-skeleton" data-source="corpus" data-field="heures" data-row="0" data-fmt="entier">—</span></td><td class="n"><span class="dash-skeleton" data-source="corpus" data-field="go" data-row="0" data-fmt="entier">—</span></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="gb-carte" id="fenetres-carte">
+        <h3>Fenêtres à encoder</h3>
+        <p class="gb-note">Chevauchement de moitié, sur les enregistrements de 120 s.</p>
+        <div class="gb-defile">
+          <table class="gb-table" id="fenetres" data-source="fenetres" data-row-key="fenetre">
+            <thead><tr><th data-field="fenetre">Fenêtre</th><th data-field="pas">Pas</th><th data-field="encodeurs">Encodeurs</th><th class="n" data-field="par_enregistrement">Par enregistrement</th><th class="n" data-field="total">Au total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="gb-carte" id="qc-carte">
+        <h3>Contrôle qualité</h3>
+        <p class="gb-note">Enregistrements écartés du projet avant l'encodage, et ce qui reste à encoder.</p>
+        <div class="gb-defile">
+          <table class="gb-table" id="controle-qualite" data-source="controle_qualite" data-row-key="motif">
+            <thead><tr><th data-field="motif">Motif</th><th data-field="decision">Décision</th><th class="n" data-field="enregistrements">Enregistrements</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== Chaîne ============================== -->
+  <section class="gb-page" id="chaine" hidden>
+    <div class="gb-page-tete"><h2>Chaîne de traitement</h2><p>Du fichier audio au score par point d'écoute. Cliquer une étape pour son détail ; en ambre : la boucle d'annotation et de réentraînement ; pointillés : la fusion, seulement si besoin.</p></div>
+    <div class="gb-carte gb-chaine-boite" id="chaine-carte">
+      <div class="gb-flux" id="chaine-flux" data-source="chaine"></div>
+      <div class="gb-legende">
+        <span><i style="background:var(--color-ok)"></i>écrit et testé</span>
+        <span><i style="background:var(--color-warn)"></i>en cours</span>
+        <span><i style="background:var(--color-fg-muted)"></i>à venir</span>
+        <span><i class="gb-trait" style="background:var(--gb-boucle)"></i>boucle d'annotation</span>
+        <span><i class="gb-tirets"></i>si besoin (ensemble, signal en parallèle)</span>
+      </div>
+    </div>
+    <div class="gb-grille">
+      <div class="gb-carte gb-detail" id="chaine-detail" data-source="chaine"></div>
+      <div class="gb-carte" id="tests-carte">
+        <div class="gb-carte-tete"><h3>Tests automatiques</h3><span class="gb-grand"><span class="dash-skeleton" data-source="tests_total" data-field="tests" data-row="0" data-fmt="entier">—</span> <small>tests</small></span></div>
+        <p class="gb-note">Nombre de tests par dossier de tests/.</p>
+        <div class="gb-graphe" id="tests-barres" data-source="tests" style="min-height:12rem"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== Annotation ============================== -->
+  <section class="gb-page" id="annotation" hidden>
+    <div class="gb-page-tete"><h2>Annotation</h2><p>Le premier lot, tiré sans aucun modèle, puis les lots suivants choisis par apprentissage actif.</p></div>
+    <div class="gb-grille">
+      <div class="gb-carte" id="avancement-carte">
+        <h3>Avancement du premier lot</h3>
+        <p class="gb-note">Enregistrements annotés face aux cibles du plan, compté le <span class="dash-skeleton" data-source="annotation_sites" data-field="compte_le" data-row="0" data-fmt="date">—</span> dans la base locale.</p>
+        <div class="gb-avancement" id="avancement" data-source="annotation_avancement"></div>
+      </div>
+      <div class="gb-carte" id="sites-carte">
+        <h3>Annotations par site et par micro</h3>
+        <p class="gb-note">Enregistrements annotés avec et sans <i>A. blanci</i>. Cliquer un site pour voir ses micros.</p>
+        <div class="gb-donuts" id="donuts" data-source="annotation_par_site"></div>
+        <div class="gb-legende"><span><i style="background:var(--gb-ambre)"></i>avec <i>A. blanci</i></span><span><i style="background:color-mix(in srgb, var(--color-fg) 14%, transparent)"></i>sans</span></div>
+        <div id="micros" data-source="annotation_micros"></div>
+      </div>
+    </div>
+    <div class="gb-carte" id="plan">
+      <h3>Plan d'annotation</h3>
+      <p class="gb-texte">Les prochaines campagnes dureront toutes une semaine, en saison des pluies, à Mataroni, sur de nouveaux points d'écoute. Le jeu de test imite cette situation avec des points de Mataroni jamais vus à l'entraînement. J'annote seul, puis Élodie et Benoît vérifient un sous-échantillon. Aucun benchmark n'est lancé sur ces données avant leur accord.</p>
+      <ol class="gb-etapes">
+        <li><div><strong>Répartir les points</strong><p>Avant toute écoute, chaque point d'écoute est attribué soit à l'entraînement, soit au test, jamais aux deux.</p></div></li>
+        <li><div><strong>Jeu d'entraînement</strong><p>Environ 450 extraits de 30 s. 300 en 2026, 3 par point d'écoute : un au pic du matin, un au pic du soir, un dans une autre tranche horaire. 150 en 2023, 50 sur chacun des 3 micros d'entraînement, répartis sur l'année.</p></div></li>
+        <li><div><strong>Validation</strong><p>Validation croisée en 5 plis inter-micros et non intra-micros. Chaque pli rassemble environ un cinquième des micros d'entraînement, entiers : jamais quelques enregistrements d'un micro déjà vu. On mesure ainsi la généralisation à des paysages sonores jamais entendus. Elle sert à régler la tête sans jamais toucher au jeu de test.</p></div></li>
+        <li><div><strong>Jeu de test</strong><p>Environ 250 enregistrements de 2 min écoutés en entier, sur les points tenus à l'écart, avec au moins 60 positifs pour mesurer le rappel avec une précision suffisante.</p></div></li>
+        <li><div><strong>Vérification</strong><p>Élodie et Benoît écoutent chacun 10 % de mes données annotées, à l'aveugle : mon label est caché et l'ordre mélangé.</p></div></li>
+      </ol>
+      <h4>Trois principes</h4>
+      <ul class="gb-principes">
+        <li><strong>Annotations de l'ancien prestataire ignorées</strong> : on repart de zéro, sans reprendre ses annotations, pour ne pas hériter de ses angles morts.</li>
+        <li><strong>Peu d'enregistrements sur beaucoup de points</strong> plutôt que beaucoup d'enregistrements sur peu de points. Varier les paysages sonores aide le détecteur à généraliser.</li>
+        <li><strong>Un tirage stratifié par point et par heure</strong>, fait avant toute écoute. Chaque point et chaque tranche horaire fournit des extraits avec et sans chant, si bien que la tête apprend le chant et pas l'ambiance sonore de l'heure ni du lieu.</li>
+      </ul>
+    </div>
+    <div class="gb-grille">
+      <div class="gb-carte" id="files">
+        <h3>Files d'écoute du premier lot</h3>
+        <p class="gb-note">Tirées au hasard avant toute écoute, sans aucun modèle, avec une graine fixe. Au plus un enregistrement par micro, jour et tranche horaire. Elles s'ouvrent dans le poste d'annotation (bouton File déjà écrite).</p>
+        <ul class="gb-deux-col">
+          <li><strong class="gb-mono">lot1</strong><span>424 extraits de 30 s pour l'entraînement. 274 sur les micros 2026 d'entraînement, 3 par micro : un vers 7–9 h, un vers 15–17 h, un à une autre heure. 150 en 2023, 50 par station, surtout en février–mars et en saison haute. Le début de l'extrait est tiré au hasard dans l'enregistrement.</span></li>
+          <li><strong class="gb-mono">test_v1</strong><span>250 enregistrements de 2 min écoutés en entier, sur les micros jamais utilisés à l'entraînement : tout RNRT, un micro sur cinq des autres sites 2026, une station sur deux par site en 2023. Heures de pic et saison haute deux fois plus représentées, probabilité de tirage notée pour chaque enregistrement.</span></li>
+        </ul>
+      </div>
+      <div class="gb-carte" id="poste">
+        <h3>Poste d'annotation</h3>
+        <p class="gb-note">Mon outil d'annotation, une page Streamlit qui s'ouvre dans le navigateur (uv run blanci annotate). Work in progress.</p>
+        <div class="gb-poste-img" role="img" aria-label="Capture du poste d'annotation Streamlit : spectrogramme zoomable et intervalles du chant tracés à la souris"></div>
+      </div>
+    </div>
+    <div class="gb-carte" id="apprentissage-actif">
+      <h3>Apprentissage actif</h3>
+      <p class="gb-texte">Une fois le premier lot validé, le modèle aide à choisir quoi écouter ensuite. Ces lots ne servent qu'à l'entraînement, jamais au test.</p>
+      <ol class="gb-etapes">
+        <li><div><strong>Score</strong><p>La tête en place note toutes les fenêtres encodées.</p></div></li>
+        <li><div><strong>File de vérification</strong><p>Choisit les fenêtres à écouter, par la méthode qu'on veut (ci-dessous). Par défaut, la file 60-20-20 : 60 % d'incertaines (les plus proches du seuil), 20 % des meilleurs scores, 20 % au hasard par micro et par heure.</p></div></li>
+        <li><div><strong>Poste d'annotation</strong><p>Logiciel d'écoute dans le navigateur : spectrogramme zoomable, écoute de la seule bande du chant, intervalles tracés à la souris, faux amis notés. Work in progress.</p></div></li>
+        <li><div><strong>Réentraînement</strong><p>Une nouvelle tête apprend sur tous les labels. Elle n'est adoptée que si elle fait au moins aussi bien sur le jeu de test gelé.</p></div></li>
+      </ol>
+      <p class="gb-note">La boucle recommence : les nouveaux labels donnent une nouvelle tête, qui choisit les écoutes suivantes.</p>
+      <h4>Méthodes de sélection</h4>
+      <ul class="gb-deux-col">
+        <li><strong>Similarité</strong><span>Les fenêtres les plus proches d'un chant connu, pour récolter des positifs sur les points encore peu annotés.</span></li>
+        <li><strong>Couverture</strong><span>Les fenêtres les plus éloignées de tout ce qui est déjà annoté : écouter ce qu'on n'a jamais entendu.</span></li>
+        <li><strong>Groupes d'embeddings</strong><span>Quelques fenêtres par groupe de sons qui se ressemblent. Un groupe homogène s'étiquette d'un coup.</span></li>
+        <li><strong>Carte des embeddings</strong><span>Une projection en 2D où l'on entoure à la main une zone de points pour l'écouter.</span></li>
+        <li><strong>Négatifs difficiles</strong><span>Faire écouter les fenêtres que la tête note haut alors qu'A. blanci n'y chante sûrement pas, et celles qui ressemblent aux faux amis déjà repérés (autres anoures, insectes). Une fois annotées négatives, elles apprennent à la tête ce qu'elle confond avec le chant.</span></li>
+        <li><strong>Détections isolées et trous dans un chant</strong><span>De manière générale, les chants d'A. blanci s'étendent sur la durée : faux positif probable pour une détection isolée, faux négatif probable pour une fenêtre négative entourée de positives.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================== Encodage ============================== -->
+  <section class="gb-page" id="encodage" hidden>
+    <div class="gb-page-tete"><h2>Temps d'encodage</h2><p>Durée réelle pour encoder tout le corpus de l'ONF sur le processeur du portable i5. Une barre apparaît dès qu'un encodeur a fini, lue dans la base à la mise à jour du tableau de bord.</p></div>
+    <div class="gb-carte" id="encodage-carte">
+      <h3>Encodage du corpus par encodeur</h3>
+      <p class="gb-note">Heures de calcul pour tout le corpus encodable, survoler une barre pour la source de la mesure.</p>
+      <div class="gb-graphe" id="encodage-barres" data-source="encodage" style="min-height:10rem"></div>
+    </div>
+  </section>
+
+  <!-- ============================== AnuraSet : le jeu réduit ============================== -->
+  <section class="gb-page" id="anuraset" hidden>
+    <div class="gb-page-tete"><span class="gb-surtitre-page">Pré-benchmark</span><h2>AnuraSet</h2><p>Un pré-benchmark sur des anoures du Brésil, pour trier encodeurs et têtes avant de les essayer sur les données de l'ONF. Les trois sous-pages qui suivent en donnent les résultats.</p></div>
+    <div class="gb-carte" id="anuraset-intro">
+      <h3>Pourquoi AnuraSet, et comment on le lit</h3>
+      <div class="gb-intro">
+        <div>
+          <p>Choisir un encodeur et une tête demande des données annotées, et les nôtres ne le sont pas encore. Encoder tout le corpus de l'ONF coûte des dizaines d'heures par encodeur : on ne peut pas tous les essayer dessus. AnuraSet (Cañas et al. 2023, CC BY) est un jeu public d'anoures néotropicaux du Brésil, annotés au chant près, enregistrés sur plusieurs sites. Il sert de banc d'essai pour trier les encodeurs (inférences réalisées sur machines virtuelles) et des dizaines de têtes avant de payer l'encodage du corpus ONF.</p>
+          <ul class="gb-deux-col">
+            <li><strong>Des anoures tropicaux</strong><span>Comme A. blanci : chants brefs et tonals, dans le bruit d'une forêt tropicale (insectes, pluie, autres anoures). DENMIN (notes brèves vers 5,3 kHz) est l'analogue le plus proche.</span></li>
+            <li><strong>Plusieurs sites</strong><span>Quatre sites INCT, chacun avec son micro, sa végétation, son chœur. C'est notre situation : Kaw, Trésor, Mataroni… et demain des points d'écoute jamais annotés.</span></li>
+            <li><strong>Généraliser à un site neuf</strong><span>Le cœur du projet. On ne demande pas au détecteur de reconnaître les sites qu'il a appris, mais de fonctionner là où il n'a pas encore écouté.</span></li>
+            <li><strong>Un indicateur, pas un verdict</strong><span>D'autres espèces qu'A. blanci, 2 à 4 sites par espèce. Le choix final se fera sur les données de l'ONF.</span></li>
+          </ul>
+          <h4>La méthode : un site tenu à l'écart à la fois</h4>
+          <div class="gb-plis" id="plis" data-source="anuraset_sites" role="img" aria-label="Quatre plis : à chaque pli, un site différent est tenu à l'écart pour le test, les trois autres servent à l'apprentissage."></div>
+          <ul class="gb-principes">
+            <li><strong>Un site tenu à l'écart.</strong> Quatre plis : à chaque pli, j'entraîne la tête sur trois sites et je la juge sur le quatrième, qu'elle n'a jamais vu. Les réglages d'une tête (le C de la régression logistique, qui dose la régularisation) se choisissent de la même façon à l'intérieur des trois sites d'entraînement : le site de test ne sert qu'à la note finale.</li>
+            <li><strong>Apprentissage.</strong> Toutes les fenêtres où l'espèce chante dans les trois sites d'entraînement, et 20 négatifs par positif tirés au hasard dans le même site : la tête apprend le chant et pas « tel site = chant ».</li>
+            <li><strong>Évaluation.</strong> Toutes les fenêtres du site de test, sans échantillonnage : la prévalence réelle du terrain. Une tête qui laisse passer un peu de bruit est pénalisée comme elle le serait sur les enregistrements de l'ONF.</li>
+            <li><strong>Comparaisons.</strong> Appariées à une référence choisie d'avance (perch_v2 + logistique), sur exactement les mêmes enregistrements ; bootstrap par site et correction de Holm. Limite : avec 2 à 4 sites par espèce, l'intervalle ne mesure que la variation d'un enregistrement à l'autre, pas d'un site à l'autre : il est optimiste.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Choix de l'unité : fenêtre ou minute</h4>
+          <p>Une minute d'AnuraSet, découpée en douze fenêtres de 5 s pour perch_v2. En vert, les fenêtres qui contiennent un chant. Au niveau minute, l'enregistrement est positif et son score est le plus haut des scores de ses fenêtres (encadré).</p>
+          <div class="gb-minute" role="img" aria-label="Une minute découpée en 12 fenêtres de 5 s : trois contiennent un chant ; le score de la minute est le plus haut des scores de fenêtre."><span></span><span></span><span class="pos"></span><span class="pos max"></span><span></span><span></span><span></span><span class="pos"></span><span></span><span></span><span></span><span></span></div>
+          <ul class="gb-deux-col">
+            <li><strong>Fenêtre</strong><span>Chaque fenêtre (3, 5 ou 6 s selon l'encodeur) est une unité, positive si elle contient un chant. C'est ce que voit le détecteur et ce qu'on annote, mais des fenêtres de 3 s et de 5 s ne contiennent pas le même morceau de son : leurs AP par fenêtre ne se comparent pas directement.</span></li>
+            <li><strong>Minute</strong><span>Chaque enregistrement d'une minute est une unité, de score le maximum de ses fenêtres. Seule unité identique pour tous les encodeurs, et la plus proche de l'usage final. Dans les benchmarks 01 à 06 elle s'appelle « enregistrement ».</span></li>
+          </ul>
+          <h4>Lecture de l'AP : moyenne par site ou poolée</h4>
+          <p>L'AP (précision moyenne) résume la courbe précision-rappel. Avec quatre plis, il y a deux façons de la calculer.</p>
+          <ul class="gb-deux-col">
+            <li><strong>AP moyenne par site</strong><span>Une AP par site tenu à l'écart, puis leur moyenne (un site où l'espèce ne chante pas est laissé de côté). Elle juge le classement à l'intérieur d'un site neuf : c'est la lecture principale pour choisir l'encodeur.</span></li>
+            <li><strong>AP poolée</strong><span>Les scores des quatre plis mis bout à bout et jugés ensemble. Elle juge en plus l'échelle des scores : un même seuil vaut-il pour tous les sites ?</span></li>
+          </ul>
+          <p class="gb-conseil">Lire les deux côte à côte : un grand écart entre AP par site et AP poolée signale des sites sur des échelles différentes, donc un seuil qui ne voyagera pas. Sur AnuraSet c'est le cas d'une espèce présente sur deux sites seulement (PITAZU) ; chaque site neuf demandera son propre seuil.</p>
+        </div>
+      </div>
+    </div>
+    <div class="gb-tuiles">
+      <div class="gb-tuile"><span class="gb-tuile-titre">Sites du Brésil</span><span class="gb-grand"><span class="dash-skeleton" data-source="anuraset_bilan" data-field="sites" data-row="0" data-fmt="entier">—</span></span><span class="gb-tuile-sous">un micro, une végétation, un chœur chacun</span></div>
+      <div class="gb-tuile"><span class="gb-tuile-titre">Enregistrements d'une minute</span><span class="gb-grand"><span class="dash-skeleton" data-source="anuraset_bilan" data-field="minutes" data-row="0" data-fmt="entier">—</span></span><span class="gb-tuile-sous">sur <span class="dash-skeleton" data-source="reperes" data-field="valeur" data-where="cle=anuraset_enregistrements" data-fmt="entier">—</span> dans le jeu complet</span></div>
+      <div class="gb-tuile"><span class="gb-tuile-titre">Fenêtres de 5 s jointives</span><span class="gb-grand"><span class="dash-skeleton" data-source="anuraset_bilan" data-field="fenetres" data-row="0" data-fmt="entier">—</span></span><span class="gb-tuile-sous">grille de perch_v2</span></div>
+      <div class="gb-tuile"><span class="gb-tuile-titre">Espèces retenues</span><span class="gb-grand"><span class="dash-skeleton" data-source="anuraset_bilan" data-field="especes" data-row="0" data-fmt="entier">—</span></span><span class="gb-tuile-sous">sur <span class="dash-skeleton" data-source="reperes" data-field="valeur" data-where="cle=anuraset_especes" data-fmt="entier">—</span> : celles présentes sur au moins deux sites</span></div>
+    </div>
+    <div class="gb-carte" id="matrice-carte">
+      <div class="gb-carte-tete"><h3>Qui chante où</h3><div class="gb-champ"><span>Unité</span><div id="matrice-unite"></div></div></div>
+      <p class="gb-note">On garde les enregistrements aux chants datés et ceux sans aucune espèce (seuls négatifs sûrs), et les espèces présentes sur au moins deux sites : sans deuxième site, impossible de mesurer le transfert. Cliquer le nom d'un site, en tête de colonne, pour le tenir à l'écart comme dans un pli ; recliquer pour revenir.</p>
+      <div class="gb-defile gb-matrice-boite" id="matrice" data-source="anuraset_positifs anuraset_sites anuraset_especes"></div>
+      <p class="gb-note" id="matrice-lecture" aria-live="polite"></p>
+    </div>
+    <div class="gb-carte" id="signature-carte">
+      <h3>La signature des chants</h3>
+      <p class="gb-note">Durée des chants de chaque espèce, de la plus aiguë à la plus grave. Le point marque la durée médiane, la barre épaisse va du 1er au 3e quartile (la moitié des chants), le trait fin du 10e au 90e centile. En ambre, A. blanci : une note plus brève que toutes, dans la bande de fréquence de DENMIN. Les chants de PHYCUV et LEPLAT dépassent souvent une fenêtre de 3 s : un encodeur à fenêtres de 3 s les coupe en morceaux.</p>
+      <div class="gb-graphe gb-signature" id="signature" data-source="anuraset_especes reperes"></div>
+      <div class="gb-legende"><span><i style="background:var(--color-fg)"></i>médiane</span><span><i style="background:color-mix(in srgb, var(--color-fg) 25%, transparent);border:1.5px solid var(--color-fg)"></i>1er–3e quartile</span><span><i class="gb-trait" style="background:var(--color-fg)"></i>10e–90e centile</span><span><i class="gb-tirets"></i>taille d'une fenêtre d'encodeur</span></div>
+    </div>
+  </section>
+
+  <!-- ============================== AnuraSet 1 : encodeurs ============================== -->
+  <section class="gb-page" id="encodeurs" hidden>
+    <div class="gb-page-tete"><span class="gb-surtitre-page">AnuraSet · 1 / 3</span><h2>Benchmark des encodeurs</h2><p>Benchmark global : chaque encodeur jugé avec la tête adaptée à sa sortie, un site tenu à l'écart à la fois. Indicateur, pas verdict : le choix se fera sur les données de l'ONF.</p></div>
+    <div class="gb-carte" id="encodeurs-choix">
+      <div class="gb-carte-tete"><h3>Choisir les encodeurs à comparer</h3><div class="gb-controles"><button type="button" class="gb-lien-btn" id="enc-tous">tous</button><button type="button" class="gb-lien-btn" id="enc-libres">libres seulement</button><button type="button" class="gb-lien-btn" id="enc-aucun">aucun</button></div></div>
+      <p class="gb-note">Ils s'affichent dans le classement et sur le graphique. Pastille pleine : libre d'accès.</p>
+      <div class="gb-puces" id="enc-puces" data-source="encodeurs" style="min-height:2rem"></div>
+    </div>
+    <div class="gb-carte" id="encodeurs-classement">
+      <h3>Classement des encodeurs</h3>
+      <p class="gb-note">AP moyenne par site tenu à l'écart (minute, cinq espèces), avec la meilleure tête de chaque encodeur, choisie après coup. Cliquer un en-tête pour trier.</p>
+      <div class="gb-defile gb-haut">
+        <table class="gb-table" id="enc-table" data-source="encodeurs" data-row-key="encodeur">
+          <thead><tr>
+            <th data-field="nom"><button type="button" data-tri="nom">Encodeur</button></th>
+            <th data-field="famille"><button type="button" data-tri="famille">Famille</button></th>
+            <th data-field="licence"><button type="button" data-tri="licence">Licence</button></th>
+            <th class="n" data-field="fenetres_par_s"><button type="button" data-tri="fenetres_par_s">Débit (fen./s)</button></th>
+            <th data-field="meilleure_tete"><button type="button" data-tri="meilleure_tete">Meilleure tête</button></th>
+            <th class="n" data-field="ap_site_meilleure"><button type="button" data-tri="ap_site_meilleure">AP par site</button></th>
+            <th class="n" data-field="ap_site_logistique"><button type="button" data-tri="ap_site_logistique">AP logistique</button></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="gb-carte" id="encodeurs-debit">
+      <h3>Débit contre qualité</h3>
+      <p class="gb-note">AP par site (meilleure tête) contre le nombre de fenêtres de 5 s encodées par seconde, en échelle log. Plein : libre d'accès.</p>
+      <div class="gb-graphe" id="enc-nuage" data-source="encodeurs" style="min-height:22rem"></div>
+    </div>
+  </section>
+
+  <!-- ============================== AnuraSet 2 : têtes ============================== -->
+  <section class="gb-page" id="tetes" hidden>
+    <div class="gb-page-tete"><span class="gb-surtitre-page">AnuraSet · 2 / 3</span><h2>Explorateur des têtes</h2><p>Choisir ce qu'on compare : encodeurs, têtes, espèces, unité et lecture de l'AP. Les têtes sont rangées sous leur encodeur ; chaque point est une espèce, le trait la moyenne des espèces choisies.</p></div>
+    <div class="gb-carte" id="tetes-carte">
+      <div id="tetes-controles" style="display:grid;gap:12px"></div>
+      <p class="gb-note" id="tetes-resume" aria-live="polite"></p>
+      <div class="gb-zone-tetes" id="tetes-zone" data-source="transfert comparaisons tetes_01_06"></div>
+    </div>
+  </section>
+
+  <!-- ============================== AnuraSet 3 : amorçage ============================== -->
+  <section class="gb-page" id="amorcage" hidden>
+    <div class="gb-page-tete"><span class="gb-surtitre-page">AnuraSet · 3 / 3</span><h2>Amorcer un site neuf</h2><p>Comment se comportent les têtes sur un site nouveau, selon le nombre d'annotations qu'il a déjà reçues : AP sur le site tenu à l'écart en fonction du nombre de ses enregistrements positifs annotés (moyenne des espèces et des sites). Une couleur par tête, un trait par encodeur.</p></div>
+    <div class="gb-carte" id="amorcage-carte">
+      <h3>Les têtes face au peu d'annotations</h3>
+      <p class="gb-note">k = 0 : le site neuf n'a encore aucune annotation, la tête n'a appris que sur les autres sites. « tout » : toutes ses annotations. Trois encodeurs au plus.</p>
+      <div class="gb-controles"><div class="gb-champ"><span>Unité</span><div id="amorcage-unite"></div></div></div>
+      <div class="gb-champ"><span>Encodeurs (un style de trait chacun)</span><div class="gb-puces" id="amorcage-encodeurs"></div></div>
+      <div class="gb-champ"><span>Têtes</span><div class="gb-puces" id="amorcage-tetes"></div></div>
+      <div class="gb-graphe gb-courbes" id="amorcage-courbes" data-source="amorcage"></div>
+    </div>
+  </section>
+
+  <!-- ============================== Rapports ============================== -->
+  <section class="gb-page" id="rapports" hidden>
+    <div class="gb-page-tete"><h2>Rapports de benchmark</h2><p>Les rapports complets, avec leurs figures, sont dans le dépôt : chacun a ses données (CSV) et le script qui les redessine.</p></div>
+    <div class="gb-carte" id="rapports-carte">
+      <h3>Rapports</h3>
+      <p class="gb-note">Cliquer un dossier pour ouvrir le rapport sur GitHub.</p>
+      <div class="gb-defile">
+        <table class="gb-table" id="rapports-table" data-source="rapports" data-row-key="numero">
+          <thead><tr><th data-field="numero">N°</th><th data-field="titre">Rapport</th><th data-field="date">Date</th><th data-field="statut">Statut</th><th class="n" data-field="figures">Figures</th><th class="n" data-field="donnees">CSV</th><th data-field="dossier">Dossier</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="gb-carte" id="tableaux-carte">
+      <h3>Tableaux de référence</h3>
+      <p class="gb-note">Un tableau par famille de méthodes : protocole, encodeurs, têtes, régularisations, fusion… Cliquer un nom pour ouvrir l'image sur GitHub.</p>
+      <div class="gb-defile">
+        <table class="gb-table" id="tableaux-table" data-source="tableaux" data-row-key="fichier">
+          <thead><tr><th data-field="fichier">Tableau</th><th data-field="description">Contenu</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== Bibliographie ============================== -->
+  <section class="gb-page" id="biblio" hidden>
+    <div class="gb-page-tete"><span class="gb-surtitre-page">documentation/biblio/biblio.md</span><h2>Bibliographie</h2><p>Chaque référence avec ce qu'on en retient pour A. blanci.</p></div>
+    <div class="gb-controles">
+      <label class="gb-champ"><span>Chercher</span><input type="search" class="gb-recherche" id="biblio-q" placeholder="Perch, anoures, annotation…"></label>
+      <label class="gb-champ"><span>Section</span><select class="gb-select" id="biblio-section"></select></label>
+      <span class="gb-note" id="biblio-nb"></span>
+    </div>
+    <div class="gb-carte gb-biblio" id="biblio-liste" data-source="biblio"></div>
+  </section>
+</div>
+
+<script src="commun.js"></script>
+<script src="vue.js"></script>
+<script src="anuraset.js"></script>
+<script src="lectures.js"></script>
+<script src="bandeau.js"></script>
