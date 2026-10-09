@@ -190,7 +190,14 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
   <span class="group"><span class="lbl">Bande</span>
     <input type="number" id="lo" min="0" max="24" step="0.1"> –
     <input type="number" id="hi" min="0" max="24" step="0.1"> kHz
-    <label><input type="checkbox" id="bandonly"> n'écouter qu'elle</label></span>
+    <label><input type="checkbox" id="bandonly"> n'écouter qu'elle</label>
+    <select id="slope" title="Raideur du filtre hors de la bande : plus elle est forte, plus les sons
+ hors bande sont coupés, mais plus le filtre « sonne » sur les claquements">
+      <option value="12">12 dB/oct</option><option value="24">24 dB/oct</option>
+      <option value="48">48 dB/oct</option><option value="96">96 dB/oct</option>
+      <option value="fft" title="Coupure franche : rien hors de la bande, mais pré-écho et
+ traînée à la fréquence des frontières sur les claquements">FFT (coupure franche)</option>
+    </select></span>
   <span class="group"><span class="lbl">Volume</span>
     <input type="range" id="gain" min="0" max="30" step="1"> <span class="val" id="gainv"></span>
   </span>
@@ -244,22 +251,123 @@ function saveSettings() {
 }
 function showSettings() {
   $("lo").value = (S.band[0] / 1000).toFixed(1); $("hi").value = (S.band[1] / 1000).toFixed(1);
-  $("bandonly").checked = !!S.bandOnly; $("gain").value = S.gain;
+  $("bandonly").checked = !!S.bandOnly; $("slope").value = String(S.slope);
+  $("gain").value = S.gain;
   $("gainv").textContent = `+${S.gain} dB`; $("range").value = String(S.range);
   $("rangev").textContent = `${S.range} dB`; $("contrastv").textContent = String(S.contrast);
   $("cless").disabled = S.contrast <= 0; $("cmore").disabled = S.contrast >= 8;
   $("chan").querySelectorAll("button")
     .forEach(b => b.classList.toggle("on", +b.value === S.channel));
 }
+// Passe-haut et passe-bas de Butterworth d'ordre 2n, chacun fait de n biquads d'ordre 2 dont
+// les Q sont ceux des paires de pôles : −3 dB pile sur la frontière, puis 12 n dB par octave.
+// (Mettre des biquads à Q = 0,707 en cascade amollirait le coude.) En mode FFT, ils laissent
+// tout passer : c'est le son lu qui est déjà filtré (`applyFFT`).
+const stages = () => S.slope === "fft" ? 1 : S.slope / 12;
+function butterQ(n) {
+  return Array.from({length: n}, (_, k) => 1 / (2 * Math.cos((2 * k + 1) * Math.PI / (4 * n))));
+}
+function wire(g) {
+  g.source.disconnect(); [...g.hp, ...g.lp].forEach(f => f.disconnect());
+  const qs = butterQ(stages());
+  g.hp = qs.map(Q => new BiquadFilterNode(actx, {type: "highpass", Q}));
+  g.lp = qs.map(Q => new BiquadFilterNode(actx, {type: "lowpass", Q}));
+  [g.source, ...g.hp, ...g.lp, g.gain].reduce((a, b) => (a.connect(b), b));
+}
 function applyAudio() {
   graphs.forEach(g => {
-    const nyq = actx.sampleRate / 2;
-    const lo = S.bandOnly ? Math.max(S.band[0], 10) : 10;
-    const hi = S.bandOnly ? Math.min(S.band[1], nyq * 0.99) : nyq * 0.99;
+    if (g.hp.length !== stages()) wire(g);
+    const nyq = actx.sampleRate / 2, on = S.bandOnly && S.slope !== "fft";
+    const lo = on ? Math.max(S.band[0], 10) : 10;
+    const hi = on ? Math.min(S.band[1], nyq * 0.99) : nyq * 0.99;
     g.hp.forEach(f => f.frequency.value = lo);
     g.lp.forEach(f => f.frequency.value = hi);
     g.gain.gain.value = Math.pow(10, S.gain / 20);
   });
+  clearTimeout(fftTimer); fftTimer = setTimeout(applyFFT, 250);  // pas à chaque pas d'un glisser
+}
+
+// --- Mode FFT : tout l'extrait passe en fréquences, ce qui sort de la bande est mis à zéro, on
+// revient au signal et le lecteur bascule sur ce son, au même instant. Les canaux vont par
+// deux dans une même FFT complexe (l'un en partie réelle, l'autre en imaginaire) : le masque
+// étant réel et symétrique, il les filtre tous deux sans les mélanger.
+let fftTimer = null;
+function fftInPlace(re, im, inverse) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+  }
+  for (let size = 2; size <= n; size *= 2) {
+    const half = size / 2, a0 = (inverse ? 2 : -2) * Math.PI / size;
+    for (let j = 0; j < half; j++) {
+      const c = Math.cos(a0 * j), sn = Math.sin(a0 * j);
+      for (let a = j; a < n; a += size) {
+        const b = a + half;
+        const tr = c * re[b] - sn * im[b], ti = c * im[b] + sn * re[b];
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+      }
+    }
+  }
+}
+function brickwall(x, y, rate, lo, hi) {  // x, y : deux canaux (y peut manquer)
+  const len = x.length;
+  let n = 1; while (n < len + rate) n *= 2;  // au moins 1 s de zéros : pas de repliement
+  const re = new Float64Array(n), im = new Float64Array(n);
+  re.set(x); if (y) im.set(y);
+  fftInPlace(re, im, false);
+  for (let k = 0; k < n; k++) {
+    const f = Math.min(k, n - k) * rate / n;
+    if (f < lo || f > hi) { re[k] = 0; im[k] = 0; }
+  }
+  fftInPlace(re, im, true);
+  const out = [new Float32Array(len), y ? new Float32Array(len) : null];
+  for (let i = 0; i < len; i++) {
+    out[0][i] = re[i] / n; if (y) out[1][i] = im[i] / n;
+  }
+  return out;
+}
+function wavURL(x, rate) {  // WAV 16 bits mono
+  const v = new DataView(new ArrayBuffer(44 + 2 * x.length));
+  const txt = (o, t) => [...t].forEach((ch, k) => v.setUint8(o + k, ch.charCodeAt(0)));
+  txt(0, "RIFF"); v.setUint32(4, 36 + 2 * x.length, true); txt(8, "WAVEfmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, 2 * rate, true); v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true); txt(36, "data"); v.setUint32(40, 2 * x.length, true);
+  for (let i = 0; i < x.length; i++) {
+    v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, x[i])) * 32767, true);
+  }
+  return URL.createObjectURL(new Blob([v.buffer], {type: "audio/wav"}));
+}
+function swapSource(el, url, key) {
+  const t = el.currentTime, playing = !el.paused;
+  if (el.src !== el._orig) URL.revokeObjectURL(el.src);
+  el._key = key; el.src = url;
+  el.addEventListener("loadedmetadata", () => {
+    el.currentTime = t; if (playing) el.play();
+  }, {once: true});
+}
+function applyFFT() {
+  const key = S.bandOnly && S.slope === "fft" ? S.band.join("-") : "";
+  const todo = players.filter(el => el._key !== key);
+  if (!todo.length) return;
+  if (!key) { todo.forEach(el => swapSource(el, el._orig, "")); return; }
+  if (players.some((_, i) => !buffers[i])) return;  // repris à la fin du décodage
+  $("status").textContent = "filtrage FFT…";
+  setTimeout(() => {  // laisse le temps d'afficher le message
+    const token = loading, idx = players.map((el, i) => i).filter(i => todo.includes(players[i]));
+    const rate = buffers.rate, lo = Math.max(S.band[0], 1), hi = S.band[1];
+    for (let k = 0; k < idx.length; k += 2) {
+      const [a, b] = [idx[k], idx[k + 1]];
+      const out = brickwall(buffers[a], b === undefined ? null : buffers[b], rate, lo, hi);
+      if (token !== loading) return;
+      swapSource(players[a], wavURL(out[0], rate), key);
+      if (b !== undefined) swapSource(players[b], wavURL(out[1], rate), key);
+    }
+    $("status").textContent = "";
+  }, 30);
 }
 function setBand(lo, hi) {
   lo = Math.max(0, Math.min(lo, hi - 100)); hi = Math.max(hi, lo + 100);
@@ -270,6 +378,9 @@ $("lo").onchange = () => setBand(+$("lo").value * 1000, S.band[1]);
 $("hi").onchange = () => setBand(S.band[0], +$("hi").value * 1000);
 $("bandonly").onchange = () => {
   S.bandOnly = $("bandonly").checked; applyAudio(); saveSettings();
+};
+$("slope").onchange = () => {
+  const v = $("slope").value; S.slope = v === "fft" ? v : +v; applyAudio(); saveSettings();
 };
 $("gain").oninput = () => {
   S.gain = +$("gain").value; showSettings(); applyAudio(); saveSettings();
@@ -336,6 +447,7 @@ function render(args) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
   }
   if (S.contrast === undefined) S.contrast = 0;
+  if (![12, 24, 48, 96, "fft"].includes(S.slope)) S.slope = 24;
   $("ivbar").style.display = D.interval_mode ? "" : "none";
   $("qbar").style.display = D.interval_mode ? "" : "none";
   if (newLabel === null) {
@@ -374,7 +486,9 @@ function render(args) {
 // --- Audio : chargé en mémoire (lecture n'importe où), décodé pour le spectrogramme --------
 async function load() {
   const token = ++loading;
-  players.forEach(p => { p.pause(); URL.revokeObjectURL(p.src); });
+  players.forEach(p => {
+    p.pause(); URL.revokeObjectURL(p.src); if (p._orig !== p.src) URL.revokeObjectURL(p._orig);
+  });
   const box = $("players");
   box.innerHTML = ""; players = []; graphs = []; active = 0;
   $("status").textContent = "chargement de l'audio…";
@@ -386,13 +500,11 @@ async function load() {
     div.innerHTML = `<span>${a.name}</span>`;
     const el = document.createElement("audio");
     el.controls = true; el.preload = "auto";
-    el.src = URL.createObjectURL(new Blob([data[i]], {type: "audio/wav"}));
+    el.src = el._orig = URL.createObjectURL(new Blob([data[i]], {type: "audio/wav"}));
+    el._key = "";
     const source = actx.createMediaElementSource(el);
-    const hp = [0, 1].map(() => new BiquadFilterNode(actx, {type: "highpass", Q: 0.7071}));
-    const lp = [0, 1].map(() => new BiquadFilterNode(actx, {type: "lowpass", Q: 0.7071}));
-    const gain = new GainNode(actx);
-    [source, ...hp, ...lp, gain].reduce((a, b) => (a.connect(b), b)).connect(actx.destination);
-    graphs.push({hp, lp, gain});
+    const g = {source, hp: [], lp: [], gain: new GainNode(actx)};
+    g.gain.connect(actx.destination); wire(g); graphs.push(g);
     el.addEventListener("play", () => {
       if (actx.state !== "running") actx.resume();
       players.forEach((p, j) => { if (j !== i) p.pause(); });
@@ -411,6 +523,7 @@ async function load() {
     draw();
   }
   $("status").textContent = "";
+  applyFFT();
 }
 function mark() {
   [...$("players").children].forEach((d, j) => d.classList.toggle("playing", j === active));
