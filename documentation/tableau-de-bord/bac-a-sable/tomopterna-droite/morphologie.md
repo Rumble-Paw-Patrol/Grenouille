@@ -15,18 +15,19 @@ par étape avec le skill.
 | Caractère | Sur la photo | Pour le sprite |
 |---|---|---|
 | Orientation | **de profil, tournée vers la gauche**, vers l'autre grenouille ; on voit son flanc gauche | membres gauches (`_g`) devant, droits (`_d`) de l'autre côté |
-| Tête | museau court, tronqué ; narine nette au bout, en bourrelet ; dos du crâne presque droit jusqu'à la nuque | profil en droites, comme la grenouille de gauche |
-| Œil | gros, globe gris argenté, cercle noir, pupille en fente verticale en amande ; paupière supérieure verte en bourrelet ; il dépasse nettement le crâne | à mesurer à l'étape 1 (environ 3 unités de rayon) |
+| Tête | museau tronqué, plus long qu'on ne croit ; narine nette au bout, en bourrelet ; dos du crâne presque droit jusqu'à la nuque ; tête petite pour l'œil | profil en droites, comme la grenouille de gauche |
+| Œil | très gros et globuleux, globe gris argenté, cercle noir, pupille en fente verticale en amande ; paupière supérieure verte en bourrelet ; il dépasse nettement le crâne | à mesurer à l'étape 1 (environ 3 unités de rayon) |
 | Autre œil | une petite bosse verte en avant de l'œil, au-dessus du museau | une bosse de peau, sans globe visible (à confirmer) |
 | Tympan | un disque vert rond, net, derrière l'œil et en dessous | un trait rond, comme sur la grenouille de gauche |
-| Lèvre | un liseré crème, du bout du museau jusque sous le tympan ; des mouchetures sombres dessous | une droite ; mouchetures en 3a |
+| Lèvre et mâchoire | un liseré crème, du bout du museau ; la ligne de la mâchoire va jusqu'au-dessus de l'épaule ; des mouchetures sombres dessous | une droite ; mouchetures en 3a |
 | Gorge et poitrine | blanc lilas, sous la tête | — |
 | Flanc | orangé, granuleux, barré et taché de violet-noir (tigré) ; une rangée de granules blanches au bord du vert du dos | — |
 | Dos | vert, lisse, en pente douce de la nuque à la croupe, au-dessus de la patte arrière | — |
-| Bras gauche (devant) | vert dehors, de l'épaule, sous le bord du dos, à la main sur le dessus de la branche ; liseré de granules blanches ; 3 doigts visibles, à grands disques, deux qui s'enroulent sous la branche | 3 doigts sur 4 (le pouce caché ?) |
-| Bras droit (de l'autre côté) | sort de sous la gorge, orangé et barré, granuleux dessous ; descend en diagonale vers la gauche jusqu'à la main sur la branche ; 3 doigts visibles, dont un vers la gauche sur la branche | 3 doigts sur 4 |
-| Patte arrière gauche (devant) | repliée à l'arrière : la cuisse, orangée et barrée (« tiger-leg »), entre le bras et le pied ; le talon levé, granuleux, en haut ; le tarse redescend à la verticale jusqu'à la branche, bordé de vert dehors ; 3 orteils en éventail sur la branche | 3 orteils sur 5 |
-| Patte arrière droite (de l'autre côté) | cachée ; sous la branche pend une forme orangée en éventail, terminée par un disque : son pied, ou une feuille ? (sous la grenouille de gauche, c'était une feuille) | question à Léonard |
+| Bras gauche (devant) | le bras, fin, part à l'horizontale de l'épaule, loin à l'avant de la grenouille, jusqu'au coude, bien visible, qui ne touche pas le corps ; l'avant-bras, plus épais, vert dehors, liseré de granules blanches, descend à la main sur le dessus de la branche | 4 doigts : 3 bien visibles, à grands disques, et un discret qui monte sur la branche, derrière l'avant-bras |
+| Bras droit (de l'autre côté) | de la main, sur la branche à gauche, l'avant-bras orangé et barré part en arrière-plan vers la droite et un peu vers le haut jusqu'au coude, sous la poitrine ; le bras remonte vers le haut et la gauche jusqu'à l'épaule droite, une très légère bosse sur le corps | 4 doigts : 3 visibles, et un qui part vers la droite le long de la branche, jusqu'à presque toucher le doigt du haut de la main gauche |
+| Patte arrière gauche (devant) | repliée à l'arrière : le tibia, vertical, barré, du genou, en haut, au pied sur la branche ; la cuisse, qu'on voit à peine, monte à la verticale depuis derrière la branche, derrière le tibia mais devant le postérieur : sa face interne, jaune à rayures foncées horizontales, à gauche du tibia, et un peu de vert à sa droite ; 3 orteils en éventail sur la branche | 3 orteils sur 5 (à compter à l'étape 1) |
+| Patte arrière droite (de l'autre côté) | **la masse orangée sous la branche est le pied droit** (sous la grenouille de gauche, c'était une feuille) : il part en diagonale vers le bas et la gauche, à l'ombre ; la plante, claire, est tournée vers le haut ; un orteil monte derrière la branche, un part vers le haut et la droite derrière elle, un à l'horizontale vers la droite, dans le vide ; un tibia, en arrière-plan, le relie à la branche | 3 orteils ; le tibia derrière le pied |
+| Coudes et avant-bras | coudes bien visibles ; l'avant-bras plus épais que le bras, qui est fin | — |
 | Doigts et orteils | épais, à grands disques ; ceux qui s'enroulent sous la branche montrent leur disque par la tranche | doigts d'environ 3 pixels, disques de 6 à 7, chacun de sa forme |
 
 ## Cadrage
@@ -34,7 +35,8 @@ par étape avec le skill.
 - **Mode :** image. La même photo d'Olivier Louguet ; seulement la grenouille de droite, à la
   demande de Léonard, après la grenouille de gauche (`../tomopterna-gauche/`).
 - **Livrable :** la grenouille et le bout de branche sous elle (la branche est dessinée dès
-  l'ébauche, les doigts l'enserrent). Destination à décider ; rien hors du bac à sable.
+  l'ébauche, les doigts l'enserrent). Destination : « pas dans le projet, je fais ça pour le
+  plaisir » (Léonard, 8/10) ; rien hors du bac à sable.
 - **Taille :** la même échelle que la grenouille de gauche, 0,28 : une unité vaut 7,14 pixels de
   photo. Le sprite couvre le rectangle de 55 × 45 unités qui commence en (118, 23) dans le
   repère de la scène, soit 110 × 90 pixels, comme la grenouille de gauche ; la grenouille y fait
