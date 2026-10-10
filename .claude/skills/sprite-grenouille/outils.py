@@ -41,7 +41,8 @@ planche acceptent l'un ou l'autre.
         Images du sprite côte à côte, la photo de référence à droite si donnée.
     zoom FICHIER.json SORTIE.png CLE x0,y0,x1,y1
         Une zone agrandie, pixel par pixel, pour juger un détail (épaule, œil, doigts) ; sprite
-        ou composition.
+        ou composition. Les pièces en demi-pixels d'un sprite seul (« fins » : la pupille fine)
+        y sont posées en cases deux fois plus petites.
     controle SPRITE.json
         Groupes de pixels qui ne tiennent pas au reste (contour exclu, teinté compris ; voisins
         par un côté),
@@ -259,6 +260,19 @@ def zoom(fichier, sortie, cle, cadre):
                     Image.new("RGB", (z - 1, z - 1), tuple(a[y, x, :3].tolist())),
                     ((x - x0) * z, (y - y0) * z),
                 )
+    # les pièces en demi-pixels d'un sprite seul (la pupille fine), en cases de z / 2
+    d = json.load(open(fichier))
+    f = d.get("fins", {}).get(cle_fixe(d, cle)) if "grenouilles" not in d else None
+    if f:
+        h = z // 2
+        for j, r in enumerate(rangees({"images": {"f": f["rangs"]}}, "f")):
+            for i, c in enumerate(r):
+                if c != ".":
+                    rvb = tuple(int(d["palette"][c][k : k + 2], 16) for k in (1, 3, 5))
+                    im.paste(
+                        Image.new("RGB", (h - 1, h - 1), rvb),
+                        ((f["x"] - x0) * z + i * h, (f["y"] - y0) * z + j * h),
+                    )
     im.save(sortie)
 
 

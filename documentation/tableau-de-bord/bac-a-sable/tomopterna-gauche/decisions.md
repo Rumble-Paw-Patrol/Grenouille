@@ -163,3 +163,10 @@ l'ébauche et le croquis.
   ventre se peignent en continu, mêlés sur 6 à 8 pixels par une limite irrégulière. Le vert
   n'a plus de pixels sombres parsemés (ni grain ni trame) : trois verts (citron, émeraude,
   bleu-vert), chacun avec ses ombres et ses lumières, se fondent en grandes zones.
+- Éclat (tour 3) : 1 500 couleurs, c'était trop : les transitions se font en paliers, sans
+  trame (5 entre les verts, 7 dans le ventre), chaque pixel prenant un ton de rampe tel quel ;
+  375 couleurs. Les trois verts sont plus distincts : citron plus clair, émeraude, bleu-vert
+  menthe (le « citron » tournait au kaki : le sens des décalages de teinte était inversé).
+- Éclat (tour 3), essai : la pupille en double résolution, une pièce en demi-pixels sur le
+  globe où la fente devient une amande pointue aux deux bouts ; la planche la dessine.
+- Éclat (tour 3) : plus de pixels bleus en haut de la fente : elle est d'un seul noir.

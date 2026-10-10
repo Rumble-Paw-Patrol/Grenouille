@@ -82,7 +82,10 @@ const C = D.grenouilles ? D : { largeur: D.largeur, hauteur: D.hauteur, grenouil
 const POSES = [["0001", "repos"], ["1001", "gorge gonflée"], ["0101", "flanc gonflé"], ["0011", "œil fermé"], ["0000", "tête baissée"], ["0002", "tête relevée"]];
 for (const g of C.grenouilles) {
   const im = g.sprite.images;
-  g.img = Object.fromEntries(Object.entries(im).map(([k, rangs]) => [k, rangs.map((r) => [...r.matchAll(/(\D)(\d+)/g)].map((m) => [m[1], +m[2]]))]));
+  const lire = (rangs) => rangs.map((r) => [...r.matchAll(/(\D)(\d+)/g)].map((m) => [m[1], +m[2]]));
+  g.img = Object.fromEntries(Object.entries(im).map(([k, rangs]) => [k, lire(rangs)]));
+  // pièces en demi-pixels (la pupille fine), posées sur certaines images
+  g.fins = Object.fromEntries(Object.entries(g.sprite.fins || {}).map(([k, f]) => [k, { x: f.x, y: f.y, rangs: lire(f.rangs) }]));
   g.anime = POSES.every(([k]) => k in im);
   g.repos = "0001" in im ? "0001" : Object.keys(im)[0];
 }
@@ -140,12 +143,24 @@ function scene(toile, fixe) {
       }
     }
     C.grenouilles.forEach((g, k) => {
-      const img = g.img[cle(g, etats[k], t)], pal = g.sprite.palette;
+      const kk = cle(g, etats[k], t), img = g.img[kk], pal = g.sprite.palette;
       for (let y = 0; y < img.length; y++) {
         let x = 0;
         for (const [c, n] of img[y]) {
           if (c !== ".") { ctx.fillStyle = pal[c]; ctx.fillRect((x + g.x + DX) * p, (y + g.y + DY) * p, n * p, p); }
           x += n;
+        }
+      }
+      const f = g.fins[kk];
+      if (f) {  // en demi-pixels, bords arrondis au pixel de l'écran
+        const ox = (f.x + g.x + DX) * p, oy = (f.y + g.y + DY) * p, h = p / 2;
+        for (let y = 0; y < f.rangs.length; y++) {
+          let x = 0;
+          const y0 = Math.round(oy + y * h), y1 = Math.round(oy + (y + 1) * h);
+          for (const [c, n] of f.rangs[y]) {
+            if (c !== ".") { const x0 = Math.round(ox + x * h), x1 = Math.round(ox + (x + n) * h); ctx.fillStyle = pal[c]; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); }
+            x += n;
+          }
         }
       }
     });

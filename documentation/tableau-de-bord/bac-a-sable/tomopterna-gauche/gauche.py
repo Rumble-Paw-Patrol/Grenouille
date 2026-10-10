@@ -260,14 +260,15 @@ def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=N
     }
 
 
-def tete_tournee(tete):
+def tete_tournee(tete, x=None, y=None):
     """Coordonnées vues par la tête, tournée de tete × PAS autour du cou ; l'effet s'estompe
     vers le corps (rien ne bouge en arrière du pivot). Une tête décrite tournée vers la droite
     (en mode image, sans MIROIR : museau à droite de la nuque) tourne dans l'autre sens."""
+    x, y = (X, Y) if x is None else (x, y)  # une autre grille : la pupille en demi-pixels
     sens = -1 if SQUELETTE and SQUELETTE["museau"][0] > SQUELETTE["nuque"][0] else 1
-    poids = np.clip((sens * (PIVOT[0] - X) + 3) / 6, 0, 1)
+    poids = np.clip((sens * (PIVOT[0] - x) + 3) / 6, 0, 1)
     a = -sens * tete * PAS * poids
-    dx, dy = X - PIVOT[0], Y - PIVOT[1]
+    dx, dy = x - PIVOT[0], y - PIVOT[1]
     return PIVOT[0] + np.cos(a) * dx - np.sin(a) * dy, PIVOT[1] + np.sin(a) * dx + np.cos(a) * dy
 
 
@@ -597,7 +598,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         ),
         *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "devant", None, barres_doigts_d),
     ]
-    oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne}
+    oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne, "tete": tete}
     oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
     oeil["u"], oeil["v"] = (xt - ox) / oeil["r"], (yt - oy) / oeil["r"]
     ax, ay = S["autre_oeil"]
@@ -1010,10 +1011,16 @@ def details(f, traits, motifs, oeil, eclat=None):
     return oeil_detaille(img, oeil, eclat)
 
 
-# avec l'éclat, ces matières se peignent en continu : le vert en grandes zones plus jaunes ou
-# plus bleues qui se mélangent, sans grain ni trame ; gorge, ventre et bas du ventre fondus l'un
-# dans l'autre sur plusieurs pixels, par une limite irrégulière (corrections de Léonard)
+# avec l'éclat, ces matières se peignent sans grain ni trame : le vert en grandes zones plus
+# jaunes ou plus bleues qui se mêlent ; gorge, ventre et bas du ventre fondus l'un dans l'autre
+# sur plusieurs pixels, par une limite irrégulière (corrections de Léonard)
 FONDUS = ("dos", "gorge", "ventre", "bas_ventre")
+
+
+# l'entre-deux (correction de Léonard : 1 500 couleurs, c'était trop) : les transitions se font
+# en quelques paliers, sans trame ; 5 paliers entre les verts, 7 dans le ventre, et les tons de
+# chaque rampe pris tels quels (11)
+PALIERS_VERT, PALIERS_VENTRE = 5, 7
 
 
 def peindre_fondus(img, zone, lum, mat):
@@ -1021,33 +1028,45 @@ def peindre_fondus(img, zone, lum, mat):
         for (j, i), c in zip(zip(*np.nonzero(m), strict=False), rvb[m], strict=True):
             img[j, i] = hexa_de(*(c / 255))
 
-    # le vert : la lumière lissée, lue en continu dans trois rampes (vert citron, émeraude,
-    # bleu-vert), mêlées selon un champ lisse en grandes taches qui se fondent l'une dans l'autre
+    def ton(rampe_, pos):  # le ton de la rampe le plus proche : pas de mélange entre tons
+        return continue_(rampe_, np.round(pos))
+
+    # le vert : la lumière lissée, lue dans trois rampes bien distinctes (vert citron, émeraude,
+    # bleu-vert), mêlées en paliers selon un champ lisse en grandes taches
     vert = zone == "dos"
     pos = lisser(lum, vert) * 10
-    verts = [  # (décalage de teinte, teinte des ombres, des lumières, de combien plus clair)
-        continue_(rampe_eclat(_decaler(MATIERES["dos"], dh), o, li), pos + dp)
+    # (décalage de teinte : négatif vers le jaune, positif vers le bleu ; teinte des ombres, des
+    # lumières ; de combien plus clair)
+    verts = [
+        ton(rampe_eclat(_decaler(MATIERES["dos"], dh), o, li), pos + dp)
         for dh, o, li, dp in (
-            (0.06, 0.40, 0.14, 1.3),
-            (0.0, 0.47, 0.22, 0.0),
-            (-0.1, 0.53, 0.37, -0.6),
+            (-0.07, 0.36, 0.15, 1.2),  # vert citron, plus clair
+            (0.0, 0.45, 0.22, 0.0),  # émeraude
+            (0.1, 0.53, 0.40, -0.6),  # bleu-vert, menthe dans la lumière
         )
     ]
     champ = _flou(_flou(np.random.default_rng(23).random((H, W)), 6), 6)
-    t = np.clip((champ - champ.mean()) / (1.6 * champ.std()), -1, 1)[..., None]
+    t = np.clip((champ - champ.mean()) / (1.6 * champ.std()), -1, 1)
+    t = (np.round((t + 1) / 2 * (PALIERS_VERT - 1)) / (PALIERS_VERT - 1) * 2 - 1)[..., None]
     rvb = np.where(t < 0, verts[1] * (1 + t) - verts[0] * t, verts[1] * (1 - t) + verts[2] * t)
     poser(vert, rvb)
-    # le ventre : les trois matières, chacune lue en continu dans sa rampe, mêlées selon leurs
-    # zones floutées (sur 6 à 8 pixels) et un peu de bruit, pour une limite qui ondule
+    # le ventre : gorge, ventre et bas du ventre mêlés selon leurs zones floutées (sur 6 à 8
+    # pixels) et un peu de bruit, pour une limite qui ondule ; en paliers, de la gorge (-1) au
+    # bas du ventre (+1) en passant par le ventre (0)
     peau = np.isin(zone, FONDUS[1:])
-    pos = lum * 10
-    total, rvb = np.zeros((H, W)), np.zeros((H, W, 3))
+    poids = []
     for k, n in enumerate(FONDUS[1:]):
         bruit = _flou(np.random.default_rng(40 + k).random((H, W)), 3)
-        poids = _flou(_flou((mat == n).astype(float), 3), 3) * (0.6 + bruit)
-        total += poids
-        rvb += poids[..., None] * continue_(rampe_eclat(MATIERES[n], *ECLAT[n][:2]), pos)
-    poser(peau, rvb / np.maximum(total, 1e-6)[..., None])
+        poids.append(_flou(_flou((mat == n).astype(float), 3), 3) * (0.6 + bruit))
+    total = np.maximum(sum(poids), 1e-6)
+    sv = (poids[2] - poids[0]) / total
+    m = (PALIERS_VENTRE - 1) / 2
+    sv = (np.round(sv * m) / m)[..., None]
+    gorge, ventre, bas = (
+        ton(rampe_eclat(MATIERES[n], *ECLAT[n][:2]), lum * 10) for n in FONDUS[1:]
+    )
+    rvb = np.where(sv < 0, ventre * (1 + sv) - gorge * sv, ventre * (1 - sv) + bas * sv)
+    poser(peau, rvb)
 
 
 def noms(f):
@@ -1083,11 +1102,48 @@ def oeil_detaille(img, oeil, eclat=False):
     img[bord(m)] = "#211A33" if eclat else OEIL["cercle"]
     fente = np.abs(u) < 0.26 * (1 - (v / 0.82) ** 2)
     img[m & fente] = "#120E22" if eclat else OEIL["pupille"]
-    bleu = "#3B4E92" if eclat else "#2E3550"
+    # le haut de la fente bleuté du modelé validé ; avec l'éclat, une fente d'un seul noir
+    # (correction de Léonard)
+    bleu = NOIRS[0] if eclat else "#2E3550"
     img[m & fente & (v < -0.35) & (np.abs(u) < 0.12)] = bleu  # le haut de la fente bleuté
     img[m & ((u + 0.42) ** 2 + (v + 0.42) ** 2 < 0.035)] = "#FFFFFF"
     img[m & ((u - 0.4) ** 2 + (v - 0.45) ** 2 < 0.02) & ~fente] = "#9FB4C0"
     return img
+
+
+# la pupille en double résolution (essai de Léonard) : au rendu détaillé, une pièce à
+# demi-pixels posée sur le globe, où seule la fente est redessinée, plus fine et plus nette
+PUPILLE_FINE = True
+NOIRS = ("#120E22",)  # la fente, avec l'éclat
+
+
+def pupille_fine(img, oeil):
+    """La pièce en demi-pixels du globe : (colonne, rangée) de son coin en pixels du sprite et
+    l'image deux fois plus fine ; les pixels de l'image, sauf la fente, refaite à cette
+    résolution, et l'iris redessiné là où l'ancienne fente, plus grossière, débordait."""
+    m = oeil["masque"]
+    jj, ii = np.nonzero(m)
+    j0, j1, i0, i1 = jj.min(), jj.max() + 1, ii.min(), ii.max() + 1
+
+    def double(a):
+        return np.repeat(np.repeat(a[j0:j1, i0:i1], 2, 0), 2, 1)
+
+    piece = double(img)
+    hj, hi = np.mgrid[2 * j0 : 2 * j1, 2 * i0 : 2 * i1]
+    x2 = ORIGINE[0] + (hi + 0.5) / (2 * ECHELLE)
+    y2 = ORIGINE[1] + (hj + 0.5) / (2 * ECHELLE)
+    xt, yt = tete_tournee(oeil["tete"], x2, y2)
+    u, v = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
+    dedans = double(m & ~bord(m))
+    fente = dedans & (np.abs(u) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4)
+    tons = rampe_eclat(OEIL["iris"], 0.62, 0.11, 9)
+    trame = np.tile(BAYER, (piece.shape[0] // 4 + 1, piece.shape[1] // 4 + 1))
+    trame = trame[: piece.shape[0], : piece.shape[1]]
+    idx = np.clip(np.floor(8 * (0.57 - 0.33 * v - 0.15 * u) + trame * 0.9), 0, 8).astype(int)
+    iris = dedans & np.isin(piece, NOIRS) & ~fente
+    piece[iris] = np.array(tons, object)[idx][iris]
+    piece[fente] = NOIRS[0]
+    return int(i0), int(j0), piece
 
 
 def _decaler(hexa, dh):
@@ -1200,14 +1256,29 @@ def squelette():
 
 def produire(etape):
     if etape == "animation":
-        images = {}
-        for g in (0, 1):
-            for s in (0, 1):
-                for c in (0, 1):
-                    for t in (-1, 0, 1):
-                        images[f"{g}{s}{c}{t + 1}"] = details(*formes(g * 0.9, s * 0.7, bool(c), t))
-        return coder(images)
-    sprite = coder({"0001": RENDUS[etape](*formes())})
+        poses = {
+            f"{g}{s}{c}{t + 1}": (g * 0.9, s * 0.7, bool(c), t)
+            for g in (0, 1)
+            for s in (0, 1)
+            for c in (0, 1)
+            for t in (-1, 0, 1)
+        }
+    else:
+        poses = {"0001": (0.0, 0.0, False, 0)}
+    rendu = details if etape == "animation" else RENDUS[etape]
+    images, coins = {}, {}
+    for cle, reglage in poses.items():
+        f, traits, motifs, oeil = formes(*reglage)
+        images[cle] = rendu(f, traits, motifs, oeil)
+        fine = PUPILLE_FINE and ECLAT_ACTIF and etape in ("details", "animation")
+        if fine and not oeil["ferme"]:
+            *coins[cle], images["fin " + cle] = pupille_fine(images[cle], oeil)
+    sprite = coder(images)
+    if coins:  # les pièces en demi-pixels, à part : la planche les pose sur l'image
+        sprite["fins"] = {
+            cle: {"x": x, "y": y, "rangs": sprite["images"].pop("fin " + cle)}
+            for cle, (x, y) in coins.items()
+        }
     if etape in ("ebauche", "croquis") and SQUELETTE:
         # la planche trace le squelette ; visible d'emblée à l'ébauche, sur demande au croquis
         sprite |= squelette() | {"squelette_visible": etape == "ebauche"}

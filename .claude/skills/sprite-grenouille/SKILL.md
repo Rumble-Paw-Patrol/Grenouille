@@ -517,17 +517,29 @@ Une fois le modelé jugé **parfait** : `cp <code>_details.json <code>_details_v
 commit.
 
 **L'éclat, si Léonard donne carte blanche** (fait pour A. blanci et tomopterna) : reteinter le
-modelé validé, sans suivre la photo, pour faire ressortir la brillance. Rampes plus longues
-(une dizaine de tons) qui glissent vers une teinte d'ombre et une teinte de lumière choisies
-par matière (vert : citron → émeraude et bleu-vert ; orangé ou brun clair : or → cramoisi),
-plaques sur cinq niveaux du jauni au rougi, points de brillance de la peau mouillée, reflet
-froid sur les bords à l'ombre, contour teinté du plus sombre de chaque rampe. Les motifs
-restent sombres même en pleine lumière. Aucune forme ne bouge, et le rendu fidèle reste
-reproductible (`fidele`, identique au gelé) ; autant de couleurs qu'il faut. Les grandes
-faces se peignent alors en continu, sans grain ni trame (sinon des pixels sombres parsemés) :
-plusieurs teintes d'une même matière (vert citron, émeraude, bleu-vert) mêlées en grandes zones
-par un champ lisse, et les zones d'une même face (gorge, ventre, bas du ventre) fondues sur
-plusieurs pixels par une limite irrégulière, jamais des bandes horizontales.
+modelé validé, sans suivre la photo, pour faire ressortir la brillance.
+- **Les rampes :** une dizaine de tons, qui glissent vers une teinte d'ombre et une teinte de
+  lumière choisies par matière (vert : citron → émeraude et bleu-vert ; orangé ou brun clair :
+  or → cramoisi) ; des lumières vives, pas crayeuses. Sur le cercle des teintes, monter la
+  teinte d'un vert le pousse vers le bleu, la baisser vers le jaune : le vérifier sur le rendu
+  (un vert « citron » à l'ombre tourne vite au kaki).
+- **La lumière :** points de brillance de la peau mouillée, reflet froid sur les bords à
+  l'ombre, contour teinté du plus sombre de chaque rampe. Les motifs restent sombres même en
+  pleine lumière.
+- **Les grandes faces, sans grain ni trame** (sinon des pixels sombres parsemés) : plusieurs
+  teintes bien distinctes d'une même matière (vert citron, émeraude, bleu-vert) mêlées en
+  grandes zones par un champ lisse ; les zones d'une même face (gorge, ventre, bas du ventre)
+  fondues sur 6 à 8 pixels par une limite irrégulière, jamais des bandes horizontales.
+- **Un entre-deux de couleurs :** peintes en continu, ces faces montent à 1 500 couleurs, trop.
+  Les transitions se font en quelques paliers (5 entre les verts, 7 dans le ventre) et chaque
+  pixel prend un ton de la rampe tel quel : 300 à 400 couleurs en tout.
+- Aucune forme ne bouge, et le rendu fidèle reste reproductible (`fidele`, identique au gelé).
+
+**La pupille en demi-pixels** (essai sur tomopterna) : au rendu détaillé, une pièce deux fois
+plus fine posée sur le globe (`fins` dans le JSON : coin en pixels du sprite et rangées en
+demi-pixels, par image), où seule la fente est redessinée ; une fente verticale y devient une
+vraie amande, pointue aux deux bouts. La planche et `outils.py zoom` la dessinent ; les autres
+outils l'ignorent.
 
 ## Étape 4 — Animation
 
