@@ -85,3 +85,5 @@ l'ébauche et le croquis.
   inférieure est à un pixel sous le globe. L'autre œil : sa bosse est raccourcie d'un pixel au
   bout (plus de pointe), et le croissant de globe est bordé d'un trait.
 - 2 : au croquis, la branche est en gris moyen, pour la distinguer des membres du fond.
+- 3a (10/10/2026) : Léonard valide le croquis (« go étape 3a ») ; il est gelé en
+  `gauche_croquis_valide.json` et `branche_croquis_valide.json`. Aucune forme ne bouge plus.
