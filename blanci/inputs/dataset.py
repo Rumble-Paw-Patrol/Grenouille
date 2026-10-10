@@ -5,19 +5,21 @@ Labels courants, transfert vers la grille, négatifs appariés.
 - Transfert (DECISIONS n° 4) : une fenêtre de grille hérite du label d'une annotation si elle la
   contient (annotation courte, 3 s) ou si elle y est contenue (annotation d'enregistrement
   entier, §5). Les fenêtres qui ne font que chevaucher l'annotation sont écartées.
-- Intervalles (§5.6, DECISIONS n° 182, 183) : sur un extrait écouté (span), recouvrement
-  r = durée commune / min(durée de l'intervalle, durée de la fenêtre). Une fenêtre est
-  **positive si r ≥ `MIN_INTERVAL_OVERLAP` (½)** pour un intervalle (elle contient le chant,
-  ou le chant la remplit, au moins à moitié) ; **« bord »** si elle ne fait qu'effleurer un
-  intervalle (0 < r < ½) : label `edge`, écartée de l'entraînement ; négative si elle est
+- Intervalles (§5.6, DECISIONS n° 182, 183, 201) : sur un extrait écouté (span), une fenêtre
+  est **positive si sa durée commune avec un intervalle atteint le plus petit de : la moitié
+  de l'intervalle (`MIN_INTERVAL_OVERLAP`), la moitié de la fenêtre, `MIN_INTERVAL_OVERLAP_S`
+  (0,5 s)**. Un cri court doit donc être à moitié dans la fenêtre ; d'un long chant, 0,5 s
+  suffit (de quoi tenir une note de 0,09 s et l'imprécision du tracé), quelle que soit la
+  fenêtre. **« Bord »** si elle ne fait qu'effleurer un intervalle (durée commune non nulle
+  sous ce seuil) : label `edge`, écartée de l'entraînement ; négative si elle est
   entièrement dans l'extrait sans toucher d'intervalle ; sans label sinon (pas entièrement
   écoutée). Avec des fenêtres glissantes à moitié recouvrantes (`encoders.overlap: 0.5`),
   chaque intervalle a au moins une fenêtre positive, quelle que soit sa durée : écarter les
   bords ne perd aucun chant. Un intervalle « A. blanci ? » rend incertaine toute fenêtre non
   positive qui le touche (`blanci_uncertain`, écartée). Un intervalle « faux ami » (un son
-  qui ressemble à A. blanci, n° 186) donne `false_friend` (négatif dur) aux fenêtres qu'il
-  remplit à moitié, si aucun intervalle d'A. blanci ne les touche ; une fenêtre qui ne fait
-  que l'effleurer garde le label du reste de l'extrait. Valable pour toute grille (3, 5 s…).
+  qui ressemble à A. blanci, n° 186) donne `false_friend` (négatif dur) aux fenêtres qui le
+  recouvrent au même seuil, si aucun intervalle d'A. blanci ne les touche ; une fenêtre qui
+  ne fait que l'effleurer garde le label du reste de l'extrait. Valable pour toute grille (3, 5 s…).
 - Négatifs appariés (§2) : fenêtres du même micro, dans des enregistrements sans label positif.
   Ce sont des négatifs *présumés* (colonne `presumed`) : jamais écrits dans la table labels.
   En saison, à l'heure de pic, une partie peut contenir A. blanci : bruit d'étiquette identique
@@ -51,9 +53,13 @@ from blanci.inputs.qc import EXCLUDING_FLAGS, is_excluded
 
 # « edge » : fenêtre qui ne fait qu'effleurer un intervalle annoté (jamais rangé dans labels).
 EXCLUDED_LABELS = ("blanci_uncertain", "uncertain", "edge")
-# Recouvrement minimal d'un intervalle pour qu'une fenêtre soit positive ; ½ garantit, avec
-# des fenêtres recouvrantes de moitié, au moins une fenêtre positive par intervalle.
+# Recouvrement minimal d'un intervalle pour qu'une fenêtre soit positive : la moitié de
+# l'intervalle ou de la fenêtre, plafonnée à MIN_INTERVAL_OVERLAP_S (n° 201). La moitié
+# garantit, avec des fenêtres recouvrantes de moitié, au moins une fenêtre positive par
+# intervalle ; le plafond évite d'écarter comme « bord » une fenêtre de 5 s qui a 2,4 s de
+# chant.
 MIN_INTERVAL_OVERLAP = 0.5
+MIN_INTERVAL_OVERLAP_S = 0.5
 PAIRING_STRATEGIES = ("nearest", "other_day", "same_day", "mixed")
 
 
@@ -189,6 +195,7 @@ def interval_labels(
     intervals: pd.DataFrame,
     grid: pd.DataFrame,
     min_overlap: float = MIN_INTERVAL_OVERLAP,
+    min_overlap_s: float = MIN_INTERVAL_OVERLAP_S,
     eps: float = 1e-6,
 ) -> pd.DataFrame:
     """Labels des fenêtres de grille déduits des intervalles (règle en tête du module).
@@ -216,7 +223,8 @@ def interval_labels(
         common = np.minimum(w1[:, None], i1[None, :]) - np.maximum(w0[:, None], i0[None, :])
         touch = common > eps
         shorter = np.minimum((w1 - w0)[:, None], (i1 - i0)[None, :])
-        enough = touch & (common >= min_overlap * shorter - eps)
+        needed = np.minimum(min_overlap * shorter, min_overlap_s)
+        enough = touch & (common >= needed - eps)
         labels = iv["label"].to_numpy()
         friend = labels == "false_friend"
         certain = ~friend & (labels != "blanci_uncertain")

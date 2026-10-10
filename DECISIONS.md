@@ -3440,3 +3440,23 @@ de Léonard, 01/10/2026.
      à -1 dBFS, fondus de 20 ms) ; il faut le disque des enregistrements pour le produire, et
      sans lui la page n'affiche pas de bouton. Vérifié dans Chromium avec un faux son (bips à
      5 kHz) : le bouton paraît et se place, la tête suit le son puis reprend son balayage.
+
+## 2026-10-10 — Bord d'un intervalle : 0,5 s de chant suffisent
+
+201. **Le seuil du « bord » plafonné à 0,5 s** (Léonard), qui assouplit le n° 183. Avec
+     r = durée commune / min(intervalle, fenêtre) ≥ ½, un chant plus long que la fenêtre
+     devait en remplir la moitié : sur une grille de 5 s, une fenêtre avec 2,49 s de chant
+     était écartée comme « bord ». Ce n'est plus un bord. **Une fenêtre est positive si sa
+     durée commune avec l'intervalle atteint le plus petit de : la moitié de l'intervalle, la
+     moitié de la fenêtre, 0,5 s** (`dataset.MIN_INTERVAL_OVERLAP_S`) ; bord en dessous.
+     - Un cri court (≤ 1 s) suit la même règle qu'avant : la moitié du cri dans la fenêtre.
+     - D'un long chant, 0,5 s suffit, quelle que soit la grille : de quoi tenir une note de
+       0,09 s et l'imprécision du tracé à la souris. Un intervalle commence et finit sur une
+       note, la fenêtre qui en mord 0,5 s en contient donc une.
+     - Le nouveau seuil n'est jamais plus haut que l'ancien : les positifs d'avant le restent,
+       la garantie d'au moins une fenêtre positive par intervalle tient toujours.
+     - Même seuil pour les faux amis : une fenêtre qui recouvre 0,5 s d'un long faux ami
+       devient `false_friend` (négatif dur) au lieu du label de l'extrait.
+     - Risque : une fenêtre qui ne mord sur le chant que par le milieu d'un silence entre deux
+       notes (≈ 1,5 s d'écart) ; impossible au bord d'un intervalle bien tracé, à surveiller si
+       les intervalles débordent largement des notes.
