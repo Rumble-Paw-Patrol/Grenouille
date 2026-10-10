@@ -3441,22 +3441,29 @@ de Léonard, 01/10/2026.
      sans lui la page n'affiche pas de bouton. Vérifié dans Chromium avec un faux son (bips à
      5 kHz) : le bouton paraît et se place, la tête suit le son puis reprend son balayage.
 
-## 2026-10-10 — Bord d'un intervalle : 0,5 s de chant suffisent
+## 2026-10-10 — Bord d'un intervalle : la première note, ou 0,2 s de la dernière
 
-201. **Le seuil du « bord » plafonné à 0,5 s** (Léonard), qui assouplit le n° 183. Avec
-     r = durée commune / min(intervalle, fenêtre) ≥ ½, un chant plus long que la fenêtre
+201. **Le seuil du « bord » suit la précision du tracé** (Léonard), qui assouplit le n° 183.
+     Avec r = durée commune / min(intervalle, fenêtre) ≥ ½, un chant plus long que la fenêtre
      devait en remplir la moitié : sur une grille de 5 s, une fenêtre avec 2,49 s de chant
-     était écartée comme « bord ». Ce n'est plus un bord. **Une fenêtre est positive si sa
-     durée commune avec l'intervalle atteint le plus petit de : la moitié de l'intervalle, la
-     moitié de la fenêtre, 0,5 s** (`dataset.MIN_INTERVAL_OVERLAP_S`) ; bord en dessous.
-     - Un cri court (≤ 1 s) suit la même règle qu'avant : la moitié du cri dans la fenêtre.
-     - D'un long chant, 0,5 s suffit, quelle que soit la grille : de quoi tenir une note de
-       0,09 s et l'imprécision du tracé à la souris. Un intervalle commence et finit sur une
-       note, la fenêtre qui en mord 0,5 s en contient donc une.
+     était écartée comme « bord ». **Une fenêtre est positive si sa durée commune avec
+     l'intervalle atteint le plus petit de : la moitié de l'intervalle, la moitié de la
+     fenêtre, et le seuil du bord qu'elle coupe** — 0,1 s pour le début
+     (`dataset.INTERVAL_START_S`), 0,2 s pour la fin (`dataset.INTERVAL_END_S`) ; bord en
+     dessous.
+     - **Pourquoi ces seuils** : les intervalles sont tracés au ras des notes, presque au
+       pixel. Une note est une attaque très nette suivie d'une décroissance douce : le début
+       d'un intervalle, posé sur l'attaque de la première note, est sûr ; 0,1 s (la durée
+       d'une note, ≈ 0,09 s) suffit pour que la fenêtre la contienne. La fin, posée dans la
+       décroissance de la dernière note, est deux fois moins précise : 0,2 s.
+     - Un premier jet du même jour plafonnait le seuil à 0,5 s des deux côtés ; trop large
+       pour la précision du tracé.
+     - Un cri court suit la même règle qu'avant tant que sa moitié est sous le seuil du bord
+       coupé (cri ≤ 0,2 s au début, ≤ 0,4 s à la fin).
      - Le nouveau seuil n'est jamais plus haut que l'ancien : les positifs d'avant le restent,
        la garantie d'au moins une fenêtre positive par intervalle tient toujours.
-     - Même seuil pour les faux amis : une fenêtre qui recouvre 0,5 s d'un long faux ami
-       devient `false_friend` (négatif dur) au lieu du label de l'extrait.
-     - Risque : une fenêtre qui ne mord sur le chant que par le milieu d'un silence entre deux
-       notes (≈ 1,5 s d'écart) ; impossible au bord d'un intervalle bien tracé, à surveiller si
-       les intervalles débordent largement des notes.
+     - Mêmes seuils pour les faux amis : une fenêtre qui en tient le début (0,1 s) ou la fin
+       (0,2 s) devient `false_friend` (négatif dur) au lieu du label de l'extrait.
+     - Le côté coupé se lit sur la fenêtre : elle commence avant l'intervalle → son début,
+       sinon → sa fin. Une fenêtre qui contient l'intervalle, ou y est contenue, passe
+       toujours.

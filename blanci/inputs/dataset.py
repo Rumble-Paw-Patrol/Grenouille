@@ -7,19 +7,22 @@ Labels courants, transfert vers la grille, négatifs appariés.
   entier, §5). Les fenêtres qui ne font que chevaucher l'annotation sont écartées.
 - Intervalles (§5.6, DECISIONS n° 182, 183, 201) : sur un extrait écouté (span), une fenêtre
   est **positive si sa durée commune avec un intervalle atteint le plus petit de : la moitié
-  de l'intervalle (`MIN_INTERVAL_OVERLAP`), la moitié de la fenêtre, `MIN_INTERVAL_OVERLAP_S`
-  (0,5 s)**. Un cri court doit donc être à moitié dans la fenêtre ; d'un long chant, 0,5 s
-  suffit (de quoi tenir une note de 0,09 s et l'imprécision du tracé), quelle que soit la
-  fenêtre. **« Bord »** si elle ne fait qu'effleurer un intervalle (durée commune non nulle
-  sous ce seuil) : label `edge`, écartée de l'entraînement ; négative si elle est
-  entièrement dans l'extrait sans toucher d'intervalle ; sans label sinon (pas entièrement
-  écoutée). Avec des fenêtres glissantes à moitié recouvrantes (`encoders.overlap: 0.5`),
-  chaque intervalle a au moins une fenêtre positive, quelle que soit sa durée : écarter les
-  bords ne perd aucun chant. Un intervalle « A. blanci ? » rend incertaine toute fenêtre non
-  positive qui le touche (`blanci_uncertain`, écartée). Un intervalle « faux ami » (un son
-  qui ressemble à A. blanci, n° 186) donne `false_friend` (négatif dur) aux fenêtres qui le
-  recouvrent au même seuil, si aucun intervalle d'A. blanci ne les touche ; une fenêtre qui
-  ne fait que l'effleurer garde le label du reste de l'extrait. Valable pour toute grille (3, 5 s…).
+  de l'intervalle (`MIN_INTERVAL_OVERLAP`), la moitié de la fenêtre, et un seuil de bord :
+  `INTERVAL_START_S` (0,1 s, une note) si elle coupe le début de l'intervalle,
+  `INTERVAL_END_S` (0,2 s) si elle en coupe la fin**. Un cri court doit donc être à moitié
+  dans la fenêtre ; d'un long chant, la fenêtre doit tenir sa première note (le début, tracé
+  au ras de l'attaque, est sûr) ou les 0,2 s de sa dernière (la fin, tracée dans la
+  décroissance de la note, l'est deux fois moins). **« Bord »** si elle ne fait qu'effleurer
+  un intervalle (durée commune non nulle sous ce seuil) : label `edge`, écartée de
+  l'entraînement ; négative si elle est entièrement dans l'extrait sans toucher
+  d'intervalle ; sans label sinon (pas entièrement écoutée). Avec des fenêtres glissantes à
+  moitié recouvrantes (`encoders.overlap: 0.5`), chaque intervalle a au moins une fenêtre
+  positive, quelle que soit sa durée : écarter les bords ne perd aucun chant. Un intervalle
+  « A. blanci ? » rend incertaine toute fenêtre non positive qui le touche
+  (`blanci_uncertain`, écartée). Un intervalle « faux ami » (un son qui ressemble à
+  A. blanci, n° 186) donne `false_friend` (négatif dur) aux fenêtres qui le recouvrent au
+  même seuil, si aucun intervalle d'A. blanci ne les touche ; une fenêtre qui ne fait que
+  l'effleurer garde le label du reste de l'extrait. Valable pour toute grille (3, 5 s…).
 - Négatifs appariés (§2) : fenêtres du même micro, dans des enregistrements sans label positif.
   Ce sont des négatifs *présumés* (colonne `presumed`) : jamais écrits dans la table labels.
   En saison, à l'heure de pic, une partie peut contenir A. blanci : bruit d'étiquette identique
@@ -54,12 +57,14 @@ from blanci.inputs.qc import EXCLUDING_FLAGS, is_excluded
 # « edge » : fenêtre qui ne fait qu'effleurer un intervalle annoté (jamais rangé dans labels).
 EXCLUDED_LABELS = ("blanci_uncertain", "uncertain", "edge")
 # Recouvrement minimal d'un intervalle pour qu'une fenêtre soit positive : la moitié de
-# l'intervalle ou de la fenêtre, plafonnée à MIN_INTERVAL_OVERLAP_S (n° 201). La moitié
+# l'intervalle ou de la fenêtre, plafonnée au seuil du bord coupé (n° 201). La moitié
 # garantit, avec des fenêtres recouvrantes de moitié, au moins une fenêtre positive par
-# intervalle ; le plafond évite d'écarter comme « bord » une fenêtre de 5 s qui a 2,4 s de
-# chant.
+# intervalle ; les plafonds suivent la précision du tracé : le début d'un intervalle est posé
+# sur l'attaque d'une note (0,1 s : la note entière), la fin dans sa décroissance, deux fois
+# moins nette (0,2 s).
 MIN_INTERVAL_OVERLAP = 0.5
-MIN_INTERVAL_OVERLAP_S = 0.5
+INTERVAL_START_S = 0.1
+INTERVAL_END_S = 0.2
 PAIRING_STRATEGIES = ("nearest", "other_day", "same_day", "mixed")
 
 
@@ -195,7 +200,8 @@ def interval_labels(
     intervals: pd.DataFrame,
     grid: pd.DataFrame,
     min_overlap: float = MIN_INTERVAL_OVERLAP,
-    min_overlap_s: float = MIN_INTERVAL_OVERLAP_S,
+    start_s: float = INTERVAL_START_S,
+    end_s: float = INTERVAL_END_S,
     eps: float = 1e-6,
 ) -> pd.DataFrame:
     """Labels des fenêtres de grille déduits des intervalles (règle en tête du module).
@@ -223,7 +229,10 @@ def interval_labels(
         common = np.minimum(w1[:, None], i1[None, :]) - np.maximum(w0[:, None], i0[None, :])
         touch = common > eps
         shorter = np.minimum((w1 - w0)[:, None], (i1 - i0)[None, :])
-        needed = np.minimum(min_overlap * shorter, min_overlap_s)
+        # Seuil du bord coupé : le début de l'intervalle si la fenêtre commence avant lui, sa
+        # fin sinon (une fenêtre qui contient l'intervalle ou y est contenue passe toujours).
+        cut = np.where(w0[:, None] <= i0[None, :] + eps, start_s, end_s)
+        needed = np.minimum(min_overlap * shorter, cut)
         enough = touch & (common >= needed - eps)
         labels = iv["label"].to_numpy()
         friend = labels == "false_friend"
