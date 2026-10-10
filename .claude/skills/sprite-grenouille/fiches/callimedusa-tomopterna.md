@@ -52,11 +52,16 @@ des caractères du groupe et de la photo : à vérifier sur chaque nouvelle phot
 
 ## Membres
 
-- **Doigts : 4. Orteils : 5.** Palmure très réduite ou absente.
+- **Doigts : 4. Orteils : 5.** Palmure très réduite : sur la photo et pour Léonard, une petite
+  palmure relie seulement la base des doigts voisins.
+- **Mains :** une paume, entre le poignet et la base des doigts ; chaque doigt part de sa base,
+  pas du poignet (correction de Léonard sur la grenouille de gauche).
 - **Mains et pieds préhensiles :** le premier doigt et le premier orteil s'opposent aux autres
   et serrent la branche (le « pouce » longe ou enserre la branche).
-- **Disques :** doigts épais à **grands disques en boule**. À l'échelle 0,28 (une grenouille
-  d'environ 96 pixels de large) : doigts d'environ 3 pixels, disques d'environ 6.
+- **Disques :** doigts épais à **grands disques**. À l'échelle 0,28 (une grenouille d'environ
+  96 pixels de large) : doigts d'environ 3 pixels, disques de 6 à 7. Pas des boules toutes
+  pareilles : un disque vu de face est un ovale ; un doigt qui s'enroule sous la branche montre
+  son disque par la tranche, aplati ; celui du pouce est plus petit (corrections de Léonard).
 - Les mâles adultes ont des tubercules calcaires (au talon).
 
 ## Couleurs, face par face
