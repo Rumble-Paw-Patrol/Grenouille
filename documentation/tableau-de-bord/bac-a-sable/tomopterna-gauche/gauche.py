@@ -1,37 +1,17 @@
-"""Modèle de sprite par étapes (skill sprite-grenouille) : à copier, puis à remplir.
+"""C. tomopterna, grenouille de gauche de la photo d'Olivier Louguet, en sprite 8-bit (mode image).
 
-    python3 <code_espece>.py ETAPE [SORTIE.json]
+    uv run python documentation/tableau-de-bord/bac-a-sable/tomopterna-gauche/gauche.py ETAPE
         ETAPE : ebauche | croquis | aplats | details | animation
 
-Une grenouille est un SQUELETTE (repères anatomiques nommés : articulations, museau, œil,
-tympan…), un jeu de FORMES tirées de ce squelette (masques sur la grille du sprite), rangées du
-plan le plus lointain au plus proche, chacune dans une MATIÈRE (dos, flanc, ventre, membres…),
-des TRAITS (bouche, narine, tympan, plis) et des MOTIFS (bandes, barres, taches) peints
-par-dessus certaines matières. Chaque étape est un rendu de ces mêmes formes, et n'en modifie
-aucune :
+Copie du modèle du skill sprite-grenouille. La grenouille est perchée sur une branche au-dessus
+de l'eau : le corps presque de face (on voit le ventre), la tête tournée vers la droite, de
+profil, vers l'autre grenouille. Sa droite est donc à gauche de l'image : les membres droits
+(_d) sont devant, les gauches (_g) derrière le ventre.
 
-    ebauche     étape 1 : formes simples en trois gris selon le plan (fond, corps, devant), le
-                contour, l'œil, les traits du visage, et le squelette nommé, tracé par la
-                planche (bouton « Squelette ») : la morphologie et la posture, rien d'autre ;
-    croquis     étape 2 : les formes affinées, en dessin sans couleur (papier clair, plans en
-                gris légers, contour, traits, doigts au pixel) ;
-    aplats      étape 3a : une couleur par matière et par motif : ni dégradé, ni ombre, ni
-                lumière, ni reflet ; les motifs à leur place exacte ;
-    details     étape 3b : volume (lumière LUMIERE), rampes de 7 tons par matière, plaques de
-                teinte, grain, reflets humides, détails de l'œil, contour clair côté lumière ;
-                à affiner ensuite à la main selon les règles du skill (grenouille.py du tableau
-                de bord est la référence de ce niveau de détail) ;
-    animation   étape 4 : les 24 images du rendu détaillé : gorge × flanc × œil × tête.
-
-Une correction de posture se fait dans SQUELETTE (déplacer un point), une correction de forme
-dans formes() : les rendus suivent. Après la validation du croquis, toute correction de forme
-ramène à l'étape 2 (voir le skill).
-Côtés : _g et _d sont la gauche et la droite de l'animal, jamais de l'image. De profil, tête à
-gauche, on voit son côté gauche : les membres _g sont devant, les _d au fond.
-Un support (branche, feuille) se fait avec une copie de ce modèle dont formes() rend une seule
-forme, aucun trait et None pour l'œil, et dont SQUELETTE et MEMBRES sont vides.
-La grenouille de démonstration ci-dessous (une silhouette assise quelconque, en formes simples)
-ne sert qu'à vérifier la chaîne : tout remplacer d'après les photos et la fiche morphologique.
+Repère : celui de la scène de la session précédente, en unités de deux pixels de toile, soit
+7,14 pixels de la photo de 1600 × 1081 (échelle 0,28), origine en haut à gauche de la photo. Le
+sprite en couvre le rectangle de 55 × 45 unités qui commence en (48, 30) : 110 × 90 pixels. La
+lecture des membres reprend celle que Léonard a validée en cinq tours (decisions.md).
 """
 
 import colorsys
@@ -43,21 +23,18 @@ from pathlib import Path
 import numpy as np
 
 ICI = Path(__file__).resolve().parent
-NOM = "demo"  # code de l'espèce : sorties <NOM>_<etape>.json
-UNITES = (57, 43)  # repère en unités (2 pixels par unité) : rien ne touche les bords
+NOM = "gauche"  # sorties gauche_<etape>.json
+UNITES = (55, 45)  # 110 × 90 pixels : rien ne touche les bords
 # ORIGINE : en mode image, coin haut gauche du sprite dans le repère de la scène (en unités) ;
 # les formes et le squelette s'écrivent alors directement en unités de la scène
-ORIGINE = (0.0, 0.0)
+ORIGINE = (48.0, 30.0)  # coin du sprite dans la scène (photo / 7,14)
 ECHELLE = 2
 W, H = UNITES[0] * ECHELLE, UNITES[1] * ECHELLE
 # MIROIR : tête à droite. Les formes restent décrites tête à gauche ; elles sont retournées avant
 # le rendu, si bien que la lumière (LUMIERE, à l'écran) garde son côté.
 MIROIR = False
-LUMIERE = (
-    -0.6,
-    -0.8,
-)  # d'où vient la lumière : en haut à gauche ; en mode image, celle de la photo
-PIVOT, PAS = (18.0, 9.5), 0.06  # cou (unités) et rotation de la tête par cran (radians)
+LUMIERE = (-0.35, -0.94)  # d'en haut, un peu de la gauche, comme sur la photo
+PIVOT, PAS = (78.0, 42.0), 0.06  # cou (unités) et rotation de la tête par cran (radians)
 _xs = (np.arange(W) + 0.5) / ECHELLE
 X, Y = np.meshgrid(UNITES[0] - _xs if MIROIR else _xs, (np.arange(H) + 0.5) / ECHELLE)
 X, Y = X + ORIGINE[0], Y + ORIGINE[1]
@@ -79,7 +56,7 @@ MOTIFS = {"bande": "#4A230E", "barre": "#7E3F17"}
 # œil : iris, pupille, cercle autour du globe, matière de la paupière fermée ; la forme de la
 # pupille (et sa taille, dans rendu_oeil) vient des photos
 OEIL = {"iris": "#C9A05A", "pupille": "#0B0705", "cercle": "#24120A", "paupiere": "dos"}
-PUPILLE = "ronde"  # ronde | horizontale | verticale (fente)
+PUPILLE = "verticale"  # fente verticale des phyllomédusines
 CONTOUR, CONTOUR_CLAIR = "#24120A", "#5A2B14"
 # CONTOUR_TEINTE : au rendu détaillé, le contour prend la couleur qu'il borde, assombrie, au lieu
 # d'un trait sombre uniforme (choix de l'étape 3b ; C. tomopterna l'a pris, A. blanci non)
@@ -107,50 +84,81 @@ CROQUIS = {
 # déplaçant un point. La planche les trace et les nomme (bouton « Squelette ») ; outils.py
 # lecture les pose sur la photo.
 SQUELETTE = {
-    # tête
-    "museau": (2.4, 9.6),
-    "narine": (4.6, 8.2),
-    "oeil": (11.2, 8.4),
-    "commissure": (13.6, 12.2),
-    "tympan": (16.6, 10.8),
-    # tronc
-    "nuque": (18.0, 6.4),
-    "sacrum": (31.0, 11.0),
-    "cloaque": (44.0, 25.0),
-    # bras gauche (devant) et droit (au fond)
-    "epaule_g": (21.0, 21.0),
-    "coude_g": (20.0, 30.0),
-    "poignet_g": (15.5, 36.0),
-    "main_g": (13.5, 38.0),
-    "epaule_d": (18.0, 22.0),
-    "coude_d": (16.0, 29.0),
-    "poignet_d": (12.0, 33.5),
-    "main_d": (10.5, 34.5),
-    # patte arrière gauche (devant) ; la droite est cachée par le corps
-    "hanche_g": (40.0, 24.0),
-    "genou_g": (28.0, 30.0),
-    "talon_g": (42.0, 34.0),
-    "tarse_g": (32.0, 38.5),
-    "orteils_g": (24.0, 38.8),
-    # bouts des doigts de la main gauche (4 doigts, I à IV)
-    "doigt1_g": (12.5, 40.6),
-    "doigt2_g": (10.0, 40.0),
-    "doigt3_g": (9.0, 38.2),
-    "doigt4_g": (10.2, 36.6),
+    # tête, de profil, tournée vers la droite
+    "museau": (99.75, 41.8),
+    "narine": (96.4, 38.4),
+    "oeil": (87.25, 38.2),
+    "autre_oeil": (95.3, 34.5),  # bosse sur le crâne, on y voit un peu du globe
+    "commissure": (79.5, 46.6),
+    "tympan": (81.6, 41.8),
+    # tronc : le dos se voit jusqu'en (64,6 ; 50) ; sacrum et cloaque cachés, estimés
+    "nuque": (82.0, 35.6),
+    "sacrum": (67.0, 46.5),
+    "cloaque": (69.0, 60.2),
+    # bras droit (devant) : le bras, fin, va de l'épaule, au milieu du ventre, au coude levé,
+    # en haut à gauche ; l'avant-bras, vert, descend à la verticale jusqu'à la branche
+    "epaule_d": (73.8, 51.4),
+    "coude_d": (63.0, 50.4),
+    "poignet_d": (63.1, 63.6),
+    "main_d": (64.7, 65.4),
+    "doigt1_d": (66.7, 62.4),  # le pouce, court, opposable, remonte le long de la branche
+    "doigt2_d": (73.4, 66.0),
+    "doigt3_d": (74.2, 69.2),
+    "doigt4_d": (68.4, 70.6),
+    # patte arrière droite (fond) : la cuisse descend en diagonale vers la gauche jusqu'au
+    # genou ; le tibia, gros, revient à l'horizontale et passe derrière l'avant-bras ; deux
+    # orteils s'enroulent sur la branche
+    "hanche_d": (64.6, 51.6),
+    "genou_d": (54.0, 60.0),
+    "talon_d": (62.2, 59.5),
+    "tarse_d": (58.4, 61.6),
+    "orteil_a_d": (56.7, 70.4),
+    "orteil_b_d": (60.0, 70.8),
+    # bras gauche (2e plan) : il sort de derrière le ventre et vient vers nous, raccourci ;
+    # trois doigts visibles, dont un part vers la gauche sur la branche
+    "epaule_g": (88.4, 48.6),
+    "coude_g": (89.4, 53.0),
+    "poignet_g": (90.2, 57.4),
+    "main_g": (90.4, 58.8),
+    "doigt1_g": (83.2, 64.9),
+    "doigt3_g": (88.6, 66.4),
+    "doigt4_g": (91.6, 66.0),
+    # patte arrière gauche (3e plan, à l'ombre) : la cuisse sort de derrière le cou ; au genou,
+    # un angle ; le tibia descend à la verticale jusqu'à la branche ; deux orteils dessus
+    "hanche_g": (88.6, 46.4),
+    "genou_g": (93.0, 48.4),
+    "talon_g": (94.0, 56.8),
+    "tarse_g": (94.8, 58.4),
+    "orteil_a_g": (97.4, 60.4),
+    "orteil_b_g": (94.4, 63.6),
+    # à confirmer : sous la branche, un bout de membre orangé barré, à bout pâle
+    "dessous_g": (91.2, 66.6),
+    "bout_dessous_g": (97.0, 70.6),
 }
-# chaque membre : ses repères de la racine au bout, son plan, et les bouts des doigts ou des
-# orteils, rattachés au dernier repère
 MEMBRES = {
-    "bras_d": (["epaule_d", "coude_d", "poignet_d", "main_d"], "fond", []),
+    "patte_g": (
+        ["hanche_g", "genou_g", "talon_g", "tarse_g"],
+        "fond",
+        ["orteil_a_g", "orteil_b_g"],
+    ),
+    "dessous_g": (["dessous_g", "bout_dessous_g"], "fond", []),
     "bras_g": (
         ["epaule_g", "coude_g", "poignet_g", "main_g"],
-        "devant",
-        ["doigt1_g", "doigt2_g", "doigt3_g", "doigt4_g"],
+        "corps",
+        ["doigt1_g", "doigt3_g", "doigt4_g"],
     ),
-    "patte_g": (["hanche_g", "genou_g", "talon_g", "tarse_g", "orteils_g"], "devant", []),
+    "patte_d": (
+        ["hanche_d", "genou_d", "talon_d", "tarse_d"],
+        "fond",
+        ["orteil_a_d", "orteil_b_d"],
+    ),
+    "bras_d": (
+        ["epaule_d", "coude_d", "poignet_d", "main_d"],
+        "devant",
+        ["doigt1_d", "doigt2_d", "doigt3_d", "doigt4_d"],
+    ),
 }
-# l'axe du corps, et la ligne de la bouche
-AXES = [["museau", "commissure"], ["nuque", "sacrum", "cloaque"]]
+AXES = [["museau", "commissure"], ["nuque", "sacrum", "cloaque"], ["oeil", "autre_oeil"]]
 
 
 # ------------------------------------------------------------------ outils de forme
@@ -238,91 +246,83 @@ def tete_tournee(tete):
 
 
 # ------------------------------------------------------------------ la grenouille
+def doigts(base, bouts, r=0.35, disque=0.9):
+    """Doigts en traits fins, de la base de la main ou du pied au bout, et leurs grands disques."""
+    m = np.zeros(X.shape, bool)
+    for b in bouts:
+        m |= membre([SQUELETTE[base], SQUELETTE[b]], [r + 0.15, r], X, Y)
+        m |= ellipse(*SQUELETTE[b], disque, disque, X, Y)
+    return m
+
+
 def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
-    """Les formes, du plus loin au plus près, les traits, les motifs et l'œil. À REMPLACER
-    d'après les photos : ici, une grenouille assise quelconque, pour vérifier la chaîne."""
+    """Étape 1, formes simples : la tête et le tronc en un polygone de quelques points, les
+    membres en segments tirés du squelette, les doigts en traits à disques."""
     S = SQUELETTE
     xt, yt = tete_tournee(tete)
     corps = dans(
-        catmull(
-            [
-                (2.2, 9.8),
-                (4.5, 6.2),
-                (10, 4.4),
-                S["nuque"],
-                (30, 10.5),
-                (40, 17),
-                (44.5, 24),
-                (42, 31),
-                (33, 33.5 + souffle * 0.4),
-                (22, 31),
-                (13, 24 + gorge * 0.6),
-                (6, 14.5),
-            ]
-        ),
+        [
+            S["museau"],
+            (99.2, 37.4),
+            (96.5, 35.8),
+            (92.0, 34.9),
+            (84.0, 35.3),
+            (78.0, 36.6),
+            (72.0, 39.8),
+            (66.4, 45.8),
+            (64.6, 50.4),
+            (64.6, 57.6),
+            (67.0, 60.3),
+            (72.0, 60.8 + souffle * 0.5),
+            (80.0, 59.6 + souffle * 0.4),
+            (85.2, 56.8),
+            (86.8, 51.0),
+            (89.4, 47.6 + gorge * 0.5),
+            (94.5, 45.3 + gorge),
+            (98.6, 43.2),
+        ],
         xt,
         yt,
     )
-    tibia = os_(["genou_g", "talon_g"], [2.4, 2.8])
-    main = np.zeros(X.shape, bool)
-    for d in MEMBRES["bras_g"][2]:  # doigts d'un pixel, du poignet au bout, disques en point
-        main |= membre([S["main_g"], S[d]], [0.5, 0.35], X, Y)
-        main |= ellipse(*S[d], 0.55, 0.55, X, Y)
+    corps |= ellipse(*S["oeil"], 4.1, 4.1, xt, yt) & (yt < S["oeil"][1])  # l'œil dépasse
+    corps |= ellipse(*S["autre_oeil"], 2.0, 1.5, xt, yt)  # la bosse de l'autre œil
+    patte_g = os_(MEMBRES["patte_g"][0], [1.3, 1.6, 1.4, 1.1])
+    patte_g |= doigts("tarse_g", MEMBRES["patte_g"][2])
+    dessous_g = os_(MEMBRES["dessous_g"][0], [1.3, 1.0])
+    bras_g = os_(MEMBRES["bras_g"][0], [1.2, 1.35, 1.3, 1.1])
+    bras_g |= doigts("main_g", MEMBRES["bras_g"][2])
+    cuisse_d = os_(["hanche_d", "genou_d"], [1.4, 1.5])
+    tibia_d = os_(["genou_d", "talon_d"], [2.0, 2.1])
+    pied_d = os_(["talon_d", "tarse_d"], [1.2, 1.0]) | doigts("tarse_d", MEMBRES["patte_d"][2])
+    bras_haut_d = os_(["epaule_d", "coude_d"], [1.5, 1.0])
+    avant_bras_d = os_(["coude_d", "poignet_d", "main_d"], [1.7, 1.5, 1.2])
+    main_d = doigts("main_d", MEMBRES["bras_d"][2])
     f = [
-        forme(
-            "bras_fond",
-            os_(MEMBRES["bras_d"][0], [2, 1.5, 1, 1]),
-            "fond",
-            "fond",
-            cernee=True,
-        ),
-        forme("corps", corps, "dos"),
-        # matières dessinées dans le corps : elles en gardent le relief
-        forme("flanc", corps & (yt > 12 + 0.25 * (xt - 10)), "flanc", volume="corps"),
-        forme("ventre", corps & (yt > 24 + 0.12 * (xt - 20)), "ventre", volume="corps"),
-        forme("gorge", corps & (xt < 16) & (yt > 13.2), "gorge", volume="corps"),
-        forme(
-            "levre",
-            corps & (xt < 10) & (np.abs(yt - (11.3 + 0.05 * xt)) < 0.45),
-            "levre",
-            volume="corps",
-        ),
-        forme("cuisse", ellipse(35, 27, 8.5, 6, X, Y, -0.3), "membre", cernee=True),
-        forme(
-            "pied",
-            os_(["talon_g", "tarse_g", "orteils_g"], [1.6, 1.2, 0.8]),
-            "membre",
-            "devant",
-            cernee=True,
-        ),
-        forme("tibia", tibia, "membre", "devant", cernee=True),
-        forme(
-            "bras",
-            os_(MEMBRES["bras_g"][0], [2.6, 1.8, 1.2, 1]) | main,
-            "membre",
-            "devant",
-            cernee=True,
-        ),
+        forme("patte_g", patte_g, "membre", "fond", cernee=True),
+        forme("dessous_g", dessous_g, "membre", "fond", cernee=True),
+        forme("bras_g", bras_g, "membre", "corps", cernee=True),
+        forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True),
+        forme("pied_d", pied_d, "membre", "fond", cernee=True),
+        forme("tibia_d", tibia_d, "membre", "fond", cernee=True),
+        forme("corps", corps, "dos", cernee=True),
+        forme("bras_haut_d", bras_haut_d, "membre", "devant", cernee=True),
+        forme("avant_bras_d", avant_bras_d, "membre", "devant", cernee=True),
+        forme("main_d", main_d, "membre", "devant", cernee=True),
     ]
-    # traits du visage : la bouche, du museau à la commissure, la narine, le tympan
+    # traits du visage : la lèvre, du museau à la commissure, la narine, le tympan
     (mx, my), (cx, cy) = S["museau"], S["commissure"]
-    t = np.clip((xt - mx) / (cx - mx), 0, 1)
+    t = np.clip((xt - cx) / (mx - cx), 0, 1)
     tx, ty = S["tympan"]
     rt = np.hypot(xt - tx, yt - ty)
     traits = {
-        "bouche": corps & (xt > mx + 0.8) & (xt < cx) & (np.abs(yt - (my + t * (cy - my))) < 0.4),
+        "bouche": corps & (xt > cx) & (xt < mx - 0.6) & (np.abs(yt - (cy + t * (my - cy))) < 0.4),
         "narine": (np.abs(xt - S["narine"][0]) < 0.5) & (np.abs(yt - S["narine"][1]) < 0.5),
-        "tympan": (rt > 1.1) & (rt < 1.6),
+        "tympan": (rt > 0.9) & (rt < 1.4),
     }
-    motifs = {
-        "bande": corps & (np.abs(yt - (9.0 + 0.32 * (xt - 6))) < 1.2) & (xt > 6) & (xt < 36),
-        "barre": tibia & (np.sin(X * 1.6) > 0.55),
-    }
-    oeil = {"x": S["oeil"][0], "y": S["oeil"][1], "r": 2.6, "ferme": cligne}
+    motifs = {}
+    oeil = {"x": S["oeil"][0], "y": S["oeil"][1], "r": 3.4, "ferme": cligne}
     oeil["masque"] = (xt - oeil["x"]) ** 2 + (yt - oeil["y"]) ** 2 <= oeil["r"] ** 2
     oeil["u"], oeil["v"] = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
-    if MIROIR:
-        oeil["u"] = -oeil["u"]
     return f, traits, motifs, oeil
 
 
