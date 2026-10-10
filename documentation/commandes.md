@@ -115,7 +115,7 @@ uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatif
 uv run blanci onsets
 uv run blanci embed --encoder birdmae --peak-hours    # reprenable
 $B cluster --encoder birdmae-bacpipe1.3.5 --mode c1   # clustering C0/C1 (§5 bis)
-uv run blanci benchmark --encoders birdmae-1,beats-1  # → data/reports/benchmark.md
+uv run blanci benchmark --encoders birdmae-bacpipe1.3.5,beats-bacpipe1.3.5  # → data/reports/benchmark.md
 
 # --- Pré-benchmark AnuraSet (§2) : base et stocks à part -----------------
 A="uv run blanci --config anuraset/anuraset.yaml"
@@ -124,10 +124,10 @@ $A embed --encoder perch_v2 && $A anuraset benchmark --encoders perch_v2-bacpipe
 $A anuraset campaign --encoders perch_v2             # tout d'un coup : espèces, encodage, têtes (n° 136)
 
 # --- Détection (§1, §5) --------------------------------------------------
-uv run blanci train --encoder birdmae-1               # tête + seuil à précision ≥ 0,1
-uv run blanci score --encoder birdmae-1               # tête adoptée ; décisions, points
-uv run blanci queue --encoder birdmae-1 --n 40        # file de vérification 60/20/20
-uv run blanci search --encoder birdmae-1 --site tresor --k 300   # récolte de positifs
+uv run blanci train --encoder birdmae-bacpipe1.3.5               # tête + seuil à précision ≥ 0,1
+uv run blanci score --encoder birdmae-bacpipe1.3.5               # tête adoptée ; décisions, points
+uv run blanci queue --encoder birdmae-bacpipe1.3.5 --n 40        # file de vérification 60/20/20
+uv run blanci search --encoder birdmae-bacpipe1.3.5 --site tresor --k 300   # récolte de positifs
 uv run blanci label <window_id> --label blanci_solo --source active
 $B fusion --encoder birdmae_base-bacpipe1.3.5        # tête + rythme + persistance (§3)
 $B score --encoder birdmae_base-bacpipe1.3.5 --fusion
@@ -177,12 +177,12 @@ $B clips-import data/exports/extraits/manifest.csv reponses.xlsx   # réponses �
 $B annotate                                          # mode de sélection, carte, « Envoyer »
 
 # --- Évaluation (§6) -----------------------------------------------------
-uv run blanci evaluate --encoder birdmae-1                       # plis par micro
-uv run blanci evaluate --encoder birdmae-1 --holdout tresor,kaw  # sites tenus à l'écart
+uv run blanci evaluate --encoder birdmae-bacpipe1.3.5                       # plis par micro
+uv run blanci evaluate --encoder birdmae-bacpipe1.3.5 --holdout tresor,kaw  # sites tenus à l'écart
 $B freeze data/reports/candidats_gele.csv --version v1   # jeu gelé : jamais entraîné
-$B evaluate --encoder birdmae-1 --frozen last            # la tête jugée sur le jeu gelé
+$B evaluate --encoder birdmae-bacpipe1.3.5 --frozen last            # la tête jugée sur le jeu gelé
 # Courbes d'activité (M4) contre les patrons de Courtois et al. 2025 ; courbes numérisées
 # en option (CSV [site,] hour, value / [site,] month, value)
-$B activity --encoder birdmae-1 --dataset 2023 --reference-hours ref_heures.csv
+$B activity --encoder birdmae-bacpipe1.3.5 --dataset 2023 --reference-hours ref_heures.csv
 ```
 

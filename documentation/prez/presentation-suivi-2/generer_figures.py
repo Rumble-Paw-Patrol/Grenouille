@@ -23,7 +23,7 @@ import soundfile as sf
 from matplotlib.patches import Rectangle
 from scipy.signal import resample_poly, stft
 
-from blanci.heads.sequential import band_envelope_db, detect_onsets, rhythm_features
+from blanci.heads.signal_processing import band_envelope_db, detect_onsets, rhythm_features
 
 ROOT = Path(__file__).resolve().parents[3]
 ECH = ROOT / "echantillon"

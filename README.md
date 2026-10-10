@@ -14,7 +14,7 @@ Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
 | | État |
 |---|---|
 | Chaîne de traitement | écrite et testée : inventaire des enregistrements, embeddings, têtes de classification, module de traitement du signal (rythme des notes), fusion, évaluation, files de vérification, poste d'annotation, réentraînement |
-| Choix de l'encodeur | pré-benchmark sur **AnuraSet** (jeu public d'anoures néotropicaux) : 23 encodeurs comparés, chacun avec la tête adaptée à sa sortie. Indicateur, pas verdict : le choix final se fera sur les données de l'ONF le 20/11/2026 |
+| Choix de l'encodeur | pré-benchmark sur **AnuraSet** (jeu public d'anoures néotropicaux) : 24 encodeurs comparés, chacun avec la tête adaptée à sa sortie. Indicateur, pas verdict : le choix final se fera sur les données de l'ONF le 20/11/2026 |
 | Contrainte d'accès | l'encodeur livré doit être **libre d'accès** (poids publics, licence compatible avec l'usage par l'ONF). Meilleur libre à ce jour : `perch_v2` + sonde à prototypes (AP moyenne par site 0,81) |
 | Annotations | reprises de zéro, par plan de tirage stratifié (point d'écoute, heure, période), vérifiées à l'aveugle par des experts. **Aucun benchmark sur les données de l'ONF avant leur accord** |
 | Livrable | application Windows installable sans code : à venir (essai d'empaquetage prévu) |
@@ -30,10 +30,10 @@ avec un bouton « Commenter » sur chaque carte. Sources : `documentation/tablea
 
 1. **[DECISIONS.md](DECISIONS.md)** : le *cadre du projet* en tête (objectifs et critères §0,
    protocole d'annotation §5, évaluation §6, livrable §7, planning §8, risques §9), puis le
-   journal des décisions numérotées (n° 1 à 165) qui dit pourquoi le code est comme il est.
+   journal des décisions numérotées (n° 1 à 200 à ce jour) qui dit pourquoi le code est comme il est.
 2. **[documentation/benchmarks/](documentation/benchmarks/LISEZMOI.md)** : les huit rapports de
    benchmark AnuraSet (têtes, régularisations, encodeurs), chacun avec ses données, ses figures et
-   le script qui les produit. Le plus récent, `2026-09-30_anuraset_encodeurs`, compare 23 encodeurs.
+   le script qui les produit. Le plus récent, `2026-09-30_anuraset_encodeurs`, compare 24 encodeurs.
 3. **[documentation/tableaux/](documentation/tableaux/LISEZMOI.md)** : un tableau par benchmark, en
    image (protocole, encodeurs, têtes, régularisations…).
 4. **[documentation/biblio/biblio.md](documentation/biblio/biblio.md)** : bibliographie commentée.
@@ -48,6 +48,8 @@ Grenouille/
 ├── tests/                suite pytest, rangée comme blanci/ (tests/heads/ teste blanci/heads/…)
 ├── config/               default.yaml, local.example.yaml
 ├── notebooks/            4 notebooks d'exploration, committés sans sorties
+├── annotations/          copie des annotations exportées (CSV), voir son LISEZMOI.md
+├── .claude/skills/       skills de Claude Code du projet (benchmark, audit, prez, tableau de bord…)
 ├── anuraset/             pré-benchmark AnuraSet, terminé : config, scripts, notes (reproductibilité)
 ├── documentation/
 │   ├── benchmarks/       rapports 01 à 08, fiches des encodeurs, modèle de rapport
@@ -55,12 +57,19 @@ Grenouille/
 │   ├── regularizations/  catalogue des régularisations des têtes (R1 à R84)
 │   ├── biblio/           bibliographie, offre de stage
 │   ├── prez/             présentations de suivi (.pptx) et leurs sources
+│   ├── sprites/          grenouille en 8-bit : bac à sable de dessin, évolution du sprite
+│   ├── audits/           rapports d'audit du dépôt
 │   ├── rapport-stage/    notes pour le rapport
 │   ├── old/              anciennes feuilles de route (V1 à V4)
-│   └── commandes.md, encodeurs-bacpipe.md, glossaire-bioacoustique.md, audit-28-septembre.md
+│   └── commandes.md, encodeurs-bacpipe.md, glossaire-bioacoustique.md
 ├── DECISIONS.md          cadre du projet et journal des décisions
 └── pyproject.toml, uv.lock, .python-version
 ```
+
+**Emplacements en attente.** Gardés volontairement pour plus tard (EN ATTENTE, à ne pas
+supprimer comme code mort) : le réglage fin des encodeurs (`blanci/heads/finetune.py`), les détecteurs distillé et
+maison (`blanci/heads/detectors/distilled.py`, `homemade.py`), les aides de distillation
+(R61 à R63, `distillation_loss`) et l'export ONNX (`blanci/embedding/encoders/export.py`).
 
 ### Le paquet `blanci/`
 
@@ -119,8 +128,10 @@ n° 195). Les files de candidats sont des dossiers, `data/reports/files/<nom>/` 
 
 ## Données
 
-**Le dépôt ne contient aucun enregistrement.** L'audio de l'ONF, la base SQLite, les embeddings
-et les modèles vivent sous `data/`, ignoré par git.
+**Le dépôt ne contient aucun enregistrement de l'ONF.** L'audio, la base SQLite, les embeddings
+et les modèles vivent sous `data/`, ignoré par git. Seuls trois extraits courts, pour les
+présentations (`documentation/prez/presentation-suivi-2/audio/*.wav`), et le chant du bandeau du
+tableau de bord (`documentation/tableau-de-bord/chant.mp3`) sont versionnés.
 
 Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), dont les
 embeddings et la base servent aux benchmarks. Elles sont rangées dans les branches

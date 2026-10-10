@@ -27,4 +27,4 @@ sur la v2.4 en LEPLAT (+0,35) et PHYCUV (+0,11), pas sur perch_v2 en moyenne. So
 sans entraînement égale ou bat la logistique sur BOAFAB et DENMIN, reste sous elle sur PHYCUV et
 LEPLAT ; rien de spectaculaire, donc pas de signe net qu'AnuraSet soit dans ses données
 d'entraînement (non exclu).
-**Anomalies** : DENMIN par site tiré par INCT4 (2 min positives) ; poolé 0,89 (perch_v2 0,91). Classifieur d'origine : AP poolée LEPLAT 0,26 (calibrage entre sites). Stock : `donnees-anuraset-birdnet_v3` ; scores : `resultats/global/birdnet_v3_*`.
+**Anomalies** : DENMIN par site tiré par INCT4 (2 min positives) ; poolé 0,89 (perch_v2 0,91). Classifieur d'origine : AP poolée LEPLAT 0,26 (calibrage entre sites). Stock : `donnees-anuraset-birdnet_v3` ; scores : `resultats/global/birdnet_v3_*` (historique : `git show 6f2ff13^:resultats/global/<fichier>`).

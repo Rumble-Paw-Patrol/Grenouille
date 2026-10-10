@@ -1,10 +1,11 @@
 """Bac à sable : A. blanci du bandeau, avec des pustules sur le corps.
 
-    uv run python documentation/tableau-de-bord/bac-a-sable/grenouille.py
+    uv run python documentation/sprites/bac-a-sable/grenouille.py
 
-Repart de ../grenouille.py (la version du bandeau). Deux rendus sont calculés et assemblés
-pixel par pixel (composer) : le corps vient du rendu « ancien », le pied, le tibia, les bras et
-les mains, avec leur contour, sont copiés tels quels du rendu « nouveau » de l'audit (ombres de
+Repart de ../../tableau-de-bord/grenouille.py (la version du bandeau). Deux rendus sont
+calculés et assemblés pixel par pixel (composer) : le corps vient du rendu « ancien »,
+le pied, le tibia, les bras et les mains, avec leur contour, sont copiés tels quels du rendu «
+nouveau » de l'audit (ombres de
 la peau plus rouges et lumières plus dorées, moins de grain, contour brun côté lumière). Le
 flanc juste derrière le bras garde sa teinte, assombrie et un peu grisée (ombre de contact). Le
 haut du contour de la cuisse remonte vers la croupe, juste assez pour que la bande sombre du

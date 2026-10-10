@@ -19,6 +19,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from blanci.core.config import config_path, load_config, project_path
+from blanci.core.db import connect
 from blanci.evaluation.anuraset import (
     _encoder_windows,
     read_strong_labels,
@@ -27,11 +29,9 @@ from blanci.evaluation.anuraset import (
     weak_only_files,
     window_labels,
 )
-from blanci.core.config import config_path, load_config, project_path
-from blanci.core.db import connect
 from blanci.evaluation.evaluate import average_precision, recall_at_precision
-from blanci.heads.head import calibration_options, oof_scores
 from blanci.evaluation.head_benchmark import _inputs
+from blanci.heads.head import calibration_options, oof_scores
 from blanci.heads.regularization import (
     Context,
     domain_statistics,

@@ -7,7 +7,7 @@ fairseq) : EAT générique d'AudioSet à la place. Clés remappées (`avex_encod
 **Débit** (4 cœurs) : encodage 2,3-2,9 f/s ; jetons ~1 h 30 ; benchmark 6-28 min par espèce.
 **Témoin BOAFAB** (logistique) : eat_all 0,920 ; eat_bio 0,899 ; sl_eat_all 0,963 ; sl_eat_bio 0,980.
 **Transfert, minute, AP moyenne par site / poolée** (proto_probe sur jetons ; autres têtes :
-`resultats/global/esp_aves2_*eat*`, branche `resultats-anuraset-07`)
+`resultats/global/esp_aves2_*eat*`, historique : `git show 6f2ff13^:resultats/global/<fichier>`)
 
 | Encodeur, tête | DENMIN | PITAZU | PHYCUV | LEPLAT | BOAFAB |
 |---|---|---|---|---|---|

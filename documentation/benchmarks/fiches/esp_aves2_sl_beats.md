@@ -18,7 +18,7 @@ l'encodage (bio) ; benchmark `--curve --tokens` (2 proc.) 340 (PITAZU) à 1 020 
 | all *jetons* proto_probe | 0,620 / 0,836 | 0,467 / 0,169 | **0,947 / 0,911** | **0,883** / 0,378 | 0,994 / 0,961 |
 | all *jetons* attentive | 0,540 / 0,630 | 0,395 / 0,118 | 0,790 / 0,728 | 0,562 / 0,303 | 0,960 / 0,932 |
 Autres têtes (lda_shrunk, logistic:max, R37, simple_prototype) et scores : `resultats/global/esp_aves2_sl_beats_*`
-(branche `resultats-anuraset-07`). **Courbe d'amorçage** (logistique, AP minute, k = 0 → 20) : bio DENMIN 0,58→0,82, PITAZU
+(historique : `git show 6f2ff13^:resultats/global/<fichier>`). **Courbe d'amorçage** (logistique, AP minute, k = 0 → 20) : bio DENMIN 0,58→0,82, PITAZU
 0,85→0,96, PHYCUV 0,89→0,95, LEPLAT 0,88→0,93, BOAFAB 0,99→0,99 ; all 0,50→0,80, 0,80→0,96,
 0,91→0,94, 0,89→0,92, 0,99→0,99.
 **Lecture** : **légèrement en retrait en sondage linéaire** (n° 151) : la sonde à prototypes

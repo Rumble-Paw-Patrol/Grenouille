@@ -38,7 +38,7 @@ non libres ne servent plus que d'objectifs à battre.
 
 ## Procédure commune (au go)
 
-**Jamais de fusion d'une branche de données (`donnees-anuraset-*`, `resultats-anuraset-07`) dans
+**Jamais de fusion d'une branche de données (`donnees-anuraset-*`) dans
 `main`**, ni directement ni par une branche intermédiaire : on pousse sur la branche de données,
 puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sorties brutes).
 
@@ -57,8 +57,8 @@ puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sor
    Noter les versions (torch, transformers, onnxruntime, tensorflow, avex, librosa) dans la
    fiche.
 3. Données : `bash anuraset/telecharger_anuraset.sh` (7,2 Go,
-   ~6 min), `git fetch origin resultats-anuraset-07 && git archive
-   origin/resultats-anuraset-07 data | tar -x` (étiquettes), `uv run blanci --config
+   ~6 min), `git archive 6f2ff13^ data | tar -x`
+   (étiquettes, récupérées dans l'historique), `uv run blanci --config
    anuraset/anuraset.yaml anuraset prepare`, puis supprimer `data/external/anuraset/raw_data.zip`.
 4. Essai de 5 min d'abord, avec le script de la fin de ce fichier : f_e, fenêtre, dimension,
    forme des jetons, embeddings ni constants ni NaN. Un écart avec ce fichier ou
@@ -78,8 +78,10 @@ puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sor
    sorties <options de la ligne>`, `OMP_NUM_THREADS=1` ; 4 processus en parallèle, **2 avec
    `--tokens`** (mémoire). **Témoin** (n° 151) : si la logistique donne sur BOAFAB une AP
    moyenne par site (minute) nettement sous 0,85, chercher d'abord un tuyau cassé.
-9. Pousser `sorties/<encodeur>_*` sous `resultats/global/` de la branche
-   `resultats-anuraset-07` (`git pull --rebase` juste avant : d'autres sessions y poussent).
+9. Garder `sorties/<encodeur>_*` hors de `main` : les sorties brutes de la vague 1 sont dans
+   l'historique (`git show 6f2ff13^:resultats/global/<fichier>`, audioprotopnet et
+   convnext_birdset dans `443f889`). Pour en ajouter, créer une branche de résultats et ne
+   jamais la fusionner.
 10. Fiche courte sur `main` : `documentation/benchmarks/fiches/<encodeur>.md`, 30 lignes au plus.
     Contenu : réglages lus (f_e, fenêtre, dimension, couche, versions), débit, témoin BOAFAB, AP
     moyenne par site et poolée (minute) par espèce pour chaque tête (les têtes sur jetons à

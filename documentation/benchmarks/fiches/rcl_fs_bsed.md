@@ -24,7 +24,7 @@ trame de 0,2 s plus courte que le chant (le max sur 300 trames par minute crée 
 | BOAFAB | 0,718 / 0,474 | 0,270 / 0,197 | 0,624 / 0,404 |
 
 `logistic+R37=glmm` à ±0,02 de la logistique. Moyennes sur les sites avec positifs (DENMIN 3,
-PITAZU 2, PHYCUV 3, LEPLAT 2, BOAFAB 2). Sorties : `resultats-anuraset-07`,
-`resultats/global/rcl_fs_bsed_*`. CNN : « en retrait en sondage linéaire » sans objet.
+PITAZU 2, PHYCUV 3, LEPLAT 2, BOAFAB 2). Sorties : historique,
+`git show 6f2ff13^:resultats/global/rcl_fs_bsed_<ESPECE>_...`. CNN : « en retrait en sondage linéaire » sans objet.
 **Anomalies** : témoin non passé, plafond ; en AP par site, le prototype simple (tête d'origine)
 est le plus faible sur les cinq espèces ; grille de 0,2 s et prototype sur candidats non faits.

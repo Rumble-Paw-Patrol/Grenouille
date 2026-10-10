@@ -1,11 +1,12 @@
 """Bac à sable « A. blanci à la chasse » : les images de la grenouille, puis la page.
 
-    uv run python documentation/tableau-de-bord/bac-a-sable/chasse/chasse.py
+    uv run python documentation/sprites/bac-a-sable/chasse/chasse.py
     (avec --page : garde les images de chasse.json, ne refait que le décor et la page)
 
-Reprend la grenouille du tableau de bord (../grenouille.py, avec ses réglages « bouche » et
-« rentres ») et produit les 60 images dont la scène a besoin : 5 angles de tête (de baissée à
-relevée, 0,06 rad par cran) × gorge × flanc × œil ouvert ou fermé ; la bouche entrouverte et
+Reprend la grenouille du tableau de bord (../../tableau-de-bord/grenouille.py, avec ses
+réglages « bouche » et « rentres ») et produit les 60 images dont la scène a besoin :
+5 angles de tête (de baissée à relevée, 0,06 rad par cran) × gorge × flanc × œil ouvert ou fermé ;
+la bouche entrouverte et
 ouverte pour la langue, à chaque angle ; les yeux rentrés pour avaler, gorge au repos ou
 gonflée, à chaque angle. Les données géométriques dont la page a besoin (bout de la bouche,
 œil, pivot de la tête) sont tirées des mêmes constantes. Le décor vient de decor.py, en

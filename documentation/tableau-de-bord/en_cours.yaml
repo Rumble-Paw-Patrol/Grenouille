@@ -49,3 +49,7 @@ en_cours:
     detail: >-
       Vérifier tôt qu'une application Python avec ONNX Runtime s'installe et tourne sur une machine Windows propre. L'objectif étant à terme de fournir une appli no code pour naturalistes allergiques aux technologies.
     suite: Création de l'application Windows
+  - titre: Maquette de l'application finale
+    etat: a_venir
+    detail: >-
+      Claude Design devient vraiment utile pour le livrable : la maquette de l'application Windows pour naturaliste, à faire valider par l'ONF avant d'écrire l'interface.

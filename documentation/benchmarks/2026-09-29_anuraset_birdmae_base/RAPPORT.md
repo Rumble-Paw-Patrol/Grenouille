@@ -1,5 +1,12 @@
 # Benchmark 04 — Têtes et régularisations sur AnuraSet, un site à la fois (birdmae_base)
 
+> **Note de l'audit du 10/10/2026 :** les p-valeurs de ce rapport sont calculées par amorçage
+> avec 1 000 tirages, selon p = 2·k/n. Quand aucun tirage ne traverse 0, p vaut 0. Environ la
+> moitié des comparaisons sont dans ce cas et sortent « significatives après Holm ». Avec le calcul
+> corrigé, p = 2·(k+1)/(n+1) a un plancher, et plus aucune comparaison ne survivrait à Holm sur
+> 115 à 245 comparaisons. Les intervalles de confiance restent valables. Lire « après Holm »
+> comme « intervalle à 95 % qui exclut 0 », en attendant une relance avec plus de tirages.
+
 29/09/2026 · commit `9d18e78` · statut : **indicateur** (d'autres anoures qu'A. blanci ; 2 à 3
 sites par espèce ; un seul tirage).
 

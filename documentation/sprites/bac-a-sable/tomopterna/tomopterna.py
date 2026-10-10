@@ -1,6 +1,6 @@
 """Deux Callimedusa tomopterna face à face sur une branche, en sprites 8-bit (mode image).
 
-    uv run python documentation/tableau-de-bord/bac-a-sable/tomopterna/tomopterna.py ETAPE
+    uv run python documentation/sprites/bac-a-sable/tomopterna/tomopterna.py ETAPE
         ETAPE : silhouette | aplats | details | animation
 
 D'après une photo d'Olivier Louguet : deux phyllomédusines tigrées perchées sur une branche

@@ -39,5 +39,7 @@ Pas au niveau minute : les décalages du stock n'ont pas été recalculés ici.
   perch_v2 ni de Holm : `rassembler_global.py` ne connaît pas encore cet encodeur).
 - PITAZU : AP poolée très basse (0,11) malgré une bonne AP par site (0,84).
 - Transformer : sans objet (CNN), pas de verdict « en retrait en linéaire ».
-- Données : branche `donnees-anuraset-convnext_birdset` ; sorties dans `resultats/global/` de
-  `resultats-anuraset-07`.
+- Données : branche `donnees-anuraset-convnext_birdset` ; sorties `resultats/global/convnext_birdset_*`
+  dans l'historique (`git show 443f889:resultats/global/<fichier>`).
+- Traitement : c'est `anuraset/rassembler_08.py` qui rassemble cet encodeur (et non
+  `rassembler_global.py`, qui ne le connaît pas).

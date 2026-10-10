@@ -1,6 +1,6 @@
 """Le décor de la scène de chasse : sous-bois guyanais, au pixel, en trois calques.
 
-    python3 documentation/tableau-de-bord/bac-a-sable/chasse/decor.py [apercu.png]
+    python3 documentation/sprites/bac-a-sable/chasse/decor.py [apercu.png]
 
 Le fond (opaque) superpose, de loin en près : la canopée et ses trouées de ciel, la brume
 verte et ses troncs lointains, deux troncs à mi-distance, un sous-étage de palmes, la litière

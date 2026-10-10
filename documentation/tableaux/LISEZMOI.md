@@ -5,8 +5,9 @@ Xcode (DECISIONS n° 118). Cliquer sur l'image dans le navigateur de fichiers d'
 
 - `protocole.png` : comment se lit un benchmark (plis, niveaux, métriques, comparaisons) et
   la liste de tous les benchmarks avec leur commande.
-- `encodeurs.png` : les 9 encodeurs du projet (f_e, fenêtre, dimension, débit mesuré, accès
-  aux jetons et aux couches) et les autres modèles de bacpipe.
+- `encodeurs.png` : les encodeurs du projet (29 déclarés dans `config/default.yaml`, dont 24
+  comparés au benchmark 08 ; le tableau n'en détaille qu'une partie : f_e, fenêtre, dimension,
+  débit mesuré, accès aux jetons et aux couches) et les autres modèles de bacpipe.
 - `tetes.png` : toutes les têtes de `blanci heads`.
 - `poolings.png` : les résumés des jetons (`logistic:<pooling>`).
 - `pertes.png` : le benchmark des pertes (R34, R35), `--methods losses`.
