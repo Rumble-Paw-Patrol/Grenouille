@@ -145,3 +145,9 @@ l'ébauche et le croquis.
   dans ses couleurs.
 - 3b (tour 2) : avant-bras gauche : le vert, à peine visible, est sur sa face externe, à droite
   de l'image (un pixel), et non à gauche.
+- 3b (10/10/2026) : Léonard juge le modelé parfait ; gelé en `gauche_details_valide.json` et
+  `branche_details_valide.json` (le rendu fidèle à la photo).
+- Éclat (avant l'étape 4) : carte blanche de Léonard pour teinter la grenouille, sans suivre la
+  photo, de couleurs qui font ressortir sa brillance et sa beauté, autant qu'on veut, y compris
+  des teintes qu'on ne voit pas sur la photo ; comme pour A. blanci, dont les parties marron
+  clair allaient du sensiblement jauni au sensiblement rougi.
