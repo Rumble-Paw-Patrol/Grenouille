@@ -68,7 +68,7 @@ SILHOUETTE = {
 }
 # le croquis : du papier, les plans en gris légers, des traits sombres
 CROQUIS = {
-    "fond": "#C9CCC8",
+    "fond": "#A4A9A5",  # le support, plus sombre que les membres du fond
     "corps": "#E4E6E2",
     "devant": "#F6F7F4",
     "trait": "#5E6663",

@@ -318,7 +318,9 @@ mains et pieds. Pour chaque zone :
    - membres à rayon variable : mollet du tibia bombé dessus et presque droit dessous,
      avant-bras un peu renflé, cuisse en fuseau ;
    - articulations : un coude ou un genou n'a pas de frontière ; les formes se lient et la pointe
-     de l'articulation se voit.
+     de l'articulation se voit. Le bras et l'avant-bras forment une seule forme cernée ; là où un
+     membre s'attache au corps sans pli (l'épaule), une bande de peau du corps recouvre son
+     contour pour qu'il s'y fonde.
 2. **Tracer les traits d'un pixel** (`traits` de `formes()`) :
    - bouche jusqu'à la commissure, narine, tympan et son anneau, pli supratympanique ;
    - paupière supérieure, bosse de l'autre œil ;
@@ -334,7 +336,11 @@ mains et pieds. Pour chaque zone :
    - disque au bout, en boule, au diamètre mesuré (environ 6 pixels chez tomopterna à
      l'échelle 0,28 : jamais un 3 × 3 par défaut) ;
    - un pouce opposable serre ou longe le support ; un doigt caché derrière un avant-bras ne se
-     dessine pas.
+     dessine pas ;
+   - des doigts qui partent d'un même point (tous les orteils du tarse) se chevauchent à leur
+     base, et le contour écrase celui du milieu. Les faire passer par un éventail (les
+     métatarses), caché sous le membre qui couvre le pied, pour qu'ils en sortent écartés de leur
+     largeur plus un pixel au moins. Le squelette ne change pas.
 4. **Se relire seul après chaque zone :**
    - `outils.py superposer` : le contour suit la photo à 1 ou 2 pixels près ;
    - `outils.py zoom` sur la zone ;
@@ -349,7 +355,10 @@ Les règles de forme, toutes espèces :
 - **Allure :** fine et vivante, jamais un crapaud ni « en surpoids » (sauf si l'espèce l'est) ;
   les proportions de la fiche.
 - **Œil :** l'œil, c'est toute la saillie : la paupière supérieure est en relief, de la couleur
-  de la peau, et le globe a un pli dessous ; la pupille a la forme de la fiche. L'autre œil se
+  de la peau, et le globe a un pli dessous ; la pupille a la forme de la fiche. Le cercle du
+  globe est un trait continu d'un pixel (les pixels du globe qui touchent l'extérieur), jamais
+  un anneau calculé par distance, qui se coupe en pointillés ; une fente verticale est en
+  amande, pointue aux deux bouts. Pas de pixel isolé qui dépasse au bout d'une bosse. L'autre œil se
   voit comme une bosse de peau sur le crâne, de la couleur de la peau ; on n'en voit au plus
   qu'un mince croissant de globe, jamais de cercle.
 

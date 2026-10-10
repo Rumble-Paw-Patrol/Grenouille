@@ -67,3 +67,21 @@ l'ébauche et le croquis.
   C'est le tarse qui se déplace, de 4 pixels vers la droite de l'image : il est caché derrière
   l'avant-bras, sur le pixel juste à l'intérieur de son bord. Ébauche validée avec ce changement
   (morphologie et posture), gelée en `gauche_ebauche_valide.json` et `branche_ebauche_valide.json`.
+- 2 (10/10/2026) : Léonard valide l'ébauche, avec le tarse déplacé, et demande de passer au
+  croquis dans la même réponse. Le squelette ne bouge plus.
+- 2 : le dos relevé colonne par colonne sur la photo : trois droites, en pente douce puis de plus
+  en plus raide jusqu'au postérieur, de 1 à 3 pixels plus haut qu'à l'ébauche. Le profil de la
+  tête et la lèvre ne changent pas ; le ventre est galbé.
+- 2 : le bras droit est une seule forme (pas de frontière au coude) ; à l'épaule, il se fond dans
+  la poitrine, sans trait.
+- 2 : la cuisse droite en fuseau ; le tibia droit a le dessus presque droit et le mollet bombé
+  dessous, comme sur la photo ; l'avant-bras droit est un peu renflé sous le coude ; la cuisse
+  gauche est plus large en son milieu.
+- 2 : les orteils droits partent du tarse et s'écartent en éventail sous l'avant-bras, pour en
+  sortir à 4 pixels l'un de l'autre. Sinon, l'orteil du milieu était écrasé à un pixel.
+- 2 : les doigts sont posés au pixel : 3 pixels de large, en escalier, avec des disques en boule
+  de 6 pixels.
+- 2 : l'œil a un cercle continu d'un pixel et une pupille en amande ; le pli de la paupière
+  inférieure est à un pixel sous le globe. L'autre œil : sa bosse est raccourcie d'un pixel au
+  bout (plus de pointe), et le croissant de globe est bordé d'un trait.
+- 2 : au croquis, la branche est en gris moyen, pour la distinguer des membres du fond.

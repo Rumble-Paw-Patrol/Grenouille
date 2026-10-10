@@ -254,27 +254,99 @@ def tete_tournee(tete):
 
 
 # ------------------------------------------------------------------ la grenouille
-def doigts(base, bouts, r=0.65, disque=1.45):
-    """Doigts épais, de la base de la main ou du pied au bout, chacun avec son grand disque en
-    boule : largeurs mesurées sur la photo (doigt d'environ 3 pixels, disque d'environ 6). Un
-    masque par doigt, pour les cerner un à un."""
+def px(*pts):
+    """Points relevés en pixels du sprite, sur la photo quadrillée au pixel, en unités de la
+    scène : le croquis se relève au pixel près."""
+    return [(ORIGINE[0] + i / ECHELLE, ORIGINE[1] + j / ECHELLE) for i, j in pts]
+
+
+def courbe(pts, n=8):
+    """Courbe ouverte lisse (Catmull-Rom) par les points, extrémités comprises : un galbe au
+    milieu d'un contour fait aussi de droites."""
+    pts = [pts[0], *pts, pts[-1]]
+    out = []
+    for k in range(1, len(pts) - 2):
+        p0, p1, p2, p3 = (np.array(pts[k + d], float) for d in (-1, 0, 1, 2))
+        for i in range(n):
+            t = i / n
+            q = 0.5 * (
+                2 * p1
+                + (p2 - p0) * t
+                + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+                + (3 * p1 - p0 - 3 * p2 + p3) * t**3
+            )
+            out.append((q[0], q[1]))
+    return out + [tuple(pts[-2])]
+
+
+def fuseau(a, b, rayons, milieu=0.5, decale=(0.0, 0.0)):
+    """Un segment du squelette, de a à b, en fuseau : trois rayons (a, milieu, b) ; le milieu,
+    à la fraction milieu du segment, peut être décalé (en unités) pour bomber un côté."""
+    (xa, ya), (xb, yb) = SQUELETTE[a], SQUELETTE[b]
+    m = (xa + (xb - xa) * milieu + decale[0], ya + (yb - ya) * milieu + decale[1])
+    return membre([(xa, ya), m, (xb, yb)], rayons, X, Y)
+
+
+# un disque en boule, de 6 pixels de diamètre (doigts de C. tomopterna à l'échelle 0,28)
+DISQUE = [".####.", "######", "######", "######", "######", ".####."]
+
+
+def doigt(base, bout, largeur=3, via=()):
+    """Un doigt posé au pixel près, de la base au bout (repères du squelette), en passant par
+    les points via (unités : l'éventail des métatarses, caché sous un autre membre) : un trait
+    de largeur pixels, en escalier (chaque pixel touche le suivant par un côté, sinon le
+    contour le coupe), et son disque en boule centré sur le bout. Un masque par doigt."""
+    m = np.zeros((H, W), bool)
+
+    def pixel(x, y):
+        x -= ORIGINE[0]
+        return ((UNITES[0] - x) if MIROIR else x) * ECHELLE, (y - ORIGINE[1]) * ECHELLE
+
+    def poser(i, j):
+        if 0 <= j < H and 0 <= i < W:
+            m[j, i] = True
+
+    pts = [pixel(*p) for p in (SQUELETTE[base], *via, SQUELETTE[bout])]
+    prec = None
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:], strict=False):
+        debout = abs(y1 - y0) >= abs(x1 - x0)  # le trait s'épaissit en travers de son sens
+        n = int(max(abs(x1 - x0), abs(y1 - y0))) * 2 + 1
+        for k in range(n + 1):
+            i, j = math.floor(x0 + (x1 - x0) * k / n), math.floor(y0 + (y1 - y0) * k / n)
+            cases = [(i, j)]
+            if prec and prec[0] != i and prec[1] != j:
+                cases.append((i, prec[1]))  # la marche de l'escalier
+            for a, b in cases:
+                for e in range(largeur):
+                    d = e - largeur // 2
+                    poser(a + d, b) if debout else poser(a, b + d)
+            prec = (i, j)
+    x1, y1 = pts[-1]
+    bi, bj = round(x1) - 3, round(y1) - 3
+    for dj, rang in enumerate(DISQUE):
+        for di, c in enumerate(rang):
+            if c == "#":
+                poser(bi + di, bj + dj)
+    return m
+
+
+def cernes(nom, base, bouts, plan, via=None):
+    """Une forme cernée par doigt, pour que deux disques voisins restent séparés ; via : pour
+    chaque doigt, ses points de passage (voir doigt)."""
+    via = via or [()] * len(bouts)
     return [
-        membre([SQUELETTE[base], SQUELETTE[b]], [r + 0.15, r], X, Y)
-        | ellipse(*SQUELETTE[b], disque, disque, X, Y)
-        for b in bouts
+        forme(f"{nom}{k}", doigt(base, b, via=v), "membre", plan, cernee=True)
+        for k, (b, v) in enumerate(zip(bouts, via, strict=True))
     ]
 
 
-def cernes(nom, masques, plan):
-    """Une forme cernée par doigt."""
-    return [forme(f"{nom}{k}", m, "membre", plan, cernee=True) for k, m in enumerate(masques)]
-
-
 def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
-    """Étape 1, formes simples : la tête et le tronc en un polygone de quelques points, les
-    membres en segments tirés du squelette, les doigts en traits à disques."""
+    """Étape 2, croquis : les contours relevés sur la photo, quadrillée au pixel du sprite.
+    Le profil de la tête, le dos et la mâchoire en droites ; le ventre en galbe ; les membres
+    en fuseaux sur le squelette validé à l'ébauche ; les doigts posés au pixel près."""
     S = SQUELETTE
     xt, yt = tete_tournee(tete)
+    s, g = souffle * 2, gorge * 2  # en pixels
     corps = dans(
         [
             # le profil de la tête : deux droites, du bout du museau à la narine gauche, puis
@@ -282,23 +354,27 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             S["museau"],
             S["narine_g"],
             S["nuque"],
-            (78.0, 36.6),
-            (72.0, 39.8),
-            (66.4, 45.8),
-            (64.6, 50.4),
-            (64.6, 57.6),
-            (67.0, 60.3),
-            (72.0, 60.8 + souffle * 0.5),
-            (80.0, 59.6 + souffle * 0.4),
-            (85.2, 56.8),
-            (85.4, 51.6),
-            (86.6, 50.0),
-            (88.4, 48.4 + gorge * 0.3),
-            (89.6, 47.0 + gorge * 0.6),
-            # le menton : son bord est coupé plus bas, au pixel, sous la lèvre (ligne)
-            (90.4, 45.0 + gorge * 0.4),
-            (95.0, 44.4),
-            (99.75, 43.2),
+            # le dos, relevé colonne par colonne : trois droites, en pente douce, puis de plus
+            # en plus raide jusqu'au postérieur, caché derrière le coude droit
+            *px((64.5, 11.0), (46.5, 20.0), (40.5, 25.0), (34.5, 36.0), (33.0, 38.8)),
+            *px((33.2, 41.0), (33.2, 55.2)),
+            # le ventre, en galbe : il s'arrête au-dessus de la branche et passe derrière les
+            # membres gauches
+            *courbe(
+                px(
+                    (33.2, 55.2),
+                    (34.8, 58.6),
+                    (38.0, 60.6),
+                    (48.0, 61.6 + s),
+                    (57.0, 61.2 + s),
+                    (64.0, 59.2 + s * 0.8),
+                    (70.0, 56.8),
+                    (74.4, 53.6),
+                )
+            ),
+            # la gorge, puis le menton : son bord est coupé plus bas, au pixel, sous la lèvre
+            *px((74.8, 43.2), (77.2, 40.0), (80.8, 36.8 + g * 0.3), (83.2, 34.0 + g * 0.6)),
+            *px((84.8, 30.0 + g * 0.4), (94.0, 28.8), (103.5, 26.4)),
         ],
         xt,
         yt,
@@ -308,47 +384,69 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     (mx, my), (cx, cy) = S["museau"], S["commissure"]
     ligne = cy + (xt - cx) * (my - cy) / (mx - cx)
     corps &= ~((xt > 90.4) & (yt > ligne + 0.75))
-    corps |= ellipse(*S["oeil"], 4.0, 4.0, xt, yt) & (yt < S["oeil"][1])  # l'œil dépasse
-    autre = ellipse(*S["autre_oeil"], 3.4, 1.95, xt, yt)  # l'autre œil : toute la bosse
+    ox, oy = S["oeil"]
+    corps |= ellipse(ox, oy, 4.0, 4.0, xt, yt) & (yt < oy)  # la paupière : l'œil dépasse
+    autre = ellipse(*S["autre_oeil"], 3.3, 1.95, xt, yt)  # l'autre œil : toute la bosse
     corps |= autre
-    patte_g = os_(MEMBRES["patte_g"][0], [2.0, 1.9, 1.6, 1.2])
+    # membres : des fuseaux sur le squelette ; rayons en unités = largeur en pixels / 4
+    patte_g = fuseau("hanche_g", "genou_g", [2.0, 2.2, 1.9])  # la cuisse, large
+    patte_g |= os_(["genou_g", "talon_g", "tarse_g"], [1.9, 1.6, 1.2])  # tibia vertical
     bras_g = os_(MEMBRES["bras_g"][0], [1.2, 1.35, 1.3, 1.1])
-    cuisse_d = os_(["hanche_d", "genou_d"], [1.8, 1.5])  # elle comble le coin sous le coude
-    tibia_d = os_(["genou_d", "talon_d"], [2.0, 2.1])
+    # la cuisse droite en fuseau ; elle comble le coin sous le coude
+    cuisse_d = fuseau("hanche_d", "genou_d", [1.8, 2.0, 1.5], decale=(-0.2, -0.25))
+    # le tibia : dessus presque droit, mollet bombé dessous
+    tibia_d = fuseau("genou_d", "talon_d", [1.95, 2.25, 2.0], decale=(0.0, 0.3))
     pied_d = os_(["talon_d", "tarse_d"], [1.2, 1.0])
-    bras_haut_d = os_(["epaule_d", "coude_d"], [1.5, 1.0])
-    avant_bras_d = os_(["coude_d", "poignet_d", "main_d"], [1.85, 1.55, 1.2])
+    # le bras droit, d'une seule forme (un coude n'a pas de frontière) : le bras, attaché en
+    # arrondi à l'épaule, fin jusqu'au coude ; l'avant-bras, large, un peu renflé sous le coude
+    bras_d = fuseau("epaule_d", "coude_d", [1.5, 0.95, 1.05])
+    bras_d |= os_(["coude_d", "poignet_d", "main_d"], [1.85, 1.55, 1.2])
+    bras_d |= fuseau("coude_d", "poignet_d", [1.85, 1.95, 1.55], milieu=0.4)
+    # les orteils droits partent du tarse, caché sous l'avant-bras, et s'écartent en éventail
+    # (les métatarses) pour sortir de sous lui à 4 pixels l'un de l'autre
+    eventail_d = [px((22.5, 71.0)), px((26.5, 71.5)), px((30.5, 71.5))]
     f = [
         forme("patte_g", patte_g, "membre", "fond", cernee=True),
-        *cernes("orteil_g", doigts("tarse_g", MEMBRES["patte_g"][2]), "fond"),
+        *cernes("orteil_g", "tarse_g", MEMBRES["patte_g"][2], "fond"),
         forme("bras_g", bras_g, "membre", "corps", cernee=True),
-        *cernes("doigt_g", doigts("main_g", MEMBRES["bras_g"][2]), "corps"),
+        *cernes("doigt_g", "main_g", MEMBRES["bras_g"][2], "corps"),
         forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True),
         forme("pied_d", pied_d, "membre", "fond", cernee=True),
-        *cernes("orteil_d", doigts("tarse_d", MEMBRES["patte_d"][2]), "fond"),
+        *cernes("orteil_d", "tarse_d", MEMBRES["patte_d"][2], "fond", eventail_d),
         forme("tibia_d", tibia_d, "membre", "fond", cernee=True),
         forme("corps", corps, "dos", cernee=True),
-        forme("bras_haut_d", bras_haut_d, "membre", "devant", cernee=True),
-        forme("avant_bras_d", avant_bras_d, "membre", "devant", cernee=True),
-        *cernes("doigt_d", doigts("main_d", MEMBRES["bras_d"][2]), "devant"),
+        forme("bras_d", bras_d, "membre", "devant", cernee=True),
+        # l'épaule : le bras s'y attache en arrondi, sans trait ; il se fond dans la poitrine (la
+        # peau de la poitrine recouvre son contour)
+        forme(
+            "epaule_d",
+            ellipse(*S["epaule_d"], 2.2, 2.2, X, Y) & dilater(bras_d) & ~bras_d,
+            "dos",
+            volume="corps",
+        ),
+        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "devant"),
     ]
+    oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne}
+    oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
+    oeil["u"], oeil["v"] = (xt - ox) / oeil["r"], (yt - oy) / oeil["r"]
+    ax, ay = S["autre_oeil"]
+    oeil["autre"] = autre & ellipse(ax + 3.9, ay + 0.2, 1.5, 1.7, xt, yt)  # croissant gris
     # traits du visage : la lèvre (un pixel par colonne, sur la droite) ; la narine ; le tympan ;
-    # le pli sous l'autre œil
+    # le pli sous l'autre œil et le bord de son croissant de globe ; sous le globe, à un pixel,
+    # le pli de la paupière inférieure
     tx, ty = S["tympan"]
     rt = np.hypot(xt - tx, yt - ty)
-    ax, ay = S["autre_oeil"]
-    pli = ellipse(ax, ay, 3.4, 1.95, xt, yt) & ~ellipse(ax, ay - 0.5, 3.4, 1.95, xt, yt)
+    pli = ellipse(ax, ay, 3.3, 1.95, xt, yt) & ~ellipse(ax, ay - 0.5, 3.3, 1.95, xt, yt)
+    autour = dilater(oeil["masque"])
     traits = {
         "bouche": corps & (xt > cx) & (xt < mx) & (np.floor(2 * yt) == np.floor(2 * ligne)),
         "pli_autre_oeil": corps & pli & (yt > ay) & (xt < ax + 2.6),
+        "croissant": autre & dilater(oeil["autre"]) & ~oeil["autre"],
         "narine": (np.abs(xt - S["narine"][0]) < 0.5) & (np.abs(yt - S["narine"][1]) < 0.5),
         "tympan": (rt > 0.9) & (rt < 1.4),
+        "pli_oeil": dilater(autour) & ~autour & (yt > oy + 1.7) & (np.abs(xt - ox) < 2.6),
     }
     motifs = {}
-    oeil = {"x": S["oeil"][0], "y": S["oeil"][1], "r": 3.4, "ferme": cligne}
-    oeil["masque"] = (xt - oeil["x"]) ** 2 + (yt - oeil["y"]) ** 2 <= oeil["r"] ** 2
-    oeil["u"], oeil["v"] = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
-    oeil["autre"] = autre & ellipse(ax + 3.9, ay + 0.2, 1.5, 1.7, xt, yt)  # croissant gris
     return f, traits, motifs, oeil
 
 
@@ -402,23 +500,35 @@ def miettes(img, n=4, bord=CONTOUR):
     return img
 
 
+def dilater(m):
+    """Le masque grossi d'un pixel (voisins par un côté)."""
+    v = np.pad(m, 1)
+    return m | v[:-2, 1:-1] | v[2:, 1:-1] | v[1:-1, :-2] | v[1:-1, 2:]
+
+
+def bord(m):
+    """Les pixels du masque qui touchent l'extérieur par un côté : un trait continu."""
+    return m & dilater(~m)[: m.shape[0], : m.shape[1]]
+
+
 def rendu_oeil(img, oeil, couleurs, ferme_couleur):
     if oeil is None:  # un support (branche, feuille) n'a pas d'œil
         return img
     m, u, v = oeil["masque"], oeil["u"], oeil["v"]
     if oeil.get("autre") is not None and not oeil["ferme"]:
         # l'autre œil est une bosse de peau ; on n'en voit au plus qu'un mince croissant de globe
-        img[oeil["autre"] & (img != "")] = couleurs["iris"]
+        img[oeil["autre"] & (img != "") & (img != CONTOUR)] = couleurs["iris"]
     if oeil["ferme"]:
         img[m] = ferme_couleur
         img[m & (np.abs(v - 0.15 * u * u) < 0.18)] = CONTOUR
         return img
     img[m] = couleurs["iris"]
-    img[m & (u * u + v * v > 0.8)] = couleurs.get("cercle", CONTOUR)
+    img[bord(m)] = couleurs.get("cercle", CONTOUR)  # un cercle continu d'un pixel
     p = {
         "ronde": u * u + v * v < 0.3,
         "horizontale": (u / 0.75) ** 2 + (v / 0.32) ** 2 < 1,
-        "verticale": (u / 0.28) ** 2 + (v / 0.8) ** 2 < 1,
+        # une fente en amande : 3 pixels au milieu, pointue aux deux bouts
+        "verticale": np.abs(u) < 0.26 * (1 - (v / 0.82) ** 2),
     }[PUPILLE]
     img[m & p] = couleurs["pupille"]
     return img
