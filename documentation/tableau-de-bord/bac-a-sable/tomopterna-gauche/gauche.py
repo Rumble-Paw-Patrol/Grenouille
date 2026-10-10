@@ -46,18 +46,17 @@ TRAME = np.tile(BAYER, (H // 4 + 1, W // 4 + 1))[:H, :W]
 # teintes prises à la pipette sur la photo, dans les zones éclairées, sans reflet ni ombre
 MATIERES = {
     "dos": "#4F9C43",  # vert feuille : dos, tête, faces externes des membres
-    "flanc": "#A9643A",  # bande orangée du flanc, entre l'avant-bras et le ventre
     "ventre": "#C4A9AA",  # poitrine et ventre, blanc rosé
     "bas_ventre": "#B9866A",  # bas du ventre, pêche orangé
     "gorge": "#B3A3B0",  # gorge, gris lilas
     "levre": "#E4DCDB",  # liseré blanc de la lèvre
     "membre": "#AE6C38",  # faces internes des membres, mains, pieds : orangé
-    "pale": "#B3A4AC",  # faces internes pâles : dessus du bras droit, avant-bras gauche
+    "pale": "#B3A4AC",  # dessus du bras droit, pâle
     "disque": "#C2884F",  # disques, plus clairs que le doigt
     "membrane": "#A9A3B8",  # paupière inférieure, lilas (œil fermé)
 }
 MOTIFS = {
-    "barre": "#2B1E33",  # barres violet-noir des membres et du flanc, mouchetures sous la lèvre
+    "barre": "#2B1E33",  # barres violet-noir des membres, mouchetures sous la lèvre
     "tache": "#6B3F50",  # marbrures violettes du ventre et du bras gauche
 }
 # les traits du croquis prennent la couleur qu'ils traversent, assombrie ; sauf ceux-ci, qui ont
@@ -76,7 +75,7 @@ PUPILLE = "verticale"  # fente verticale des phyllomédusines
 CONTOUR, CONTOUR_CLAIR = "#24120A", "#5A2B14"
 # CONTOUR_TEINTE : au rendu détaillé, le contour prend la couleur qu'il borde, assombrie, au lieu
 # d'un trait sombre uniforme (choix de l'étape 3b ; C. tomopterna l'a pris, A. blanci non)
-CONTOUR_TEINTE = False
+CONTOUR_TEINTE = True  # choix de tomopterna : un contour teinté, sans trait noir
 SILHOUETTE = {
     "fond": "#56625E",
     "corps": "#8E9B96",
@@ -487,11 +486,13 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     Px, Py = (X - ORIGINE[0]) * ECHELLE - 0.5, (Y - ORIGINE[1]) * ECHELLE - 0.5
     Pxt, Pyt = (xt - ORIGINE[0]) * ECHELLE - 0.5, (yt - ORIGINE[1]) * ECHELLE - 0.5
     rang, rang_levre = np.floor(2 * yt), np.floor(2 * ligne)
+    # l'avant-bras droit va jusqu'au ventre : sa face interne, orangée et barrée, est la bande
+    # qu'on prenait pour le flanc (correction de Léonard à l'étape 3a)
+    bras_d |= corps & (Px >= 33) & (Px <= 37.5) & (Py >= 43.5)
     # le vert s'arrête, côté ventre, sur une droite relevée colonne par colonne, de l'arrière du
     # bras droit à la commissure, puis sur la lèvre ; dessous, la peau claire du ventre
     vert = 38.5 - 0.27 * (Pxt - 35)
     dessous = np.where(xt < cx, Pyt > vert, rang > rang_levre)
-    flanc = dessous & (Pxt <= 37.5) & (Pyt >= 41)
     # sous le vert et sous la lèvre, une rangée de mouchetures sombres, de la poitrine au coin
     # de la bouche et jusque sous l'œil ; à gauche de la commissure, après un pixel clair
     sous_vert = np.where(xt < cx, np.floor(Pyt) == np.floor(vert) + 2, rang == rang_levre + 1)
@@ -502,10 +503,8 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         # menton, et la poitrine au-dessus du bras droit ; plus bas, la peau du ventre
         "gorge": dessous & ((Pyt <= 38) | ((Pxt >= 58) & (Pyt <= 42.2 - 0.237 * (Pxt - 63)))),
         "bas_ventre": dessous & (Pyt >= 54 + np.clip((Pxt - 58) * 0.12, 0, None)),
-        "flanc": flanc,
         # les marbrures violettes, plus denses à gauche et au milieu du ventre
         "tache": dessous
-        & ~flanc
         & pixels(
             *[(48, 37), (49, 37), (52, 36), (52, 37), (53, 37), (54, 37)],  # poitrine
             *[(64, 37), (65, 37), (67, 36)],  # gorge
@@ -520,19 +519,22 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             *[(43, 57), (44, 57), (45, 58), (46, 58), (46, 59), (47, 59)],
             *[(62, 58), (63, 58)],
         ),
-        # le flanc, orangé, barré de noir ; les mouchetures sous la lèvre
-        "barre": (flanc & np.isin(np.floor(Pyt), [42, 43, 49, 50, 57, 58])) | mouchetures,
+        # les mouchetures sous la lèvre
+        "barre": mouchetures,
     }
-    # le bras droit : l'avant-bras vert ; le bras, de l'épaule au coude, montre sa face interne,
-    # pâle sur sa rangée du haut, orangée dessous, barrée de cinq barres
+    # le bras droit : l'avant-bras vert sur sa face externe (les quatre cinquièmes, à gauche) et
+    # orangé, barré, sur sa face interne, contre le ventre ; le bras, de l'épaule au coude, montre
+    # sa face interne, pâle sur sa rangée du haut, orangée dessous, barrée de cinq barres
     haut = bras_d & (Px >= 33.5) & (Py <= 44.5)
     dessus = haut & bande(bras_d, 0, -1, 1)
+    interne = bras_d & ~haut & bande(bras_d, 1, 0, 3) & (Py <= 62)
     zones_bras_d = {
-        "membre": haut,
+        "membre": haut | interne,
         "pale": dessus,
         "barre": haut
         & ~dessus
-        & barres([S["epaule_d"], S["coude_d"]], px(*[(c, 41.5) for c in (39, 46, 50, 55, 60)])),
+        & barres([S["epaule_d"], S["coude_d"]], px(*[(c, 41.5) for c in (39, 46, 50, 55, 60)]))
+        | interne & np.isin(Py, [49, 50, 57, 58]),
         "tache": pixels((63, 38), (64, 38)),
     }
     # la cuisse droite : bordée de vert en haut, trois barres ; le tibia : le genou vert, deux
@@ -554,11 +556,13 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         | barres([S["hanche_g"], S["genou_g"]], px((76.6, 44.8))),
         "dos": bande(patte_g, 1, 0, 2) & (Py >= 34) & (Py <= 52) & (Px >= 86),
     }
-    # le bras gauche : bordé de vert à gauche, orangé en haut, pâle et taché en bas
+    # le bras gauche : orangé, bordé de vert à gauche, quatre barres (pas de gris : correction
+    # de Léonard à l'étape 3a)
     zones_bras_g = {
-        "membre": Py < 49.5,
+        "barre": barres(
+            [S[n] for n in MEMBRES["bras_g"][0]], px((81.6, 39), (83.8, 45), (84.5, 50), (84.7, 55))
+        ),
         "dos": bande(bras_g, -1, 0, 2) & (Py >= 40) & (Py <= 51),
-        "tache": pixels((81, 52), (82, 52), (84, 54)),
     }
     # barres des doigts et des orteils (centres en pixels) et taches des disques, par doigt
     barres_orteils_d = [([(21.6, 74.0), (20.7, 77.0)], ()), ([(26.4, 74.0), (26.2, 77.0)], ())]
@@ -571,7 +575,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     f = [
         forme("patte_g", patte_g, "membre", "fond", cernee=True, zones=zones_patte_g),
         *cernes("orteil_g", "tarse_g", MEMBRES["patte_g"][2], "fond", None, barres_orteils_g),
-        forme("bras_g", bras_g, "pale", "corps", cernee=True, zones=zones_bras_g),
+        forme("bras_g", bras_g, "membre", "corps", cernee=True, zones=zones_bras_g),
         *cernes("doigt_g", "main_g", MEMBRES["bras_g"][2], "corps", None, barres_doigts_g),
         forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True, zones=zones_cuisse_d),
         forme("pied_d", pied_d, "membre", "fond", cernee=True),
@@ -781,20 +785,77 @@ def rampe(hexa, n=7):
     return out
 
 
+# étape 3b : les formes à l'ombre sur la photo (la patte et le bras gauches, derrière le ventre),
+# de combien ; les granules blanches de tomopterna, sur le vert
+OMBRES = {"patte_g": 0.16, "orteil_g": 0.12, "bras_g": 0.08, "doigt_g": 0.06}
+GRANULE = "#E2EEDA"
+
+
+def decaler(m, di, dj):
+    """Le tableau décalé de (di, dj) pixels, sans retour par les bords."""
+    v = np.zeros(m.shape, m.dtype)
+    src = m[max(-dj, 0) : H + min(-dj, 0), max(-di, 0) : W + min(-di, 0)]
+    v[max(dj, 0) : H + min(dj, 0), max(di, 0) : W + min(di, 0)] = src
+    return v
+
+
+def semis(m, densite, graine, pris=None):
+    """Des points semés au hasard dans m, à places fixes (graine), jamais deux voisins (même en
+    diagonale, ni d'un point déjà pris)."""
+    r = np.random.default_rng(graine).random((H, W))
+    pris = np.zeros((H, W), bool) if pris is None else pris.copy()
+    out = np.zeros((H, W), bool)
+    for j, i in sorted(zip(*np.nonzero(m & (r < densite)), strict=False), key=lambda q: r[q]):
+        if not pris[max(j - 1, 0) : j + 2, max(i - 1, 0) : i + 2].any():
+            out[j, i] = pris[j, i] = True
+    return out
+
+
+def fondre(zone, a, b):
+    """Le passage d'une matière à l'autre sur une même face (ventre, gorge) : deux rangées
+    tramées au lieu d'une ligne."""
+    autre = zone == b
+    pres = dilater(autre)[:H, :W]
+    zone[(zone == a) & pres & (TRAME > 0.5)] = b
+    zone[(zone == a) & dilater(pres)[:H, :W] & ~pres & (TRAME > 0.85)] = b
+    return zone
+
+
 def details(f, traits, motifs, oeil):
-    """Volume par forme (bords tournés vers la lumière plus clairs), rampes tramées, plaques
-    de teinte, grain, œil brillant, contour clair côté lumière. Point de départ : affiner à la
-    main (ombres de contact, reflets humides, épaule, pustules…)."""
+    """Étape 3b, le modelé : volume par forme (lumière d'en haut, un peu de la gauche, comme sur
+    la photo), ombre portée par les formes plus proches, patte et bras gauches à l'ombre, ventre
+    bombé, gorge dans l'ombre de la tête, pustules du ventre, rampes tramées en trois variantes
+    de teinte, passages tramés entre les zones du ventre, granules blanches sur le vert et en
+    liseré au bord du vert, reflets humides des disques, œil bombé et réticulé, contour
+    teinté."""
     mat, plan, num = etiqueter(f)
     lx, ly = LUMIERE
     lum = np.full((H, W), 0.5)
-    volumes = {fo["nom"]: fo["masque"] for fo in f}
     for k, fo in enumerate(f):
-        b = _flou(volumes[fo["volume"]].astype(float), 3)
-        gy, gx = np.gradient(b)
-        face = gx * lx + gy * ly  # bord tourné vers la lumière : positif
         ici = num == k
+        volume = next(g["masque"] for g in f if g["nom"] == fo["volume"])
+        gy, gx = np.gradient(_flou(volume.astype(float), 3))
+        # le gradient du masque flouté pointe vers l'intérieur : un bord tourné vers la lumière
+        # (LUMIERE, d'où elle vient) a un gradient opposé à elle
+        face = -(gx * lx + gy * ly)
         lum[ici] = (0.55 + 4.0 * face - 0.18 * ((Y - ORIGINE[1]) / UNITES[1] - 0.4))[ici]
+        # l'ombre portée par les formes plus proches, du côté opposé à la lumière
+        proches = [j for j in range(k + 1, len(f)) if f[j]["volume"] == f[j]["nom"]]
+        porte = decaler(np.isin(num, proches), round(-lx * 2), round(-ly * 2))
+        lum[ici] -= 0.32 * _flou(porte.astype(float), 1)[ici]
+        lum[ici] -= next((v for n, v in OMBRES.items() if fo["nom"].startswith(n)), 0.0)
+    # le ventre, bombé, plus clair au milieu ; la gorge, dans l'ombre de la tête
+    ventre = np.isin(mat, ["ventre", "bas_ventre", "tache"]) & (num == noms(f).index("corps"))
+    bombe = np.clip(1 - ((X - 76.0) / 10) ** 2 - ((Y - 56.0) / 5.5) ** 2, 0, 1)
+    lum[ventre] += 0.2 * bombe[ventre]
+    lum[ventre] = np.maximum(lum[ventre], 0.4)  # le bas du ventre, face à nous, reste éclairé
+    lum[mat == "gorge"] -= 0.1
+    # pustules du ventre et de la gorge : un pixel plus clair, son ombre dessous
+    peau = np.isin(mat, ["ventre", "bas_ventre", "gorge"])
+    pustules = semis(peau, 0.16, 11)
+    lum[pustules] += 0.14
+    dessous = decaler(pustules, 0, 1) & peau
+    lum[dessous] -= 0.1
     plaques = np.clip(np.floor(_flou(np.random.default_rng(3).random((H, W)), 4) * 6 - 2), -1, 1)
     grain = (np.random.default_rng(5).random((H, W)) - 0.5) * 0.08
     img = np.full((H, W), "", object)
@@ -802,6 +863,7 @@ def details(f, traits, motifs, oeil):
     zone = mat.copy()
     for nom, m in motifs.items():
         zone[m & (num >= 0)] = nom
+    zone = fondre(fondre(zone, "ventre", "bas_ventre"), "gorge", "ventre")
     for nom, coul in couleurs.items():
         ici = zone == nom
         if not ici.any():
@@ -810,28 +872,73 @@ def details(f, traits, motifs, oeil):
         idx = np.clip(
             np.floor((lum + grain) * (len(tons) - 1) + TRAME * 0.9), 0, len(tons) - 1
         ).astype(int)
-        for v in (-1, 0, 1):  # trois variantes de teinte, par plaques
-            sous = ici & (plaques == v)
-            if v:
-                tons_v = rampe(_decaler(coul, 0.012 * v))
-                img[sous] = np.array(tons_v, object)[idx[sous]]
-            else:
-                img[sous] = np.array(tons, object)[idx[sous]]
+        # trois variantes de teinte, par plaques, sur les grandes matières seulement
+        for v in (-1, 0, 1) if nom in ("dos", "ventre", "membre") else (0,):
+            sous = ici & (plaques == v) if nom in ("dos", "ventre", "membre") else ici
+            tons_v = rampe(_decaler(coul, 0.012 * v)) if v else tons
+            img[sous] = np.array(tons_v, object)[idx[sous]]
+    # granules blanches : clairsemées sur le vert, serrées en liseré là où le vert touche une
+    # autre matière de la même forme (le bord des membres verts, la limite du ventre)
+    vert = mat == "dos"
+    lisere = vert & dilater(~vert & (num >= 0))[:H, :W] & (decaler(num, 1, 0) == num)
+    lisere |= vert & dilater(~vert & (num >= 0))[:H, :W] & (decaler(num, 0, 1) == num)
+    granules = semis(lisere, 0.5, 7)
+    granules |= semis(vert & ~lisere, 0.035, 8, pris=granules)
+    img[granules & ~oeil["masque"]] = GRANULE
+    # reflets humides : un point clair en haut à gauche de chaque disque
+    for k, fo in enumerate(f):
+        if "disque" in fo["zones"]:
+            d = fo["zones"]["disque"] & (num == k)
+            if d.any():
+                jj, ii = np.nonzero(fo["zones"]["disque"])
+                q = (jj.min() + 1, ii.min() + 1)
+                if d[q]:
+                    img[q] = rampe(MATIERES["disque"])[-1]
     img = contour(img, f, num)
     img = tracer(img, traits, num, oeil)
-    if CONTOUR_TEINTE:
-        img = teinter_contour(img)
-    # contour clair du côté de la lumière, autour des membres proches
-    devant = plan == "devant"
-    sx, sy = (-1 if LUMIERE[0] < 0 else 1), (-1 if LUMIERE[1] < 0 else 1)
-    cote_lumiere = np.roll(devant, sy, axis=0) | np.roll(devant, sx, axis=1)
-    img[(img == CONTOUR) & (num < 0) & cote_lumiere] = CONTOUR_CLAIR
-    img = rendu_oeil(img, oeil, OEIL, rampe(MATIERES[OEIL["paupiere"]])[4])
-    if oeil and not oeil["ferme"]:  # reflet blanc, petit reflet bleuté, bas du globe
-        u, v = oeil["u"], oeil["v"]
-        m = oeil["masque"]
-        img[m & ((u + 0.35) ** 2 + (v + 0.35) ** 2 < 0.05)] = "#FFFFFF"
-        img[m & ((u - 0.3) ** 2 + (v - 0.4) ** 2 < 0.03)] = "#9FB4C0"
+    if CONTOUR_TEINTE:  # la matière qu'il borde, assombrie : une teinte par matière
+        teinte = {nom: assombrir(c, 0.4) for nom, c in couleurs.items()}
+        TEINTES.update(teinte.values())
+        for j, i in zip(*np.nonzero(img == CONTOUR), strict=False):
+            voisins = [(j, i)] if num[j, i] >= 0 else []
+            voisins += [(j, i + 1), (j, i - 1), (j + 1, i), (j - 1, i)]
+            for q in voisins:
+                if 0 <= q[0] < H and 0 <= q[1] < W and zone[q] in teinte:
+                    img[j, i] = teinte[zone[q]]
+                    break
+    return oeil_detaille(img, oeil)
+
+
+def noms(f):
+    return [fo["nom"] for fo in f]
+
+
+def oeil_detaille(img, oeil):
+    """L'œil du modelé : le bord pâle de la paupière, le globe bombé (clair en haut à gauche),
+    l'iris argenté finement réticulé, le cercle, la fente, un reflet blanc et un petit reflet
+    bleuté ; fermé, la paupière inférieure, membrane lilas au réseau doré irrégulier."""
+    m, u, v = oeil["masque"], oeil["u"], oeil["v"]
+    if oeil.get("autre") is not None:  # l'autre œil ne cligne jamais
+        img[oeil["autre"] & (img != "") & (img != CONTOUR)] = rampe(OEIL["iris"])[3]
+    if oeil["ferme"]:  # sans cercle ni bord autour : pas d'effet lunettes
+        tons = rampe(MATIERES["membrane"])
+        idx = np.clip(np.floor(3.2 - 2.0 * v + TRAME * 0.9), 0, 6).astype(int)
+        img[m] = np.array(tons, object)[idx][m]
+        img[semis(m & ~bord(m), 0.2, 21)] = "#B49C6E"
+        return img
+    autour = dilater(m)[:H, :W] & ~m & (v > -0.3) & (img != "") & (img != CONTOUR)
+    img[autour] = OEIL["bord"]
+    tons = rampe(OEIL["iris"])
+    idx = np.clip(np.floor(3.4 - 2.0 * v - 0.9 * u + TRAME * 0.9), 0, 6).astype(int)
+    img[m] = np.array(tons, object)[idx][m]
+    reticule = semis(m & ~bord(m), 0.22, 13)
+    img[reticule] = np.array(tons, object)[np.clip(idx - 2, 0, 6)][reticule]
+    img[bord(m)] = OEIL["cercle"]
+    fente = np.abs(u) < 0.26 * (1 - (v / 0.82) ** 2)
+    img[m & fente] = OEIL["pupille"]
+    img[m & fente & (v < -0.35) & (np.abs(u) < 0.12)] = "#2E3550"  # le haut de la fente bleuté
+    img[m & ((u + 0.42) ** 2 + (v + 0.42) ** 2 < 0.035)] = "#FFFFFF"
+    img[m & ((u - 0.4) ** 2 + (v - 0.45) ** 2 < 0.02) & ~fente] = "#9FB4C0"
     return img
 
 

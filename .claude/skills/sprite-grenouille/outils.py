@@ -25,6 +25,12 @@ planche acceptent l'un ou l'autre.
     pipette PHOTO x0,y0,x1,y1 [x0,y0,x1,y1 …]
         Couleur médiane de chaque zone de la photo (prendre des zones bien éclairées, sans
         reflet ni ombre) : les couleurs à plat de l'étape 3a.
+    carte PHOTO x0,y0,x1,y1 FICHIER.json SORTIE.png [i0,j0,i1,j1] [zoom]
+        La photo réduite au pixel du sprite (moyenne de chaque case du cadre x0,y0,x1,y1),
+        niveaux relevés sur la zone i0,j0,i1,j1 (en pixels du sprite, toute la toile par
+        défaut), le contour du sprite en points cyan, des repères tous les 5 pixels : une seule
+        vue pour lire au pixel près où sont les limites de couleur, les barres et les taches
+        (étape 3a), plutôt que de multiplier les agrandissements.
     profil PHOTO x0,y0,x1,y1 LxH ax,ay bx,by [demi_largeur]
         La luminosité de la photo le long d'un os ou d'un doigt, de a à b (en pixels du sprite,
         sur une toile de L × H qui correspond au cadre x0,y0,x1,y1 de la photo, comme pour
@@ -162,6 +168,42 @@ def pipette(photo, *zones):
         x0, y0, x1, y1 = (int(v) for v in z.split(","))
         r, g, b = np.median(im[y0:y1, x0:x1].reshape(-1, 3), axis=0).astype(int)
         print(f"{z} : #{r:02X}{g:02X}{b:02X}")
+
+
+def carte(photo, cadre, fichier, sortie, zone=None, zoom="14"):
+    a, z = rgba(fichier), int(zoom)
+    h, w = a.shape[:2]
+    x0, y0, x1, y1 = (int(v) for v in cadre.split(","))
+    ref = Image.open(photo).convert("RGB").crop((x0, y0, x1, y1)).resize((w, h), Image.BOX)
+    i0, j0, i1, j1 = (int(v) for v in zone.split(",")) if zone else (0, 0, w, h)
+    pix = np.asarray(ref, float)[j0:j1, i0:i1]
+    bas, haut = np.percentile(pix, 2), np.percentile(pix, 99)
+    pix = (np.clip((pix - bas) / (haut - bas), 0, 1) ** 0.8 * 255).astype(np.uint8)
+    im = agrandir(Image.fromarray(pix), z)
+    out = Image.new("RGB", (im.width + 24, im.height + 16), "#000")
+    out.paste(im, (24, 16))
+    d = ImageDraw.Draw(out)
+    m = a[j0:j1, i0:i1, 3] > 0
+    v = np.pad(m, 1)
+    bord = m & ~(v[:-2, 1:-1] & v[2:, 1:-1] & v[1:-1, :-2] & v[1:-1, 2:])
+    for y, x in zip(*np.nonzero(bord), strict=False):
+        cx, cy = 24 + x * z + z // 2, 16 + y * z + z // 2
+        d.rectangle([cx - 1, cy - 1, cx + 1, cy + 1], fill=(0, 255, 240))
+    for i in range(i0, i1 + 1):
+        if i % 5 == 0:
+            gx = 24 + (i - i0) * z
+            d.line(
+                [(gx, 16), (gx, out.height)], fill=(255, 255, 0) if i % 10 == 0 else (110, 110, 0)
+            )
+            d.text((gx + 1, 2), str(i), fill=(255, 255, 0))
+    for j in range(j0, j1 + 1):
+        if j % 5 == 0:
+            gy = 16 + (j - j0) * z
+            d.line(
+                [(24, gy), (out.width, gy)], fill=(255, 255, 0) if j % 10 == 0 else (110, 110, 0)
+            )
+            d.text((1, gy + 1), str(j), fill=(255, 255, 0))
+    out.save(sortie)
 
 
 def profil(photo, cadre, toile, a, b, demi="2"):
@@ -356,6 +398,7 @@ if __name__ == "__main__":
         "superposer": superposer,
         "pipette": pipette,
         "profil": profil,
+        "carte": carte,
         "apercu": apercu,
         "zoom": zoom,
         "controle": controle,

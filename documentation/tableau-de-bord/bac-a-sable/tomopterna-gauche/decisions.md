@@ -112,3 +112,29 @@ l'ébauche et le croquis.
 - 3a : les membres du fond gardent les couleurs de ceux de devant : l'ombre de la patte gauche
   et le liseré de granules blanches viendront au modelé (3b).
 - 3a : la branche brun-gris sombre, avec trois plaques de lichen gris argenté.
+- 3a (tour 2) : l'avant-bras droit n'est pas tout vert : vert sur sa face externe (les quatre
+  cinquièmes, à gauche de l'image), orangé et rayé de barres tigrées sur sa face interne (à
+  droite). La bande rayée qu'on avait mise sur le flanc est cette face de l'avant-bras :
+  l'avant-bras s'élargit jusqu'au ventre (son contour s'y déplace ; la silhouette ne change pas)
+  et il n'y a plus de flanc visible. Croquis refait avec ce seul changement et gelé de nouveau.
+- 3a (tour 2) : pas de tache grise sur l'avant-bras gauche : il est orangé, barré (quatre
+  barres), bordé de vert à gauche.
+- 3a (tour 2) : Léonard valide les aplats avec ces corrections (« le résultat est plutôt
+  réussi », la pipette « très bien ») et demande de passer au modelé dans la même réponse.
+- 3b (10/10/2026, tour 1) : modelé d'après la photo :
+  - lumière d'en haut, un peu de la gauche ;
+  - ombre portée par les formes plus proches, du côté opposé à la lumière (sous le bras droit,
+    le long de l'avant-bras, sous les doigts) ;
+  - patte et bras gauches à l'ombre ;
+  - ventre bombé, plus clair au milieu, et son bas encore éclairé ; gorge dans l'ombre de la
+    tête ;
+  - pustules du ventre ; passages tramés entre gorge, ventre et bas du ventre ;
+  - granules blanches clairsemées sur le vert et serrées en liseré au bord du vert ;
+  - un reflet humide en haut de chaque disque ;
+  - œil bombé, iris finement réticulé, reflet blanc, petit reflet bleuté, haut de la fente
+    bleuté. Fermé : la membrane lilas au réseau doré, sans cercle autour ; l'autre œil reste
+    ouvert ;
+  - contour teinté (choix de tomopterna à la session précédente), une teinte par matière ;
+  - 100 couleurs.
+- 3b : le rendu détaillé du modèle éclairait le côté opposé à LUMIERE (signe inversé) ; corrigé
+  dans modele.py, gauche.py et branche.py.

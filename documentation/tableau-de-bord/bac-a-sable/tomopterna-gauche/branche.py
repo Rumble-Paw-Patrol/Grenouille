@@ -337,7 +337,9 @@ def details(f, traits, motifs, oeil):
     for k, fo in enumerate(f):
         b = _flou(volumes[fo["volume"]].astype(float), 3)
         gy, gx = np.gradient(b)
-        face = gx * lx + gy * ly  # bord tourné vers la lumière : positif
+        # le gradient du masque flouté pointe vers l'intérieur : un bord tourné vers la lumière
+        # (LUMIERE, d'où elle vient) a un gradient opposé à elle
+        face = -(gx * lx + gy * ly)  # bord tourné vers la lumière : positif
         ici = num == k
         lum[ici] = (0.55 + 4.0 * face - 0.18 * ((Y - ORIGINE[1]) / UNITES[1] - 0.4))[ici]
     plaques = np.clip(np.floor(_flou(np.random.default_rng(3).random((H, W)), 4) * 6 - 2), -1, 1)

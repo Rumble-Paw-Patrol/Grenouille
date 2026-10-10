@@ -421,6 +421,15 @@ commit.
     tournée d'un côté (la face verte d'un membre), `pixels()` pour une tache.
 - **Les traits du croquis** prennent la couleur qu'ils traversent, assombrie, sauf ceux que la
   photo montre clairs : `TRAITS_MATIERE` leur donne une matière (la lèvre blanche).
+- **Une bande de couleur collée à un membre, avec ses motifs, est une face de ce membre**, pas
+  du corps : la face interne orangée et barrée de l'avant-bras de tomopterna, prise pour le
+  flanc. Suivre chaque membre sur la carte avant de colorer ; si le croquis l'a coupé trop
+  court, élargir la forme (correction de forme, croquis refait et regelé).
+- **Pour aller vite** (la première fois, l'étape a pris plus d'une demi-heure) : une seule vue
+  de lecture, `outils.py carte` zone par zone (la photo au pixel du sprite, avec le contour),
+  au lieu de multiplier les agrandissements ; `profil` pour les barres de chaque os ;
+  `pipette` sur toutes les zones en un appel, au même éclairement ; puis un seul rendu à
+  corriger.
 - **Rien d'autre** : ni dégradé, ni ombre, ni lumière, ni reflet, ni effet mouillé, ni grain,
   ni tramage.
 - **Aucune forme ne bouge** : `outils.py comparer <code>_croquis_valide.json <code>_aplats.json`
@@ -462,7 +471,12 @@ des pieds et `poser`, `nuancer`, `pustules`, `retoucher`.
 
 La fiche morphologique l'emporte sur ces règles quand l'espèce le demande.
 - **Ombre de contact** (par exemple le flanc derrière un bras) : le pixel de base, même teinte,
-  assombri et un peu grisé. Jamais des pixels d'une autre matière.
+  assombri et un peu grisé. Jamais des pixels d'une autre matière. Elle se calcule : chaque
+  forme plus proche porte son ombre sur les plus lointaines, décalée du côté opposé à la
+  lumière (`LUMIERE` dit d'où elle vient). En mode image, les membres à l'ombre sur la photo
+  s'assombrissent en plus (la patte gauche de tomopterna, derrière le ventre).
+- **Couleurs comptées :** les trois variantes de teinte sur les grandes matières seulement, et
+  le contour teinté d'une teinte par matière (pas par nuance), sinon on dépasse 200 couleurs.
 - **Nuances :** flou limité à chaque matière, puis une rampe fine (7 à 12 niveaux) et trois
   variantes de teinte par plaques. On vise une centaine de couleurs. Léonard a trouvé ce rendu
   « bien bien mieux » que les seuls tons de base.
@@ -622,6 +636,7 @@ Ce qui a marché :
 | `superposer FICHIER.json PHOTO x0,y0,x1,y1 SORTIE.png [zoom] [CLE]` | photo, sprite, et contour du sprite sur la photo (cadre aux proportions de la toile) |
 | `comparer AVANT.json APRES.json [SORTIE.png] [CLE_AVANT] [CLE_APRES]` | pixels de silhouette ajoutés ou retirés, pixels recolorés : geler une étape validée |
 | `pipette PHOTO zone [zone …]` | couleur médiane de chaque zone : les aplats de l'étape 3a |
+| `carte PHOTO x0,y0,x1,y1 FICHIER.json SORTIE.png [i0,j0,i1,j1] [zoom]` | la photo réduite au pixel du sprite, niveaux relevés, contour du sprite : la vue de lecture de l'étape 3a |
 | `profil PHOTO x0,y0,x1,y1 LxH ax,ay bx,by [demi]` | luminosité de la photo le long d'un os, de a à b en pixels du sprite : chaque creux est une barre (étape 3a) |
 | `apercu SPRITE.json SORTIE.png CLES [zoom] [PHOTO]` | images côte à côte |
 | `zoom SPRITE.json SORTIE.png CLE x0,y0,x1,y1` | un détail pixel par pixel |
