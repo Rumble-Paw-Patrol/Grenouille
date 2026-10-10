@@ -523,7 +523,11 @@ par matière (vert : citron → émeraude et bleu-vert ; orangé ou brun clair :
 plaques sur cinq niveaux du jauni au rougi, points de brillance de la peau mouillée, reflet
 froid sur les bords à l'ombre, contour teinté du plus sombre de chaque rampe. Les motifs
 restent sombres même en pleine lumière. Aucune forme ne bouge, et le rendu fidèle reste
-reproductible (`fidele`, identique au gelé) ; autant de couleurs qu'il faut.
+reproductible (`fidele`, identique au gelé) ; autant de couleurs qu'il faut. Les grandes
+faces se peignent alors en continu, sans grain ni trame (sinon des pixels sombres parsemés) :
+plusieurs teintes d'une même matière (vert citron, émeraude, bleu-vert) mêlées en grandes zones
+par un champ lisse, et les zones d'une même face (gorge, ventre, bas du ventre) fondues sur
+plusieurs pixels par une limite irrégulière, jamais des bandes horizontales.
 
 ## Étape 4 — Animation
 

@@ -159,3 +159,7 @@ l'ébauche et le croquis.
   les marbrures restent sombres même en pleine lumière. Le modelé fidèle reste disponible
   (`gauche.py fidele`, identique au gelé) ; `gauche.py details` donne l'éclat, que l'animation
   reprendra une fois validé.
+- Éclat (tour 2) : le ventre ne montre plus de frontières horizontales : gorge, ventre et bas du
+  ventre se peignent en continu, mêlés sur 6 à 8 pixels par une limite irrégulière. Le vert
+  n'a plus de pixels sombres parsemés (ni grain ni trame) : trois verts (citron, émeraude,
+  bleu-vert), chacun avec ses ombres et ses lumières, se fondent en grandes zones.

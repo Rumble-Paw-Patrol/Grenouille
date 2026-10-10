@@ -38,6 +38,7 @@ import colorsys
 import json
 import math
 import sys
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -633,7 +634,13 @@ def coder(images):
         {c for im in images.values() for c in im.ravel() if c} - {CONTOUR, CONTOUR_CLAIR}
     )
     lettres = list("ABCDEFGHIJLMNOPQRSTUVWXYZabcdefghijlmnopqrstuvwxyz")
-    lettres += [chr(0x100 + i) for i in range(max(0, len(couleurs) - len(lettres)))]
+    # au-delà, des lettres et des symboles d'Unicode, jamais un chiffre (les plages s'écrivent
+    # lettre puis nombre ; certains chiffres d'autres écritures passeraient pour des nombres)
+    lettres += [
+        c
+        for c in map(chr, range(0x100, 0x3000))
+        if unicodedata.category(c)[0] in "LS" and not c.isdigit()
+    ][: max(0, len(couleurs) - len(lettres))]
     palette = {"K": CONTOUR, "k": CONTOUR_CLAIR, **dict(zip(lettres, couleurs, strict=False))}
     # lettres du contour (K, k et les contours teintés) : outils.py controle les ignore
     contour_lettres = "Kk" + "".join(lt for lt, c in palette.items() if c in TEINTES)

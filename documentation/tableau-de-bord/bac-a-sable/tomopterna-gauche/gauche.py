@@ -18,6 +18,7 @@ import colorsys
 import json
 import math
 import sys
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -833,6 +834,22 @@ def rampe_eclat(hexa, ombre, lumiere, n=11):
     return out
 
 
+def continue_(tons, pos):
+    """La rampe lue en continu : pos, position flottante dans la rampe (0 = le plus sombre) ;
+    les tons voisins se mélangent au lieu de se tramer. Renvoie des RVB (…, 3)."""
+    rvb = np.array([[int(h[i : i + 2], 16) for i in (1, 3, 5)] for h in tons], float)
+    pos = np.clip(pos, 0, len(tons) - 1)
+    bas = np.floor(pos).astype(int)
+    haut = np.minimum(bas + 1, len(tons) - 1)
+    fr = (pos - bas)[..., None]
+    return rvb[bas] * (1 - fr) + rvb[haut] * fr
+
+
+def lisser(valeurs, m, r=1):
+    """La moyenne des valeurs sur m seulement, autour de chaque pixel (rayon r)."""
+    return _flou(np.where(m, valeurs, 0.0), r) / np.maximum(_flou(m.astype(float), r), 1e-6)
+
+
 def melanger(a, b, t):
     """La couleur a, tirée vers b de la part t."""
     ca = [int(a[i : i + 2], 16) for i in (1, 3, 5)]
@@ -917,10 +934,11 @@ def details(f, traits, motifs, oeil, eclat=None):
     zone = mat.copy()
     for nom, m in motifs.items():
         zone[m & (num >= 0)] = nom
-    zone = fondre(fondre(zone, "ventre", "bas_ventre"), "gorge", "ventre")
+    if not eclat:
+        zone = fondre(fondre(zone, "ventre", "bas_ventre"), "gorge", "ventre")
     for nom, coul in couleurs.items():
         ici = zone == nom
-        if not ici.any():
+        if not ici.any() or (eclat and nom in FONDUS):
             continue
         if eclat and nom in ECLAT:
             ombre, lumiere, ecart = ECLAT[nom]
@@ -940,6 +958,8 @@ def details(f, traits, motifs, oeil, eclat=None):
             sous = ici & (plaques == v) if nom in ("dos", "ventre", "membre") else ici
             tons_v = rampe(_decaler(coul, 0.012 * v)) if v else tons
             img[sous] = np.array(tons_v, object)[idx[sous]]
+    if eclat:
+        peindre_fondus(img, zone, lum, mat)
     # granules blanches : clairsemées sur le vert, serrées en liseré là où le vert touche une
     # autre matière de la même forme (le bord des membres verts, la limite du ventre)
     vert = mat == "dos"
@@ -988,6 +1008,46 @@ def details(f, traits, motifs, oeil, eclat=None):
                     img[j, i] = teinte[zone[q]]
                     break
     return oeil_detaille(img, oeil, eclat)
+
+
+# avec l'éclat, ces matières se peignent en continu : le vert en grandes zones plus jaunes ou
+# plus bleues qui se mélangent, sans grain ni trame ; gorge, ventre et bas du ventre fondus l'un
+# dans l'autre sur plusieurs pixels, par une limite irrégulière (corrections de Léonard)
+FONDUS = ("dos", "gorge", "ventre", "bas_ventre")
+
+
+def peindre_fondus(img, zone, lum, mat):
+    def poser(m, rvb):
+        for (j, i), c in zip(zip(*np.nonzero(m), strict=False), rvb[m], strict=True):
+            img[j, i] = hexa_de(*(c / 255))
+
+    # le vert : la lumière lissée, lue en continu dans trois rampes (vert citron, émeraude,
+    # bleu-vert), mêlées selon un champ lisse en grandes taches qui se fondent l'une dans l'autre
+    vert = zone == "dos"
+    pos = lisser(lum, vert) * 10
+    verts = [  # (décalage de teinte, teinte des ombres, des lumières, de combien plus clair)
+        continue_(rampe_eclat(_decaler(MATIERES["dos"], dh), o, li), pos + dp)
+        for dh, o, li, dp in (
+            (0.06, 0.40, 0.14, 1.3),
+            (0.0, 0.47, 0.22, 0.0),
+            (-0.1, 0.53, 0.37, -0.6),
+        )
+    ]
+    champ = _flou(_flou(np.random.default_rng(23).random((H, W)), 6), 6)
+    t = np.clip((champ - champ.mean()) / (1.6 * champ.std()), -1, 1)[..., None]
+    rvb = np.where(t < 0, verts[1] * (1 + t) - verts[0] * t, verts[1] * (1 - t) + verts[2] * t)
+    poser(vert, rvb)
+    # le ventre : les trois matières, chacune lue en continu dans sa rampe, mêlées selon leurs
+    # zones floutées (sur 6 à 8 pixels) et un peu de bruit, pour une limite qui ondule
+    peau = np.isin(zone, FONDUS[1:])
+    pos = lum * 10
+    total, rvb = np.zeros((H, W)), np.zeros((H, W, 3))
+    for k, n in enumerate(FONDUS[1:]):
+        bruit = _flou(np.random.default_rng(40 + k).random((H, W)), 3)
+        poids = _flou(_flou((mat == n).astype(float), 3), 3) * (0.6 + bruit)
+        total += poids
+        rvb += poids[..., None] * continue_(rampe_eclat(MATIERES[n], *ECLAT[n][:2]), pos)
+    poser(peau, rvb / np.maximum(total, 1e-6)[..., None])
 
 
 def noms(f):
@@ -1078,7 +1138,13 @@ def coder(images):
         {c for im in images.values() for c in im.ravel() if c} - {CONTOUR, CONTOUR_CLAIR}
     )
     lettres = list("ABCDEFGHIJLMNOPQRSTUVWXYZabcdefghijlmnopqrstuvwxyz")
-    lettres += [chr(0x100 + i) for i in range(max(0, len(couleurs) - len(lettres)))]
+    # au-delà, des lettres et des symboles d'Unicode, jamais un chiffre (les plages s'écrivent
+    # lettre puis nombre ; certains chiffres d'autres écritures passeraient pour des nombres)
+    lettres += [
+        c
+        for c in map(chr, range(0x100, 0x3000))
+        if unicodedata.category(c)[0] in "LS" and not c.isdigit()
+    ][: max(0, len(couleurs) - len(lettres))]
     palette = {"K": CONTOUR, "k": CONTOUR_CLAIR, **dict(zip(lettres, couleurs, strict=False))}
     # lettres du contour (K, k et les contours teintés) : outils.py controle les ignore
     contour_lettres = "Kk" + "".join(lt for lt, c in palette.items() if c in TEINTES)

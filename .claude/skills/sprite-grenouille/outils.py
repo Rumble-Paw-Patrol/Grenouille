@@ -77,7 +77,8 @@ COULEUR_PLAN = {"devant": (255, 154, 46), "corps": (255, 224, 90), "fond": (63, 
 
 def rangees(sprite, cle):
     return [
-        "".join(c * int(n) for c, n in re.findall(r"(\D)(\d+)", r)) for r in sprite["images"][cle]
+        "".join(c * int(n) for c, n in re.findall(r"(\D)(\d+)", r, re.ASCII))
+        for r in sprite["images"][cle]
     ]
 
 
