@@ -63,3 +63,7 @@ l'ébauche et le croquis.
   droite de l'image (le haut à droite).
 - 1 : le trou entre la cuisse droite, l'avant-bras droit et le tibia droit est comblé par la
   cuisse.
+- 1 (tour 6) : erreur sur le troisième orteil droit : il part du tarse, comme les deux autres.
+  C'est le tarse qui se déplace, de 4 pixels vers la droite de l'image : il est caché derrière
+  l'avant-bras, sur le pixel juste à l'intérieur de son bord. Ébauche validée avec ce changement
+  (morphologie et posture), gelée en `gauche_ebauche_valide.json` et `branche_ebauche_valide.json`.

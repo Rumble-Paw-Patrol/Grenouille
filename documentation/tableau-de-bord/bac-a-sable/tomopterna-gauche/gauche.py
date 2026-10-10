@@ -113,15 +113,13 @@ SQUELETTE = {
     "doigt4_d": (68.4, 70.6),
     # patte arrière droite (fond) : la cuisse descend en diagonale vers la gauche jusqu'au
     # genou ; le tibia, gros, revient à l'horizontale et passe derrière l'avant-bras ; deux
-    # orteils s'enroulent sur la branche
+    # orteils s'enroulent sur la branche ; le troisième, vertical, passe sous le poignet
     "hanche_d": (64.6, 51.6),
     "genou_d": (54.0, 60.0),
     "talon_d": (62.2, 59.5),
-    "tarse_d": (59.2, 61.6),
+    "tarse_d": (61.25, 61.6),  # caché derrière l'avant-bras, juste à l'intérieur de son bord
     "orteil_a_d": (57.8, 70.4),
     "orteil_b_d": (61.0, 70.8),
-    # le troisième orteil, vertical, sort de sous le poignet
-    "base_orteil_c_d": (63.4, 63.8),
     "orteil_c_d": (63.8, 70.8),
     # bras gauche (2e plan) : il sort de derrière le ventre et vient vers nous, raccourci ;
     # trois doigts visibles, dont un part vers la gauche sur la branche
@@ -156,9 +154,8 @@ MEMBRES = {
     "patte_d": (
         ["hanche_d", "genou_d", "talon_d", "tarse_d"],
         "fond",
-        ["orteil_a_d", "orteil_b_d"],
+        ["orteil_a_d", "orteil_b_d", "orteil_c_d"],
     ),
-    "orteil_c_d": (["base_orteil_c_d", "orteil_c_d"], "fond", []),
     "bras_d": (
         ["epaule_d", "coude_d", "poignet_d", "main_d"],
         "devant",
@@ -329,7 +326,6 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True),
         forme("pied_d", pied_d, "membre", "fond", cernee=True),
         *cernes("orteil_d", doigts("tarse_d", MEMBRES["patte_d"][2]), "fond"),
-        *cernes("orteil_c_d", doigts("base_orteil_c_d", ["orteil_c_d"]), "fond"),
         forme("tibia_d", tibia_d, "membre", "fond", cernee=True),
         forme("corps", corps, "dos", cernee=True),
         forme("bras_haut_d", bras_haut_d, "membre", "devant", cernee=True),
