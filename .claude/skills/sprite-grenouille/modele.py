@@ -1,28 +1,37 @@
 """Modèle de sprite par étapes (skill sprite-grenouille) : à copier, puis à remplir.
 
     python3 <code_espece>.py ETAPE [SORTIE.json]
-        ETAPE : silhouette | aplats | details | animation
+        ETAPE : ebauche | croquis | aplats | details | animation
 
-Une grenouille est un jeu de FORMES (masques sur la grille du sprite), rangées du plan le plus
-lointain au plus proche, chacune dans une MATIÈRE (peau du dos, flanc, ventre, membres…), et de
-MOTIFS (bandes, barres, taches) peints par-dessus certaines matières. Chaque étape est un rendu
-de ces mêmes formes, et n'en modifie aucune :
+Une grenouille est un SQUELETTE (repères anatomiques nommés : articulations, museau, œil,
+tympan…), un jeu de FORMES tirées de ce squelette (masques sur la grille du sprite), rangées du
+plan le plus lointain au plus proche, chacune dans une MATIÈRE (dos, flanc, ventre, membres…),
+des TRAITS (bouche, narine, tympan, plis) et des MOTIFS (bandes, barres, taches) peints
+par-dessus certaines matières. Chaque étape est un rendu de ces mêmes formes, et n'en modifie
+aucune :
 
-    silhouette  trois gris selon le plan (fond, corps, devant), le contour, l'œil (globe, iris,
-                pupille) : la morphologie et la posture, rien d'autre ;
-    aplats      une couleur par matière et par motif : ni dégradé, ni ombre, ni lumière, ni
-                reflet ; les motifs à leur place exacte ;
-    details     volume (lumière LUMIERE), rampes de 7 tons par matière, plaques de
+    ebauche     étape 1 : formes simples en trois gris selon le plan (fond, corps, devant), le
+                contour, l'œil, les traits du visage, et le squelette nommé, tracé par la
+                planche (bouton « Squelette ») : la morphologie et la posture, rien d'autre ;
+    croquis     étape 2 : les formes affinées, en dessin sans couleur (papier clair, plans en
+                gris légers, contour, traits, doigts au pixel) ;
+    aplats      étape 3a : une couleur par matière et par motif : ni dégradé, ni ombre, ni
+                lumière, ni reflet ; les motifs à leur place exacte ;
+    details     étape 3b : volume (lumière LUMIERE), rampes de 7 tons par matière, plaques de
                 teinte, grain, reflets humides, détails de l'œil, contour clair côté lumière ;
                 à affiner ensuite à la main selon les règles du skill (grenouille.py du tableau
                 de bord est la référence de ce niveau de détail) ;
-    animation   les 24 images du rendu détaillé : gorge × flanc × œil × tête.
+    animation   étape 4 : les 24 images du rendu détaillé : gorge × flanc × œil × tête.
 
-Une correction de forme demandée à l'étape 2 ou 3 se fait dans formes() : les rendus suivent.
+Une correction de posture se fait dans SQUELETTE (déplacer un point), une correction de forme
+dans formes() : les rendus suivent. Après la validation du croquis, toute correction de forme
+ramène à l'étape 2 (voir le skill).
+Côtés : _g et _d sont la gauche et la droite de l'animal, jamais de l'image. De profil, tête à
+gauche, on voit son côté gauche : les membres _g sont devant, les _d au fond.
 Un support (branche, feuille) se fait avec une copie de ce modèle dont formes() rend une seule
-forme et None pour l'œil.
+forme, aucun trait et None pour l'œil, et dont SQUELETTE et MEMBRES sont vides.
 La grenouille de démonstration ci-dessous (une silhouette assise quelconque, en formes simples)
-ne sert qu'à vérifier la chaîne : tout remplacer d'après les photos.
+ne sert qu'à vérifier la chaîne : tout remplacer d'après les photos et la fiche morphologique.
 """
 
 import colorsys
@@ -68,6 +77,9 @@ MOTIFS = {"bande": "#4A230E", "barre": "#7E3F17"}
 OEIL = {"iris": "#C9A05A", "pupille": "#0B0705", "cercle": "#24120A", "paupiere": "dos"}
 PUPILLE = "ronde"  # ronde | horizontale | verticale (fente)
 CONTOUR, CONTOUR_CLAIR = "#24120A", "#5A2B14"
+# CONTOUR_TEINTE : au rendu détaillé, le contour prend la couleur qu'il borde, assombrie, au lieu
+# d'un trait sombre uniforme (choix de l'étape 3b ; C. tomopterna l'a pris, A. blanci non)
+CONTOUR_TEINTE = False
 SILHOUETTE = {
     "fond": "#56625E",
     "corps": "#8E9B96",
@@ -75,6 +87,66 @@ SILHOUETTE = {
     "globe": "#E6ECEA",
     "pupille": "#141918",
 }
+# le croquis : du papier, les plans en gris légers, des traits sombres
+CROQUIS = {
+    "fond": "#C9CCC8",
+    "corps": "#E4E6E2",
+    "devant": "#F6F7F4",
+    "trait": "#5E6663",
+    "globe": "#FFFFFF",
+    "pupille": "#141918",
+}
+
+# ------------------------------------------------------------------ squelette
+# Les repères anatomiques, en unités, relevés sur la photo (étape 1) : articulations, bouts des
+# doigts et traits du visage. Les membres en sont tirés : une correction de posture se fait en
+# déplaçant un point. La planche les trace et les nomme (bouton « Squelette ») ; outils.py
+# lecture les pose sur la photo.
+SQUELETTE = {
+    # tête
+    "museau": (2.4, 9.6),
+    "narine": (4.6, 8.2),
+    "oeil": (11.2, 8.4),
+    "commissure": (13.6, 12.2),
+    "tympan": (16.6, 10.8),
+    # tronc
+    "nuque": (18.0, 6.4),
+    "sacrum": (31.0, 11.0),
+    "cloaque": (44.0, 25.0),
+    # bras gauche (devant) et droit (au fond)
+    "epaule_g": (21.0, 21.0),
+    "coude_g": (20.0, 30.0),
+    "poignet_g": (15.5, 36.0),
+    "main_g": (13.5, 38.0),
+    "epaule_d": (18.0, 22.0),
+    "coude_d": (16.0, 29.0),
+    "poignet_d": (12.0, 33.5),
+    "main_d": (10.5, 34.5),
+    # patte arrière gauche (devant) ; la droite est cachée par le corps
+    "hanche_g": (40.0, 24.0),
+    "genou_g": (28.0, 30.0),
+    "talon_g": (42.0, 34.0),
+    "tarse_g": (32.0, 38.5),
+    "orteils_g": (24.0, 38.8),
+    # bouts des doigts de la main gauche (4 doigts, I à IV)
+    "doigt1_g": (12.5, 40.6),
+    "doigt2_g": (10.0, 40.0),
+    "doigt3_g": (9.0, 38.2),
+    "doigt4_g": (10.2, 36.6),
+}
+# chaque membre : ses repères de la racine au bout, son plan, et les bouts des doigts ou des
+# orteils, rattachés au dernier repère
+MEMBRES = {
+    "bras_d": (["epaule_d", "coude_d", "poignet_d", "main_d"], "fond", []),
+    "bras_g": (
+        ["epaule_g", "coude_g", "poignet_g", "main_g"],
+        "devant",
+        ["doigt1_g", "doigt2_g", "doigt3_g", "doigt4_g"],
+    ),
+    "patte_g": (["hanche_g", "genou_g", "talon_g", "tarse_g", "orteils_g"], "devant", []),
+}
+# l'axe du corps, et la ligne de la bouche
+AXES = [["museau", "commissure"], ["nuque", "sacrum", "cloaque"]]
 
 
 # ------------------------------------------------------------------ outils de forme
@@ -129,6 +201,13 @@ def membre(pts, rayons, x, y):
     return m
 
 
+def os_(noms, rayons, x=None, y=None):
+    """Un membre tiré du squelette : membre() sur les repères nommés."""
+    return membre(
+        [SQUELETTE[n] for n in noms], rayons, X if x is None else x, Y if y is None else y
+    )
+
+
 def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None):
     """plan : fond (membres de l'autre côté), corps, devant (membres proches) ; cernee : un
     contour la sépare de ce qu'elle recouvre ; volume : la forme dont elle prend le relief
@@ -154,8 +233,9 @@ def tete_tournee(tete):
 
 # ------------------------------------------------------------------ la grenouille
 def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
-    """Les formes, du plus loin au plus près, les motifs et l'œil. À REMPLACER d'après les
-    photos : ici, une grenouille assise quelconque, pour vérifier la chaîne."""
+    """Les formes, du plus loin au plus près, les traits, les motifs et l'œil. À REMPLACER
+    d'après les photos : ici, une grenouille assise quelconque, pour vérifier la chaîne."""
+    S = SQUELETTE
     xt, yt = tete_tournee(tete)
     corps = dans(
         catmull(
@@ -163,7 +243,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
                 (2.2, 9.8),
                 (4.5, 6.2),
                 (10, 4.4),
-                (18, 6.0),
+                S["nuque"],
                 (30, 10.5),
                 (40, 17),
                 (44.5, 24),
@@ -177,11 +257,15 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         xt,
         yt,
     )
-    tibia = membre([(28, 30), (40, 31.5), (42.5, 35)], [2.4, 3, 2.4], X, Y)
+    tibia = os_(["genou_g", "talon_g"], [2.4, 2.8])
+    main = np.zeros(X.shape, bool)
+    for d in MEMBRES["bras_g"][2]:  # doigts d'un pixel, du poignet au bout, disques en point
+        main |= membre([S["main_g"], S[d]], [0.5, 0.35], X, Y)
+        main |= ellipse(*S[d], 0.55, 0.55, X, Y)
     f = [
         forme(
             "bras_fond",
-            membre([(18, 22), (16, 29), (12, 33.5), (10, 34.5)], [2, 1.5, 1, 1], X, Y),
+            os_(MEMBRES["bras_d"][0], [2, 1.5, 1, 1]),
             "fond",
             "fond",
             cernee=True,
@@ -197,10 +281,10 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             "levre",
             volume="corps",
         ),
-        forme("cuisse", ellipse(36, 27, 8.5, 6, X, Y, -0.3), "membre", cernee=True),
+        forme("cuisse", ellipse(35, 27, 8.5, 6, X, Y, -0.3), "membre", cernee=True),
         forme(
             "pied",
-            membre([(41, 37), (32, 38.5), (24, 38.8)], [1.6, 1.2, 0.8], X, Y),
+            os_(["talon_g", "tarse_g", "orteils_g"], [1.6, 1.2, 0.8]),
             "membre",
             "devant",
             cernee=True,
@@ -208,22 +292,32 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("tibia", tibia, "membre", "devant", cernee=True),
         forme(
             "bras",
-            membre([(21, 21), (20, 30), (15, 36.5), (13, 38.5)], [2.6, 1.8, 1.2, 1], X, Y),
+            os_(MEMBRES["bras_g"][0], [2.6, 1.8, 1.2, 1]) | main,
             "membre",
             "devant",
             cernee=True,
         ),
     ]
+    # traits du visage : la bouche, du museau à la commissure, la narine, le tympan
+    (mx, my), (cx, cy) = S["museau"], S["commissure"]
+    t = np.clip((xt - mx) / (cx - mx), 0, 1)
+    tx, ty = S["tympan"]
+    rt = np.hypot(xt - tx, yt - ty)
+    traits = {
+        "bouche": corps & (xt > mx + 0.8) & (xt < cx) & (np.abs(yt - (my + t * (cy - my))) < 0.4),
+        "narine": (np.abs(xt - S["narine"][0]) < 0.5) & (np.abs(yt - S["narine"][1]) < 0.5),
+        "tympan": (rt > 1.1) & (rt < 1.6),
+    }
     motifs = {
         "bande": corps & (np.abs(yt - (9.0 + 0.32 * (xt - 6))) < 1.2) & (xt > 6) & (xt < 36),
         "barre": tibia & (np.sin(X * 1.6) > 0.55),
     }
-    oeil = {"x": 11.2, "y": 8.4, "r": 2.6, "ferme": cligne}
+    oeil = {"x": S["oeil"][0], "y": S["oeil"][1], "r": 2.6, "ferme": cligne}
     oeil["masque"] = (xt - oeil["x"]) ** 2 + (yt - oeil["y"]) ** 2 <= oeil["r"] ** 2
     oeil["u"], oeil["v"] = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
     if MIROIR:
         oeil["u"] = -oeil["u"]
-    return f, motifs, oeil
+    return f, traits, motifs, oeil
 
 
 # ------------------------------------------------------------------ rendus
@@ -294,12 +388,24 @@ def rendu_oeil(img, oeil, couleurs, ferme_couleur):
     return img
 
 
-def silhouette(f, motifs, oeil):
+def tracer(img, traits, num, oeil, couleur=None):
+    """Les traits (bouche, narine, tympan, plis) : d'une couleur donnée (ébauche, croquis) ou,
+    sans couleur donnée, de la couleur du dessous assombrie (aplats, détails)."""
+    hors_oeil = ~oeil["masque"] if oeil else True
+    for m in traits.values():
+        ici = m & (num >= 0) & hors_oeil & (img != CONTOUR)
+        for j, i in zip(*np.nonzero(ici), strict=False):
+            img[j, i] = couleur or assombrir(img[j, i])
+    return img
+
+
+def ebauche(f, traits, motifs, oeil):
     mat, plan, num = etiqueter(f)
     img = np.full((H, W), "", object)
     for nom, coul in SILHOUETTE.items():
         img[plan == nom] = coul
     img = contour(img, f, num)
+    img = tracer(img, traits, num, oeil, CONTOUR)
     return rendu_oeil(
         img,
         oeil,
@@ -308,7 +414,22 @@ def silhouette(f, motifs, oeil):
     )
 
 
-def aplats(f, motifs, oeil):
+def croquis(f, traits, motifs, oeil):
+    mat, plan, num = etiqueter(f)
+    img = np.full((H, W), "", object)
+    for nom in ("fond", "corps", "devant"):
+        img[plan == nom] = CROQUIS[nom]
+    img = contour(img, f, num)
+    img = tracer(img, traits, num, oeil, CROQUIS["trait"])
+    return rendu_oeil(
+        img,
+        oeil,
+        {"iris": CROQUIS["globe"], "pupille": CROQUIS["pupille"], "cercle": CROQUIS["trait"]},
+        CROQUIS["corps"],
+    )
+
+
+def aplats(f, traits, motifs, oeil):
     mat, plan, num = etiqueter(f)
     img = np.full((H, W), "", object)
     for nom, coul in MATIERES.items():
@@ -316,6 +437,7 @@ def aplats(f, motifs, oeil):
     for nom, m in motifs.items():
         img[m & (num >= 0)] = MOTIFS[nom]
     img = contour(img, f, num)
+    img = tracer(img, traits, num, oeil)
     return rendu_oeil(img, oeil, OEIL, MATIERES[OEIL["paupiere"]])
 
 
@@ -341,7 +463,7 @@ def rampe(hexa, n=7):
     return out
 
 
-def details(f, motifs, oeil):
+def details(f, traits, motifs, oeil):
     """Volume par forme (bords tournés vers la lumière plus clairs), rampes tramées, plaques
     de teinte, grain, œil brillant, contour clair côté lumière. Point de départ : affiner à la
     main (ombres de contact, reflets humides, épaule, pustules…)."""
@@ -378,6 +500,9 @@ def details(f, motifs, oeil):
             else:
                 img[sous] = np.array(tons, object)[idx[sous]]
     img = contour(img, f, num)
+    img = tracer(img, traits, num, oeil)
+    if CONTOUR_TEINTE:
+        img = teinter_contour(img)
     # contour clair du côté de la lumière, autour des membres proches
     devant = plan == "devant"
     sx, sy = (-1 if LUMIERE[0] < 0 else 1), (-1 if LUMIERE[1] < 0 else 1)
@@ -402,7 +527,29 @@ def hexa_de(r, g, b):
     return f"#{round(r * 255):02X}{round(g * 255):02X}{round(b * 255):02X}"
 
 
-RENDUS = {"silhouette": silhouette, "aplats": aplats, "details": details}
+def assombrir(hexa, f=0.55):
+    """La même teinte, plus sombre et un peu plus saturée : traits et contours teintés."""
+    r, g, b = (int(hexa[i : i + 2], 16) / 255 for i in (1, 3, 5))
+    h, clarte, s = colorsys.rgb_to_hls(r, g, b)
+    return hexa_de(*colorsys.hls_to_rgb(h, clarte * f, min(s * 1.15, 1)))
+
+
+TEINTES = set()  # couleurs des contours teintés : coder() les range avec le contour
+
+
+def teinter_contour(img):
+    """Chaque pixel de contour prend la couleur, assombrie, du premier voisin qu'il borde."""
+    out = img.copy()
+    for j, i in zip(*np.nonzero(img == CONTOUR), strict=False):
+        for v in ((j, i + 1), (j, i - 1), (j + 1, i), (j - 1, i)):
+            if 0 <= v[0] < H and 0 <= v[1] < W and img[v] not in ("", CONTOUR, CONTOUR_CLAIR):
+                out[j, i] = assombrir(img[v], 0.4)
+                TEINTES.add(out[j, i])
+                break
+    return out
+
+
+RENDUS = {"ebauche": ebauche, "croquis": croquis, "aplats": aplats, "details": details}
 
 
 # ------------------------------------------------------------------ sortie
@@ -414,6 +561,8 @@ def coder(images):
     lettres = list("ABCDEFGHIJLMNOPQRSTUVWXYZabcdefghijlmnopqrstuvwxyz")
     lettres += [chr(0x100 + i) for i in range(max(0, len(couleurs) - len(lettres)))]
     palette = {"K": CONTOUR, "k": CONTOUR_CLAIR, **dict(zip(lettres, couleurs, strict=False))}
+    # lettres du contour (K, k et les contours teintés) : outils.py controle les ignore
+    contour_lettres = "Kk" + "".join(lt for lt, c in palette.items() if c in TEINTES)
     code = {c: lettre for lettre, c in palette.items()} | {"": "."}
     out = {}
     for cle, im in images.items():
@@ -429,7 +578,39 @@ def coder(images):
                     prec, n = ch, 1
             rangs.append(s + f"{prec}{n}")
         out[cle] = rangs
-    return {"palette": palette, "largeur": W, "hauteur": H, "images": out}
+    return {
+        "palette": palette,
+        "contour": contour_lettres,
+        "largeur": W,
+        "hauteur": H,
+        "images": out,
+    }
+
+
+def squelette():
+    """Les repères et les os en pixels de la toile, pour la planche et outils.py lecture. Avec
+    MIROIR, l'image est retournée : les côtés de l'animal s'échangent (_g ↔ _d)."""
+
+    def px(nom):
+        x, y = SQUELETTE[nom]
+        return [round((UNITES[0] - x if MIROIR else x) * ECHELLE, 1), round(y * ECHELLE, 1)]
+
+    def cote(nom):
+        if MIROIR and nom[-2:] in ("_g", "_d"):
+            return nom[:-2] + ("_d" if nom.endswith("_g") else "_g")
+        return nom
+
+    plans = {n: "corps" for n in SQUELETTE}
+    os_liste = [[a, b, "corps"] for axe in AXES for a, b in zip(axe, axe[1:], strict=False)]
+    for chaine, plan, bouts in MEMBRES.values():
+        for n in chaine + bouts:
+            plans[n] = plan
+        os_liste += [[a, b, plan] for a, b in zip(chaine, chaine[1:], strict=False)]
+        os_liste += [[chaine[-1], b, plan] for b in bouts]
+    return {
+        "reperes": {cote(n): px(n) + [plans[n]] for n in SQUELETTE},
+        "os": [[cote(a), cote(b), p] for a, b, p in os_liste],
+    }
 
 
 def produire(etape):
@@ -441,11 +622,15 @@ def produire(etape):
                     for t in (-1, 0, 1):
                         images[f"{g}{s}{c}{t + 1}"] = details(*formes(g * 0.9, s * 0.7, bool(c), t))
         return coder(images)
-    return coder({"0001": RENDUS[etape](*formes())})
+    sprite = coder({"0001": RENDUS[etape](*formes())})
+    if etape in ("ebauche", "croquis") and SQUELETTE:
+        # la planche trace le squelette ; visible d'emblée à l'ébauche, sur demande au croquis
+        sprite |= squelette() | {"squelette_visible": etape == "ebauche"}
+    return sprite
 
 
 if __name__ == "__main__":
-    etape = sys.argv[1] if len(sys.argv) > 1 else "silhouette"
+    etape = sys.argv[1] if len(sys.argv) > 1 else "ebauche"
     sortie = Path(sys.argv[2]) if len(sys.argv) > 2 else ICI / f"{NOM}_{etape}.json"
     sprite = produire(etape)
     sortie.write_text(json.dumps(sprite, separators=(",", ":")), encoding="utf-8")

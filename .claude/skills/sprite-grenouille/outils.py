@@ -4,6 +4,17 @@ Un SPRITE est le JSON d'une grenouille (palette, largeur, hauteur, images codée
 Une COMPOSITION en réunit plusieurs sur une même toile (voir « composer ») ; superposer et
 planche acceptent l'un ou l'autre.
 
+    lecture FICHIER.json PHOTO x0,y0,x1,y1 SORTIE.png [zoom]
+        Le squelette nommé (repères du modèle : articulations, bouts des doigts, museau, œil,
+        tympan…) posé sur la photo recadrée et sur le sprite, côte à côte : la lecture de la
+        photo à faire valider à l'étape 1 (quel membre est lequel, à quel plan, combien de
+        doigts). Couleurs des os : orange devant, jaune corps, bleu fond.
+    comparer AVANT.json APRES.json [SORTIE.png] [CLE_AVANT] [CLE_APRES]
+        Différence entre deux rendus : pixels de silhouette ajoutés ou retirés, et pixels de
+        couleur différente. Sert à geler une étape validée : le croquis validé contre les
+        rendus suivants (aucune forme ne doit bouger sans décision), la pose de repos de
+        l'animation contre l'image validée (pixel pour pixel). SORTIE.png : vert = ajouté,
+        rouge = retiré, jaune = recoloré.
     grille PHOTO SORTIE.png [x0,y0,x1,y1] [pas]
         Grille numérotée sur la photo (une case = une unité du repère, 48 de large par défaut,
         ou « pas » pixels de photo par unité) pour y relever la silhouette, en unités.
@@ -19,7 +30,8 @@ planche acceptent l'un ou l'autre.
     zoom SPRITE.json SORTIE.png CLE x0,y0,x1,y1
         Une zone agrandie, pixel par pixel, pour juger un détail (épaule, œil, doigts).
     controle SPRITE.json
-        Groupes de pixels qui ne tiennent pas au reste (contour K et k exclu, voisins par un côté),
+        Groupes de pixels qui ne tiennent pas au reste (contour exclu, teinté compris ; voisins
+        par un côté),
         image par image. Les grands groupes sont des formes cernées tout autour (membre de
         l'autre côté, membre proche cerné) ; les petits (moins de 12 pixels) sont des miettes :
         un doigt, un orteil ou un talon détaché, à corriger.
@@ -43,10 +55,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 ICI = Path(__file__).resolve().parent
 FOND = (10, 15, 14)
+COULEUR_PLAN = {"devant": (255, 154, 46), "corps": (255, 224, 90), "fond": (63, 167, 255)}
 
 
 def rangees(sprite, cle):
@@ -180,7 +193,8 @@ def controle(fichier):
     s = json.load(open(fichier))
     for cle in sorted(s["images"]):
         g = rangees(s, cle)
-        plein = {(j, i) for j, r in enumerate(g) for i, c in enumerate(r) if c not in ".Kk"}
+        bord = "." + s.get("contour", "Kk")  # contours sombres et teintés
+        plein = {(j, i) for j, r in enumerate(g) for i, c in enumerate(r) if c not in bord}
         groupes, vus = [], set()
         for depart in sorted(plein):
             if depart in vus:
@@ -204,6 +218,80 @@ def controle(fichier):
         )
 
 
+def cote(nom):
+    """Côté de l'animal échangé (_g ↔ _d) : un sprite retourné montre l'autre flanc."""
+    if nom[-2:] in ("_g", "_d"):
+        return nom[:-2] + ("_d" if nom.endswith("_g") else "_g")
+    return nom
+
+
+def squelettes(d):
+    """Repères et os d'un sprite ou d'une composition, en pixels de la toile."""
+    gs = d["grenouilles"] if "grenouilles" in d else [{"x": 0, "y": 0, "sprite": d}]
+    for g in gs:
+        s = g["sprite"]
+        if "reperes" not in s:
+            continue
+        r = {n: (x + g["x"], y + g["y"], p) for n, (x, y, p) in s["reperes"].items()}
+        yield r, s["os"]
+
+
+def dessiner_squelette(im, d, z):
+    trace = ImageDraw.Draw(im)
+    police = ImageFont.load_default(size=max(10, z * 2))
+    for r, os_liste in squelettes(d):
+        for a, b, p in os_liste:
+            (xa, ya, _), (xb, yb, _) = r[a], r[b]
+            trace.line([(xa * z, ya * z), (xb * z, yb * z)], fill=COULEUR_PLAN[p], width=2)
+        for n, (x, y, p) in r.items():
+            c = COULEUR_PLAN[p]
+            trace.ellipse([x * z - 3, y * z - 3, x * z + 3, y * z + 3], fill=c, outline=(0, 0, 0))
+            trace.text(
+                (x * z + 5, y * z - 6),
+                n,
+                fill=c,
+                font=police,
+                stroke_width=2,
+                stroke_fill=(0, 0, 0),
+            )
+    return im
+
+
+def lecture(fichier, photo, cadre, sortie, zoom="6"):
+    d = json.load(open(fichier))
+    a = rgba(d)
+    h, w = a.shape[:2]
+    z = int(zoom)
+    x0, y0, x1, y1 = (int(v) for v in cadre.split(","))
+    ref = Image.open(photo).convert("RGB").crop((x0, y0, x1, y1)).resize((w * z, h * z))
+    sprite = Image.new("RGB", (w, h), FOND)
+    sprite.paste(Image.fromarray(a[..., :3]), mask=Image.fromarray(a[..., 3]))
+    panneaux = [dessiner_squelette(ref, d, z), dessiner_squelette(agrandir(sprite, z), d, z)]
+    tot = Image.new("RGB", (2 * w * z + 10, h * z), "#000")
+    for k, pan in enumerate(panneaux):
+        tot.paste(pan, (k * (w * z + 10), 0))
+    tot.save(sortie)
+
+
+def comparer(avant, apres, sortie=None, cle_avant=None, cle_apres=None):
+    a, b = rgba(avant, cle_avant), rgba(apres, cle_apres)
+    if a.shape != b.shape:
+        print(f"tailles différentes : {a.shape[1]} × {a.shape[0]} et {b.shape[1]} × {b.shape[0]}")
+        return
+    ma, mb = a[..., 3] > 0, b[..., 3] > 0
+    ajoute, retire = mb & ~ma, ma & ~mb
+    recolore = ma & mb & (a[..., :3] != b[..., :3]).any(axis=2)
+    for nom, m in (("ajoutés", ajoute), ("retirés", retire)):
+        ys, xs = np.nonzero(m)
+        ou = f" (x {xs.min()}–{xs.max()}, y {ys.min()}–{ys.max()})" if m.any() else ""
+        print(f"silhouette : {m.sum()} pixels {nom}{ou}")
+    print(f"pixels de couleur différente : {recolore.sum()}")
+    if sortie:
+        im = np.where(mb[..., None], 70, 15).astype(np.uint8).repeat(3, axis=2)
+        im[recolore], im[ajoute], im[retire] = (255, 220, 60), (60, 230, 90), (255, 70, 70)
+        agrandir(Image.fromarray(im), 6).save(sortie)
+
+
 def composer(sortie, taille, *poses):
     largeur, hauteur = (int(v) for v in taille.lower().split("x"))
     grenouilles = []
@@ -213,6 +301,11 @@ def composer(sortie, taille, *poses):
         s = json.load(open(chemin))
         if "m" in drapeaux:  # tête à droite : chaque rangée retournée
             s = dict(s, images={c: [plages(r[::-1]) for r in rangees(s, c)] for c in s["images"]})
+            if "reperes" in s:  # le squelette aussi, et les côtés de l'animal s'échangent
+                s["reperes"] = {
+                    cote(n): [s["largeur"] - x, y, p] for n, (x, y, p) in s["reperes"].items()
+                }
+                s["os"] = [[cote(a), cote(b), p] for a, b, p in s["os"]]
         grenouilles.append({"nom": Path(chemin).stem, "x": int(x), "y": int(y), "sprite": s})
     composition = {"largeur": largeur, "hauteur": hauteur, "grenouilles": grenouilles}
     Path(sortie).write_text(json.dumps(composition, separators=(",", ":")), encoding="utf-8")
@@ -227,6 +320,8 @@ def planche(fichier, sortie, nom, texte, etape="Relecture"):
 
 if __name__ == "__main__":
     {
+        "lecture": lecture,
+        "comparer": comparer,
         "grille": grille,
         "superposer": superposer,
         "pipette": pipette,
