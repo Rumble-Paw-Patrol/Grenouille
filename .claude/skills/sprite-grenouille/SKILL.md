@@ -516,6 +516,15 @@ La fiche morphologique l'emporte sur ces règles quand l'espèce le demande.
 Une fois le modelé jugé **parfait** : `cp <code>_details.json <code>_details_valide.json`,
 commit.
 
+**L'éclat, si Léonard donne carte blanche** (fait pour A. blanci et tomopterna) : reteinter le
+modelé validé, sans suivre la photo, pour faire ressortir la brillance. Rampes plus longues
+(une dizaine de tons) qui glissent vers une teinte d'ombre et une teinte de lumière choisies
+par matière (vert : citron → émeraude et bleu-vert ; orangé ou brun clair : or → cramoisi),
+plaques sur cinq niveaux du jauni au rougi, points de brillance de la peau mouillée, reflet
+froid sur les bords à l'ombre, contour teinté du plus sombre de chaque rampe. Les motifs
+restent sombres même en pleine lumière. Aucune forme ne bouge, et le rendu fidèle reste
+reproductible (`fidele`, identique au gelé) ; autant de couleurs qu'il faut.
+
 ## Étape 4 — Animation
 
 - **La base :** `python3 <code>.py animation` donne 24 images (gorge × flanc × œil × tête),

@@ -151,3 +151,11 @@ l'ébauche et le croquis.
   photo, de couleurs qui font ressortir sa brillance et sa beauté, autant qu'on veut, y compris
   des teintes qu'on ne voit pas sur la photo ; comme pour A. blanci, dont les parties marron
   clair allaient du sensiblement jauni au sensiblement rougi.
+- Éclat (tour 1) : rampes de 11 tons qui glissent vers une teinte d'ombre et une teinte de
+  lumière choisies (vert : citron → émeraude et bleu-vert ; orangé : or → cramoisi ; ventre :
+  crème → lilas ; gorge lavande ; disques ambre et miel) ; cinq niveaux de plaques, du jauni au
+  rougi ; points de brillance de la peau mouillée ; reflet froid sur les bords à l'ombre ;
+  contour teinté du plus sombre de chaque rampe ; œil de nacre ; lèvre nacrée. Les barres et
+  les marbrures restent sombres même en pleine lumière. Le modelé fidèle reste disponible
+  (`gauche.py fidele`, identique au gelé) ; `gauche.py details` donne l'éclat, que l'animation
+  reprendra une fois validé.

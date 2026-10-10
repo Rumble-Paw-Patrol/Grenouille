@@ -791,6 +791,53 @@ def rampe(hexa, n=7):
 # de combien ; les granules blanches de tomopterna, sur le vert
 OMBRES = {"patte_g": 0.16, "orteil_g": 0.12, "bras_g": 0.08, "doigt_g": 0.06}
 GRANULE = "#E2EEDA"
+# l'éclat (carte blanche de Léonard, avant l'étape 4) : des teintes au-delà de la photo, qui font
+# ressortir la brillance et la beauté. Par matière : la teinte où glissent les ombres, celle où
+# glissent les lumières, et l'écart de teinte d'une plaque à l'autre (du jauni au rougi)
+ECLAT = {
+    "dos": (0.47, 0.18, 0.04),  # citron dans la lumière, émeraude puis bleu-vert dans l'ombre
+    "membre": (0.975, 0.125, 0.05),  # de l'or au cramoisi
+    "disque": (0.01, 0.13, 0.035),  # ambre et miel
+    "ventre": (0.80, 0.07, 0.025),  # nacre : crème dans la lumière, lilas dans l'ombre
+    "bas_ventre": (0.985, 0.095, 0.035),  # abricot et rose
+    "gorge": (0.68, 0.88, 0.02),  # lavande, bleutée dans l'ombre de la tête
+    "pale": (0.70, 0.90, 0.02),
+    "levre": (0.72, 0.12, 0.0),
+    "barre": (0.72, 0.87, 0.02),  # violet-noir, indigo dans l'ombre, prune dans la lumière
+    "tache": (0.85, 0.97, 0.02),  # marbrures prune et vieux rose
+}
+# les motifs restent sombres : seule la part basse de leur rampe sert, même en pleine lumière
+PLAFOND = {"barre": 0.5, "tache": 0.7}
+ECLAT_ACTIF = True  # False : le modelé fidèle à la photo, gelé dans gauche_details_valide.json
+REFLET_FROID = "#86E8E0"  # la lumière du ciel renvoyée sur les bords à l'ombre
+ECLAT_HUMIDE = "#FFFFFF"  # les points de brillance de la peau mouillée
+
+
+def rampe_eclat(hexa, ombre, lumiere, n=11):
+    """n tons d'une couleur, du plus sombre au plus clair : les ombres glissent vers la teinte
+    ombre et se saturent, les lumières vers la teinte lumiere et s'éclaircissent fort."""
+    r, g, b = (int(hexa[i : i + 2], 16) / 255 for i in (1, 3, 5))
+    h, clarte, sat = colorsys.rgb_to_hls(r, g, b)
+    out = []
+    for k in range(n):
+        t = 2 * k / (n - 1) - 1  # de -1 (ombre) à 1 (lumière)
+        cible = ombre if t < 0 else lumiere
+        hh = (h + ((cible - h + 0.5) % 1 - 0.5) * abs(t) * 0.6) % 1
+        if t < 0:
+            ll = max(clarte - 0.3 * -t, 0.06)
+            ss = min(max(sat * (1 + 0.35 * -t), 0.3 * -t), 1)
+        else:  # des lumières vives, pas crayeuses
+            ll = clarte + (0.95 - clarte) * 0.5 * t
+            ss = min(sat * (1 + 0.3 * t), 1)
+        out.append(hexa_de(*colorsys.hls_to_rgb(hh, ll, ss)))
+    return out
+
+
+def melanger(a, b, t):
+    """La couleur a, tirée vers b de la part t."""
+    ca = [int(a[i : i + 2], 16) for i in (1, 3, 5)]
+    cb = [int(b[i : i + 2], 16) for i in (1, 3, 5)]
+    return hexa_de(*((x + (y - x) * t) / 255 for x, y in zip(ca, cb, strict=True)))
 
 
 def decaler(m, di, dj):
@@ -823,13 +870,15 @@ def fondre(zone, a, b):
     return zone
 
 
-def details(f, traits, motifs, oeil):
+def details(f, traits, motifs, oeil, eclat=None):
     """Étape 3b, le modelé : volume par forme (lumière d'en haut, un peu de la gauche, comme sur
     la photo), ombre portée par les formes plus proches, patte et bras gauches à l'ombre, ventre
     bombé, gorge dans l'ombre de la tête, pustules du ventre, rampes tramées en trois variantes
     de teinte, passages tramés entre les zones du ventre, granules blanches sur le vert et en
     liseré au bord du vert, reflets humides des disques, œil bombé et réticulé, contour
-    teinté."""
+    teinté. Avec l'éclat (ECLAT_ACTIF), les teintes de ECLAT, des plaques du jauni au rougi, des
+    points de brillance et un reflet froid sur les bords à l'ombre."""
+    eclat = ECLAT_ACTIF if eclat is None else eclat
     mat, plan, num = etiqueter(f)
     lx, ly = LUMIERE
     lum = np.full((H, W), 0.5)
@@ -859,6 +908,9 @@ def details(f, traits, motifs, oeil):
     dessous = decaler(pustules, 0, 1) & peau
     lum[dessous] -= 0.1
     plaques = np.clip(np.floor(_flou(np.random.default_rng(3).random((H, W)), 4) * 6 - 2), -1, 1)
+    if eclat:  # cinq niveaux de plaques, plus larges
+        champ = _flou(np.random.default_rng(17).random((H, W)), 5)
+        plaques = np.clip(np.round((champ - champ.mean()) / champ.std() * 1.1), -2, 2)
     grain = (np.random.default_rng(5).random((H, W)) - 0.5) * 0.08
     img = np.full((H, W), "", object)
     couleurs = MATIERES | MOTIFS
@@ -869,6 +921,15 @@ def details(f, traits, motifs, oeil):
     for nom, coul in couleurs.items():
         ici = zone == nom
         if not ici.any():
+            continue
+        if eclat and nom in ECLAT:
+            ombre, lumiere, ecart = ECLAT[nom]
+            haut = 10 * PLAFOND.get(nom, 1.0)
+            idx = np.clip(np.floor((lum + grain) * haut + TRAME * 0.9), 0, 10).astype(int)
+            for v in (-2, -1, 0, 1, 2):
+                sous = ici & (plaques == v)
+                tons_v = rampe_eclat(_decaler(coul, ecart * v / 2), ombre, lumiere)
+                img[sous] = np.array(tons_v, object)[idx[sous]]
             continue
         tons = rampe(coul)
         idx = np.clip(
@@ -895,11 +956,29 @@ def details(f, traits, motifs, oeil):
                 jj, ii = np.nonzero(fo["zones"]["disque"])
                 q = (jj.min() + 1, ii.min() + 1)
                 if d[q]:
-                    img[q] = rampe(MATIERES["disque"])[-1]
+                    img[q] = "#FFF6DF" if eclat else rampe(MATIERES["disque"])[-1]
+    if eclat:
+        img[granules & ~oeil["masque"]] = "#F2FFEE"
+        # des points de brillance, là où la lumière frappe la peau mouillée
+        brille = np.isin(zone, ["dos", "membre", "disque", "ventre", "bas_ventre"]) & (lum > 0.88)
+        for j, i in zip(*np.nonzero(semis(brille & ~granules, 0.3, 31)), strict=False):
+            img[j, i] = melanger(img[j, i], ECLAT_HUMIDE, 0.55)
+        # un reflet froid sur les bords à l'ombre, à droite et en bas de la silhouette
+        sil = num >= 0
+        bords = sil & (~decaler(sil, -1, 0) | ~decaler(sil, 0, -1)) & (lum < 0.62)
+        bords &= np.isin(zone, ["dos", "membre", "disque", "ventre", "bas_ventre", "gorge"])
+        for j, i in zip(*np.nonzero(bords), strict=False):
+            img[j, i] = melanger(img[j, i], REFLET_FROID, 0.3)
     img = contour(img, f, num)
     img = tracer(img, traits, num, oeil)
+    if eclat:  # la lèvre nacrée, claire dans la lumière, lilas dans l'ombre
+        levre = traits["bouche"] & (num >= 0) & (img == MATIERES["levre"])
+        img[levre & (lum > 0.5)] = "#FBF5F3"
+        img[levre & (lum <= 0.5)] = "#E6DAEB"
     if CONTOUR_TEINTE:  # la matière qu'il borde, assombrie : une teinte par matière
         teinte = {nom: assombrir(c, 0.4) for nom, c in couleurs.items()}
+        if eclat:  # le plus sombre de sa rampe, assombri encore : vert sapin, cramoisi, indigo
+            teinte |= {n: assombrir(rampe_eclat(couleurs[n], *ECLAT[n][:2])[0], 0.7) for n in ECLAT}
         TEINTES.update(teinte.values())
         for j, i in zip(*np.nonzero(img == CONTOUR), strict=False):
             voisins = [(j, i)] if num[j, i] >= 0 else []
@@ -908,37 +987,44 @@ def details(f, traits, motifs, oeil):
                 if 0 <= q[0] < H and 0 <= q[1] < W and zone[q] in teinte:
                     img[j, i] = teinte[zone[q]]
                     break
-    return oeil_detaille(img, oeil)
+    return oeil_detaille(img, oeil, eclat)
 
 
 def noms(f):
     return [fo["nom"] for fo in f]
 
 
-def oeil_detaille(img, oeil):
+def oeil_detaille(img, oeil, eclat=False):
     """L'œil du modelé : le bord pâle de la paupière, le globe bombé (clair en haut à gauche),
     l'iris argenté finement réticulé, le cercle, la fente, un reflet blanc et un petit reflet
     bleuté ; fermé, la paupière inférieure, membrane lilas au réseau doré irrégulier."""
     m, u, v = oeil["masque"], oeil["u"], oeil["v"]
+    # avec l'éclat : un iris de nacre, bleu dans l'ombre, chaud dans la lumière, et 9 tons
+    tons = rampe_eclat(OEIL["iris"], 0.62, 0.11, 9) if eclat else rampe(OEIL["iris"])
+    n = len(tons) - 1
     if oeil.get("autre") is not None:  # l'autre œil ne cligne jamais
-        img[oeil["autre"] & (img != "") & (img != CONTOUR)] = rampe(OEIL["iris"])[3]
+        img[oeil["autre"] & (img != "") & (img != CONTOUR)] = tons[n // 2]
     if oeil["ferme"]:  # sans cercle ni bord autour : pas d'effet lunettes
-        tons = rampe(MATIERES["membrane"])
-        idx = np.clip(np.floor(3.2 - 2.0 * v + TRAME * 0.9), 0, 6).astype(int)
-        img[m] = np.array(tons, object)[idx][m]
-        img[semis(m & ~bord(m), 0.2, 21)] = "#B49C6E"
+        membrane = MATIERES["membrane"]
+        tons_m = rampe_eclat(membrane, 0.70, 0.95, 9) if eclat else rampe(membrane)
+        k = len(tons_m) - 1
+        clair = k * (0.53 - 0.33 * v) if eclat else 3.2 - 2.0 * v
+        idx = np.clip(np.floor(clair + TRAME * 0.9), 0, k).astype(int)
+        img[m] = np.array(tons_m, object)[idx][m]
+        img[semis(m & ~bord(m), 0.2, 21)] = "#D9B55E" if eclat else "#B49C6E"
         return img
     autour = dilater(m)[:H, :W] & ~m & (v > -0.3) & (img != "") & (img != CONTOUR)
-    img[autour] = OEIL["bord"]
-    tons = rampe(OEIL["iris"])
-    idx = np.clip(np.floor(3.4 - 2.0 * v - 0.9 * u + TRAME * 0.9), 0, 6).astype(int)
+    img[autour] = "#BDEBB2" if eclat else OEIL["bord"]
+    clair = n * (0.57 - 0.33 * v - 0.15 * u) if eclat else 3.4 - 2.0 * v - 0.9 * u
+    idx = np.clip(np.floor(clair + TRAME * 0.9), 0, n).astype(int)
     img[m] = np.array(tons, object)[idx][m]
     reticule = semis(m & ~bord(m), 0.22, 13)
-    img[reticule] = np.array(tons, object)[np.clip(idx - 2, 0, 6)][reticule]
-    img[bord(m)] = OEIL["cercle"]
+    img[reticule] = np.array(tons, object)[np.clip(idx - 2, 0, n)][reticule]
+    img[bord(m)] = "#211A33" if eclat else OEIL["cercle"]
     fente = np.abs(u) < 0.26 * (1 - (v / 0.82) ** 2)
-    img[m & fente] = OEIL["pupille"]
-    img[m & fente & (v < -0.35) & (np.abs(u) < 0.12)] = "#2E3550"  # le haut de la fente bleuté
+    img[m & fente] = "#120E22" if eclat else OEIL["pupille"]
+    bleu = "#3B4E92" if eclat else "#2E3550"
+    img[m & fente & (v < -0.35) & (np.abs(u) < 0.12)] = bleu  # le haut de la fente bleuté
     img[m & ((u + 0.42) ** 2 + (v + 0.42) ** 2 < 0.035)] = "#FFFFFF"
     img[m & ((u - 0.4) ** 2 + (v - 0.45) ** 2 < 0.02) & ~fente] = "#9FB4C0"
     return img
@@ -976,7 +1062,13 @@ def teinter_contour(img):
     return out
 
 
-RENDUS = {"ebauche": ebauche, "croquis": croquis, "aplats": aplats, "details": details}
+RENDUS = {
+    "ebauche": ebauche,
+    "croquis": croquis,
+    "aplats": aplats,
+    "details": details,
+    "fidele": lambda *a: details(*a, eclat=False),  # le modelé validé, fidèle à la photo
+}
 
 
 # ------------------------------------------------------------------ sortie
