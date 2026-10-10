@@ -51,3 +51,9 @@ l'ébauche et le croquis.
   (plus de tache sombre au bout du museau).
 - 1 : le bras droit est plus long et horizontal (dans le sens de l'image) ; l'épaule est presque
   à la verticale de la commissure.
+- 1 (tour 4) : une seule rangée de pixels sous la lèvre, au menton.
+- 1 : l'orteil gauche voisin du doigt part à la verticale (base déplacée vers la gauche de
+  l'image), presque parallèle au doigt du bras gauche.
+- 1 : le profil de la tête est fait de droites : du bout du museau à la narine gauche (cachée),
+  puis jusqu'à la nuque ; pas de creux ni d'arrondi ; les yeux dépassent du crâne, qui ne suit
+  pas leur courbure.

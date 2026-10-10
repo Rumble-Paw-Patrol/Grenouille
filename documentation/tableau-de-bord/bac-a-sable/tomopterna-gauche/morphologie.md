@@ -29,8 +29,8 @@ photo montre de cet individu et le cadrage.
 | Orientation | corps presque de face (on voit le ventre), tête tournée vers la droite, de profil | sa droite est à gauche de l'image : membres `_d` devant, `_g` derrière le ventre |
 | Œil | gros, globe gris argenté réticulé, pupille en fente verticale, paupière supérieure verte en bourrelet ; il dépasse le crâne | rayon du globe 3,4 unités, bourrelet 4,1 |
 | Autre œil | toute la bosse verte sur le crâne, en haut à droite ; on n'en voit qu'un mince croissant gris du globe, au bout | une bosse de peau de 6,8 × 3,9 unités, un croissant de globe de 2 pixels |
-| Museau | court, tronqué, lignes presque droites ; narine nette près du bout | — |
-| Lèvre et menton | liseré blanc, presque droit, du bout du museau à la commissure ; menton fin (propre à cette grenouille, pas une règle de l'espèce) | la lèvre est une droite du museau à la commissure ; sous elle, deux rangées de pixels, puis le contour |
+| Museau et profil de la tête | court, tronqué ; narine nette près du bout ; du bout du museau à la narine gauche (cachée), puis jusqu'à la nuque, des droites ; les yeux dépassent du crâne | deux droites, repère narine_g |
+| Lèvre et menton | liseré blanc, presque droit, du bout du museau à la commissure ; menton fin (propre à cette grenouille, pas une règle de l'espèce) | la lèvre est une droite du museau à la commissure ; sous elle, une seule rangée de pixels, puis le contour |
 | Tympan | une bosse ronde verte derrière l'œil, en bas | non décrit dans les sources : à confirmer |
 | Ventre | gros, granuleux, blanc rosé marbré de violet ; il s'arrête au-dessus de la branche | — |
 | Bras droit | le bras, long et fin, passe à l'horizontale sur le ventre, de l'épaule, sous la commissure, au coude ; l'avant-bras, vert dehors, descend à la verticale ; 4 doigts : le pouce remonte le long de la branche, 3 doigts à grands disques partent vers la droite | 4 doigts sur 4 |

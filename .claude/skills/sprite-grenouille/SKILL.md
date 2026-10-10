@@ -234,6 +234,11 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
        d'environ 3 pixels, disques d'environ 6. Un doigt par forme cernée, pour que deux disques
        voisins restent séparés. En nombre, direction et longueur justes (la formule de la
        fiche) ; les espaces entre doigts et orteils voisins comme sur la photo ;
+     - **le profil de la tête sans les yeux** : relever le contour du crâne (bout du museau,
+       canthus, dessus de la tête jusqu'à la nuque) en faisant abstraction des yeux. Un œil
+       saillant dépasse du crâne : le crâne ne suit pas sa courbure, et il ne se creuse pas
+       entre l'œil et le museau. Des droites là où la tête est anguleuse, sans lissage par
+       défaut ; poser des repères sur le profil (la narine cachée, la nuque) et les relier ;
      - **l'œil entier, avant la pupille** : d'abord toute la saillie, c'est-à-dire le globe et la
        paupière qui l'entoure et le couvre, souvent de la couleur du dos (verte chez
        tomopterna) ; puis la part visible du globe, à sa taille ; la pupille en dernier
@@ -282,6 +287,8 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
 - [ ] Les proportions suivent la fiche : tête, tibia, main et pied en part de la LMC.
 - [ ] La posture : angles du coude, du genou, du talon ; inclinaison du dos et de la tête ;
       regard et écart entre les grenouilles (mode image).
+- [ ] Le profil du crâne relevé sans les yeux, qui en dépassent ; ni creux ni arrondi que la
+      photo ne montre pas.
 - [ ] Le museau de profil, la courbure de la lèvre et l'épaisseur du menton, le tympan et le
       pli s'ils se voient.
 - [ ] L'œil entier : la saillie et la paupière d'abord, puis le globe (taille, place) et la

@@ -87,6 +87,9 @@ SQUELETTE = {
     # tête, de profil, tournée vers la droite
     "museau": (99.75, 41.8),
     "narine": (96.4, 38.4),
+    # la narine gauche, cachée, au coin du museau : du bout du museau jusqu'à elle, puis jusqu'à
+    # la nuque, le profil de la tête est fait de droites ; les yeux dépassent du crâne
+    "narine_g": (98.4, 36.9),
     "oeil": (87.25, 38.0),
     # l'autre œil : toute la bosse verte sur le crâne (paupière et globe) ; on n'en voit qu'un
     # mince croissant gris, au bout à droite
@@ -133,7 +136,7 @@ SQUELETTE = {
     "hanche_g": (85.6, 52.6),
     "genou_g": (92.4, 49.0),
     "talon_g": (93.8, 56.4),
-    "tarse_g": (94.8, 58.4),
+    "tarse_g": (94.0, 58.4),  # l'orteil b en part à la verticale, parallèle au doigt voisin
     "orteil_a_g": (97.4, 60.4),
     "orteil_b_g": (94.0, 64.8),  # son disque touche celui du doigt voisin
 }
@@ -159,7 +162,11 @@ MEMBRES = {
         ["doigt1_d", "doigt2_d", "doigt3_d", "doigt4_d"],
     ),
 }
-AXES = [["museau", "commissure"], ["nuque", "sacrum", "cloaque"], ["oeil", "autre_oeil"]]
+AXES = [
+    ["museau", "commissure"],
+    ["museau", "narine_g", "nuque", "sacrum", "cloaque"],
+    ["oeil", "autre_oeil"],
+]
 
 
 # ------------------------------------------------------------------ outils de forme
@@ -270,12 +277,11 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     xt, yt = tete_tournee(tete)
     corps = dans(
         [
+            # le profil de la tête : deux droites, du bout du museau à la narine gauche, puis
+            # jusqu'à la nuque ; le crâne ne suit pas la courbure des yeux, qui en dépassent
             S["museau"],
-            (99.7, 40.0),
-            (99.0, 37.6),
-            (97.6, 36.4),
-            (92.0, 34.9),
-            (84.0, 35.3),
+            S["narine_g"],
+            S["nuque"],
             (78.0, 36.6),
             (72.0, 39.8),
             (66.4, 45.8),
@@ -289,16 +295,19 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             (86.6, 50.0),
             (88.4, 48.4 + gorge * 0.3),
             (89.6, 47.0 + gorge * 0.6),
-            # le menton, fin : sous la lèvre, deux rangées de pixels, parallèles à elle
-            (90.0, 45.7 + gorge * 0.4),
-            (92.0, 45.0),
-            (95.0, 44.3),
-            (98.0, 43.5),
-            (99.6, 42.4),
+            # le menton : son bord est coupé plus bas, au pixel, sous la lèvre (ligne)
+            (90.4, 45.0 + gorge * 0.4),
+            (95.0, 44.4),
+            (99.75, 43.2),
         ],
         xt,
         yt,
     )
+    # la lèvre : une droite de la commissure au bout du museau ; sous elle, au menton, une seule
+    # rangée de pixels, puis le contour (coupe au pixel près, colonne par colonne)
+    (mx, my), (cx, cy) = S["museau"], S["commissure"]
+    ligne = cy + (xt - cx) * (my - cy) / (mx - cx)
+    corps &= ~((xt > 90.4) & (yt > ligne + 0.75))
     corps |= ellipse(*S["oeil"], 4.0, 4.0, xt, yt) & (yt < S["oeil"][1])  # l'œil dépasse
     autre = ellipse(*S["autre_oeil"], 3.4, 1.95, xt, yt)  # l'autre œil : toute la bosse
     corps |= autre
@@ -323,15 +332,14 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("avant_bras_d", avant_bras_d, "membre", "devant", cernee=True),
         *cernes("doigt_d", doigts("main_d", MEMBRES["bras_d"][2]), "devant"),
     ]
-    # traits du visage : la lèvre, une droite de la commissure au bout du museau ; la narine ; le
-    # tympan ; le pli sous l'autre œil
-    levre = [S["commissure"], S["museau"]]
+    # traits du visage : la lèvre (un pixel par colonne, sur la droite) ; la narine ; le tympan ;
+    # le pli sous l'autre œil
     tx, ty = S["tympan"]
     rt = np.hypot(xt - tx, yt - ty)
     ax, ay = S["autre_oeil"]
     pli = ellipse(ax, ay, 3.4, 1.95, xt, yt) & ~ellipse(ax, ay - 0.5, 3.4, 1.95, xt, yt)
     traits = {
-        "bouche": corps & membre(levre, [0.35] * len(levre), xt, yt),
+        "bouche": corps & (xt > cx) & (xt < mx) & (np.floor(2 * yt) == np.floor(2 * ligne)),
         "pli_autre_oeil": corps & pli & (yt > ay) & (xt < ax + 2.6),
         "narine": (np.abs(xt - S["narine"][0]) < 0.5) & (np.abs(yt - S["narine"][1]) < 0.5),
         "tympan": (rt > 0.9) & (rt < 1.4),
