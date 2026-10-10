@@ -218,7 +218,9 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
      (le centre du globe), autre œil (le centre de toute sa bosse), commissure de la bouche,
      tympan. Tronc : nuque, sacrum, cloaque. Membres : épaule, coude,
      poignet, main ; hanche, genou, talon, tarse, orteils. Bouts des doigts et des orteils
-     visibles (`doigt1_g`…), numérotés comme dans la fiche (I = le plus interne) ;
+     visibles (`doigt1_g`…), numérotés comme dans la fiche (I = le plus interne) ; un doigt
+     ou un orteil qui ne part pas de la main ou du pied visibles (il sort de sous un poignet,
+     par exemple) prend sa propre base (`base_<nom>`) et sa direction relevée sur la photo ;
    - **`MEMBRES`** : pour chaque membre, sa chaîne de repères, son plan (`fond`, `corps`,
      `devant` ; en mode image, d'après la photo) et ses bouts de doigts ; **`AXES`** : l'axe du
      corps et la ligne de la bouche ;

@@ -103,9 +103,9 @@ SQUELETTE = {
     # bras droit (devant) : le bras, long et fin, à l'horizontale, va de l'épaule, presque à la
     # verticale de la commissure, au coude levé, en haut à gauche ; l'avant-bras, vert, descend
     # à la verticale jusqu'à la branche
-    "epaule_d": (79.2, 50.4),
-    "coude_d": (63.0, 50.4),
-    "poignet_d": (63.1, 63.6),
+    "epaule_d": (79.2, 50.6),
+    "coude_d": (63.6, 50.6),  # l'avant-bras, large, penche un peu : le haut à droite
+    "poignet_d": (62.6, 63.4),
     "main_d": (64.7, 65.4),
     "doigt1_d": (66.7, 62.4),  # le pouce, court, opposable, remonte le long de la branche
     "doigt2_d": (73.4, 66.0),
@@ -120,7 +120,9 @@ SQUELETTE = {
     "tarse_d": (59.2, 61.6),
     "orteil_a_d": (57.8, 70.4),
     "orteil_b_d": (61.0, 70.8),
-    "orteil_c_d": (64.2, 71.0),  # le troisième passe sous le bras
+    # le troisième orteil, vertical, sort de sous le poignet
+    "base_orteil_c_d": (63.4, 63.8),
+    "orteil_c_d": (63.8, 70.8),
     # bras gauche (2e plan) : il sort de derrière le ventre et vient vers nous, raccourci ;
     # trois doigts visibles, dont un part vers la gauche sur la branche
     "epaule_g": (88.6, 49.0),
@@ -154,8 +156,9 @@ MEMBRES = {
     "patte_d": (
         ["hanche_d", "genou_d", "talon_d", "tarse_d"],
         "fond",
-        ["orteil_a_d", "orteil_b_d", "orteil_c_d"],
+        ["orteil_a_d", "orteil_b_d"],
     ),
+    "orteil_c_d": (["base_orteil_c_d", "orteil_c_d"], "fond", []),
     "bras_d": (
         ["epaule_d", "coude_d", "poignet_d", "main_d"],
         "devant",
@@ -313,11 +316,11 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     corps |= autre
     patte_g = os_(MEMBRES["patte_g"][0], [2.0, 1.9, 1.6, 1.2])
     bras_g = os_(MEMBRES["bras_g"][0], [1.2, 1.35, 1.3, 1.1])
-    cuisse_d = os_(["hanche_d", "genou_d"], [1.4, 1.5])
+    cuisse_d = os_(["hanche_d", "genou_d"], [1.8, 1.5])  # elle comble le coin sous le coude
     tibia_d = os_(["genou_d", "talon_d"], [2.0, 2.1])
     pied_d = os_(["talon_d", "tarse_d"], [1.2, 1.0])
     bras_haut_d = os_(["epaule_d", "coude_d"], [1.5, 1.0])
-    avant_bras_d = os_(["coude_d", "poignet_d", "main_d"], [1.7, 1.5, 1.2])
+    avant_bras_d = os_(["coude_d", "poignet_d", "main_d"], [1.85, 1.55, 1.2])
     f = [
         forme("patte_g", patte_g, "membre", "fond", cernee=True),
         *cernes("orteil_g", doigts("tarse_g", MEMBRES["patte_g"][2]), "fond"),
@@ -326,6 +329,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True),
         forme("pied_d", pied_d, "membre", "fond", cernee=True),
         *cernes("orteil_d", doigts("tarse_d", MEMBRES["patte_d"][2]), "fond"),
+        *cernes("orteil_c_d", doigts("base_orteil_c_d", ["orteil_c_d"]), "fond"),
         forme("tibia_d", tibia_d, "membre", "fond", cernee=True),
         forme("corps", corps, "dos", cernee=True),
         forme("bras_haut_d", bras_haut_d, "membre", "devant", cernee=True),

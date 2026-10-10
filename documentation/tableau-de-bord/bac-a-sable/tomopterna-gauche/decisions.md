@@ -57,3 +57,9 @@ l'ébauche et le croquis.
 - 1 : le profil de la tête est fait de droites : du bout du museau à la narine gauche (cachée),
   puis jusqu'à la nuque ; pas de creux ni d'arrondi ; les yeux dépassent du crâne, qui ne suit
   pas leur courbure.
+- 1 (tour 5) : orteil gauche vertical : parfait.
+- 1 : le troisième orteil droit est vertical lui aussi et disparaît sous le poignet droit.
+- 1 : l'avant-bras droit est plus large et pas tout à fait vertical : il penche un peu vers la
+  droite de l'image (le haut à droite).
+- 1 : le trou entre la cuisse droite, l'avant-bras droit et le tibia droit est comblé par la
+  cuisse.
