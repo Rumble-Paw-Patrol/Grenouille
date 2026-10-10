@@ -170,3 +170,12 @@ l'ébauche et le croquis.
 - Éclat (tour 3), essai : la pupille en double résolution, une pièce en demi-pixels sur le
   globe où la fente devient une amande pointue aux deux bouts ; la planche la dessine.
 - Éclat (tour 3) : plus de pixels bleus en haut de la fente : elle est d'un seul noir.
+- Retouche du croquis (après l'éclat) : les doigts partaient tous du poignet et leurs contours
+  se marchaient dessus à la base. Chaque main a désormais sa paume, relevée sur la photo, d'où
+  chaque doigt part de sa base, sur son bord ; une petite palmure relie les doigts voisins à
+  leur départ. La main se pose par-dessus la racine des doigts, soudée à eux et à son bras (ni
+  contour ni ombre portée entre eux). Les bouts ne sont plus des boules toutes pareilles :
+  ovales de face (grand disque de la main droite, disque du doigt I gauche, orteils gauches),
+  aplatis par la tranche là où ils s'enroulent sous la branche (orteils droits, doigts III et
+  IV des deux mains), le pouce plus petit. Seules les mains et les bouts bougent ; le croquis
+  et le modelé fidèle seront gelés de nouveau après validation.

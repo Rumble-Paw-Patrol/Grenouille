@@ -178,6 +178,41 @@ MEMBRES = {
         ["doigt1_d", "doigt2_d", "doigt3_d", "doigt4_d"],
     ),
 }
+# les mains, relevées sur la photo, en pixels du sprite (correction de Léonard : les doigts
+# partaient tous du poignet, et leurs contours se chevauchaient à la base) : la paume, d'où part
+# chaque doigt, de sa base, sur son bord ; les doigts voisins reliés à leur départ par une petite
+# palmure (paires de doigts, dans l'ordre de MEMBRES)
+MAINS = {
+    "bras_d": {
+        "paume": [
+            (32.5, 67.5),
+            (35.5, 67.5),
+            (38.5, 69.0),
+            (40.5, 71.0),
+            (40.5, 74.5),
+            (39.0, 76.5),
+            (36.0, 77.0),
+            (33.5, 75.0),
+            (32.5, 71.5),
+        ],
+        "bases": [(35.5, 68.0), (40.3, 71.8), (40.0, 75.3), (37.0, 76.8)],
+        "palmes": [(1, 2), (2, 3)],
+    },
+    "bras_g": {
+        "paume": [
+            (82.0, 56.0),
+            (87.0, 56.0),
+            (88.5, 59.0),
+            (87.5, 62.0),
+            (85.0, 63.0),
+            (81.0, 62.5),
+            (79.0, 60.5),
+            (80.5, 58.0),
+        ],
+        "bases": [(79.0, 60.5), (82.0, 62.5), (86.5, 62.5)],
+        "palmes": [(0, 1), (1, 2)],
+    },
+}
 AXES = [
     ["museau", "commissure"],
     ["museau", "narine_g", "nuque", "sacrum", "cloaque"],
@@ -244,11 +279,13 @@ def os_(noms, rayons, x=None, y=None):
     )
 
 
-def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=None):
+def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=None, soude=()):
     """plan : fond (membres de l'autre côté), corps, devant (membres proches) ; cernee : un
     contour la sépare de ce qu'elle recouvre ; volume : la forme dont elle prend le relief
     (une matière dessinée dans le corps, comme le flanc, prend celui du corps) ; zones : les
-    autres matières et les motifs de la forme, {nom: masque}, posés dans l'ordre (étape 3a)."""
+    autres matières et les motifs de la forme, {nom: masque}, posés dans l'ordre (étape 3a) ;
+    soude : les formes (début de leur nom) dont elle ne se sépare ni par un contour ni par une
+    ombre portée, parce qu'elle les continue (la main, son bras et ses doigts)."""
     return {
         "nom": nom,
         "masque": masque,
@@ -257,7 +294,14 @@ def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=N
         "cernee": cernee,
         "volume": volume or nom,
         "zones": zones or {},
+        "soude": soude,
     }
+
+
+def soudees(f, k):
+    """Les numéros des formes auxquelles la forme k est soudée."""
+    debuts = tuple(f[k]["soude"])
+    return [j for j, g in enumerate(f) if debuts and g["nom"].startswith(debuts)]
 
 
 def tete_tournee(tete, x=None, y=None):
@@ -306,8 +350,24 @@ def fuseau(a, b, rayons, milieu=0.5, decale=(0.0, 0.0)):
     return membre([(xa, ya), m, (xb, yb)], rayons, X, Y)
 
 
-# un disque en boule, de 6 pixels de diamètre (doigts de C. tomopterna à l'échelle 0,28)
-DISQUE = [".####.", "######", "######", "######", "######", ".####."]
+# le bout de chaque doigt, relevé sur la photo : largeur, hauteur (pixels), inclinaison (degrés).
+# Pas des boules toutes pareilles (correction de Léonard) : vu de face, un disque est un ovale de
+# 7 pixels ; enroulé autour de la branche, il se présente par la tranche, aplati ; le pouce est
+# plus petit. Sans relevé, un disque rond de 6 pixels
+BOUTS = {
+    "doigt1_d": (5, 4, 0),  # le pouce, un petit bouton sur la branche
+    "doigt2_d": (7, 8, 0),  # le grand disque, de face
+    "doigt3_d": (6, 3, 0),  # passe sous la branche : par la tranche
+    "doigt4_d": (5, 3, 0),
+    "orteil_a_d": (8, 5, 0),  # les orteils droits s'enroulent sous la branche
+    "orteil_b_d": (7, 4, 0),
+    "orteil_c_d": (6, 4, 0),
+    "doigt1_g": (7, 6, -30),  # de face, un peu de biais
+    "doigt3_g": (6, 3, 0),  # sous la branche
+    "doigt4_g": (5, 3, 0),
+    "orteil_a_g": (6, 7, 15),  # de face
+    "orteil_b_g": (7, 6, 0),
+}
 
 
 def _pixel(x, y):
@@ -317,15 +377,14 @@ def _pixel(x, y):
 
 
 def disque(bout):
-    """Le disque en boule (DISQUE) centré sur le bout d'un doigt : sa zone de matière."""
-    m = np.zeros((H, W), bool)
+    """Le disque du bout d'un doigt (BOUTS), un ovale centré sur le bout : sa zone de matière.
+    Rond de 6 pixels, c'est l'ancien disque en boule, au pixel près."""
+    larg, haut, incl = BOUTS.get(bout, (6, 6, 0))
     x1, y1 = _pixel(*SQUELETTE[bout])
-    bi, bj = round(x1) - 3, round(y1) - 3
-    for dj, rang in enumerate(DISQUE):
-        for di, c in enumerate(rang):
-            if c == "#" and 0 <= bj + dj < H and 0 <= bi + di < W:
-                m[bj + dj, bi + di] = True
-    return m
+    cx, cy = round(x1 - larg / 2) + larg / 2, round(y1 - haut / 2) + haut / 2
+    i, j = np.meshgrid(np.arange(W) + 0.5 - cx, np.arange(H) + 0.5 - cy)
+    c, s = math.cos(math.radians(incl)), math.sin(math.radians(incl))
+    return ((i * c + j * s) / (larg / 2)) ** 2 + ((j * c - i * s) / (haut / 2)) ** 2 <= 1
 
 
 def doigt(base, bout, largeur=3, via=()):
@@ -355,6 +414,24 @@ def doigt(base, bout, largeur=3, via=()):
                     poser(a + d, b) if debout else poser(a, b + d)
             prec = (i, j)
     return m | disque(bout)
+
+
+def main(membre_, palmure=2.0):
+    """La main d'un membre (MAINS) : la paume, et entre deux doigts voisins une petite palmure,
+    de leur base jusqu'à palmure pixels le long de chacun, au bord libre creusé vers la paume.
+    Elle se pose par-dessus la racine des doigts, qui partent ainsi chacun de sa base."""
+    m_ = MAINS[membre_]
+    m = dans(px(*m_["paume"]), X, Y)
+    bases = [np.array(b) for b in m_["bases"]]
+    bouts = [np.array(_pixel(*SQUELETTE[b])) for b in MEMBRES[membre_][2]]
+    for a, b in m_["palmes"]:
+        p1, p2 = (
+            bases[k] + (bouts[k] - bases[k]) * palmure / np.hypot(*(bouts[k] - bases[k]))
+            for k in (a, b)
+        )
+        creux = 0.6 * (p1 + p2) / 2 + 0.4 * (bases[a] + bases[b]) / 2
+        m |= dans(px(*(tuple(q) for q in (bases[a], p1, creux, p2, bases[b]))), X, Y)
+    return m
 
 
 # ------------------------------------------------------------------ couleurs et motifs (3a)
@@ -481,6 +558,8 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # les orteils droits partent du tarse, caché sous l'avant-bras, et s'écartent en éventail
     # (les métatarses) pour sortir de sous lui à 4 pixels l'un de l'autre
     eventail_d = [px((22.5, 71.0)), px((26.5, 71.5)), px((30.5, 71.5))]
+    # les doigts passent par leur base, sur le bord de la paume (MAINS)
+    bases_d, bases_g = ([px(b) for b in MAINS[m]["bases"]] for m in ("bras_d", "bras_g"))
 
     # Étape 3a : les couleurs à plat et les motifs de cet individu, relevés sur la photo réduite
     # au pixel du sprite (profils le long des os, taches sombres du ventre). En pixels du
@@ -571,7 +650,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # barres des doigts et des orteils (centres en pixels) et taches des disques, par doigt
     barres_orteils_d = [([(21.6, 74.0), (20.7, 77.0)], ()), ([(26.4, 74.0), (26.2, 77.0)], ())]
     barres_orteils_d.append(([(31.0, 77.0)], ()))
-    barres_doigts_d = [((), ()), ([(42.0, 71.4)], ()), ([(39.0, 73.1), (45.0, 75.4)], ())]
+    barres_doigts_d = [((), ()), ([(45.0, 71.6)], ()), ([(39.0, 73.1), (45.0, 75.4)], ())]
     barres_doigts_d.append(([(36.2, 74.7)], ()))
     barres_doigts_g = [([(82.5, 59.6), (78.6, 62.9)], [(68, 69), (69, 69), (69, 70)])]
     barres_doigts_g += [([(83.3, 64.3), (82.4, 68.0)], ()), ([(85.6, 62.0), (86.4, 66.6)], ())]
@@ -580,7 +659,9 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("patte_g", patte_g, "membre", "fond", cernee=True, zones=zones_patte_g),
         *cernes("orteil_g", "tarse_g", MEMBRES["patte_g"][2], "fond", None, barres_orteils_g),
         forme("bras_g", bras_g, "membre", "corps", cernee=True, zones=zones_bras_g),
-        *cernes("doigt_g", "main_g", MEMBRES["bras_g"][2], "corps", None, barres_doigts_g),
+        *cernes("doigt_g", "main_g", MEMBRES["bras_g"][2], "corps", bases_g, barres_doigts_g),
+        # la main, par-dessus la racine des doigts, sans contour avec eux ni avec le bras
+        forme("main_g", main("bras_g"), "membre", "corps", True, soude=("doigt_g", "bras_g")),
         forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True, zones=zones_cuisse_d),
         forme("pied_d", pied_d, "membre", "fond", cernee=True),
         *cernes("orteil_d", "tarse_d", MEMBRES["patte_d"][2], "fond", eventail_d, barres_orteils_d),
@@ -596,7 +677,8 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             volume="corps",
             zones=peau,
         ),
-        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "devant", None, barres_doigts_d),
+        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "devant", bases_d, barres_doigts_d),
+        forme("main_d", main("bras_d"), "membre", "devant", True, soude=("doigt_d", "bras_d")),
     ]
     oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne, "tete": tete}
     oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
@@ -646,7 +728,7 @@ def contour(img, f, num):
             continue
         mm = np.pad(fo["masque"] & (num == k), 1)
         autour = mm[:-2, 1:-1] | mm[2:, 1:-1] | mm[1:-1, :-2] | mm[1:-1, 2:]
-        img[autour & plein & (num < k) & (num >= 0)] = CONTOUR
+        img[autour & plein & (num < k) & (num >= 0) & ~np.isin(num, soudees(f, k))] = CONTOUR
     return miettes(img)
 
 
@@ -791,7 +873,7 @@ def rampe(hexa, n=7):
 
 # étape 3b : les formes à l'ombre sur la photo (la patte et le bras gauches, derrière le ventre),
 # de combien ; les granules blanches de tomopterna, sur le vert
-OMBRES = {"patte_g": 0.16, "orteil_g": 0.12, "bras_g": 0.08, "doigt_g": 0.06}
+OMBRES = {"patte_g": 0.16, "orteil_g": 0.12, "bras_g": 0.08, "main_g": 0.07, "doigt_g": 0.06}
 GRANULE = "#E2EEDA"
 # l'éclat (carte blanche de Léonard, avant l'étape 4) : des teintes au-delà de la photo, qui font
 # ressortir la brillance et la beauté. Par matière : la teinte où glissent les ombres, celle où
@@ -909,7 +991,11 @@ def details(f, traits, motifs, oeil, eclat=None):
         face = -(gx * lx + gy * ly)
         lum[ici] = (0.55 + 4.0 * face - 0.18 * ((Y - ORIGINE[1]) / UNITES[1] - 0.4))[ici]
         # l'ombre portée par les formes plus proches, du côté opposé à la lumière
-        proches = [j for j in range(k + 1, len(f)) if f[j]["volume"] == f[j]["nom"]]
+        proches = [
+            j
+            for j in range(k + 1, len(f))
+            if f[j]["volume"] == f[j]["nom"] and k not in soudees(f, j) + soudees(f, k)
+        ]
         porte = decaler(np.isin(num, proches), round(-lx * 2), round(-ly * 2))
         lum[ici] -= 0.32 * _flou(porte.astype(float), 1)[ici]
         lum[ici] -= next((v for n, v in OMBRES.items() if fo["nom"].startswith(n)), 0.0)

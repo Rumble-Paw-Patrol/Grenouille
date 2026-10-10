@@ -216,12 +216,14 @@ def os_(noms, rayons, x=None, y=None):
     )
 
 
-def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=None):
+def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=None, soude=()):
     """plan : fond (membres de l'autre côté), corps, devant (membres proches) ; cernee : un
     contour la sépare de ce qu'elle recouvre ; volume : la forme dont elle prend le relief
     (une matière dessinée dans le corps, comme le flanc, prend celui du corps) ; zones : les
     autres matières et les motifs propres à la forme, {nom: masque}, posés dans l'ordre et
-    seulement sur elle : des barres de tibia ne débordent pas sur le bras qui le couvre."""
+    seulement sur elle : des barres de tibia ne débordent pas sur le bras qui le couvre ;
+    soude : les formes (début de leur nom) dont aucun contour ne la sépare, parce qu'elle les
+    continue : une main posée par-dessus la racine de ses doigts, soudée à eux et à son bras."""
     return {
         "nom": nom,
         "masque": masque,
@@ -230,7 +232,14 @@ def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=N
         "cernee": cernee,
         "volume": volume or nom,
         "zones": zones or {},
+        "soude": soude,
     }
+
+
+def soudees(f, k):
+    """Les numéros des formes auxquelles la forme k est soudée."""
+    debuts = tuple(f[k]["soude"])
+    return [j for j, g in enumerate(f) if debuts and g["nom"].startswith(debuts)]
 
 
 def bande(m, dx, dy, n=2):
@@ -408,7 +417,7 @@ def contour(img, f, num):
             continue
         mm = np.pad(fo["masque"] & (num == k), 1)
         autour = mm[:-2, 1:-1] | mm[2:, 1:-1] | mm[1:-1, :-2] | mm[1:-1, 2:]
-        img[autour & plein & (num < k) & (num >= 0)] = CONTOUR
+        img[autour & plein & (num < k) & (num >= 0) & ~np.isin(num, soudees(f, k))] = CONTOUR
     return miettes(img)
 
 

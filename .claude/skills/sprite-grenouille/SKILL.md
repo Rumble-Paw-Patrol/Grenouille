@@ -233,8 +233,9 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
        `os_()`, segments tirés du squelette, de rayon en unités égal à la largeur en pixels
        divisée par 4 ;
      - **les doigts et les orteils** de même, jamais en traits fins par défaut ; les disques
-       sont des **boules** au diamètre mesuré. Chez *C. tomopterna*, à l'échelle 0,28 : doigts
-       d'environ 3 pixels, disques d'environ 6. Un doigt par forme cernée, pour que deux disques
+       au diamètre mesuré, chacun de la forme que montre la photo (voir l'étape 2). Chez
+       *C. tomopterna*, à l'échelle 0,28 : doigts d'environ 3 pixels, disques d'environ 6 à 7. Un
+       doigt par forme cernée, pour que deux disques
        voisins restent séparés. En nombre, direction et longueur justes (la formule de la
        fiche) ; les espaces entre doigts et orteils voisins comme sur la photo ;
      - **le profil de la tête sans les yeux** : relever le contour du crâne (bout du museau,
@@ -333,14 +334,26 @@ mains et pieds. Pour chaque zone :
      aux doigts fins comme A. blanci ;
    - diagonales **en escalier** : chaque pixel touche le suivant par un côté, sinon le contour
      le coupe et le doigt paraît détaché ;
-   - disque au bout, en boule, au diamètre mesuré (environ 6 pixels chez tomopterna à
-     l'échelle 0,28 : jamais un 3 × 3 par défaut) ;
+   - disque au bout, au diamètre mesuré (6 à 7 pixels chez tomopterna à l'échelle 0,28 :
+     jamais un 3 × 3 par défaut), et **chacun de sa forme, relevée sur la photo**, jamais des
+     boules toutes pareilles (correction de Léonard) : un disque vu de face est un ovale de 7 à
+     8 pixels ; un doigt qui s'enroule autour du support présente son disque par la tranche,
+     aplati (6 × 3, 8 × 5) ; le pouce a un disque plus petit. Une taille par bout (largeur,
+     hauteur, inclinaison), un rond de 6 pixels sans relevé ;
    - un pouce opposable serre ou longe le support ; un doigt caché derrière un avant-bras ne se
      dessine pas ;
    - des doigts qui partent d'un même point (tous les orteils du tarse) se chevauchent à leur
      base, et le contour écrase celui du milieu. Les faire passer par un éventail (les
      métatarses), caché sous le membre qui couvre le pied, pour qu'ils en sortent écartés de leur
-     largeur plus un pixel au moins. Le squelette ne change pas.
+     largeur plus un pixel au moins. Le squelette ne change pas ;
+   - **une main, pas un poignet** (correction de Léonard) : des doigts qui partent tous du
+     poignet se chevauchent, et leurs contours se marchent dessus. Relever sur la photo la
+     **paume**, un petit polygone entre le poignet et la base des doigts, et la **base** de
+     chaque doigt sur son bord ; chaque doigt passe par sa base. Une **petite palmure** relie
+     deux doigts voisins à leur départ, sur 2 pixels le long de chacun, au bord libre creusé
+     vers la paume. La main se pose par-dessus la racine des doigts, cernée contre le reste
+     mais **soudée** à son bras et à ses doigts : ni contour ni ombre portée entre eux (dans le
+     modèle de tomopterna : `MAINS`, `main()`, `forme(…, soude=…)`).
 4. **Se relire seul après chaque zone :**
    - `outils.py superposer` : le contour suit la photo à 1 ou 2 pixels près ;
    - `outils.py zoom` sur la zone ;
@@ -389,7 +402,9 @@ masqué, à afficher avec le bouton), et la superposition dans la conversation.
 - [ ] Chaque galbe et chaque articulation se lisent ; aucune forme en « boudin ».
 - [ ] Les traits du visage sont à leur place ; l'œil a sa taille et sa saillie, l'autre œil sa
       bosse.
-- [ ] Les mains et les pieds : nombre, formule, éventail, disques, contact ; `controle` ne
+- [ ] Les mains et les pieds : nombre, formule, éventail, disques, contact ; une paume d'où
+      chaque doigt part de sa base, une palmure entre doigts voisins, aucun contour qui se
+      croise à la racine ; des disques de formes variées, comme sur la photo ; `controle` ne
       trouve aucune miette.
 - [ ] Le dessin se lit à la taille du téléphone.
 
