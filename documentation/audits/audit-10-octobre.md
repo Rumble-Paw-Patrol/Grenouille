@@ -101,12 +101,12 @@ Tests après : 799 réussis, 0 échoué (62 lents non lancés), ruff propre.
 | Figure 4 du rapport 08 sans audioprotopnet | `generer.py` ne l'a pas dans `COURBE` ; la légende le dit, figure non régénérée |
 | Trois rassembleurs AnuraSet presque identiques | Archives de reproductibilité des rapports 02–08, laissées telles quelles |
 | `avex` (10 encodeurs `esp_aves2_*`) absent de `pyproject.toml` | Installé à part ; à déclarer quand ces encodeurs serviront sur les données ONF |
-| `estimate_prevalence` (R73) ne compte pas le test v1 (source `plan`) | Choix de méthode à trancher : il faudrait pondérer par `prob_tirage` |
+| L'estimation de la part d'enregistrements où A. blanci chante (`prevalence`, R73) ne se sert que des écoutes tirées au hasard uniforme ; elle laisse de côté le test v1 | Le test v1 surreprésente les heures de pic et la période haute : l'y ajouter tel quel gonflerait l'estimation. Il faudrait peser chaque enregistrement par 1 / `prob_tirage`. Rien d'urgent |
 
 ## 3. À savoir
 
 - **Relire les rapports de benchmark à la lumière de la note sur Holm** : « après Holm » veut dire, pour l'instant, « intervalle à 95 % qui exclut 0 ».
-- **Files du plan existantes** : elles ont été tirées le 07/10. Si la base contenait déjà des labels ce jour-là, elles restent identiques ; sinon `candidates --plan` le dira et demandera `--force`.
+- **Files du plan existantes (lot 1, test v1) : gardées telles quelles.** `candidates --plan` ne réécrit jamais une file existante sans `--force` ; ne pas le passer. Aucune autre commande n'y touche.
 - **Relancer `blanci qc`** une fois : les drapeaux posés par extraits n'existent pas encore dans la base.
 - Les stocks d'embeddings existants ne sont pas à réencoder : l'identité ancienne reste acceptée.
 - `queue` et `search` n'existent plus : `select --method active` et `select --method similarity`.

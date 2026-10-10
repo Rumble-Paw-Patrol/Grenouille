@@ -19,8 +19,8 @@ graine fixée, tout avant écoute.
    réparti entre strates en proportion de M_h × poids (pics × 2, période haute × 2).
 
 Partout : au plus un enregistrement par point, jour et tranche ; enregistrements écartés par
-un drapeau et enregistrements labellisés avant le tirage (détecteur externe, écoutes ciblées,
-§5.2 : leur sélection n'était pas aléatoire) exclus ; pluie et saturation restent. « Avant le
+un drapeau et enregistrements labellisés avant le tirage (écoutes ciblées : leur sélection
+n'était pas aléatoire) exclus ; pluie et saturation restent. « Avant le
 tirage » : label ou intervalle créé avant `plan.labels_before` ; les écoutes postérieures
 n'entrent pas dans le tirage, sinon chaque relance déplacerait le lot 1 et le test et
 fausserait les probabilités d'inclusion. Sans cette date, tout label exclut.
