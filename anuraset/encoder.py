@@ -31,7 +31,7 @@ for name in sys.argv[1:]:
         config_path(cfg, "embeddings"),
         overlap=overlap_from_cfg(cfg),
         channel=cfg["audio"]["channel"],
-        signal_cfg=cfg["signal"],
+        resample=cfg["encoders"].get("resample", "recording"),
     )
     print(
         f"FINI {done.encoder_id} : {done.recordings} encodés, {done.skipped} sautés, "

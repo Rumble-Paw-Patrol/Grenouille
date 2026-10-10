@@ -234,8 +234,10 @@ def paired_bootstrap(
 
     « A meilleur que B » seulement si l'intervalle exclut zéro (§6). `units` : l'unité tirée,
     enregistrement ou micro (DECISIONS n° 139). `p` : p-valeur bilatérale du bootstrap,
-    2 × min(P(Δ ≤ 0), P(Δ ≥ 0)), à corriger par `with_holm` quand un tableau aligne plusieurs
-    comparaisons (n° 139).
+    2 × (min(k(Δ ≤ 0), k(Δ ≥ 0)) + 1) / (n + 1) (Davison & Hinkley), à corriger par `with_holm`
+    quand un tableau aligne plusieurs comparaisons (n° 139). Jamais nulle : la plus petite p
+    atteignable est 2/(n + 1), donc avec Holm sur M comparaisons il faut n_boot ≳ 2M/α pour
+    qu'une différence puisse rester significative.
     """
     y, a, b = np.asarray(y), np.asarray(scores_a), np.asarray(scores_b)
     blocks = _unit_index(units)
@@ -255,7 +257,7 @@ def paired_bootstrap(
             "p": float("nan"),
         }
     lo, hi = np.quantile(diffs, [alpha / 2, 1 - alpha / 2])
-    p = min(1.0, 2 * min(float((diffs <= 0).mean()), float((diffs >= 0).mean())))
+    p = bootstrap_p(diffs)
     return {
         "diff": metric(y, a) - metric(y, b),
         "lo": float(lo),
@@ -263,6 +265,14 @@ def paired_bootstrap(
         "significant": bool(lo > 0 or hi < 0),
         "p": p,
     }
+
+
+def bootstrap_p(diffs: np.ndarray) -> float:
+    """p-valeur bilatérale d'un bootstrap : min(1, 2 × (min(k(Δ ≤ 0), k(Δ ≥ 0)) + 1) / (n + 1)),
+    n tirages valides. Jamais nulle (plus petite valeur : 2/(n + 1))."""
+    d = np.asarray(diffs, dtype=float)
+    d = d[~np.isnan(d)]
+    return min(1.0, 2 * (min(int((d <= 0).sum()), int((d >= 0).sum())) + 1) / (len(d) + 1))
 
 
 def holm(p_values: np.ndarray) -> np.ndarray:
@@ -427,20 +437,3 @@ def false_alarms_per_hour(
         return float("nan")
     scores, labels = np.asarray(scores, dtype=float), np.asarray(labels).astype(int)
     return float(((scores >= threshold) & (labels == 0)).sum() / audio_hours)
-
-
-def snr_bins(snr_db: np.ndarray, edges: tuple[float, ...] = (6.0, 12.0)) -> np.ndarray:
-    """Tranches de RSB lisibles : « <6 dB », « 6–12 dB », « ≥12 dB » ; « ? » si inconnu."""
-    snr_db = np.asarray(snr_db, dtype=float)
-    names = [f"<{edges[0]:g} dB"]
-    names += [f"{a:g}–{b:g} dB" for a, b in zip(edges[:-1], edges[1:], strict=True)]
-    names += [f"≥{edges[-1]:g} dB"]
-    out = np.array(
-        [
-            names[int(np.searchsorted(edges, v, side="right"))]
-            for v in np.nan_to_num(snr_db, nan=-np.inf)
-        ],
-        dtype=object,
-    )
-    out[np.isnan(snr_db)] = "?"
-    return out

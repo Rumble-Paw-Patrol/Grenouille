@@ -103,3 +103,30 @@ def test_calibration_indices_read_each_recording_once(tmp_path):
     out = calibration_indices(windows, tmp_path, channel=0)
     assert len(out) == 2 and out["r_hf_ratio"].nunique() == 1
     assert out["w_hf_ratio"].between(0, 1).all()
+
+
+def test_in_bag_flag_follows_the_run_rule_of_the_qc_module():
+    from blanci.evaluation.qc_calibration import current_flags
+
+    thresholds = load_config()["qc"] | {
+        "in_bag_hf_ratio": 0.02,
+        "in_bag_min_run": 3,
+        "in_bag_max_gap_min": 60.0,
+    }
+    rows = [  # trois sacs consécutifs d'un micro, un grave isolé d'un autre
+        ("a1", "in_bag", 0.01, 0.1),
+        ("a2", "in_bag", 0.01, 0.1),
+        ("a3", "in_bag", 0.01, 0.1),
+        ("iso", "other", 0.01, 0.1),
+    ]
+    indices = _indices(rows).assign(
+        dataset="d",
+        site="s",
+        mic_id=["m1", "m1", "m1", "m2"],
+        start_utc=["2026-01-01T00:00:00Z", "2026-01-01T00:30:00Z", "2026-01-01T01:00:00Z"]
+        + ["2026-01-01T00:00:00Z"],
+    )
+    flags = current_flags(indices, thresholds).set_index("recording_id")["in_bag"]
+    assert flags.to_dict() == {"a1": True, "a2": True, "a3": True, "iso": False}
+    row = suggest_thresholds(indices, thresholds).query("flag == 'in_bag'").iloc[0]
+    assert row["targets_flagged_now"] == 3 and row["blanci_flagged_now"] == 0

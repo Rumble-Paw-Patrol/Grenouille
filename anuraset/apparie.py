@@ -5,7 +5,7 @@ tirage se calcule sur des scores triés une fois, pondérés par le nombre de ti
 import numpy as np
 import pandas as pd
 
-from blanci.evaluation.evaluate import average_precision
+from blanci.evaluation.evaluate import average_precision, bootstrap_p
 
 
 def minutes(z: dict) -> pd.DataFrame:
@@ -54,7 +54,10 @@ class _Sorted:
 def paired(
     frame: pd.DataFrame, a: np.ndarray, b: np.ndarray, n_boot: int = 1000, seed: int = 0
 ) -> dict:
-    """AP moyenne par site, A − B ; enregistrements tirés avec remise dans chaque site."""
+    """AP moyenne par site, A − B ; enregistrements tirés avec remise dans chaque site. `p` :
+    2 × (min(k(Δ ≤ 0), k(Δ ≥ 0)) + 1) / (n + 1), jamais nulle ; la plus petite atteignable est
+    2/(n + 1), donc avec Holm sur M comparaisons il faut n_boot ≳ 2M/α pour qu'une différence
+    puisse rester significative."""
     y, site, rec = frame["y"].to_numpy(), frame["site"].to_numpy(), frame["rec"].to_numpy()
     parts = []
     for g in np.unique(site):
@@ -78,5 +81,5 @@ def paired(
         "diff": site_mean_ap(y, a, site) - site_mean_ap(y, b, site),
         "lo": float(np.quantile(d, 0.025)),
         "hi": float(np.quantile(d, 0.975)),
-        "p": float(min(1.0, 2 * min((d <= 0).mean(), (d >= 0).mean()))),
+        "p": bootstrap_p(d),
     }

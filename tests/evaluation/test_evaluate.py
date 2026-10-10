@@ -264,13 +264,6 @@ def test_false_alarms_per_hour():
     assert np.isnan(false_alarms_per_hour(scores, labels, 0.5, audio_hours=0))
 
 
-def test_snr_bins():
-    from blanci.evaluation.evaluate import snr_bins
-
-    bins = snr_bins(np.array([3.0, 6.0, 11.9, 12.0, np.nan]))
-    assert bins.tolist() == ["<6 dB", "6–12 dB", "6–12 dB", "≥12 dB", "?"]
-
-
 def test_R77_leave_one_micro_out_puts_each_positive_mic_alone():
     from blanci.evaluation.evaluate import fold_assignment, grouped_folds, lomo_assignment
 
@@ -320,3 +313,26 @@ def test_evaluate_adds_the_fold_mean_at_both_levels():
         assert out["ap_fold_mean"] == pytest.approx(1.0) and out["n_folds_ap"] == 2
         assert out["ap"] < 0.95
     assert "ap_fold_mean" not in evaluate(scores, y, recordings, "window", n_boot=10)
+
+
+def test_bootstrap_p_is_never_zero_and_floors_at_two_over_n_plus_one():
+    from blanci.evaluation.evaluate import bootstrap_p
+
+    d = np.full(199, 0.3)  # aucun tirage ne traverse zéro
+    assert bootstrap_p(d) == pytest.approx(2 / 200)
+    assert bootstrap_p(np.r_[d, np.nan]) == pytest.approx(2 / 200)  # les NaN ne comptent pas
+    assert bootstrap_p(np.array([-1.0, 1.0] * 50)) == 1.0
+
+
+def test_paired_bootstrap_p_is_positive_when_every_difference_has_one_sign():
+    rng = np.random.default_rng(0)
+    y = np.tile([1, 0], 60)
+    good = y + rng.normal(0, 0.05, len(y))
+    bad = rng.normal(0, 1, len(y))
+    out = paired_bootstrap(y, good, bad, np.arange(len(y)), n_boot=100, seed=0)
+    assert out["p"] == pytest.approx(2 / 101)
+    from blanci.evaluation.evaluate import with_holm
+
+    pd = pytest.importorskip("pandas")
+    p = with_holm(pd.DataFrame({"p": [out["p"]] * 115}))["p_holm"]
+    assert (p >= 0.11).all()  # Holm ne garde plus un p nul

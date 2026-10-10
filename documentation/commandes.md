@@ -126,8 +126,8 @@ $A anuraset campaign --encoders perch_v2             # tout d'un coup : espèces
 # --- Détection (§1, §5) --------------------------------------------------
 uv run blanci train --encoder birdmae-bacpipe1.3.5               # tête + seuil à précision ≥ 0,1
 uv run blanci score --encoder birdmae-bacpipe1.3.5               # tête adoptée ; décisions, points
-uv run blanci queue --encoder birdmae-bacpipe1.3.5 --n 40        # file de vérification 60/20/20
-uv run blanci search --encoder birdmae-bacpipe1.3.5 --site tresor --k 300   # récolte de positifs
+uv run blanci select --method active --encoder birdmae-bacpipe1.3.5 --n 40   # file de vérification 60/20/20
+uv run blanci select --method similarity --encoder birdmae-bacpipe1.3.5 --site tresor --n 300   # récolte de positifs
 uv run blanci label <window_id> --label blanci_solo --source active
 $B fusion --encoder birdmae_base-bacpipe1.3.5        # tête + rythme + persistance (§3)
 $B score --encoder birdmae_base-bacpipe1.3.5 --fusion

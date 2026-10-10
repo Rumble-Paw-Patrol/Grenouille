@@ -23,8 +23,9 @@ import numpy as np
 import pandas as pd
 import soundfile as sf
 
+from blanci.inputs.dataset import interval_labels, load_spans
 from blanci.inputs.labels import POSITIVE_LABELS
-from blanci.inputs.qc import qc_flags, qc_indices
+from blanci.inputs.qc import in_bag_runs, qc_flags, qc_indices
 
 # (drapeau, indice, sens) : le drapeau se lève quand l'indice est sous (« below ») ou
 # au-dessus (« above ») du seuil. Clé de config du seuil.
@@ -34,26 +35,76 @@ FLAGS = {
 }
 
 
+def _group(label: pd.Series, tags: pd.Series) -> np.ndarray:
+    return np.select(
+        [
+            label == "artefact_in_bag",
+            (label == "rain") | tags.map(lambda t: "rain" in t),
+            label.isin(POSITIVE_LABELS),
+        ],
+        ["in_bag", "rain", "blanci"],
+        default="other",
+    )
+
+
 def labelled_windows(con: sqlite3.Connection) -> pd.DataFrame:
-    """Dernier label de chaque fenêtre, avec ses conditions et le chemin de l'enregistrement."""
+    """Dernier label de chaque fenêtre, avec ses conditions et le chemin de l'enregistrement ;
+    plus les fenêtres couvertes par un extrait écouté (annotation par intervalles, `spans`),
+    étiquetées comme `interval_labels` le fait pour l'entraînement. Un label d'une fenêtre
+    prime sur celui de l'extrait.
+
+    `attrs["series"]` : indices déjà rangés par le contrôle audio pour tous les enregistrements
+    (voisins compris), dont la règle des suites d'`in_bag` a besoin."""
+    cols = "r.path, r.dataset, r.site, r.mic_id, r.start_utc"
     df = pd.read_sql_query(
-        """SELECT l.window_id, l.label, l.conditions, w.recording_id, w.offset_s, w.dur_s,
-                  r.path
+        f"""SELECT l.window_id, l.label, l.conditions, w.recording_id, w.offset_s, w.dur_s,
+                  {cols}
            FROM labels l JOIN windows w USING (window_id) JOIN recordings r USING (recording_id)
            WHERE l.label_id IN (SELECT MAX(label_id) FROM labels GROUP BY window_id)""",
         con,
     )
     tags = df["conditions"].map(lambda c: set(json.loads(c).get("tags", [])) if c else set())
-    df["group"] = np.select(
-        [
-            df["label"] == "artefact_in_bag",
-            (df["label"] == "rain") | tags.map(lambda t: "rain" in t),
-            df["label"].isin(POSITIVE_LABELS),
+    df["group"] = _group(df["label"], tags)
+    df = df.drop(columns="conditions")
+    spans, intervals = load_spans(con)
+    if not spans.empty:
+        grid = pd.read_sql_query(
+            f"""SELECT w.window_id, w.recording_id, w.offset_s, w.dur_s, {cols}
+               FROM windows w JOIN recordings r USING (recording_id)
+               WHERE w.recording_id IN (SELECT recording_id FROM spans)""",
+            con,
+        )
+        found = interval_labels(spans, intervals, grid)
+        found = found[~found["window_id"].isin(df["window_id"])]
+        if len(found):
+            found = found[["window_id", "label"]].merge(grid, on="window_id", how="left")
+            found["group"] = _group(found["label"], pd.Series([set()] * len(found)))
+            df = pd.concat([df, found], ignore_index=True)
+    df.attrs["series"] = _stored_indices(con)
+    return df
+
+
+def _stored_indices(con: sqlite3.Connection) -> pd.DataFrame:
+    """Indices du contrôle audio rangés avec chaque enregistrement (`recordings.qc_flags`)."""
+    rows = []
+    for rid, dataset, site, mic, start, qc in con.execute(
+        "SELECT recording_id, dataset, site, mic_id, start_utc, qc_flags FROM recordings"
+    ):
+        idx = (json.loads(qc) if qc else {}).get("indices")
+        if idx:
+            rows.append((rid, dataset, site, mic, start, idx.get("hf_ratio"), idx.get("rms_dbfs")))
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "recording_id",
+            "dataset",
+            "site",
+            "mic_id",
+            "start_utc",
+            "r_hf_ratio",
+            "r_rms_dbfs",
         ],
-        ["in_bag", "rain", "blanci"],
-        default="other",
     )
-    return df.drop(columns="conditions")
 
 
 def calibration_indices(
@@ -79,7 +130,9 @@ def calibration_indices(
             cut = x[start : start + round(row["dur_s"] * sr)]
             part = {f"w_{k}": v for k, v in qc_indices(cut, sr).items()} if len(cut) else {}
             rows.append({**row.to_dict(), **whole, **part})
-    return pd.DataFrame(rows)
+    out = pd.DataFrame(rows)
+    out.attrs["series"] = windows.attrs.get("series")
+    return out
 
 
 def _suggest(targets: np.ndarray, protected: np.ndarray, direction: str) -> tuple[float, str]:
@@ -106,6 +159,44 @@ def _raised(values: pd.Series, threshold: float, direction: str) -> int:
     return int((values < threshold).sum() if direction == "below" else (values > threshold).sum())
 
 
+def bagged_recordings(indices: pd.DataFrame, thresholds: dict[str, Any]) -> set[str]:
+    """Enregistrements que le drapeau `in_bag` retient vraiment aux seuils actuels : ratio sous
+    le seuil (hors silencieux) **et** suite d'`in_bag_min_run` enregistrements consécutifs du
+    même micro (`in_bag_runs`, comme `apply_audio_flags`, n° 194). Les voisins viennent de
+    `indices.attrs["series"]` quand il existe ; sans lui (ou sans date), la règle se réduit
+    aux enregistrements présents, et à un seuil par enregistrement s'ils n'ont pas de micro."""
+    one = indices.groupby("recording_id").first()
+    context = [c for c in ("dataset", "site", "mic_id", "start_utc") if c in one]
+    if len(context) < 4:  # pas de micro ni d'heure : pas de suite à juger
+        hf, rms = one["r_hf_ratio"], one["r_rms_dbfs"]
+        ok = (rms >= thresholds["silent_dbfs"]) & (hf < thresholds["in_bag_hf_ratio"])
+        return set(one.index[ok])
+    cols = ["recording_id", *context, "r_hf_ratio", "r_rms_dbfs"]
+    series = one.reset_index()[cols]
+    stored = indices.attrs.get("series")
+    if stored is not None and len(stored):
+        series = pd.concat(
+            [series, stored[~stored["recording_id"].isin(series["recording_id"])][cols]]
+        )
+    candidate = (series["r_rms_dbfs"] >= thresholds["silent_dbfs"]) & (
+        series["r_hf_ratio"] < thresholds["in_bag_hf_ratio"]
+    )
+    return in_bag_runs(
+        series.assign(candidate=candidate),
+        int(thresholds.get("in_bag_min_run", 4)),
+        float(thresholds.get("in_bag_max_gap_min", 60.0)),
+    )
+
+
+def _flagged_now(
+    values: pd.Series, threshold: float, direction: str, flag: str, bagged: set[str]
+) -> int:
+    """Enregistrements signalés aux seuils actuels : `in_bag` suit la règle des suites."""
+    if flag == "in_bag":
+        return int(values.index.isin(bagged).sum())
+    return _raised(values, threshold, direction)
+
+
 def suggest_thresholds(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.DataFrame:
     """Par drapeau : effet du seuil actuel et seuil proposé, au niveau de l'enregistrement
     (celui où le drapeau décide de l'encodage). Un enregistrement est « à protéger » s'il
@@ -114,6 +205,7 @@ def suggest_thresholds(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.
         groups=("group", lambda g: set(g)), **{c: (c, "first") for c in indices if c[:2] == "r_"}
     )
     rows = []
+    bagged = bagged_recordings(indices, thresholds)
     has_blanci = recordings["groups"].map(lambda g: "blanci" in g)
     for flag, (index, direction, key) in FLAGS.items():
         column = f"r_{index}"
@@ -134,9 +226,9 @@ def suggest_thresholds(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.
                 "config_key": key,
                 "current": current,
                 "targets": len(targets),
-                "targets_flagged_now": _raised(targets, current, direction),
+                "targets_flagged_now": _flagged_now(targets, current, direction, flag, bagged),
                 "blanci_recordings": len(protected),
-                "blanci_flagged_now": _raised(protected, current, direction),
+                "blanci_flagged_now": _flagged_now(protected, current, direction, flag, bagged),
                 "suggested": suggestion,
                 "targets_flagged_suggested": _raised(targets, suggestion, direction),
                 "reason": why,
@@ -148,6 +240,7 @@ def suggest_thresholds(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.
 def current_flags(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.DataFrame:
     """Drapeaux que lèveraient les seuils actuels, enregistrement par enregistrement."""
     rows = []
+    bagged = bagged_recordings(indices, thresholds)
     for rid, group in indices.groupby("recording_id"):
         values = {k[2:]: v for k, v in group.iloc[0].items() if k.startswith("r_")}
         flags = qc_flags(values, thresholds)
@@ -156,6 +249,7 @@ def current_flags(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.DataF
                 "recording_id": rid,
                 "groups": ",".join(sorted(set(group["group"]))),
                 **{k: flags[k] for k in FLAGS},
+                "in_bag": rid in bagged,
             }
         )
     return pd.DataFrame(rows)

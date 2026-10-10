@@ -206,14 +206,16 @@ def machine_description() -> str:
 
 def main(argv: list[str] | None = None) -> None:
     """Point d'entrée du sous-processus : imprime une ligne JSON."""
-    from blanci.core.config import load_config
+    from blanci.core.config import default_user_config, load_config
 
     parser = argparse.ArgumentParser()
     parser.add_argument("encoder")
     parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--n-windows", type=int, default=64)
     args = parser.parse_args(argv)
-    row = measure_by_name(args.encoder, load_config(args.config), args.n_windows)
+    row = measure_by_name(
+        args.encoder, load_config(args.config or default_user_config()), args.n_windows
+    )
     print(json.dumps(row), flush=True)
 
 

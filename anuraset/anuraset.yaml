@@ -21,6 +21,7 @@ paths:
 # par celle qui en porte la plus grande part (n° 138). Stock séparé <encodeur>@o0.
 encoders:
   overlap: 0.0
+  resample: window                     # les stocks AnuraSet existants ont été encodés ainsi (n° 176)
 
 recorder:
   filename_utc_offset_h: -3            # Brésil (sites INCT), sans importance ici

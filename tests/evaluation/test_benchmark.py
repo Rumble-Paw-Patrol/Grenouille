@@ -402,3 +402,20 @@ def test_oof_frame_refuses_an_unknown_kind_or_a_length_mismatch():
         oof_frame("s", "baseline", data, np.array([0.1, 0.2]), None, "x", 3.0)
     frame = oof_frame("s", "baseline", data, np.array([0.1]), {"p": 2}, "x", 3.0)
     assert frame.loc[0, "fold"] == 2 and frame.loc[0, "dur_s"] == 3.0
+
+
+def test_load_oof_ignores_sources_of_a_retired_kind_and_says_so_once(tmp_path, cfg, capsys):
+    from blanci.evaluation import oof
+    from blanci.evaluation.oof import list_sources, load_oof, oof_frame, save_oof
+
+    data = pd.DataFrame(
+        {"window_id": ["w"], "recording_id": ["r"], "offset_s": [0.0], "point": ["p"], "y": [1]}
+    )
+    save_oof(cfg, oof_frame("good/knn", "baseline", data, np.array([0.1]), None, "x", 3.0))
+    old = oof_frame("external/old", "baseline", data, np.array([0.1]), None, "x", 3.0)
+    save_oof(cfg, old.assign(kind="external"))
+    oof._IGNORED.clear()
+    assert list(list_sources(cfg)["source"]) == ["good/knn"]
+    assert "external/old" in capsys.readouterr().err
+    load_oof(cfg)
+    assert capsys.readouterr().err == ""
