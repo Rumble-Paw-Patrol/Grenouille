@@ -37,7 +37,7 @@ D'où trois principes :
 | Étape | On juge | Interdit à ce stade | Livrable |
 |---|---|---|---|
 | 0 Recherche et cadrage | la fiche morphologique, le mode, les photos, la taille, la destination | dessiner | `morphologie.md` et un message, questions groupées |
-| 1 Ébauche | squelette, articulations, proportions, posture, membres, plans, nombre de doigts, œil et pupille, traits du visage, en formes simples | couleur, forme fine, détail | planche avec squelette, lecture de la photo, superposition |
+| 1 Ébauche | squelette, articulations, proportions, posture, membres, plans, nombre et largeur des doigts, yeux entiers (saillie, paupière, puis globe et pupille), menton et lèvre, en formes simples | couleur, forme fine, détail | planche avec squelette, lecture de la photo, superposition |
 | 2 Croquis | les formes affinées, en dessin sans couleur : contours, galbes, mains et pieds au pixel, traits | couleur, ombre | planche, superposition |
 | 3a Couleurs à plat | les couleurs justes et surtout les **motifs** | dégradé, ombre, lumière, reflet, effet mouillé, grain, tramage ; changer une forme | planche |
 | 3b Modelé et détails | volume, nuances, peau, œil, contour | changer une forme ou un motif sans qu'il le demande | planche |
@@ -214,8 +214,9 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
      chaque membre de l'épaule ou de la hanche jusqu'aux doigts, et le dire.
 2. **Copier `modele.py`** en `<code>.py` à côté du travail, une copie par grenouille, et
    remplir :
-   - **`SQUELETTE`** : les repères en unités, relevés sur la grille. Tête : museau, narine, œil,
-     commissure de la bouche, tympan. Tronc : nuque, sacrum, cloaque. Membres : épaule, coude,
+   - **`SQUELETTE`** : les repères en unités, relevés sur la grille. Tête : museau, narine, œil
+     (le centre du globe), autre œil (le centre de toute sa bosse), commissure de la bouche,
+     tympan. Tronc : nuque, sacrum, cloaque. Membres : épaule, coude,
      poignet, main ; hanche, genou, talon, tarse, orteils. Bouts des doigts et des orteils
      visibles (`doigt1_g`…), numérotés comme dans la fiche (I = le plus interne) ;
    - **`MEMBRES`** : pour chaque membre, sa chaîne de repères, son plan (`fond`, `corps`,
@@ -224,9 +225,21 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
    - **`formes()` en formes simples** :
      - le tronc et la tête en polygones ou en ellipses de quelques points ;
      - les membres en `os_()`, des segments de rayon variable tirés du squelette ;
-     - les doigts et les orteils en traits fins, en nombre, direction et longueur justes (la
-       formule de la fiche), les disques en points ;
-     - l'œil à sa taille, avec sa pupille (`PUPILLE` : ronde, horizontale ou verticale) ;
+     - **les doigts et les orteils à leur largeur réelle**, jamais en traits fins par défaut :
+       mesurer sur la photo, à l'échelle de la toile, la largeur d'un doigt et le diamètre
+       d'un disque, en pixels. Les disques sont des **boules** à ce diamètre. Chez *C.
+       tomopterna*, à l'échelle 0,28 : doigts d'environ 3 pixels, disques d'environ 6. Un
+       doigt par forme cernée, pour que deux disques voisins restent séparés. En nombre,
+       direction et longueur justes (la formule de la fiche) ;
+     - **l'œil entier, avant la pupille** : d'abord toute la saillie, c'est-à-dire le globe et la
+       paupière qui l'entoure et le couvre, souvent de la couleur du dos (verte chez
+       tomopterna) ; puis la part visible du globe, à sa taille ; la pupille en dernier
+       (`PUPILLE` : ronde, horizontale ou verticale) ;
+     - **l'autre œil** : toute la bosse qu'il fait sur le crâne, de la couleur de la peau. On
+       n'en voit au plus qu'un mince croissant de globe (`oeil["autre"]`), jamais un œil entier
+       ni une pupille au centre ;
+     - **le menton et la lèvre** : relever la courbure de la lèvre sur la photo. Le menton est
+       souvent fin : près du museau, la lèvre inférieure en fait le bord ;
      - les traits du visage : bouche, narine, tympan, pli supratympanique s'il se voit ;
    - **les plans** : chaque forme a le sien (`fond` : les membres de l'autre côté, `corps`,
      `devant` : les membres proches) ; on la cerne si un contour doit la séparer de ce qu'elle
@@ -265,9 +278,12 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
 - [ ] Les proportions suivent la fiche : tête, tibia, main et pied en part de la LMC.
 - [ ] La posture : angles du coude, du genou, du talon ; inclinaison du dos et de la tête ;
       regard et écart entre les grenouilles (mode image).
-- [ ] Le museau de profil, la ligne de la bouche, le tympan et le pli s'ils se voient ; l'œil
-      (taille, saillie, place, pupille) et la bosse de l'autre œil.
-- [ ] Le nombre de doigts et d'orteils et leur formule ; le contact avec le support.
+- [ ] Le museau de profil, la courbure de la lèvre et l'épaisseur du menton, le tympan et le
+      pli s'ils se voient.
+- [ ] L'œil entier : la saillie et la paupière d'abord, puis le globe (taille, place) et la
+      pupille ; l'autre œil en bosse de peau, avec au plus un croissant de globe.
+- [ ] Le nombre de doigts et d'orteils et leur formule ; la largeur des doigts et le diamètre
+      des disques mesurés sur la photo ; le contact avec le support.
 - [ ] Rien ne touche les bords de la toile.
 
 ## Étape 2 — Croquis sans couleur
@@ -294,11 +310,13 @@ mains et pieds. Pour chaque zone :
      qu'elle recouvre.
 3. **Poser les mains et les pieds au pixel près**, en gabarits, jamais en formes calculées (qui
    donnent des pâtés et des doigts collés) :
-   - doigts d'un pixel en éventail, avec un pixel vide entre deux doigts, selon la formule de
-     la fiche ;
+   - doigts à la largeur mesurée à l'étape 1, en éventail, avec au moins un pixel vide entre
+     deux doigts, selon la formule de la fiche ; un pixel de large seulement chez une espèce
+     aux doigts fins comme A. blanci ;
    - diagonales **en escalier** : chaque pixel touche le suivant par un côté, sinon le contour
      le coupe et le doigt paraît détaché ;
-   - disque au bout, à la taille de la fiche (grands disques de 3 × 3 chez les phyllomédusines) ;
+   - disque au bout, en boule, au diamètre mesuré (environ 6 pixels chez tomopterna à
+     l'échelle 0,28 : jamais un 3 × 3 par défaut) ;
    - un pouce opposable serre ou longe le support ; un doigt caché derrière un avant-bras ne se
      dessine pas.
 4. **Se relire seul après chaque zone :**
@@ -314,9 +332,10 @@ Les règles de forme, toutes espèces :
   de la silhouette.
 - **Allure :** fine et vivante, jamais un crapaud ni « en surpoids » (sauf si l'espèce l'est) ;
   les proportions de la fiche.
-- **Œil :** la paupière supérieure est en relief et le globe a un pli dessous ; la pupille a la
-  forme de la fiche ; l'autre œil se voit comme une simple bosse de peau sur le crâne, sans
-  pupille ni cercle.
+- **Œil :** l'œil, c'est toute la saillie : la paupière supérieure est en relief, de la couleur
+  de la peau, et le globe a un pli dessous ; la pupille a la forme de la fiche. L'autre œil se
+  voit comme une bosse de peau sur le crâne, de la couleur de la peau ; on n'en voit au plus
+  qu'un mince croissant de globe, jamais de cercle.
 
 Les règles de forme d'A. blanci (pose assise, de profil) :
 - **Allure :** ventre haut, avec du vide entre le bras et la patte ; dos peu incliné ; tête haute.
@@ -343,7 +362,8 @@ masqué, à afficher avec le bouton), et la superposition dans la conversation.
 À vérifier :
 - [ ] Le contour suit la photo à 1 ou 2 pixels près ; le squelette validé n'a pas bougé.
 - [ ] Chaque galbe et chaque articulation se lisent ; aucune forme en « boudin ».
-- [ ] Les traits du visage sont à leur place ; l'œil a sa taille et sa saillie.
+- [ ] Les traits du visage sont à leur place ; l'œil a sa taille et sa saillie, l'autre œil sa
+      bosse.
 - [ ] Les mains et les pieds : nombre, formule, éventail, disques, contact ; `controle` ne
       trouve aucune miette.
 - [ ] Le dessin se lit à la taille du téléphone.

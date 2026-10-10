@@ -28,16 +28,17 @@ photo montre de cet individu et le cadrage.
 |---|---|---|
 | Orientation | corps presque de face (on voit le ventre), tête tournée vers la droite, de profil | sa droite est à gauche de l'image : membres `_d` devant, `_g` derrière le ventre |
 | Œil | gros, globe gris argenté réticulé, pupille en fente verticale, paupière supérieure verte en bourrelet ; il dépasse le crâne | rayon du globe 3,4 unités, bourrelet 4,1 |
-| Autre œil | une bosse sur le crâne, en haut à droite, où l'on voit un peu du globe pâle | une bosse, sans pupille à l'ébauche |
+| Autre œil | toute la bosse verte sur le crâne, en haut à droite ; on n'en voit qu'un mince croissant gris du globe, au bout | une bosse de peau de 6,8 × 3,9 unités, un croissant de globe de 2 pixels |
 | Museau | court, tronqué, lignes presque droites ; narine nette près du bout | — |
-| Lèvre | liseré blanc du bout du museau à la commissure, sous l'œil et en arrière | ligne de la bouche |
+| Lèvre et menton | liseré blanc du bout du museau à la commissure ; menton fin, dont la lèvre inférieure fait le bord près du museau | ligne de la bouche relevée point par point |
 | Tympan | une bosse ronde verte derrière l'œil, en bas | non décrit dans les sources : à confirmer |
 | Ventre | gros, granuleux, blanc rosé marbré de violet ; il s'arrête au-dessus de la branche | — |
 | Bras droit | le bras, fin, passe sur le ventre ; l'avant-bras, vert dehors, descend à la verticale ; 4 doigts : le pouce remonte le long de la branche, 3 doigts à grands disques partent vers la droite | 4 doigts sur 4 |
 | Patte arrière droite | cuisse en diagonale vers la gauche, genou vert à l'extrême gauche, tibia horizontal derrière l'avant-bras, 2 orteils barrés autour de la branche | 2 orteils sur 5 |
 | Bras gauche | derrière le ventre, raccourci, barré, bordé de vert ; 3 doigts, dont un vers la gauche sur la branche | 3 doigts sur 4 |
-| Patte arrière gauche | à l'ombre, granuleuse, bordée de vert : genou en haut sous la mâchoire, tibia vertical ; 2 orteils à grands disques sur la branche | 2 orteils sur 5 |
-| Sous la branche | un bout de membre orangé barré, à bout pâle | à confirmer : le reste du pied gauche ? |
+| Patte arrière gauche | à l'ombre, granuleuse, bordée de vert : genou en haut sous la mâchoire, tibia vertical ; la cuisse, large, part du genou vers le bas et la gauche, passe derrière le bras gauche et se voit entre le bras et le ventre ; 2 orteils à grands disques sur la branche | 2 orteils sur 5 |
+| Doigts et orteils | épais, à grands disques en boule | doigts d'environ 3 pixels, disques d'environ 6 |
+| Sous la branche | une feuille, qu'on pourrait prendre pour un pied | ne pas la dessiner |
 
 ## Cadrage
 

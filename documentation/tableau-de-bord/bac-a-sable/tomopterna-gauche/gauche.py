@@ -87,8 +87,10 @@ SQUELETTE = {
     # tête, de profil, tournée vers la droite
     "museau": (99.75, 41.8),
     "narine": (96.4, 38.4),
-    "oeil": (87.25, 38.2),
-    "autre_oeil": (95.3, 34.5),  # bosse sur le crâne, on y voit un peu du globe
+    "oeil": (87.25, 38.0),
+    # l'autre œil : toute la bosse verte sur le crâne (paupière et globe) ; on n'en voit qu'un
+    # mince croissant gris, au bout à droite
+    "autre_oeil": (93.4, 34.4),
     "commissure": (79.5, 46.6),
     "tympan": (81.6, 41.8),
     # tronc : le dos se voit jusqu'en (64,6 ; 50) ; sacrum et cloaque cachés, estimés
@@ -116,24 +118,22 @@ SQUELETTE = {
     "orteil_b_d": (60.0, 70.8),
     # bras gauche (2e plan) : il sort de derrière le ventre et vient vers nous, raccourci ;
     # trois doigts visibles, dont un part vers la gauche sur la branche
-    "epaule_g": (88.4, 48.6),
-    "coude_g": (89.4, 53.0),
-    "poignet_g": (90.2, 57.4),
+    "epaule_g": (88.6, 49.0),
+    "coude_g": (90.2, 53.2),
+    "poignet_g": (90.4, 57.6),
     "main_g": (90.4, 58.8),
     "doigt1_g": (83.2, 64.9),
     "doigt3_g": (88.6, 66.4),
     "doigt4_g": (91.6, 66.0),
-    # patte arrière gauche (3e plan, à l'ombre) : la cuisse sort de derrière le cou ; au genou,
-    # un angle ; le tibia descend à la verticale jusqu'à la branche ; deux orteils dessus
-    "hanche_g": (88.6, 46.4),
-    "genou_g": (93.0, 48.4),
-    "talon_g": (94.0, 56.8),
+    # patte arrière gauche (3e plan, à l'ombre) : genou en haut, sous la mâchoire ; la cuisse,
+    # large, part du genou en diagonale vers le bas et la gauche, passe derrière le bras et se
+    # voit entre le bras et le ventre ; le tibia descend à la verticale jusqu'à la branche
+    "hanche_g": (85.8, 56.0),
+    "genou_g": (92.4, 49.0),
+    "talon_g": (93.8, 56.4),
     "tarse_g": (94.8, 58.4),
     "orteil_a_g": (97.4, 60.4),
     "orteil_b_g": (94.4, 63.6),
-    # à confirmer : sous la branche, un bout de membre orangé barré, à bout pâle
-    "dessous_g": (91.2, 66.6),
-    "bout_dessous_g": (97.0, 70.6),
 }
 MEMBRES = {
     "patte_g": (
@@ -141,7 +141,6 @@ MEMBRES = {
         "fond",
         ["orteil_a_g", "orteil_b_g"],
     ),
-    "dessous_g": (["dessous_g", "bout_dessous_g"], "fond", []),
     "bras_g": (
         ["epaule_g", "coude_g", "poignet_g", "main_g"],
         "corps",
@@ -246,13 +245,20 @@ def tete_tournee(tete):
 
 
 # ------------------------------------------------------------------ la grenouille
-def doigts(base, bouts, r=0.35, disque=0.9):
-    """Doigts en traits fins, de la base de la main ou du pied au bout, et leurs grands disques."""
-    m = np.zeros(X.shape, bool)
-    for b in bouts:
-        m |= membre([SQUELETTE[base], SQUELETTE[b]], [r + 0.15, r], X, Y)
-        m |= ellipse(*SQUELETTE[b], disque, disque, X, Y)
-    return m
+def doigts(base, bouts, r=0.65, disque=1.45):
+    """Doigts épais, de la base de la main ou du pied au bout, chacun avec son grand disque en
+    boule : largeurs mesurées sur la photo (doigt d'environ 3 pixels, disque d'environ 6). Un
+    masque par doigt, pour les cerner un à un."""
+    return [
+        membre([SQUELETTE[base], SQUELETTE[b]], [r + 0.15, r], X, Y)
+        | ellipse(*SQUELETTE[b], disque, disque, X, Y)
+        for b in bouts
+    ]
+
+
+def cernes(nom, masques, plan):
+    """Une forme cernée par doigt."""
+    return [forme(f"{nom}{k}", m, "membre", plan, cernee=True) for k, m in enumerate(masques)]
 
 
 def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
@@ -263,8 +269,9 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     corps = dans(
         [
             S["museau"],
-            (99.2, 37.4),
-            (96.5, 35.8),
+            (99.7, 40.0),
+            (99.0, 37.6),
+            (97.6, 36.4),
             (92.0, 34.9),
             (84.0, 35.3),
             (78.0, 36.6),
@@ -276,46 +283,54 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             (72.0, 60.8 + souffle * 0.5),
             (80.0, 59.6 + souffle * 0.4),
             (85.2, 56.8),
-            (86.8, 51.0),
-            (89.4, 47.6 + gorge * 0.5),
-            (94.5, 45.3 + gorge),
-            (98.6, 43.2),
+            (85.4, 51.6),
+            (86.6, 50.0),
+            (88.4, 48.4 + gorge * 0.3),
+            (89.6, 47.0 + gorge * 0.6),
+            # le menton, fin : la lèvre inférieure en fait le bord, jusqu'au bout du museau
+            (91.0, 45.8 + gorge * 0.4),
+            (93.0, 44.8),
+            (95.5, 43.8),
+            (98.0, 42.8),
+            (99.4, 42.2),
         ],
         xt,
         yt,
     )
-    corps |= ellipse(*S["oeil"], 4.1, 4.1, xt, yt) & (yt < S["oeil"][1])  # l'œil dépasse
-    corps |= ellipse(*S["autre_oeil"], 2.0, 1.5, xt, yt)  # la bosse de l'autre œil
-    patte_g = os_(MEMBRES["patte_g"][0], [1.3, 1.6, 1.4, 1.1])
-    patte_g |= doigts("tarse_g", MEMBRES["patte_g"][2])
-    dessous_g = os_(MEMBRES["dessous_g"][0], [1.3, 1.0])
+    corps |= ellipse(*S["oeil"], 4.0, 4.0, xt, yt) & (yt < S["oeil"][1])  # l'œil dépasse
+    autre = ellipse(*S["autre_oeil"], 3.4, 1.95, xt, yt)  # l'autre œil : toute la bosse
+    corps |= autre
+    patte_g = os_(MEMBRES["patte_g"][0], [2.0, 1.9, 1.6, 1.2])
     bras_g = os_(MEMBRES["bras_g"][0], [1.2, 1.35, 1.3, 1.1])
-    bras_g |= doigts("main_g", MEMBRES["bras_g"][2])
     cuisse_d = os_(["hanche_d", "genou_d"], [1.4, 1.5])
     tibia_d = os_(["genou_d", "talon_d"], [2.0, 2.1])
-    pied_d = os_(["talon_d", "tarse_d"], [1.2, 1.0]) | doigts("tarse_d", MEMBRES["patte_d"][2])
+    pied_d = os_(["talon_d", "tarse_d"], [1.2, 1.0])
     bras_haut_d = os_(["epaule_d", "coude_d"], [1.5, 1.0])
     avant_bras_d = os_(["coude_d", "poignet_d", "main_d"], [1.7, 1.5, 1.2])
-    main_d = doigts("main_d", MEMBRES["bras_d"][2])
     f = [
         forme("patte_g", patte_g, "membre", "fond", cernee=True),
-        forme("dessous_g", dessous_g, "membre", "fond", cernee=True),
+        *cernes("orteil_g", doigts("tarse_g", MEMBRES["patte_g"][2]), "fond"),
         forme("bras_g", bras_g, "membre", "corps", cernee=True),
+        *cernes("doigt_g", doigts("main_g", MEMBRES["bras_g"][2]), "corps"),
         forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True),
         forme("pied_d", pied_d, "membre", "fond", cernee=True),
+        *cernes("orteil_d", doigts("tarse_d", MEMBRES["patte_d"][2]), "fond"),
         forme("tibia_d", tibia_d, "membre", "fond", cernee=True),
         forme("corps", corps, "dos", cernee=True),
         forme("bras_haut_d", bras_haut_d, "membre", "devant", cernee=True),
         forme("avant_bras_d", avant_bras_d, "membre", "devant", cernee=True),
-        forme("main_d", main_d, "membre", "devant", cernee=True),
+        *cernes("doigt_d", doigts("main_d", MEMBRES["bras_d"][2]), "devant"),
     ]
-    # traits du visage : la lèvre, du museau à la commissure, la narine, le tympan
-    (mx, my), (cx, cy) = S["museau"], S["commissure"]
-    t = np.clip((xt - cx) / (mx - cx), 0, 1)
+    # traits du visage : la lèvre, relevée sur la photo, de la commissure au bout du museau (près
+    # du museau, elle borde le menton) ; la narine ; le tympan ; le pli sous l'autre œil
+    levre = [S["commissure"], (85.0, 45.3), (89.0, 44.6), (92.0, 44.0), (95.0, 43.3), (98.0, 42.4)]
     tx, ty = S["tympan"]
     rt = np.hypot(xt - tx, yt - ty)
+    ax, ay = S["autre_oeil"]
+    pli = ellipse(ax, ay, 3.4, 1.95, xt, yt) & ~ellipse(ax, ay - 0.5, 3.4, 1.95, xt, yt)
     traits = {
-        "bouche": corps & (xt > cx) & (xt < mx - 0.6) & (np.abs(yt - (cy + t * (my - cy))) < 0.4),
+        "bouche": corps & membre(levre, [0.35] * len(levre), xt, yt),
+        "pli_autre_oeil": corps & pli & (yt > ay) & (xt < ax + 2.6),
         "narine": (np.abs(xt - S["narine"][0]) < 0.5) & (np.abs(yt - S["narine"][1]) < 0.5),
         "tympan": (rt > 0.9) & (rt < 1.4),
     }
@@ -323,6 +338,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     oeil = {"x": S["oeil"][0], "y": S["oeil"][1], "r": 3.4, "ferme": cligne}
     oeil["masque"] = (xt - oeil["x"]) ** 2 + (yt - oeil["y"]) ** 2 <= oeil["r"] ** 2
     oeil["u"], oeil["v"] = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
+    oeil["autre"] = autre & ellipse(ax + 3.9, ay + 0.2, 1.5, 1.7, xt, yt)  # croissant gris
     return f, traits, motifs, oeil
 
 
@@ -352,10 +368,11 @@ def contour(img, f, num):
     return miettes(img)
 
 
-def miettes(img, n=4):
-    """Les groupes de moins de n pixels isolés par les contours (voisins par un côté)
-    deviennent du contour : sinon un pixel flotte, seul, entre deux traits."""
-    plein = (img != "") & (img != CONTOUR)
+def miettes(img, n=4, bord=CONTOUR):
+    """Les groupes de moins de n pixels isolés par les contours ou les traits de couleur bord
+    (voisins par un côté) prennent cette couleur : sinon un pixel flotte, seul, entre deux
+    traits (entre la lèvre et le bord du menton, par exemple)."""
+    plein = (img != "") & (img != CONTOUR) & (img != bord)
     vus = np.zeros(plein.shape, bool)
     for j0, i0 in zip(*np.nonzero(plein), strict=False):
         if vus[j0, i0]:
@@ -371,7 +388,7 @@ def miettes(img, n=4):
                     pile.append(v)
         if len(groupe) < n:
             for p in groupe:
-                img[p] = CONTOUR
+                img[p] = bord
     return img
 
 
@@ -379,6 +396,9 @@ def rendu_oeil(img, oeil, couleurs, ferme_couleur):
     if oeil is None:  # un support (branche, feuille) n'a pas d'œil
         return img
     m, u, v = oeil["masque"], oeil["u"], oeil["v"]
+    if oeil.get("autre") is not None and not oeil["ferme"]:
+        # l'autre œil est une bosse de peau ; on n'en voit au plus qu'un mince croissant de globe
+        img[oeil["autre"] & (img != "")] = couleurs["iris"]
     if oeil["ferme"]:
         img[m] = ferme_couleur
         img[m & (np.abs(v - 0.15 * u * u) < 0.18)] = CONTOUR
@@ -402,7 +422,7 @@ def tracer(img, traits, num, oeil, couleur=None):
         ici = m & (num >= 0) & hors_oeil & (img != CONTOUR)
         for j, i in zip(*np.nonzero(ici), strict=False):
             img[j, i] = couleur or assombrir(img[j, i])
-    return img
+    return miettes(img, bord=couleur) if couleur else img
 
 
 def ebauche(f, traits, motifs, oeil):

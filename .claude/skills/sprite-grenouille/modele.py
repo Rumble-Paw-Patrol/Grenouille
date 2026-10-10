@@ -265,7 +265,9 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     )
     tibia = os_(["genou_g", "talon_g"], [2.4, 2.8])
     main = np.zeros(X.shape, bool)
-    for d in MEMBRES["bras_g"][2]:  # doigts d'un pixel, du poignet au bout, disques en point
+    # doigts fins, comme chez A. blanci : chez une autre espèce, la largeur des doigts et le
+    # diamètre des disques se mesurent sur la photo
+    for d in MEMBRES["bras_g"][2]:
         main |= membre([S["main_g"], S[d]], [0.5, 0.35], X, Y)
         main |= ellipse(*S[d], 0.55, 0.55, X, Y)
     f = [
@@ -352,10 +354,11 @@ def contour(img, f, num):
     return miettes(img)
 
 
-def miettes(img, n=4):
-    """Les groupes de moins de n pixels isolés par les contours (voisins par un côté)
-    deviennent du contour : sinon un pixel flotte, seul, entre deux traits."""
-    plein = (img != "") & (img != CONTOUR)
+def miettes(img, n=4, bord=CONTOUR):
+    """Les groupes de moins de n pixels isolés par les contours ou les traits de couleur bord
+    (voisins par un côté) prennent cette couleur : sinon un pixel flotte, seul, entre deux
+    traits (entre la lèvre et le bord du menton, par exemple)."""
+    plein = (img != "") & (img != CONTOUR) & (img != bord)
     vus = np.zeros(plein.shape, bool)
     for j0, i0 in zip(*np.nonzero(plein), strict=False):
         if vus[j0, i0]:
@@ -371,7 +374,7 @@ def miettes(img, n=4):
                     pile.append(v)
         if len(groupe) < n:
             for p in groupe:
-                img[p] = CONTOUR
+                img[p] = bord
     return img
 
 
@@ -379,6 +382,9 @@ def rendu_oeil(img, oeil, couleurs, ferme_couleur):
     if oeil is None:  # un support (branche, feuille) n'a pas d'œil
         return img
     m, u, v = oeil["masque"], oeil["u"], oeil["v"]
+    if oeil.get("autre") is not None and not oeil["ferme"]:
+        # l'autre œil est une bosse de peau ; on n'en voit au plus qu'un mince croissant de globe
+        img[oeil["autre"] & (img != "")] = couleurs["iris"]
     if oeil["ferme"]:
         img[m] = ferme_couleur
         img[m & (np.abs(v - 0.15 * u * u) < 0.18)] = CONTOUR
@@ -402,7 +408,7 @@ def tracer(img, traits, num, oeil, couleur=None):
         ici = m & (num >= 0) & hors_oeil & (img != CONTOUR)
         for j, i in zip(*np.nonzero(ici), strict=False):
             img[j, i] = couleur or assombrir(img[j, i])
-    return img
+    return miettes(img, bord=couleur) if couleur else img
 
 
 def ebauche(f, traits, motifs, oeil):

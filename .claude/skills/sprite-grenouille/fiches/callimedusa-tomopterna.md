@@ -30,7 +30,11 @@ des caractères du groupe et de la photo : à vérifier sur chaque nouvelle phot
 - **Museau** court, arrondi à légèrement tronqué ; tête plus large que le cou, aux lignes
   presque droites de profil (dos, museau, mâchoire : la session a gardé des polygones sans
   lissage).
-- **Œil :** gros et saillant, il dépasse le contour de la tête.
+- **Menton** fin : la lèvre inférieure, un liseré blanc, en fait le bord près du museau.
+- **Œil :** gros et saillant, il dépasse le contour de la tête. La paupière supérieure, verte,
+  fait un bourrelet autour du globe.
+- **Autre œil :** vu de l'avant ou de trois quarts, une grosse bosse verte sur le crâne ; on
+  n'en voit qu'un mince croissant gris du globe, au bout.
 - **Pupille : verticale, en fente** (caractère des phyllomédusines).
 - **Iris :** argenté à gris (lavande sur la photo), finement réticulé de noir.
 - **Paupière inférieure (membrane palpébrale) :** chez *Phyllomedusa* au sens de Duellman 1968,
@@ -50,7 +54,8 @@ des caractères du groupe et de la photo : à vérifier sur chaque nouvelle phot
 - **Doigts : 4. Orteils : 5.** Palmure très réduite ou absente.
 - **Mains et pieds préhensiles :** le premier doigt et le premier orteil s'opposent aux autres
   et serrent la branche (le « pouce » longe ou enserre la branche).
-- **Disques :** doigts épais à **grands disques** (gabarits de 3 × 3 pixels au bout).
+- **Disques :** doigts épais à **grands disques en boule**. À l'échelle 0,28 (une grenouille
+  d'environ 96 pixels de large) : doigts d'environ 3 pixels, disques d'environ 6.
 - Les mâles adultes ont des tubercules calcaires (au talon).
 
 ## Couleurs, face par face

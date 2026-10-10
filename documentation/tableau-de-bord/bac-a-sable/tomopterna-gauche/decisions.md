@@ -30,3 +30,13 @@ l'ébauche et le croquis.
 
 - 0 (10/10/2026) : seulement la grenouille de gauche ; l'étape 0 reprend la fiche de l'espèce,
   validée, et le cadrage de la session précédente.
+- 1 (10/10/2026, tour 2) : la cuisse gauche est large ; elle part du genou en diagonale vers le
+  bas et la gauche, passe derrière le bras gauche et se voit, à l'ombre, entre le bras et le
+  ventre.
+- 1 : sous la branche, le bout orangé est une feuille : ne pas le dessiner.
+- 1 : doigts plus épais (au moins un pixel de plus) et disques en boule (au moins deux pixels
+  de plus) : environ 3 et 6 pixels.
+- 1 : le menton est beaucoup plus fin ; la lèvre inférieure se confond avec lui ; courbure de la
+  lèvre relevée sur la photo.
+- 1 : l'autre œil est toute la bosse verte sur la tête ; on n'en voit qu'un tout petit peu du
+  globe gris.

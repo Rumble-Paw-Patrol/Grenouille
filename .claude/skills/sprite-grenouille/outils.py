@@ -27,8 +27,9 @@ planche acceptent l'un ou l'autre.
         reflet ni ombre) : les couleurs à plat de l'étape 2.
     apercu SPRITE.json SORTIE.png CLE[,CLE…] [zoom] [PHOTO]
         Images du sprite côte à côte, la photo de référence à droite si donnée.
-    zoom SPRITE.json SORTIE.png CLE x0,y0,x1,y1
-        Une zone agrandie, pixel par pixel, pour juger un détail (épaule, œil, doigts).
+    zoom FICHIER.json SORTIE.png CLE x0,y0,x1,y1
+        Une zone agrandie, pixel par pixel, pour juger un détail (épaule, œil, doigts) ; sprite
+        ou composition.
     controle SPRITE.json
         Groupes de pixels qui ne tiennent pas au reste (contour exclu, teinté compris ; voisins
         par un côté),
@@ -176,14 +177,13 @@ def apercu(fichier, sortie, cles, zoom="5", photo=None):
 
 
 def zoom(fichier, sortie, cle, cadre):
-    s = json.load(open(fichier))
-    g, (x0, y0, x1, y1), z = rangees(s, cle), map(int, cadre.split(",")), 12
+    a, (x0, y0, x1, y1), z = rgba(fichier, cle), map(int, cadre.split(",")), 12
     im = Image.new("RGB", ((x1 - x0) * z, (y1 - y0) * z), FOND)
     for y in range(y0, y1):
         for x in range(x0, x1):
-            if g[y][x] != ".":
+            if a[y, x, 3]:
                 im.paste(
-                    Image.new("RGB", (z - 1, z - 1), s["palette"][g[y][x]]),
+                    Image.new("RGB", (z - 1, z - 1), tuple(a[y, x, :3].tolist())),
                     ((x - x0) * z, (y - y0) * z),
                 )
     im.save(sortie)
