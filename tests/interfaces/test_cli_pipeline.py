@@ -1,4 +1,4 @@
-"""Chaîne complète en ligne de commande : embed → benchmark → train → score → queue → evaluate."""
+"""Chaîne complète en ligne de commande : embed → benchmark → train → score → select → evaluate."""
 
 import numpy as np
 import pytest
@@ -174,32 +174,42 @@ def test_score_writes_decisions_and_ranks_points(embedded):
     assert con.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] == 20
 
 
-def test_queue_writes_a_csv(embedded):
+def test_select_active_writes_a_queue_for_the_workbench(embedded):
+    """`select --method active` (l'ancienne `queue`) : file 60-20-20 sur la tête choisie."""
     tmp_path, config = embedded
     run(config, "train", "--encoder", "toy-1")
     run(config, "score", "--encoder", "toy-1")
-    output = run(config, "queue", "--encoder", "toy-1", "--n", "5")
-    assert "5 enregistrements" in output
-    assert (tmp_path / "reports" / "queue_toy-1.csv").exists()
+    output = run(
+        config, "select", "--method", "active", "--encoder", "toy-1", "--n", "5", "--head", "v1"
+    )
+    assert "candidats" in output
+    assert (tmp_path / "reports" / "files" / "active" / "candidats.csv").exists()
 
 
-def test_queue_rejects_a_malformed_mix(embedded):
+def test_select_rejects_a_malformed_mix(embedded):
     tmp_path, config = embedded
     run(config, "train", "--encoder", "toy-1")
     run(config, "score", "--encoder", "toy-1")
     result = runner.invoke(
         app,
-        ["--config", str(config), "queue", "--encoder", "toy-1", "--mix", "0.6,0.4"],
-    )
+        [
+            "--config", str(config), "select", "--method", "active", "--encoder", "toy-1",
+            "--mix", "0.6,0.4",
+        ],
+    )  # fmt: skip
     assert result.exit_code != 0
     assert "trois proportions" in result.output
 
 
-def test_search_lists_candidates(embedded):
+def test_select_similarity_lists_candidates(embedded):
+    """`select --method similarity` (l'ancienne `search`), restreinte à un jeu."""
     tmp_path, config = embedded
-    output = run(config, "search", "--encoder", "toy-1", "--k", "10")
-    assert "10 candidats" in output
-    assert (tmp_path / "reports" / "search_toy-1.csv").exists()
+    output = run(
+        config, "select", "--method", "similarity", "--encoder", "toy-1", "--n", "60",
+        "--dataset", "2026", "--no-paired-negatives",
+    )  # fmt: skip
+    assert "candidats" in output
+    assert (tmp_path / "reports" / "files" / "similarity" / "candidats.csv").exists()
 
 
 def test_benchmark_writes_the_report(embedded):

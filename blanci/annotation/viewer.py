@@ -191,8 +191,8 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
     <input type="number" id="lo" min="0" max="24" step="0.1"> –
     <input type="number" id="hi" min="0" max="24" step="0.1"> kHz
     <label><input type="checkbox" id="bandonly"> n'écouter qu'elle</label>
-    <select id="slope" title="Raideur du filtre hors de la bande : plus elle est forte, plus les sons
- hors bande sont coupés, mais plus le filtre « sonne » sur les claquements">
+    <select id="slope" title="Raideur du filtre hors de la bande : plus elle est forte, plus les
+ sons hors bande sont coupés, mais plus le filtre « sonne » sur les claquements">
       <option value="12">12 dB/oct</option><option value="24">24 dB/oct</option>
       <option value="48">48 dB/oct</option><option value="96">96 dB/oct</option>
       <option value="fft" title="Coupure franche : rien hors de la bande, mais pré-écho et
@@ -261,15 +261,17 @@ function showSettings() {
 }
 // Passe-haut et passe-bas de Butterworth d'ordre 2n, chacun fait de n biquads d'ordre 2 dont
 // les Q sont ceux des paires de pôles : −3 dB pile sur la frontière, puis 12 n dB par octave.
-// (Mettre des biquads à Q = 0,707 en cascade amollirait le coude.) En mode FFT, ils laissent
-// tout passer : c'est le son lu qui est déjà filtré (`applyFFT`).
+// (Mettre des biquads à Q = 0,707 en cascade amollirait le coude.) Web Audio lit le Q d'un
+// passe-haut ou d'un passe-bas en dB (α = sin ω0 / (2·10^(Q/20))) : on lui passe 20 log10 Q,
+// sinon chaque étage bombe à la coupure (+1,9 dB à 24 dB/oct, +17 dB à 96 dB/oct). En mode
+// FFT, ils laissent tout passer : c'est le son lu qui est déjà filtré (`applyFFT`).
 const stages = () => S.slope === "fft" ? 1 : S.slope / 12;
 function butterQ(n) {
   return Array.from({length: n}, (_, k) => 1 / (2 * Math.cos((2 * k + 1) * Math.PI / (4 * n))));
 }
 function wire(g) {
   g.source.disconnect(); [...g.hp, ...g.lp].forEach(f => f.disconnect());
-  const qs = butterQ(stages());
+  const qs = butterQ(stages()).map(q => 20 * Math.log10(q));  // Q en dB pour Web Audio
   g.hp = qs.map(Q => new BiquadFilterNode(actx, {type: "highpass", Q}));
   g.lp = qs.map(Q => new BiquadFilterNode(actx, {type: "lowpass", Q}));
   [g.source, ...g.hp, ...g.lp, g.gain].reduce((a, b) => (a.connect(b), b));

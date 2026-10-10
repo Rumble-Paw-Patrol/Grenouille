@@ -38,6 +38,7 @@ peak_hours_local: [[7, 9], [15, 17]]
 plan:
   seed: 2026
   partition_file: config/plan/partition_v1.csv   # versionnée : relue, jamais retirée
+  labels_before: "2026-10-08T00:00:00Z"  # tirage du 07/10 (n° 196) : labels antérieurs exclus, écoutes postérieures sans effet sur le tirage
   level2_site: RNRT                # site 2026 tenu à l'écart en entier (Léonard, 07/10)
   level1_fraction: 0.2             # part des points de chacun des autres sites 2026
   # 2023 : le point est la station, avec ses micros successifs (dates et dossiers SM4 C/D/E/F).
@@ -291,7 +292,7 @@ benchmark:
   pairing: nearest
   slot_tolerance_min: 30           # même micro, créneau horaire à ± 30 min
   same_day_min_gap_min: 30         # 30 = l'enregistrement voisin (programme : 2 min / 30 min)
-  n_boot: 1000
+  n_boot: 1000                     # plus petite p atteignable 2/(n_boot+1) : avec Holm sur M comparaisons, n_boot ≳ 2M/α
   precisions: [0.1, 0.5]
   # Mise bout à bout des plis (n° 133, 135). Chaque pli choisit ses réglages (C…) : un C petit
   # resserre ses scores, et l'AP « poolée » (tous les plis ensemble) le paie sans que le

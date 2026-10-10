@@ -231,3 +231,27 @@ def test_annotated_negatives_between_positives_are_listened_again(scored, cfg): 
     queue = select_candidates(scored, cfg, "gaps", mode="labels")
     assert (queue["recording_id"] == rid).any() and (queue["reason"] == "gap_labels").all()
     assert 3.0 in set(queue.loc[queue["recording_id"] == rid, "offset_s"])
+
+
+def test_selection_sees_what_was_heard_by_intervals(scored, cfg):  # noqa: F811
+    """Annotation par intervalles (n° 182) : un enregistrement où A. blanci est tracé n'est
+    plus « sans positif » pour le negative mining ; la carte montre les fenêtres d'un extrait
+    comme écoutées."""
+    from blanci.service import append_span
+
+    first = select_candidates(scored, cfg, "negative_mining", "main-1", n=1)
+    rid, offset = first.loc[0, "recording_id"], float(first.loc[0, "offset_s"])
+    # L'extrait ne couvre pas la fenêtre proposée : seul l'intervalle positif l'écarte.
+    start, end = (0.0, offset) if offset >= 5.0 else (offset + 3.0, 20.0)
+    append_span(scored, rid, start, end, [(start, start + 2.0, "blanci")], "background", "audit")
+    again = select_candidates(scored, cfg, "negative_mining", "main-1", n=5)
+    assert rid not in set(again["recording_id"])
+
+    pytest.importorskip("sklearn.manifold")
+    points = embedding_map(scored, cfg, "main-1", n=300, method="pca")
+    inside = points[
+        (points["recording_id"] == rid)
+        & (points["offset_s"] >= start)
+        & (points["offset_s"] + points["dur_s"] <= end)
+    ]
+    assert len(inside) and not (inside["label"] == "non écouté").any()

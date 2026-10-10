@@ -19,8 +19,11 @@ graine fixée, tout avant écoute.
    réparti entre strates en proportion de M_h × poids (pics × 2, période haute × 2).
 
 Partout : au plus un enregistrement par point, jour et tranche ; enregistrements écartés par
-un drapeau et enregistrements déjà labellisés (dont les labels du détecteur externe, §5.2)
-exclus ; pluie et saturation restent.
+un drapeau et enregistrements labellisés avant le tirage (détecteur externe, écoutes ciblées,
+§5.2 : leur sélection n'était pas aléatoire) exclus ; pluie et saturation restent. « Avant le
+tirage » : label ou intervalle créé avant `plan.labels_before` ; les écoutes postérieures
+n'entrent pas dans le tirage, sinon chaque relance déplacerait le lot 1 et le test et
+fausserait les probabilités d'inclusion. Sans cette date, tout label exclut.
 """
 
 from __future__ import annotations
@@ -77,17 +80,23 @@ def station_of(cfg: dict) -> dict[tuple[str, str], str]:
 def eligible_recordings(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
     """Enregistrements tirables, avec point, jour, tranche et période locaux.
 
-    Écartés : drapeau d'exclusion, hors tranche horaire, déjà labellisés (une fenêtre ou un
-    intervalle, quelle qu'en soit la source)."""
+    Écartés : drapeau d'exclusion, hors tranche horaire, labellisés avant le tirage (une
+    fenêtre ou un intervalle créé avant `plan.labels_before`, quelle qu'en soit la source ; sans
+    cette date, tout label). Les écoutes postérieures ne changent pas le vivier."""
     plan = cfg["plan"]
     offset = cfg["recorder"]["filename_utc_offset_h"]
     rec = recordings_table(con)
     rec = rec[~rec["qc_flags"].map(is_excluded)].copy()
+    cutoff = plan.get("labels_before")
+    before, params = ("", ()) if cutoff is None else (" WHERE {0} IS NULL OR {0} < ?", (cutoff,))
     labelled = {
         r[0]
         for r in con.execute(
-            "SELECT DISTINCT w.recording_id FROM labels l JOIN windows w USING (window_id) "
-            "UNION SELECT DISTINCT recording_id FROM spans"
+            "SELECT DISTINCT w.recording_id FROM labels l JOIN windows w USING (window_id)"
+            + before.format("l.created_at")
+            + " UNION SELECT DISTINCT recording_id FROM spans"
+            + before.format("created_at"),
+            params * 2,
         )
     }
     rec = rec[~rec["recording_id"].isin(labelled)]

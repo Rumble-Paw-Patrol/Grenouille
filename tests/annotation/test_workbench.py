@@ -12,7 +12,6 @@ from blanci.annotation.workbench import (
     ANSWERS,
     CANDIDATE_COLUMNS,
     agreement,
-    clip_spectrogram,
     ensure_window,
     latest_labels,
     load_candidates,
@@ -65,7 +64,7 @@ def test_random_candidates_draw_peak_hours_evenly_across_sites(corpus):
 
 
 def test_load_candidates_completes_a_recording_level_queue(corpus, tmp_path):
-    """Une file `blanci queue` n'a que recording_id, score, reason : départ à 0 s, 3 s."""
+    """Une file à l'unité enregistrement (recording_id, score, reason) : départ à 0 s, 3 s."""
     con, cfg, _ = corpus
     rid = con.execute("SELECT recording_id FROM recordings LIMIT 1").fetchone()[0]
     path = tmp_path / "queue_toy-1.csv"
@@ -141,11 +140,8 @@ def test_read_clip_adds_context_within_the_file_and_picks_the_channel(corpus):
     assert (raw / path).stat().st_mtime_ns == before
 
 
-def test_spectrogram_and_player_bytes():
+def test_player_bytes_apply_the_gain():
     x = np.sin(2 * np.pi * 5000 * np.arange(SR) / SR).astype(np.float32) * 0.1
-    freqs, times, db = clip_spectrogram(x, SR, fmax_hz=8000)
-    assert freqs.max() <= 8000 and db.shape == (len(freqs), len(times))
-    assert abs(freqs[db.mean(axis=1).argmax()] - 5000) < 50
     data, rate = sf.read(io.BytesIO(wav_bytes(x, SR, gain_db=6)))
     assert rate == SR and np.abs(data).max() == pytest.approx(0.2, rel=0.01)
 
@@ -387,6 +383,8 @@ def test_viewer_serves_its_files_next_to_the_page(tmp_path, monkeypatch):
     assert args["audios"] == [{"name": "micro 1", "src": src, "start": 1.0}]
     page = (viewer._prepare() / "index.html").read_text(encoding="utf-8")
     assert "__MAGMA__" not in page and "[0, 0, 4]" in page
+    # Web Audio lit le Q des passe-haut et passe-bas en dB : le filtre lui passe 20 log10 Q.
+    assert "20 * Math.log10(q)" in page
 
 
 def test_save_span_derives_the_other_label(corpus):
@@ -421,3 +419,22 @@ def test_each_interval_has_its_own_quality(corpus):
     intervals = [(4.0, 5.0, "blanci", "A"), (8.0, 9.0, "blanci", "C"), (10.0, 11.0, "blanci")]
     save_span(con, candidate, 0.0, 12.0, intervals, [], "léonard")
     assert [q for *_, q in span_intervals(con, rid, 0.0, 12.0)] == ["A", "C", None]
+
+
+def test_windows_heard_by_intervals_count_as_heard(corpus):
+    """Une fenêtre est écoutée si elle porte un label ou si un extrait la couvre (n° 182) ;
+    positive si son label l'est ou si un intervalle d'A. blanci la couvre."""
+    from blanci.annotation.workbench import annotation_status
+    from blanci.service import append_span
+
+    con, cfg, _ = corpus
+    rids = [r[0] for r in con.execute("SELECT recording_id FROM recordings ORDER BY path")]
+    append_span(con, rids[0], 0.0, 12.0, [(3.0, 6.0, "blanci")], "background", "audit")
+    frame = pd.DataFrame(
+        {"recording_id": [rids[0]] * 2 + [rids[1]], "offset_s": [3.0, 9.0, 0.0], "dur_s": 3.0}
+    )
+    status = annotation_status(con, frame)
+    assert status["heard"].tolist() == [True, True, False]
+    assert status["positive"].tolist() == [True, False, False]
+    whole = recording_candidates(con, cfg, n=len(rids))
+    assert rids[0] not in set(whole["recording_id"]) and len(whole) == len(rids) - 1

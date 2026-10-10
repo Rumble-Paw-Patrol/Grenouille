@@ -1,4 +1,4 @@
-"""Poste d'annotation (§5, M2) : candidats à écouter, extraits, spectrogrammes, labels.
+"""Poste d'annotation (§5, M2) : candidats à écouter, extraits, écoute, labels.
 
 Logique pure, sans interface : l'application Streamlit (`blanci/annotation/app.py`) n'en est qu'un
 affichage, et la future GUI du livrable appellera les mêmes fonctions (§4).
@@ -6,7 +6,8 @@ affichage, et la future GUI du livrable appellera les mêmes fonctions (§4).
 Candidats = une file CSV (recording_id, offset_s, dur_s, reason, source, score…) :
 - `random_candidates` : fenêtres tirées au hasard (site, micro, heure), qui mesurent ce
   qu'aucun détecteur n'a remonté ;
-- plus tard, les files `blanci queue` et `blanci search`, dès qu'un encodeur sera choisi.
+- les files de l'outil de sélection (`selection.py`, `blanci select`) et du tirage par plan
+  (`plan.py`, `blanci candidates --plan`).
 
 Chaque réponse est un label en ajout seul (`service.append_label`) ; la fenêtre est créée si
 elle n'existe pas. L'audio n'est que lu.
@@ -23,7 +24,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import soundfile as sf
-from scipy.signal import spectrogram
 
 from blanci.core.db import window_id_for
 from blanci.embedding.embed import select_recordings
@@ -215,14 +215,67 @@ def flagged_candidates(
     return _finish(out, seed)
 
 
-def labelled_windows(con: sqlite3.Connection) -> set[str]:
-    """Fenêtres qui portent déjà un label."""
-    return {row[0] for row in con.execute("SELECT DISTINCT window_id FROM labels")}
+def annotation_status(
+    con: sqlite3.Connection, frame: pd.DataFrame, ignore_sources: tuple[str, ...] = ()
+) -> pd.DataFrame:
+    """État d'écoute des fenêtres de `frame` (recording_id, offset_s, dur_s), sur son index :
+    window_id ; `label`, celui que lui donnent les intervalles (`interval_labels`), sinon son
+    dernier label de fenêtre ; `heard`, l'un ou l'autre existe (fenêtre étiquetée, ou couverte
+    par un extrait annoté par intervalles, n° 182) ; `positive`, dernier label positif ou
+    intervalle positif courant. `ignore_sources` : labels de fenêtre de ces sources non comptés
+    (« bulk » : ce qui a été entendu, pas ce qui a été propagé)."""
+    from blanci.inputs.dataset import current_labels, interval_labels, load_spans
+    from blanci.inputs.labels import POSITIVE_LABELS
+
+    ids = _window_ids(frame) if len(frame) else []
+    labels = current_labels(con)
+    labels = labels[~labels["source"].isin(ignore_sources)]
+    own = dict(zip(labels["window_id"], labels["label"], strict=True))
+    grid = pd.DataFrame(
+        {
+            "window_id": ids,
+            "recording_id": frame["recording_id"].to_numpy(),
+            "offset_s": frame["offset_s"].to_numpy(dtype=float),
+            "dur_s": frame["dur_s"].to_numpy(dtype=float),
+        }
+    ).drop_duplicates("window_id")
+    derived = interval_labels(*load_spans(con), grid)
+    spans = dict(zip(derived["window_id"], derived["label"], strict=True))
+    y = dict(zip(derived["window_id"], derived["y"], strict=True))
+    label = [spans.get(i, own.get(i)) for i in ids]
+    return pd.DataFrame(
+        {
+            "window_id": ids,
+            "label": pd.Series(label, dtype=object).to_numpy(),
+            "heard": [lab is not None for lab in label],
+            "positive": [own.get(i) in POSITIVE_LABELS or y.get(i) == 1 for i in ids],
+        },
+        index=frame.index,
+    )
+
+
+def annotated_recordings(con: sqlite3.Connection) -> tuple[set[str], set[str]]:
+    """(enregistrements écoutés, enregistrements où A. blanci a été entendu), mêmes règles que
+    `annotation_status` à l'échelle de l'enregistrement : un label de fenêtre ou un extrait ;
+    un dernier label positif ou un intervalle positif courant."""
+    from blanci.inputs.dataset import current_intervals, current_labels, load_spans
+    from blanci.inputs.labels import POSITIVE_LABELS
+
+    labels = current_labels(con)
+    spans, intervals = load_spans(con)
+    valid = current_intervals(spans, intervals)
+    heard = set(labels["recording_id"]) | set(spans["recording_id"])
+    positive = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"]) | set(
+        valid.loc[valid["label"].isin(POSITIVE_LABELS), "recording_id"]
+    )
+    return heard, positive
 
 
 def _drop_labelled(con: sqlite3.Connection, candidates: pd.DataFrame) -> pd.DataFrame:
-    done = labelled_windows(con)
-    return candidates[[i not in done for i in _window_ids(candidates)]]
+    """Candidats jamais écoutés (`annotation_status`)."""
+    if candidates.empty:
+        return candidates
+    return candidates[~annotation_status(con, candidates)["heard"].to_numpy()]
 
 
 def _window_ids(frame: pd.DataFrame) -> list[str]:
@@ -239,7 +292,7 @@ def _finish(candidates: pd.DataFrame, seed: int) -> pd.DataFrame:
 
 
 def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
-    """Relit une file CSV (celles-ci, ou `blanci queue` / `search`) et la complète depuis la
+    """Relit une file CSV (celles-ci, ou `blanci select`) et la complète depuis la
     base : chemin, site, micro. Une file sans `offset_s` (unité : l'enregistrement) démarre
     à 0 s ; sans `dur_s`, la fenêtre fait 3 s."""
     queue = pd.read_csv(path)
@@ -381,18 +434,6 @@ def read_clip(
         wav = f.read(round((stop - start) * f.samplerate), dtype="float32", always_2d=True)
         sr = f.samplerate
     return wav[:, min(channel, wav.shape[1] - 1)], sr, start
-
-
-def clip_spectrogram(
-    wav: np.ndarray, sr: int, fmax_hz: float = 10_000.0, nperseg: int = 1024
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """(fréquences Hz, temps s, puissance dB) jusqu'à `fmax_hz`, pour l'affichage."""
-    nperseg = min(nperseg, len(wav)) or 1
-    freqs, times, power = spectrogram(
-        wav.astype(np.float64), fs=sr, nperseg=nperseg, noverlap=nperseg * 3 // 4
-    )
-    keep = freqs <= fmax_hz
-    return freqs[keep], times, 10 * np.log10(power[keep] + 1e-12)
 
 
 def wav_bytes(

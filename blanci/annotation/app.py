@@ -6,8 +6,8 @@
 - **Mode de sélection** (panneau de gauche) : une file déjà écrite, ou une nouvelle file tirée
   sur place par n'importe quelle méthode de l'outil de sélection (`blanci/annotation/selection.py` :
   60-20-20 à proportions réglables, similarité, couverture, groupes, audit, hasard, negative
-  mining, phénologie, suspects, congénères), ou la **carte des embeddings** (YAPAT fait
-  maison) : on entoure une zone de points, on l'écoute.
+  mining, phénologie, suspects, trous dans un chant), ou la **carte des embeddings** (YAPAT
+  fait maison) : on entoure une zone de points, on l'écoute.
 - **Navigation** : sous la file, la liste de ses candidats (numérotés dans la file entière,
   ✓ et label pour ceux déjà écoutés) ; on peut revenir sur n'importe lequel et le
   réécouter, une nouvelle réponse s'ajoute à l'ancienne (correction, jamais écrasée).
@@ -50,6 +50,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from blanci.annotation.bandeau import bandeau
+from blanci.annotation.selection import NEEDS_ENCODER
 from blanci.annotation.style import BRAND, CHART_COLORS, CSS, LABEL_COLORS, UNHEARD_COLOR
 from blanci.annotation.viewer import HELP, asset, viewer, viewer_args
 from blanci.annotation.workbench import (
@@ -92,15 +93,7 @@ MODES = {
     "suspects": "Détections isolées (« suspect »)",
     "gaps": "Trous dans un chant (faux négatifs suspects)",
 }
-NEEDS_ENCODER = (
-    "active",
-    "similarity",
-    "coverage",
-    MAP,
-    "cluster",
-    "negative_mining",
-    "suspects",
-)
+ENCODER_MODES = (*NEEDS_ENCODER, MAP)  # la carte lit aussi un stock d'embeddings
 
 
 def _config_file() -> Path | None:
@@ -122,9 +115,9 @@ def _setup(config: Path | None):
 
 
 def _queues(reports: Path) -> list[Path]:
-    """Files de candidats : un dossier par file (`files/<nom>/candidats.csv`), et les anciens
-    CSV posés à plat dans `paths.reports`."""
-    patterns = ("files/*/candidats.csv", "candidats_*.csv", "queue_*.csv", "search_*.csv")
+    """Files de candidats : un dossier par file (`files/<nom>/candidats.csv`), et celles que
+    `blanci candidates` (hors `--plan`) pose à plat dans `paths.reports`."""
+    patterns = ("files/*/candidats.csv", "candidats_*.csv")
     found = {p for pattern in patterns for p in reports.glob(pattern)}
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
@@ -166,10 +159,10 @@ def _selection_panel(cfg, con, reports: Path) -> tuple[str, Path | None, str | N
     mode = st.selectbox("Mode de sélection", list(MODES), format_func=MODES.get, key="mode")
     encoder = None
     encoders = _encoders(con)
-    if mode in NEEDS_ENCODER and not encoders:
+    if mode in ENCODER_MODES and not encoders:
         st.info("Aucun encodeur encodé : `blanci embed` d'abord.")
         return mode, None, None
-    if (mode in NEEDS_ENCODER or mode == "gaps") and encoders:
+    if (mode in ENCODER_MODES or mode == "gaps") and encoders:
         encoder = st.selectbox("Encodeur", encoders, key="encoder")
     if mode == EXISTING:
         queues = _queues(reports)

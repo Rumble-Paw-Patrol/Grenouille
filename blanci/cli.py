@@ -65,11 +65,9 @@ from blanci.service import (
     compute_tokens,
     evaluate_frozen,
     evaluate_holdout,
-    make_queue,
     ranked_points,
     run_clustering,
     score_and_decide,
-    similarity_search,
     train_and_register,
     train_fusion,
     upstream_bench,
@@ -227,8 +225,8 @@ def qc_command(
         workers=workers,
     )
     typer.echo(
-        f"{report['checked']} contrôlés, dont {report['excluded']} écartés (silencieux ou micro "
-        f"dans sac) ; {report['skipped']} déjà faits, {report['errors']} illisibles"
+        f"{report['checked']} contrôlés, dont {report['excluded']} écartés (silencieux) ;"
+        f" {report['skipped']} déjà faits, {report['errors']} illisibles"
     )
     audio = apply_audio_flags(con, cfg["qc"])
     typer.echo("drapeaux audio : " + ", ".join(f"{k} {audio[k]}" for k in AUDIO_FLAGS))
@@ -261,19 +259,23 @@ def export_labels(ctx: typer.Context) -> None:
     """Annotations en CSV dans le dossier des rapports.
 
     - fenetres_annotees.csv : fenêtres annotées une à une (méthode par fenêtres), une
-      ligne chacune : label, qualité, espèce, commentaire (tel qu'écrit par l'annotateur) ;
+      ligne chacune : label, qualité, espèce, commentaire (tel qu'écrit par l'annotateur),
+      source, annotateur ;
     - extraits_annotes.csv : extraits écoutés dans le poste (méthode par intervalles), une
       ligne chacun, ses intervalles résumés dans la colonne `intervalles` ;
-    - intervalles_annotes.csv : un intervalle (A. blanci, faux ami) par ligne.
+    - intervalles_annotes.csv : un intervalle (A. blanci, faux ami) par ligne, avec
+      l'annotateur de son extrait.
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     labels = current_labels(con)
+    annotators = pd.read_sql_query("SELECT label_id, annotator FROM labels", con)
+    labels = labels.merge(annotators, on="label_id", how="left")
     rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
     table = labels.merge(rec, on="recording_id", how="left")
     columns = [
         "window_id", "path", "site", "mic_id", "start_utc", "offset_s", "dur_s", "label",
-        "quality", "species", "comment", "source",
+        "quality", "species", "comment", "source", "annotator",
     ]  # fmt: skip
     _write_csv(
         table[columns].sort_values(["path", "offset_s"]),
@@ -281,6 +283,7 @@ def export_labels(ctx: typer.Context) -> None:
         f"{len(table)} fenêtres annotées",
     )
     extracts, intervals = annotated_spans(con)
+    intervals = intervals.merge(extracts[["span_id", "annotator"]], on="span_id", how="left")
     reports = config_path(cfg, "reports")
     _write_csv(extracts, reports / "extraits_annotes.csv", f"{len(extracts)} extraits écoutés")
     _write_csv(intervals, reports / "intervalles_annotes.csv", f"{len(intervals)} intervalles")
@@ -413,7 +416,7 @@ def embed(
     if report.qc_checked:
         typer.echo(
             f"contrôle audio : {report.qc_checked} enregistrements, {report.qc_excluded} écartés "
-            "(silencieux ou micro dans sac)"
+            "(silencieux ; micro dans sac : règle des suites en fin de passage)"
         )
     if report.gated:
         typer.echo(f"portes : {report.gated} fenêtres arrêtées (non encodées, score minimal)")
@@ -727,57 +730,6 @@ def score(
 
 
 @app.command()
-def queue(
-    ctx: typer.Context,
-    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
-    n: Annotated[int | None, typer.Option(help="Défaut : active.batch_recordings.")] = None,
-    head: Annotated[
-        str,
-        typer.Option(
-            help="Version de tête, latest ou adopted. Défaut : l'adoptée, sinon la plus récente."
-        ),
-    ] = "default",
-    mix: Annotated[
-        str | None, typer.Option(help="Proportions incertains,top,aléatoire. Défaut : active.mix.")
-    ] = None,
-) -> None:
-    """File de vérification : 60 % incertains, 20 % meilleurs, 20 % aléatoire stratifié (§5)."""
-    cfg = _cfg(ctx)
-    con = connect(config_path(cfg, "db"))
-    proportions = tuple(float(x) for x in _split(mix)) if mix else None
-    if proportions is not None and len(proportions) != 3:
-        raise typer.BadParameter("--mix attend trois proportions, par exemple 0.6,0.2,0.2")
-    rows = make_queue(con, encoder, cfg, n=n, version=head, mix=proportions)
-    counts = rows["reason"].value_counts().to_dict()
-    typer.echo(f"{len(rows)} enregistrements : " + ", ".join(f"{k} {v}" for k, v in counts.items()))
-    _write_csv(rows, config_path(cfg, "reports") / f"queue_{encoder}.csv", "file")
-
-
-@app.command()
-def search(
-    ctx: typer.Context,
-    encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
-    k: Annotated[int, typer.Option(help="Nombre de candidats à remonter.")] = 300,
-    site: Annotated[str | None, typer.Option(help="Chercher dans ce site.")] = None,
-    dataset: Annotated[str | None, typer.Option(help="Chercher dans ce jeu.")] = None,
-    paired_negatives: Annotated[
-        bool, typer.Option(help="Retrancher la similarité aux négatifs appariés (§3).")
-    ] = True,
-) -> None:
-    """Fenêtres les plus proches des positifs annotés (§5, récolte hors Mataroni)."""
-    cfg = _cfg(ctx)
-    con = connect(config_path(cfg, "db"))
-    filters = {key: value for key, value in (("site", site), ("dataset", dataset)) if value}
-    found = similarity_search(
-        con, encoder, cfg, k=k, filters=filters or None, use_paired_negatives=paired_negatives
-    )
-    typer.echo(f"{len(found)} candidats")
-    for r in found.head(10).itertuples():
-        typer.echo(f"  {r.score:+.3f}  {r.path} @ {r.offset_s:.1f} s")
-    _write_csv(found, config_path(cfg, "reports") / f"search_{encoder}.csv", "candidats")
-
-
-@app.command()
 def retrain(
     ctx: typer.Context,
     encoder: Annotated[str, typer.Option(help="Identifiant d'encodeur.")],
@@ -950,6 +902,12 @@ def freeze(
         typer.echo(
             f"  {report['labels_withdrawn']} labels existants sortent de l'entraînement, dont "
             f"{report['positive_labels_withdrawn']} positifs"
+        )
+    if report.get("spans_withdrawn"):
+        typer.echo(
+            f"  {report['spans_withdrawn']} extraits et "
+            f"{report['intervals_withdrawn']} intervalles sortent de l'entraînement, "
+            f"dont {report['positive_intervals_withdrawn']} positifs"
         )
     if report["already_frozen"]:
         typer.echo(f"  {report['already_frozen']} déjà gelés dans une autre version")
@@ -1279,9 +1237,22 @@ def select(
     ] = False,
     name: Annotated[str | None, typer.Option(help="Nom de la file (défaut : la méthode).")] = None,
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
+    head: Annotated[
+        str | None,
+        typer.Option(
+            help="active, negative_mining, suspects, gaps : version de tête, latest ou adopted. "
+            "Défaut : l'adoptée, sinon la plus récente."
+        ),
+    ] = None,
+    dataset: Annotated[str | None, typer.Option(help="similarity : chercher dans ce jeu.")] = None,
+    paired_negatives: Annotated[
+        bool,
+        typer.Option(help="similarity : retrancher la similarité aux négatifs appariés (§3)."),
+    ] = True,
 ) -> None:
     """Outil de sélection (DECISIONS n° 99) : une méthode, une file files/<nom>/ (candidats.csv,
-    LISEZMOI.md) pour le poste d'annotation."""
+    LISEZMOI.md) pour le poste d'annotation. Remplace `queue` (`--method active`) et `search`
+    (`--method similarity`)."""
     from blanci.annotation.selection import select_candidates, write_queue
 
     cfg = _cfg(ctx)
@@ -1291,6 +1262,14 @@ def select(
         options["n"] = n
     if mix:
         options["mix"] = [float(v) for v in _split(mix)]
+        if len(options["mix"]) != 3:
+            raise typer.BadParameter("--mix attend trois proportions, par exemple 0.6,0.2,0.2")
+    if head:
+        options["version"] = head
+    if dataset:
+        options["dataset"] = dataset
+    if not paired_negatives:
+        options["paired_negatives"] = False
     if mode:
         options["mode"] = mode
     if site:
@@ -1481,7 +1460,10 @@ def prevalence(ctx: typer.Context) -> None:
     from blanci.service import estimate_prevalence
 
     cfg = _cfg(ctx)
-    out = estimate_prevalence(connect(config_path(cfg, "db")))
+    w3 = cfg["grids"]["w3"]
+    out = estimate_prevalence(
+        connect(config_path(cfg, "db")), window_s=w3["window_s"], hop_s=w3["hop_s"]
+    )
     if not out["n_windows"]:
         typer.echo("aucune fenêtre écoutée au hasard (sources random, audit) : rien à estimer")
         return
@@ -1832,13 +1814,21 @@ def candidates(
             "réglés par la section `plan` de la configuration (les autres options sont ignorées).",
         ),
     ] = False,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Avec --plan : réécrire files/lot1 et files/test_v1 même si le tirage diffère "
+            "de la file déjà écrite.",
+        ),
+    ] = False,
 ) -> None:
     """File d'écoute pour le poste d'annotation (§5) : tirage par plan du lot 1 (`--plan`),
     strate aléatoire, enregistrements entiers (audit aléatoire et jeu gelé, §6)."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     if plan:
-        _plan_queues(con, cfg)
+        _plan_queues(con, cfg, force)
         return
     wanted = _split(sites) or None
     parts = []
@@ -1863,10 +1853,14 @@ def candidates(
     )
 
 
-def _plan_queues(con, cfg: dict[str, Any]) -> None:
-    """Partition versionnée, files `files/lot1/` et `files/test_v1/` (DECISIONS n° 196)."""
+def _plan_queues(con, cfg: dict[str, Any], force: bool = False) -> None:
+    """Partition versionnée, files `files/lot1/` et `files/test_v1/` (DECISIONS n° 196). Une
+    file déjà écrite et identique au tirage est laissée telle quelle ; différente, elle n'est
+    réécrite qu'avec `--force` (on écoute peut-être déjà l'ancienne)."""
+    import io
+
     from blanci.annotation.plan import draw_plan
-    from blanci.annotation.selection import write_queue
+    from blanci.annotation.selection import queue_dir, write_queue
 
     partition_path = project_path(cfg["plan"]["partition_file"])
     drawn = draw_plan(con, cfg, partition_path)
@@ -1882,8 +1876,26 @@ def _plan_queues(con, cfg: dict[str, Any]) -> None:
         "graine": cfg["plan"]["seed"],
         "partition": cfg["plan"]["partition_file"],
     }
-    for key, title in (("lot1", "lot1"), ("test", "test_v1")):
+    files = {"lot1": "lot1", "test": "test_v1"}
+    same = {}
+    for key, title in files.items():
+        path = queue_dir(cfg) / title / "candidats.csv"
+        if not path.exists():
+            continue
+        new = pd.read_csv(io.StringIO(drawn[key].to_csv(index=False)))
+        same[key] = pd.read_csv(path).equals(new)
+        if not same[key] and not force:
+            typer.echo(
+                f"{path} existe et diffère du tirage : rien n'est réécrit (--force pour "
+                "remplacer la file, qu'on écoute peut-être déjà)",
+                err=True,
+            )
+            raise typer.Exit(1)
+    for key, title in files.items():
         queue = drawn[key]
+        if same.get(key):
+            typer.echo(f"{title} : {len(queue)} candidats, inchangée")
+            continue
         path = write_queue(cfg, queue, title, settings)
         typer.echo(f"{title} : {len(queue)} candidats, {path}")
         for niveau, n in queue["niveau"].value_counts().sort_index().items():
@@ -1913,7 +1925,7 @@ def label_window(
     ctx: typer.Context,
     window_id: Annotated[str, typer.Argument(help="Identifiant de fenêtre.")],
     label: Annotated[str, typer.Option(help="blanci_solo, bird, rain…")],
-    source: Annotated[str, typer.Option(help="import | similarity | active | random | audit.")],
+    source: Annotated[str, typer.Option(help="similarity | active | random | audit | plan…")],
     quality: Annotated[str | None, typer.Option(help="A, B ou C.")] = None,
     species: Annotated[str | None, typer.Option(help="Espèce du faux ami.")] = None,
     annotator: Annotated[str | None, typer.Option(help="Qui a annoté.")] = None,
