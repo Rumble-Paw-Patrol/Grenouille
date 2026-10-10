@@ -24,7 +24,13 @@ planche acceptent l'un ou l'autre.
         et le contour du sprite tracé sur la photo. Sert à chaque étape de forme.
     pipette PHOTO x0,y0,x1,y1 [x0,y0,x1,y1 …]
         Couleur médiane de chaque zone de la photo (prendre des zones bien éclairées, sans
-        reflet ni ombre) : les couleurs à plat de l'étape 2.
+        reflet ni ombre) : les couleurs à plat de l'étape 3a.
+    profil PHOTO x0,y0,x1,y1 LxH ax,ay bx,by [demi_largeur]
+        La luminosité de la photo le long d'un os ou d'un doigt, de a à b (en pixels du sprite,
+        sur une toile de L × H qui correspond au cadre x0,y0,x1,y1 de la photo, comme pour
+        superposer), moyennée en travers sur demi_largeur pixels (2 par défaut), par pas d'un
+        demi-pixel. Les creux marqués sont les barres : leur nombre et leur centre, pour les
+        motifs de l'étape 3a.
     apercu SPRITE.json SORTIE.png CLE[,CLE…] [zoom] [PHOTO]
         Images du sprite côte à côte, la photo de référence à droite si donnée.
     zoom FICHIER.json SORTIE.png CLE x0,y0,x1,y1
@@ -156,6 +162,30 @@ def pipette(photo, *zones):
         x0, y0, x1, y1 = (int(v) for v in z.split(","))
         r, g, b = np.median(im[y0:y1, x0:x1].reshape(-1, 3), axis=0).astype(int)
         print(f"{z} : #{r:02X}{g:02X}{b:02X}")
+
+
+def profil(photo, cadre, toile, a, b, demi="2"):
+    im = np.asarray(Image.open(photo).convert("RGB")).astype(float) @ (0.3, 0.59, 0.11)
+    x0, y0, x1, y1 = (int(v) for v in cadre.split(","))
+    lw, lh = (int(v) for v in toile.split("x"))
+    (ax, ay), (bx, by) = (tuple(float(v) for v in p.split(",")) for p in (a, b))
+    long = float(np.hypot(bx - ax, by - ay))
+    ux, uy, d = (bx - ax) / long, (by - ay) / long, float(demi)
+    points = []
+    for k in range(int(long * 2) + 1):
+        x, y = ax + ux * k / 2, ay + uy * k / 2
+        vals = []
+        for t in np.linspace(-d, d, 9):  # en travers de l'os
+            px = int(x0 + (x - uy * t) * (x1 - x0) / lw)
+            py = int(y0 + (y + ux * t) * (y1 - y0) / lh)
+            if 0 <= py < im.shape[0] and 0 <= px < im.shape[1]:
+                vals.append(im[py, px])
+        points.append((x, y, float(np.mean(vals)) if vals else 0.0))
+    moyenne = np.mean([lum for *_, lum in points])
+    for k, (x, y, lum) in enumerate(points):
+        voisins = [q[2] for q in points[max(0, k - 3) : k + 4]]
+        creux = "← barre" if lum == min(voisins) and lum < 0.85 * moyenne else ""
+        print(f"({x:5.1f}, {y:5.1f})  {lum:5.1f}  {'█' * int(lum / 8):<32}{creux}")
 
 
 def apercu(fichier, sortie, cles, zoom="5", photo=None):
@@ -325,6 +355,7 @@ if __name__ == "__main__":
         "grille": grille,
         "superposer": superposer,
         "pipette": pipette,
+        "profil": profil,
         "apercu": apercu,
         "zoom": zoom,
         "controle": controle,

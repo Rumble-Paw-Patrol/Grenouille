@@ -42,20 +42,36 @@ BAYER = (np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 TRAME = np.tile(BAYER, (H // 4 + 1, W // 4 + 1))[:H, :W]
 
 # ------------------------------------------------------------------ matières et couleurs
-# une couleur à plat par matière ; les rampes du rendu détaillé en sont tirées
+# une couleur à plat par matière ; les rampes du rendu détaillé en sont tirées. Étape 3a :
+# teintes prises à la pipette sur la photo, dans les zones éclairées, sans reflet ni ombre
 MATIERES = {
-    "dos": "#D07A35",
-    "flanc": "#C2804A",
-    "ventre": "#E8DCC4",
-    "gorge": "#E8DCC4",
-    "membre": "#D88A40",
-    "fond": "#9C5223",  # membres de l'autre côté
-    "levre": "#F2CC98",
+    "dos": "#4F9C43",  # vert feuille : dos, tête, faces externes des membres
+    "flanc": "#A9643A",  # bande orangée du flanc, entre l'avant-bras et le ventre
+    "ventre": "#C4A9AA",  # poitrine et ventre, blanc rosé
+    "bas_ventre": "#B9866A",  # bas du ventre, pêche orangé
+    "gorge": "#B3A3B0",  # gorge, gris lilas
+    "levre": "#E4DCDB",  # liseré blanc de la lèvre
+    "membre": "#AE6C38",  # faces internes des membres, mains, pieds : orangé
+    "pale": "#B3A4AC",  # faces internes pâles : dessus du bras droit, avant-bras gauche
+    "disque": "#C2884F",  # disques, plus clairs que le doigt
+    "membrane": "#A9A3B8",  # paupière inférieure, lilas (œil fermé)
 }
-MOTIFS = {"bande": "#4A230E", "barre": "#7E3F17"}
-# œil : iris, pupille, cercle autour du globe, matière de la paupière fermée ; la forme de la
-# pupille (et sa taille, dans rendu_oeil) vient des photos
-OEIL = {"iris": "#C9A05A", "pupille": "#0B0705", "cercle": "#24120A", "paupiere": "dos"}
+MOTIFS = {
+    "barre": "#2B1E33",  # barres violet-noir des membres et du flanc, mouchetures sous la lèvre
+    "tache": "#6B3F50",  # marbrures violettes du ventre et du bras gauche
+}
+# les traits du croquis prennent la couleur qu'ils traversent, assombrie ; sauf ceux-ci, qui ont
+# leur matière : chez cette grenouille, la lèvre est un liseré blanc
+TRAITS_MATIERE = {"bouche": "levre"}
+# œil : iris, pupille, cercle autour du globe, bord pâle de la paupière autour de lui, matière de
+# la paupière fermée ; la forme de la pupille (et sa taille, dans rendu_oeil) vient des photos
+OEIL = {
+    "iris": "#B4B0BE",  # argenté, lavande
+    "pupille": "#16141E",
+    "cercle": "#2C2833",
+    "bord": "#A9C99E",  # le bord de la paupière autour du globe, vert pâle
+    "paupiere": "membrane",
+}
 PUPILLE = "verticale"  # fente verticale des phyllomédusines
 CONTOUR, CONTOUR_CLAIR = "#24120A", "#5A2B14"
 # CONTOUR_TEINTE : au rendu détaillé, le contour prend la couleur qu'il borde, assombrie, au lieu
@@ -228,10 +244,11 @@ def os_(noms, rayons, x=None, y=None):
     )
 
 
-def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None):
+def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=None):
     """plan : fond (membres de l'autre côté), corps, devant (membres proches) ; cernee : un
     contour la sépare de ce qu'elle recouvre ; volume : la forme dont elle prend le relief
-    (une matière dessinée dans le corps, comme le flanc, prend celui du corps)."""
+    (une matière dessinée dans le corps, comme le flanc, prend celui du corps) ; zones : les
+    autres matières et les motifs de la forme, {nom: masque}, posés dans l'ordre (étape 3a)."""
     return {
         "nom": nom,
         "masque": masque,
@@ -239,6 +256,7 @@ def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None):
         "plan": plan,
         "cernee": cernee,
         "volume": volume or nom,
+        "zones": zones or {},
     }
 
 
@@ -291,6 +309,24 @@ def fuseau(a, b, rayons, milieu=0.5, decale=(0.0, 0.0)):
 DISQUE = [".####.", "######", "######", "######", "######", ".####."]
 
 
+def _pixel(x, y):
+    """Un point en unités de la scène → ses coordonnées en pixels de la toile."""
+    x -= ORIGINE[0]
+    return ((UNITES[0] - x) if MIROIR else x) * ECHELLE, (y - ORIGINE[1]) * ECHELLE
+
+
+def disque(bout):
+    """Le disque en boule (DISQUE) centré sur le bout d'un doigt : sa zone de matière."""
+    m = np.zeros((H, W), bool)
+    x1, y1 = _pixel(*SQUELETTE[bout])
+    bi, bj = round(x1) - 3, round(y1) - 3
+    for dj, rang in enumerate(DISQUE):
+        for di, c in enumerate(rang):
+            if c == "#" and 0 <= bj + dj < H and 0 <= bi + di < W:
+                m[bj + dj, bi + di] = True
+    return m
+
+
 def doigt(base, bout, largeur=3, via=()):
     """Un doigt posé au pixel près, de la base au bout (repères du squelette), en passant par
     les points via (unités : l'éventail des métatarses, caché sous un autre membre) : un trait
@@ -298,15 +334,11 @@ def doigt(base, bout, largeur=3, via=()):
     contour le coupe), et son disque en boule centré sur le bout. Un masque par doigt."""
     m = np.zeros((H, W), bool)
 
-    def pixel(x, y):
-        x -= ORIGINE[0]
-        return ((UNITES[0] - x) if MIROIR else x) * ECHELLE, (y - ORIGINE[1]) * ECHELLE
-
     def poser(i, j):
         if 0 <= j < H and 0 <= i < W:
             m[j, i] = True
 
-    pts = [pixel(*p) for p in (SQUELETTE[base], *via, SQUELETTE[bout])]
+    pts = [_pixel(*p) for p in (SQUELETTE[base], *via, SQUELETTE[bout])]
     prec = None
     for (x0, y0), (x1, y1) in zip(pts, pts[1:], strict=False):
         debout = abs(y1 - y0) >= abs(x1 - x0)  # le trait s'épaissit en travers de son sens
@@ -321,23 +353,66 @@ def doigt(base, bout, largeur=3, via=()):
                     d = e - largeur // 2
                     poser(a + d, b) if debout else poser(a, b + d)
             prec = (i, j)
-    x1, y1 = pts[-1]
-    bi, bj = round(x1) - 3, round(y1) - 3
-    for dj, rang in enumerate(DISQUE):
-        for di, c in enumerate(rang):
-            if c == "#":
-                poser(bi + di, bj + dj)
+    return m | disque(bout)
+
+
+# ------------------------------------------------------------------ couleurs et motifs (3a)
+def pixels(*pts):
+    """Un motif posé au pixel près : les pixels (i, j) du sprite, relevés sur la photo."""
+    m = np.zeros((H, W), bool)
+    for i, j in pts:
+        m[j, i] = True
     return m
 
 
-def cernes(nom, base, bouts, plan, via=None):
+def barres(chemin, centres, largeur=1.0, portee=3.0):
+    """Des barres en travers d'un membre ou d'un doigt : chemin, ses points (os ou tracé du
+    doigt) ; centres, le milieu de chaque barre, relevé sur la photo (outils.py profil le long
+    de l'os : chaque creux est une barre) ; largeur, le long du membre, et portée, de part et
+    d'autre de son axe. Tout en unités. Chaque barre suit le segment le plus proche."""
+    m = np.zeros((H, W), bool)
+    for cx, cy in centres:
+        meilleur = None
+        for (xa, ya), (xb, yb) in zip(chemin, chemin[1:], strict=False):
+            dx, dy = xb - xa, yb - ya
+            t = np.clip(((cx - xa) * dx + (cy - ya) * dy) / (dx * dx + dy * dy), 0, 1)
+            d = math.hypot(xa + t * dx - cx, ya + t * dy - cy)
+            if meilleur is None or d < meilleur[0]:
+                meilleur = (d, dx / math.hypot(dx, dy), dy / math.hypot(dx, dy))
+        _, ux, uy = meilleur
+        long = (X - cx) * ux + (Y - cy) * uy
+        trav = -(X - cx) * uy + (Y - cy) * ux
+        m |= (np.abs(long) < largeur / 2) & (np.abs(trav) < portee)
+    return m
+
+
+def bande(m, dx, dy, n=2):
+    """La bande de n pixels de la forme m tournée vers la direction (dx, dy) : les pixels dont
+    un des n voisins dans cette direction sort de la forme (la face verte d'un membre)."""
+    out = np.zeros(m.shape, bool)
+    for k in range(1, n + 1):
+        di, dj = round(k * dx), round(k * dy)
+        v = np.zeros(m.shape, bool)
+        src = m[max(dj, 0) : H + min(dj, 0), max(di, 0) : W + min(di, 0)]
+        v[max(-dj, 0) : H + min(-dj, 0), max(-di, 0) : W + min(-di, 0)] = src
+        out |= m & ~v
+    return out
+
+
+def cernes(nom, base, bouts, plan, via=None, motifs=None):
     """Une forme cernée par doigt, pour que deux disques voisins restent séparés ; via : pour
-    chaque doigt, ses points de passage (voir doigt)."""
+    chaque doigt, ses points de passage (voir doigt) ; motifs : pour chaque doigt, ses barres
+    (centres en pixels) et les taches de son disque (pixels). Le disque est d'une matière à
+    part, plus claire."""
     via = via or [()] * len(bouts)
-    return [
-        forme(f"{nom}{k}", doigt(base, b, via=v), "membre", plan, cernee=True)
-        for k, (b, v) in enumerate(zip(bouts, via, strict=True))
-    ]
+    motifs = motifs or [((), ())] * len(bouts)
+    out = []
+    for k, (b, v, (centres, taches)) in enumerate(zip(bouts, via, motifs, strict=True)):
+        chemin = [SQUELETTE[base], *v, SQUELETTE[b]]
+        zones = {"barre": barres(chemin, px(*centres), 1.0, 1.0), "disque": disque(b)}
+        zones["tache"] = pixels(*taches)
+        out.append(forme(f"{nom}{k}", doigt(base, b, via=v), "membre", plan, True, zones=zones))
+    return out
 
 
 def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
@@ -405,17 +480,105 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # les orteils droits partent du tarse, caché sous l'avant-bras, et s'écartent en éventail
     # (les métatarses) pour sortir de sous lui à 4 pixels l'un de l'autre
     eventail_d = [px((22.5, 71.0)), px((26.5, 71.5)), px((30.5, 71.5))]
+
+    # Étape 3a : les couleurs à plat et les motifs de cet individu, relevés sur la photo réduite
+    # au pixel du sprite (profils le long des os, taches sombres du ventre). En pixels du
+    # sprite : Px, Py pour le corps et les membres, Pxt, Pyt pour ce qui tourne avec la tête
+    Px, Py = (X - ORIGINE[0]) * ECHELLE - 0.5, (Y - ORIGINE[1]) * ECHELLE - 0.5
+    Pxt, Pyt = (xt - ORIGINE[0]) * ECHELLE - 0.5, (yt - ORIGINE[1]) * ECHELLE - 0.5
+    rang, rang_levre = np.floor(2 * yt), np.floor(2 * ligne)
+    # le vert s'arrête, côté ventre, sur une droite relevée colonne par colonne, de l'arrière du
+    # bras droit à la commissure, puis sur la lèvre ; dessous, la peau claire du ventre
+    vert = 38.5 - 0.27 * (Pxt - 35)
+    dessous = np.where(xt < cx, Pyt > vert, rang > rang_levre)
+    flanc = dessous & (Pxt <= 37.5) & (Pyt >= 41)
+    # sous le vert et sous la lèvre, une rangée de mouchetures sombres, de la poitrine au coin
+    # de la bouche et jusque sous l'œil ; à gauche de la commissure, après un pixel clair
+    sous_vert = np.where(xt < cx, np.floor(Pyt) == np.floor(vert) + 2, rang == rang_levre + 1)
+    mouchetures = sous_vert & (Pxt >= 52) & (Pxt <= 77) & (np.round(Pxt) % 3 != 2)
+    peau = {
+        "ventre": dessous,
+        # la gorge : une bande gris lilas sous la lèvre, qui en suit la pente, de l'épaule au
+        # menton, et la poitrine au-dessus du bras droit ; plus bas, la peau du ventre
+        "gorge": dessous & ((Pyt <= 38) | ((Pxt >= 58) & (Pyt <= 42.2 - 0.237 * (Pxt - 63)))),
+        "bas_ventre": dessous & (Pyt >= 54 + np.clip((Pxt - 58) * 0.12, 0, None)),
+        "flanc": flanc,
+        # les marbrures violettes, plus denses à gauche et au milieu du ventre
+        "tache": dessous
+        & ~flanc
+        & pixels(
+            *[(48, 37), (49, 37), (52, 36), (52, 37), (53, 37), (54, 37)],  # poitrine
+            *[(64, 37), (65, 37), (67, 36)],  # gorge
+            *[(51, 45), (52, 45), (55, 46), (55, 47)],
+            *[(45, 46), (45, 47), (46, 47), (46, 48), (47, 49)],
+            *[(52, 49), (53, 49), (51, 50), (52, 50), (53, 50), (54, 50), (55, 50)],
+            *[(65, 49), (66, 49), (65, 50)],
+            *[(43, 52), (44, 52), (43, 53), (44, 53), (45, 53), (43, 54)],
+            *[(60, 53), (60, 54)],
+            *[(53, 54), (54, 54), (55, 54), (55, 55), (56, 55)],
+            *[(49, 56), (50, 56), (51, 56), (51, 57), (52, 57)],
+            *[(43, 57), (44, 57), (45, 58), (46, 58), (46, 59), (47, 59)],
+            *[(62, 58), (63, 58)],
+        ),
+        # le flanc, orangé, barré de noir ; les mouchetures sous la lèvre
+        "barre": (flanc & np.isin(np.floor(Pyt), [42, 43, 49, 50, 57, 58])) | mouchetures,
+    }
+    # le bras droit : l'avant-bras vert ; le bras, de l'épaule au coude, montre sa face interne,
+    # pâle sur sa rangée du haut, orangée dessous, barrée de cinq barres
+    haut = bras_d & (Px >= 33.5) & (Py <= 44.5)
+    dessus = haut & bande(bras_d, 0, -1, 1)
+    zones_bras_d = {
+        "membre": haut,
+        "pale": dessus,
+        "barre": haut
+        & ~dessus
+        & barres([S["epaule_d"], S["coude_d"]], px(*[(c, 41.5) for c in (39, 46, 50, 55, 60)])),
+        "tache": pixels((63, 38), (64, 38)),
+    }
+    # la cuisse droite : bordée de vert en haut, trois barres ; le tibia : le genou vert, deux
+    # barres ; les mesures sont les creux de lumière de la photo le long de chaque os
+    zones_cuisse_d = {
+        "barre": barres(
+            [S["hanche_d"], S["genou_d"]], px((15.3, 54.4), (20.3, 50.3), (24.0, 47.4))
+        ),
+        "dos": bande(cuisse_d, -0.62, -0.78, 2),
+    }
+    zones_tibia_d = {
+        "barre": barres([S["genou_d"], S["talon_d"]], px((17.0, 59.7), (24.0, 59.3))),
+        "dos": ((Px <= 13) & (Py <= 59.5)) | (Px <= 10),
+    }
+    # la patte arrière gauche, à l'ombre : le tibia bordé de vert à droite, deux barres ; une
+    # barre sur la cuisse, entre le ventre et le bras
+    zones_patte_g = {
+        "barre": barres([S["genou_g"], S["talon_g"]], px((89.7, 44.0), (91.0, 51.0)))
+        | barres([S["hanche_g"], S["genou_g"]], px((76.6, 44.8))),
+        "dos": bande(patte_g, 1, 0, 2) & (Py >= 34) & (Py <= 52) & (Px >= 86),
+    }
+    # le bras gauche : bordé de vert à gauche, orangé en haut, pâle et taché en bas
+    zones_bras_g = {
+        "membre": Py < 49.5,
+        "dos": bande(bras_g, -1, 0, 2) & (Py >= 40) & (Py <= 51),
+        "tache": pixels((81, 52), (82, 52), (84, 54)),
+    }
+    # barres des doigts et des orteils (centres en pixels) et taches des disques, par doigt
+    barres_orteils_d = [([(21.6, 74.0), (20.7, 77.0)], ()), ([(26.4, 74.0), (26.2, 77.0)], ())]
+    barres_orteils_d.append(([(31.0, 77.0)], ()))
+    barres_doigts_d = [((), ()), ([(42.0, 71.4)], ()), ([(39.0, 73.1), (45.0, 75.4)], ())]
+    barres_doigts_d.append(([(36.2, 74.7)], ()))
+    barres_doigts_g = [([(82.5, 59.6), (78.6, 62.9)], [(68, 69), (69, 69), (69, 70)])]
+    barres_doigts_g += [([(83.3, 64.3), (82.4, 68.0)], ()), ([(85.6, 62.0), (86.4, 66.6)], ())]
+    barres_orteils_g = [((), [(97, 61), (97, 62), (99, 62)]), ([(92.0, 64.0)], ())]
     f = [
-        forme("patte_g", patte_g, "membre", "fond", cernee=True),
-        *cernes("orteil_g", "tarse_g", MEMBRES["patte_g"][2], "fond"),
-        forme("bras_g", bras_g, "membre", "corps", cernee=True),
-        *cernes("doigt_g", "main_g", MEMBRES["bras_g"][2], "corps"),
-        forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True),
+        forme("patte_g", patte_g, "membre", "fond", cernee=True, zones=zones_patte_g),
+        *cernes("orteil_g", "tarse_g", MEMBRES["patte_g"][2], "fond", None, barres_orteils_g),
+        forme("bras_g", bras_g, "pale", "corps", cernee=True, zones=zones_bras_g),
+        *cernes("doigt_g", "main_g", MEMBRES["bras_g"][2], "corps", None, barres_doigts_g),
+        forme("cuisse_d", cuisse_d, "membre", "fond", cernee=True, zones=zones_cuisse_d),
         forme("pied_d", pied_d, "membre", "fond", cernee=True),
-        *cernes("orteil_d", "tarse_d", MEMBRES["patte_d"][2], "fond", eventail_d),
-        forme("tibia_d", tibia_d, "membre", "fond", cernee=True),
-        forme("corps", corps, "dos", cernee=True),
-        forme("bras_d", bras_d, "membre", "devant", cernee=True),
+        *cernes("orteil_d", "tarse_d", MEMBRES["patte_d"][2], "fond", eventail_d, barres_orteils_d),
+        forme("tibia_d", tibia_d, "membre", "fond", cernee=True, zones=zones_tibia_d),
+        forme("corps", corps, "dos", cernee=True, zones=peau),
+        forme("bras_d", bras_d, "dos", "devant", cernee=True, zones=zones_bras_d),
         # l'épaule : le bras s'y attache en arrondi, sans trait ; il se fond dans la poitrine (la
         # peau de la poitrine recouvre son contour)
         forme(
@@ -423,8 +586,9 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             ellipse(*S["epaule_d"], 2.2, 2.2, X, Y) & dilater(bras_d) & ~bras_d,
             "dos",
             volume="corps",
+            zones=peau,
         ),
-        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "devant"),
+        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "devant", None, barres_doigts_d),
     ]
     oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne}
     oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
@@ -457,6 +621,8 @@ def etiqueter(f):
     for k, fo in enumerate(f):
         m = fo["masque"]
         mat[m], plan[m], num[m] = fo["matiere"], fo["plan"], k
+        for nom, zone in fo["zones"].items():  # matières et motifs de la forme, dans l'ordre
+            mat[m & zone] = nom
     return mat, plan, num
 
 
@@ -522,6 +688,9 @@ def rendu_oeil(img, oeil, couleurs, ferme_couleur):
         img[m] = ferme_couleur
         img[m & (np.abs(v - 0.15 * u * u) < 0.18)] = CONTOUR
         return img
+    if "bord" in couleurs:  # le bord pâle de la paupière, autour du globe, sauf en haut
+        autour = dilater(m) & ~m & (v > -0.3) & (img != "") & (img != CONTOUR)
+        img[autour] = couleurs["bord"]
     img[m] = couleurs["iris"]
     img[bord(m)] = couleurs.get("cercle", CONTOUR)  # un cercle continu d'un pixel
     p = {
@@ -538,8 +707,11 @@ def tracer(img, traits, num, oeil, couleur=None):
     """Les traits (bouche, narine, tympan, plis) : d'une couleur donnée (ébauche, croquis) ou,
     sans couleur donnée, de la couleur du dessous assombrie (aplats, détails)."""
     hors_oeil = ~oeil["masque"] if oeil else True
-    for m in traits.values():
+    for nom, m in traits.items():
         ici = m & (num >= 0) & hors_oeil & (img != CONTOUR)
+        if couleur is None and nom in TRAITS_MATIERE:
+            img[ici] = MATIERES[TRAITS_MATIERE[nom]]
+            continue
         for j, i in zip(*np.nonzero(ici), strict=False):
             img[j, i] = couleur or assombrir(img[j, i])
     return miettes(img, bord=couleur) if couleur else img
@@ -578,7 +750,7 @@ def croquis(f, traits, motifs, oeil):
 def aplats(f, traits, motifs, oeil):
     mat, plan, num = etiqueter(f)
     img = np.full((H, W), "", object)
-    for nom, coul in MATIERES.items():
+    for nom, coul in (MATIERES | MOTIFS).items():  # les motifs sont des zones des formes
         img[mat == nom] = coul
     for nom, m in motifs.items():
         img[m & (num >= 0)] = MOTIFS[nom]
@@ -626,10 +798,10 @@ def details(f, traits, motifs, oeil):
     plaques = np.clip(np.floor(_flou(np.random.default_rng(3).random((H, W)), 4) * 6 - 2), -1, 1)
     grain = (np.random.default_rng(5).random((H, W)) - 0.5) * 0.08
     img = np.full((H, W), "", object)
-    couleurs = {**MATIERES, **{"motif_" + n: c for n, c in MOTIFS.items()}}
+    couleurs = MATIERES | MOTIFS
     zone = mat.copy()
     for nom, m in motifs.items():
-        zone[m & (num >= 0)] = "motif_" + nom
+        zone[m & (num >= 0)] = nom
     for nom, coul in couleurs.items():
         ici = zone == nom
         if not ici.any():

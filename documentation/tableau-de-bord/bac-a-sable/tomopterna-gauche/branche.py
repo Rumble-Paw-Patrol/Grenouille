@@ -46,11 +46,11 @@ MATIERES = {
     "ventre": "#E8DCC4",
     "gorge": "#E8DCC4",
     "membre": "#D88A40",
-    "ecorce": "#4A3A30",
+    "ecorce": "#463733",  # écorce brun-gris sombre (pipette sur la photo)
     "fond": "#9C5223",  # membres de l'autre côté
     "levre": "#F2CC98",
 }
-MOTIFS = {"bande": "#4A230E", "barre": "#7E3F17"}
+MOTIFS = {"lichen": "#8E8D94"}  # plaques de lichen gris argenté
 # œil : iris, pupille, cercle autour du globe, matière de la paupière fermée ; la forme de la
 # pupille (et sa taille, dans rendu_oeil) vient des photos
 OEIL = {"iris": "#C9A05A", "pupille": "#0B0705", "cercle": "#24120A", "paupiere": "dos"}
@@ -170,10 +170,17 @@ def tete_tournee(tete):
 
 # ------------------------------------------------------------------ la grenouille
 def formes(**_):
-    """La branche, en biais : une bande droite, un peu plus épaisse à gauche."""
+    """La branche, en biais : une bande droite, un peu plus épaisse à gauche. Étape 3a : les
+    plaques de lichen gris argenté relevées sur la photo, à gauche, au milieu et à droite."""
     dessus = 65.8 - (X - 48.0) * 0.188
     dessous = 72.5 - (X - 48.0) * 0.204
-    return [forme("branche", (Y > dessus) & (Y < dessous), "ecorce", "fond")], {}, {}, None
+    lichen = (
+        ellipse(50.5, 67.2, 3.0, 1.3, X, Y, -0.19)
+        | ellipse(81.3, 63.5, 1.8, 0.5, X, Y, -0.19)
+        | ellipse(100.0, 58.9, 2.6, 0.9, X, Y, -0.19)
+    )
+    branche = [forme("branche", (Y > dessus) & (Y < dessous), "ecorce", "fond")]
+    return branche, {}, {"lichen": lichen}, None
 
 
 # ------------------------------------------------------------------ rendus

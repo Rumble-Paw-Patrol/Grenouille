@@ -403,13 +403,24 @@ commit.
   donne leurs teintes.
   - Couleurs prises sur la photo, dans des zones bien éclairées, sans reflet ni ombre :
     `outils.py pipette PHOTO zone [zone …]` donne la couleur médiane de chaque zone.
+  - Toutes au même niveau d'éclairement (par exemple les pixels clairs, mais pas les reflets,
+    de chaque zone) : sinon une matière à l'ombre sur la photo sort trop vive ou trop terne à
+    côté des autres (les membres orangés de tomopterna, sous le corps).
+  - Les limites entre matières se relèvent sur la photo comme un contour : colonne par
+    colonne, en droites (le vert du dos qui s'arrête sur le ventre, la gorge sous la lèvre).
 - **Les motifs comptent le plus** : bandes, barres, taches, réticulations.
   - Leur forme, leur nombre, leur place et leur orientation viennent de la photo. Compter les
-    barres sur chaque segment de membre et placer chaque tache.
+    barres sur chaque segment de membre et chaque doigt avec `outils.py profil` le long de
+    l'os : chaque creux de lumière est une barre, et donne son centre. Placer chaque tache au
+    pixel, d'après la photo réduite au pixel du sprite.
   - En mode image, ce sont les motifs de **chaque individu** de la photo, pas ceux de l'espèce
     en général.
-  - Les décrire dans `MOTIFS` et `formes()`.
-- **Les traits du croquis** prennent la couleur qu'ils traversent, assombrie.
+  - Les décrire dans `MOTIFS` et `formes()`. Une matière ou un motif propre à une forme se
+    pose en zone de cette forme (`forme(…, zones={nom: masque})`, dans l'ordre) : il s'arrête
+    sous ce qui la couvre. Outils : `barres()` en travers d'un os, `bande()` pour la face
+    tournée d'un côté (la face verte d'un membre), `pixels()` pour une tache.
+- **Les traits du croquis** prennent la couleur qu'ils traversent, assombrie, sauf ceux que la
+  photo montre clairs : `TRAITS_MATIERE` leur donne une matière (la lèvre blanche).
 - **Rien d'autre** : ni dégradé, ni ombre, ni lumière, ni reflet, ni effet mouillé, ni grain,
   ni tramage.
 - **Aucune forme ne bouge** : `outils.py comparer <code>_croquis_valide.json <code>_aplats.json`
@@ -611,6 +622,7 @@ Ce qui a marché :
 | `superposer FICHIER.json PHOTO x0,y0,x1,y1 SORTIE.png [zoom] [CLE]` | photo, sprite, et contour du sprite sur la photo (cadre aux proportions de la toile) |
 | `comparer AVANT.json APRES.json [SORTIE.png] [CLE_AVANT] [CLE_APRES]` | pixels de silhouette ajoutés ou retirés, pixels recolorés : geler une étape validée |
 | `pipette PHOTO zone [zone …]` | couleur médiane de chaque zone : les aplats de l'étape 3a |
+| `profil PHOTO x0,y0,x1,y1 LxH ax,ay bx,by [demi]` | luminosité de la photo le long d'un os, de a à b en pixels du sprite : chaque creux est une barre (étape 3a) |
 | `apercu SPRITE.json SORTIE.png CLES [zoom] [PHOTO]` | images côte à côte |
 | `zoom SPRITE.json SORTIE.png CLE x0,y0,x1,y1` | un détail pixel par pixel |
 | `controle SPRITE.json` | image par image : formes cernées à part, et miettes (moins de 12 pixels) à corriger ; ignore le contour, teinté compris |

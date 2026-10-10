@@ -87,3 +87,28 @@ l'ébauche et le croquis.
 - 2 : au croquis, la branche est en gris moyen, pour la distinguer des membres du fond.
 - 3a (10/10/2026) : Léonard valide le croquis (« go étape 3a ») ; il est gelé en
   `gauche_croquis_valide.json` et `branche_croquis_valide.json`. Aucune forme ne bouge plus.
+- 3a : couleurs à plat prises à la pipette sur la photo, toutes au même niveau d'éclairement
+  que le vert du dos : dos vert feuille ; lèvre blanche (le trait de la lèvre garde la matière
+  « levre » au lieu d'être assombri) ; gorge gris lilas, en bande sous la lèvre et sur la
+  poitrine au-dessus du bras droit ; ventre blanc rosé ; bas du ventre pêche ; flanc orangé, la
+  bande entre l'avant-bras droit et le ventre ; faces internes des membres orangées, plus ternes
+  que ma première teinte, comme sur la photo ; disques plus clairs ; dessus du bras droit et bas
+  du bras gauche pâles, gris lilas.
+- 3a : la limite du vert relevée colonne par colonne : une droite de l'arrière du bras droit à
+  la commissure, puis la lèvre jusqu'au museau.
+- 3a : les faces vertes des membres, d'après la photo : tout l'avant-bras droit, le bord haut de
+  la cuisse droite et le genou droit, le bord droit du tibia gauche, le bord gauche du bras
+  gauche.
+- 3a : les barres comptées sur la photo, creux de lumière le long de chaque os et de chaque
+  doigt : bras droit 5, cuisse droite 3, tibia droit 2, patte gauche 3 (tibia 2, cuisse 1),
+  flanc 2 visibles ; orteils droits 2, 2, 1 ; doigts droits 0, 1, 2, 1 ; doigts gauches 2, 2,
+  2 ; orteils gauches 0, 1.
+- 3a : les marbrures violettes du ventre placées au pixel d'après la photo, plus denses à gauche
+  et au milieu ; une rangée de mouchetures sombres sous le vert et sous la lèvre ; des taches
+  sombres sur deux disques gauches.
+- 3a : l'œil : iris argenté lavande, cercle sombre, pupille en fente, et le bord pâle de la
+  paupière autour du globe, sauf en haut. La fine réticulation de l'iris viendra au modelé
+  (3b) : sur 14 pixels, c'est une texture.
+- 3a : les membres du fond gardent les couleurs de ceux de devant : l'ombre de la patte gauche
+  et le liseré de granules blanches viendront au modelé (3b).
+- 3a : la branche brun-gris sombre, avec trois plaques de lichen gris argenté.

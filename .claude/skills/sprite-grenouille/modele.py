@@ -75,7 +75,10 @@ MATIERES = {
     "fond": "#9C5223",  # membres de l'autre côté
     "levre": "#F2CC98",
 }
-MOTIFS = {"bande": "#4A230E", "barre": "#7E3F17"}
+MOTIFS = {"bande": "#4A230E", "barre": "#7E3F17"}  # noms distincts de ceux des matières
+# les traits du croquis prennent, à l'étape 3a, la couleur qu'ils traversent, assombrie ; ceux
+# nommés ici gardent une matière (une lèvre blanche, par exemple : {"bouche": "levre"})
+TRAITS_MATIERE = {}
 # œil : iris, pupille, cercle autour du globe, matière de la paupière fermée ; la forme de la
 # pupille (et sa taille, dans rendu_oeil) vient des photos
 OEIL = {"iris": "#C9A05A", "pupille": "#0B0705", "cercle": "#24120A", "paupiere": "dos"}
@@ -212,10 +215,12 @@ def os_(noms, rayons, x=None, y=None):
     )
 
 
-def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None):
+def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None, zones=None):
     """plan : fond (membres de l'autre côté), corps, devant (membres proches) ; cernee : un
     contour la sépare de ce qu'elle recouvre ; volume : la forme dont elle prend le relief
-    (une matière dessinée dans le corps, comme le flanc, prend celui du corps)."""
+    (une matière dessinée dans le corps, comme le flanc, prend celui du corps) ; zones : les
+    autres matières et les motifs propres à la forme, {nom: masque}, posés dans l'ordre et
+    seulement sur elle : des barres de tibia ne débordent pas sur le bras qui le couvre."""
     return {
         "nom": nom,
         "masque": masque,
@@ -223,7 +228,50 @@ def forme(nom, masque, matiere, plan="corps", cernee=False, volume=None):
         "plan": plan,
         "cernee": cernee,
         "volume": volume or nom,
+        "zones": zones or {},
     }
+
+
+def bande(m, dx, dy, n=2):
+    """La bande de n pixels de la forme m tournée vers la direction (dx, dy) : les pixels dont
+    un des n voisins dans cette direction sort de la forme (la face verte d'un membre)."""
+    out = np.zeros(m.shape, bool)
+    for k in range(1, n + 1):
+        di, dj = round(k * dx), round(k * dy)
+        v = np.zeros(m.shape, bool)
+        src = m[max(dj, 0) : H + min(dj, 0), max(di, 0) : W + min(di, 0)]
+        v[max(-dj, 0) : H + min(-dj, 0), max(-di, 0) : W + min(-di, 0)] = src
+        out |= m & ~v
+    return out
+
+
+def barres(chemin, centres, largeur=1.0, portee=3.0):
+    """Des barres en travers d'un membre ou d'un doigt : chemin, ses points (os ou tracé du
+    doigt) ; centres, le milieu de chaque barre, relevé sur la photo (outils.py profil le long
+    de l'os : chaque creux est une barre) ; largeur, le long du membre, et portée, de part et
+    d'autre de son axe. Tout en unités. Chaque barre suit le segment le plus proche."""
+    m = np.zeros((H, W), bool)
+    for cx, cy in centres:
+        meilleur = None
+        for (xa, ya), (xb, yb) in zip(chemin, chemin[1:], strict=False):
+            dx, dy = xb - xa, yb - ya
+            t = np.clip(((cx - xa) * dx + (cy - ya) * dy) / (dx * dx + dy * dy), 0, 1)
+            d = math.hypot(xa + t * dx - cx, ya + t * dy - cy)
+            if meilleur is None or d < meilleur[0]:
+                meilleur = (d, dx / math.hypot(dx, dy), dy / math.hypot(dx, dy))
+        _, ux, uy = meilleur
+        long = (X - cx) * ux + (Y - cy) * uy
+        trav = -(X - cx) * uy + (Y - cy) * ux
+        m |= (np.abs(long) < largeur / 2) & (np.abs(trav) < portee)
+    return m
+
+
+def pixels(*pts):
+    """Un motif posé au pixel près : les pixels (i, j) du sprite, relevés sur la photo."""
+    m = np.zeros((H, W), bool)
+    for i, j in pts:
+        m[j, i] = True
+    return m
 
 
 def tete_tournee(tete):
@@ -297,7 +345,15 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             "devant",
             cernee=True,
         ),
-        forme("tibia", tibia, "membre", "devant", cernee=True),
+        # les barres du tibia : une zone de la forme, pour qu'elles s'arrêtent sous le bras
+        forme(
+            "tibia",
+            tibia,
+            "membre",
+            "devant",
+            cernee=True,
+            zones={"barre": np.sin(X * 1.6) > 0.55},
+        ),
         forme(
             "bras",
             os_(MEMBRES["bras_g"][0], [2.6, 1.8, 1.2, 1]) | main,
@@ -318,7 +374,6 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     }
     motifs = {
         "bande": corps & (np.abs(yt - (9.0 + 0.32 * (xt - 6))) < 1.2) & (xt > 6) & (xt < 36),
-        "barre": tibia & (np.sin(X * 1.6) > 0.55),
     }
     oeil = {"x": S["oeil"][0], "y": S["oeil"][1], "r": 2.6, "ferme": cligne}
     oeil["masque"] = (xt - oeil["x"]) ** 2 + (yt - oeil["y"]) ** 2 <= oeil["r"] ** 2
@@ -335,6 +390,8 @@ def etiqueter(f):
     for k, fo in enumerate(f):
         m = fo["masque"]
         mat[m], plan[m], num[m] = fo["matiere"], fo["plan"], k
+        for nom, zone in fo["zones"].items():  # matières et motifs de la forme, dans l'ordre
+            mat[m & zone] = nom
     return mat, plan, num
 
 
@@ -404,8 +461,11 @@ def tracer(img, traits, num, oeil, couleur=None):
     """Les traits (bouche, narine, tympan, plis) : d'une couleur donnée (ébauche, croquis) ou,
     sans couleur donnée, de la couleur du dessous assombrie (aplats, détails)."""
     hors_oeil = ~oeil["masque"] if oeil else True
-    for m in traits.values():
+    for nom, m in traits.items():
         ici = m & (num >= 0) & hors_oeil & (img != CONTOUR)
+        if couleur is None and nom in TRAITS_MATIERE:
+            img[ici] = MATIERES[TRAITS_MATIERE[nom]]
+            continue
         for j, i in zip(*np.nonzero(ici), strict=False):
             img[j, i] = couleur or assombrir(img[j, i])
     return miettes(img, bord=couleur) if couleur else img
@@ -444,9 +504,9 @@ def croquis(f, traits, motifs, oeil):
 def aplats(f, traits, motifs, oeil):
     mat, plan, num = etiqueter(f)
     img = np.full((H, W), "", object)
-    for nom, coul in MATIERES.items():
+    for nom, coul in (MATIERES | MOTIFS).items():  # matières, et motifs posés en zones
         img[mat == nom] = coul
-    for nom, m in motifs.items():
+    for nom, m in motifs.items():  # motifs communs à toutes les formes visibles
         img[m & (num >= 0)] = MOTIFS[nom]
     img = contour(img, f, num)
     img = tracer(img, traits, num, oeil)
@@ -492,10 +552,10 @@ def details(f, traits, motifs, oeil):
     plaques = np.clip(np.floor(_flou(np.random.default_rng(3).random((H, W)), 4) * 6 - 2), -1, 1)
     grain = (np.random.default_rng(5).random((H, W)) - 0.5) * 0.08
     img = np.full((H, W), "", object)
-    couleurs = {**MATIERES, **{"motif_" + n: c for n, c in MOTIFS.items()}}
+    couleurs = MATIERES | MOTIFS
     zone = mat.copy()
     for nom, m in motifs.items():
-        zone[m & (num >= 0)] = "motif_" + nom
+        zone[m & (num >= 0)] = nom
     for nom, coul in couleurs.items():
         ici = zone == nom
         if not ici.any():
