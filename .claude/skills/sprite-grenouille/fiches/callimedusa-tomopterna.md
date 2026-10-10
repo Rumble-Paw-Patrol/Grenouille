@@ -30,7 +30,6 @@ des caractères du groupe et de la photo : à vérifier sur chaque nouvelle phot
 - **Museau** court, arrondi à légèrement tronqué ; tête plus large que le cou, aux lignes
   presque droites de profil (dos, museau, mâchoire : la session a gardé des polygones sans
   lissage).
-- **Menton** fin : la lèvre inférieure, un liseré blanc, en fait le bord près du museau.
 - **Œil :** gros et saillant, il dépasse le contour de la tête. La paupière supérieure, verte,
   fait un bourrelet autour du globe.
 - **Autre œil :** vu de l'avant ou de trois quarts, une grosse bosse verte sur le crâne ; on

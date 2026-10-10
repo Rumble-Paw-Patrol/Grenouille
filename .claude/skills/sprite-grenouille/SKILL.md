@@ -37,7 +37,7 @@ D'où trois principes :
 | Étape | On juge | Interdit à ce stade | Livrable |
 |---|---|---|---|
 | 0 Recherche et cadrage | la fiche morphologique, le mode, les photos, la taille, la destination | dessiner | `morphologie.md` et un message, questions groupées |
-| 1 Ébauche | squelette, articulations, proportions, posture, membres, plans, nombre et largeur des doigts, yeux entiers (saillie, paupière, puis globe et pupille), menton et lèvre, en formes simples | couleur, forme fine, détail | planche avec squelette, lecture de la photo, superposition |
+| 1 Ébauche | squelette, articulations, proportions, posture, membres et leurs largeurs en pixels, plans, nombre de doigts, yeux entiers (saillie, paupière, puis globe et pupille), traits du visage, en formes simples | couleur, forme fine, détail | planche avec squelette, lecture de la photo, superposition |
 | 2 Croquis | les formes affinées, en dessin sans couleur : contours, galbes, mains et pieds au pixel, traits | couleur, ombre | planche, superposition |
 | 3a Couleurs à plat | les couleurs justes et surtout les **motifs** | dégradé, ombre, lumière, reflet, effet mouillé, grain, tramage ; changer une forme | planche |
 | 3b Modelé et détails | volume, nuances, peau, œil, contour | changer une forme ou un motif sans qu'il le demande | planche |
@@ -224,13 +224,16 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
      corps et la ligne de la bouche ;
    - **`formes()` en formes simples** :
      - le tronc et la tête en polygones ou en ellipses de quelques points ;
-     - les membres en `os_()`, des segments de rayon variable tirés du squelette ;
-     - **les doigts et les orteils à leur largeur réelle**, jamais en traits fins par défaut :
-       mesurer sur la photo, à l'échelle de la toile, la largeur d'un doigt et le diamètre
-       d'un disque, en pixels. Les disques sont des **boules** à ce diamètre. Chez *C.
-       tomopterna*, à l'échelle 0,28 : doigts d'environ 3 pixels, disques d'environ 6. Un
-       doigt par forme cernée, pour que deux disques voisins restent séparés. En nombre,
-       direction et longueur justes (la formule de la fiche) ;
+     - **chaque membre à sa largeur réelle, mesurée en pixels** : sur la grille, à l'échelle de
+       la toile, mesurer la largeur de chaque segment (cuisse, tibia, tarse, bras, avant-bras,
+       doigts, orteils) et le diamètre des disques, en pixels du sprite. Les membres sont des
+       `os_()`, segments tirés du squelette, de rayon en unités égal à la largeur en pixels
+       divisée par 4 ;
+     - **les doigts et les orteils** de même, jamais en traits fins par défaut ; les disques
+       sont des **boules** au diamètre mesuré. Chez *C. tomopterna*, à l'échelle 0,28 : doigts
+       d'environ 3 pixels, disques d'environ 6. Un doigt par forme cernée, pour que deux disques
+       voisins restent séparés. En nombre, direction et longueur justes (la formule de la
+       fiche) ; les espaces entre doigts et orteils voisins comme sur la photo ;
      - **l'œil entier, avant la pupille** : d'abord toute la saillie, c'est-à-dire le globe et la
        paupière qui l'entoure et le couvre, souvent de la couleur du dos (verte chez
        tomopterna) ; puis la part visible du globe, à sa taille ; la pupille en dernier
@@ -238,8 +241,8 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
      - **l'autre œil** : toute la bosse qu'il fait sur le crâne, de la couleur de la peau. On
        n'en voit au plus qu'un mince croissant de globe (`oeil["autre"]`), jamais un œil entier
        ni une pupille au centre ;
-     - **le menton et la lèvre** : relever la courbure de la lèvre sur la photo. Le menton est
-       souvent fin : près du museau, la lèvre inférieure en fait le bord ;
+     - **la lèvre et le menton** : relever sur la photo la ligne de la lèvre et l'épaisseur du
+       menton en pixels ; elles varient d'une espèce et d'un individu à l'autre ;
      - les traits du visage : bouche, narine, tympan, pli supratympanique s'il se voit ;
    - **les plans** : chaque forme a le sien (`fond` : les membres de l'autre côté, `corps`,
      `devant` : les membres proches) ; on la cerne si un contour doit la séparer de ce qu'elle
@@ -269,7 +272,8 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
    - La publier en artefact privé, toujours le même fichier. Montrer la lecture et la
      superposition dans la conversation.
 5. **Dans le message**, un tableau de lecture, une ligne par membre : côté de l'animal, plan,
-   articulations visibles, doigts ou orteils visibles sur combien, contact avec le support.
+   articulations visibles, largeurs mesurées en pixels, doigts ou orteils visibles sur combien,
+   contact avec le support.
    C'est ce tableau que Léonard valide autant que l'image.
 
 À vérifier avant de montrer :
@@ -282,8 +286,10 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
       pli s'ils se voient.
 - [ ] L'œil entier : la saillie et la paupière d'abord, puis le globe (taille, place) et la
       pupille ; l'autre œil en bosse de peau, avec au plus un croissant de globe.
-- [ ] Le nombre de doigts et d'orteils et leur formule ; la largeur des doigts et le diamètre
-      des disques mesurés sur la photo ; le contact avec le support.
+- [ ] Les largeurs de chaque segment de membre, des doigts et des disques, mesurées en pixels
+      sur la photo ; aucun vide de fond là où la photo n'en montre pas, et le fond là où elle
+      en montre.
+- [ ] Le nombre de doigts et d'orteils et leur formule ; le contact avec le support.
 - [ ] Rien ne touche les bords de la toile.
 
 ## Étape 2 — Croquis sans couleur

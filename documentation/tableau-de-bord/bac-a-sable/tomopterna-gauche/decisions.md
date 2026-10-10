@@ -40,3 +40,14 @@ l'ébauche et le croquis.
   lèvre relevée sur la photo.
 - 1 : l'autre œil est toute la bosse verte sur la tête ; on n'en voit qu'un tout petit peu du
   globe gris.
+- 1 (tour 3) : la règle du menton fin est propre à cette grenouille, pas universelle.
+- 1 : l'angle de la cuisse gauche était trop fermé au genou : elle remonte, comble le vide au-dessus
+  d'elle (entre le ventre et le bras) et laisse le fond en dessous.
+- 1 : taille des doigts et des disques parfaite ; l'orteil gauche se rapproche du doigt voisin
+  jusqu'à le toucher.
+- 1 : les orteils droits se décalent un peu vers la droite de l'image ; un troisième passe sous
+  le bras.
+- 1 : la lèvre est une droite du museau à la commissure ; sous elle, deux rangées de pixels gris
+  (plus de tache sombre au bout du museau).
+- 1 : le bras droit est plus long et horizontal (dans le sens de l'image) ; l'épaule est presque
+  à la verticale de la commissure.

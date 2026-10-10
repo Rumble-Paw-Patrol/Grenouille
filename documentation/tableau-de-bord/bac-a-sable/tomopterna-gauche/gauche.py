@@ -97,9 +97,10 @@ SQUELETTE = {
     "nuque": (82.0, 35.6),
     "sacrum": (67.0, 46.5),
     "cloaque": (69.0, 60.2),
-    # bras droit (devant) : le bras, fin, va de l'épaule, au milieu du ventre, au coude levé,
-    # en haut à gauche ; l'avant-bras, vert, descend à la verticale jusqu'à la branche
-    "epaule_d": (73.8, 51.4),
+    # bras droit (devant) : le bras, long et fin, à l'horizontale, va de l'épaule, presque à la
+    # verticale de la commissure, au coude levé, en haut à gauche ; l'avant-bras, vert, descend
+    # à la verticale jusqu'à la branche
+    "epaule_d": (79.2, 50.4),
     "coude_d": (63.0, 50.4),
     "poignet_d": (63.1, 63.6),
     "main_d": (64.7, 65.4),
@@ -113,9 +114,10 @@ SQUELETTE = {
     "hanche_d": (64.6, 51.6),
     "genou_d": (54.0, 60.0),
     "talon_d": (62.2, 59.5),
-    "tarse_d": (58.4, 61.6),
-    "orteil_a_d": (56.7, 70.4),
-    "orteil_b_d": (60.0, 70.8),
+    "tarse_d": (59.2, 61.6),
+    "orteil_a_d": (57.8, 70.4),
+    "orteil_b_d": (61.0, 70.8),
+    "orteil_c_d": (64.2, 71.0),  # le troisième passe sous le bras
     # bras gauche (2e plan) : il sort de derrière le ventre et vient vers nous, raccourci ;
     # trois doigts visibles, dont un part vers la gauche sur la branche
     "epaule_g": (88.6, 49.0),
@@ -128,12 +130,12 @@ SQUELETTE = {
     # patte arrière gauche (3e plan, à l'ombre) : genou en haut, sous la mâchoire ; la cuisse,
     # large, part du genou en diagonale vers le bas et la gauche, passe derrière le bras et se
     # voit entre le bras et le ventre ; le tibia descend à la verticale jusqu'à la branche
-    "hanche_g": (85.8, 56.0),
+    "hanche_g": (85.6, 52.6),
     "genou_g": (92.4, 49.0),
     "talon_g": (93.8, 56.4),
     "tarse_g": (94.8, 58.4),
     "orteil_a_g": (97.4, 60.4),
-    "orteil_b_g": (94.4, 63.6),
+    "orteil_b_g": (94.0, 64.8),  # son disque touche celui du doigt voisin
 }
 MEMBRES = {
     "patte_g": (
@@ -149,7 +151,7 @@ MEMBRES = {
     "patte_d": (
         ["hanche_d", "genou_d", "talon_d", "tarse_d"],
         "fond",
-        ["orteil_a_d", "orteil_b_d"],
+        ["orteil_a_d", "orteil_b_d", "orteil_c_d"],
     ),
     "bras_d": (
         ["epaule_d", "coude_d", "poignet_d", "main_d"],
@@ -287,12 +289,12 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             (86.6, 50.0),
             (88.4, 48.4 + gorge * 0.3),
             (89.6, 47.0 + gorge * 0.6),
-            # le menton, fin : la lèvre inférieure en fait le bord, jusqu'au bout du museau
-            (91.0, 45.8 + gorge * 0.4),
-            (93.0, 44.8),
-            (95.5, 43.8),
-            (98.0, 42.8),
-            (99.4, 42.2),
+            # le menton, fin : sous la lèvre, deux rangées de pixels, parallèles à elle
+            (90.0, 45.7 + gorge * 0.4),
+            (92.0, 45.0),
+            (95.0, 44.3),
+            (98.0, 43.5),
+            (99.6, 42.4),
         ],
         xt,
         yt,
@@ -321,9 +323,9 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("avant_bras_d", avant_bras_d, "membre", "devant", cernee=True),
         *cernes("doigt_d", doigts("main_d", MEMBRES["bras_d"][2]), "devant"),
     ]
-    # traits du visage : la lèvre, relevée sur la photo, de la commissure au bout du museau (près
-    # du museau, elle borde le menton) ; la narine ; le tympan ; le pli sous l'autre œil
-    levre = [S["commissure"], (85.0, 45.3), (89.0, 44.6), (92.0, 44.0), (95.0, 43.3), (98.0, 42.4)]
+    # traits du visage : la lèvre, une droite de la commissure au bout du museau ; la narine ; le
+    # tympan ; le pli sous l'autre œil
+    levre = [S["commissure"], S["museau"]]
     tx, ty = S["tympan"]
     rt = np.hypot(xt - tx, yt - ty)
     ax, ay = S["autre_oeil"]
