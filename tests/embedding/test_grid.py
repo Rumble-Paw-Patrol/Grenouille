@@ -98,3 +98,9 @@ def test_overlap_is_read_from_the_config_or_the_old_hop_ratio():
     assert overlap_from_cfg({"encoders": {"overlap": 0.75}}) == 0.75
     assert overlap_from_cfg({"encoders": {"grid_hop_ratio": 0.25}}) == 0.75
     assert overlap_from_cfg({}) == 0.5
+
+
+def test_a_hop_ratio_set_in_a_local_config_wins_over_the_default_overlap():
+    """`encoders.overlap` est toujours dans default.yaml : `grid_hop_ratio` fixé l'emporte."""
+    assert overlap_from_cfg({"encoders": {"overlap": 0.5, "grid_hop_ratio": 0.25}}) == 0.75
+    assert overlap_from_cfg({"encoders": {"overlap": 0.75, "grid_hop_ratio": None}}) == 0.75

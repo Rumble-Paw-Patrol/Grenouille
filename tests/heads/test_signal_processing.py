@@ -219,6 +219,28 @@ def test_onsets_round_trip_through_the_database(tmp_path):
     assert load_onsets(con, {"autre"}) == {}
 
 
+def test_onsets_of_given_recordings_are_filtered_in_sql(tmp_path):
+    """`embed` lit les débuts de notes d'un enregistrement à la fois : la requête ne doit pas
+    relire toute la table (coût quadratique). Plus de 999 identifiants : lus par paquets."""
+    from blanci.core.db import connect
+    from blanci.heads.signal_processing import load_onsets, store_onsets
+
+    con = connect(tmp_path / "db.sqlite")
+    for rid in ("r1", "r2"):
+        con.execute(
+            "INSERT INTO recordings (recording_id, path, dataset) VALUES (?, ?, '2026')",
+            (rid, f"{rid}.wav"),
+        )
+        store_onsets(con, rid, np.array([0.5]), 0)
+    queries = []
+    con.set_trace_callback(queries.append)
+    assert list(load_onsets(con, {"r2"})) == ["r2"]
+    con.set_trace_callback(None)
+    assert any("WHERE recording_id IN" in q for q in queries)
+    many = [f"x{i}" for i in range(1200)] + ["r1"]
+    assert list(load_onsets(con, many)) == ["r1"]
+
+
 def test_window_rhythm_counts_only_notes_inside_the_window():
     import pandas as pd
 

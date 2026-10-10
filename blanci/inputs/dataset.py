@@ -167,13 +167,17 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
 
 def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFrame:
     """Intervalles encore valables : un extrait réécouté plus tard qui couvre entièrement un
-    intervalle le remplace (correction en ajout seul, comme les labels)."""
+    intervalle le remplace (correction en ajout seul, comme les labels). Un intervalle dont
+    l'enregistrement n'a aucun extrait dans `spans` (filtré : jeu gelé) n'est pas corrigé."""
     if intervals.empty:
         return intervals
     keep = []
     by_recording = {rid: g for rid, g in spans.groupby("recording_id")}
     for row in intervals.itertuples(index=False):
-        later = by_recording[row.recording_id]
+        later = by_recording.get(row.recording_id)
+        if later is None:
+            keep.append(True)
+            continue
         later = later[later["span_id"] > row.span_id]
         covered = (later["start_s"] <= row.start_s + 1e-6) & (later["end_s"] >= row.end_s - 1e-6)
         keep.append(not covered.any())
@@ -526,6 +530,8 @@ def training_set(
     négatifs appariés. `row` reste l'indice dans la grille complète.
     Colonne `suspect_fn` : négatif annoté encadré d'annotations positives à moins de
     `gap_radius_s` — faux négatif suspect, à réécouter ; il reste négatif (n° 85, 102).
+    Une fenêtre écartée (« A. blanci ? », bord, incertaine : `EXCLUDED_LABELS`) n'est pas non
+    plus tirée comme négatif présumé (n° 182).
     """
     grid = grid.reset_index(drop=True)
     if exclude_recordings:
@@ -534,9 +540,12 @@ def training_set(
     spans, intervals = load_spans(con)
     if exclude_recordings:
         spans = spans[~spans["recording_id"].isin(exclude_recordings)]
-    labeled = _merge_labelled(
-        transfer_labels(annotations, grid),
-        interval_labels(spans, intervals, grid).query("label not in @EXCLUDED_LABELS"),
+        intervals = intervals[intervals["span_id"].isin(spans["span_id"])]
+    from_intervals = interval_labels(spans, intervals, grid)
+    doubtful = from_intervals["label"].isin(EXCLUDED_LABELS)
+    labeled = _merge_labelled(transfer_labels(annotations, grid), from_intervals[~doubtful])
+    excluded_windows = set(from_intervals.loc[doubtful, "window_id"]) | set(
+        annotations.loc[annotations["label"].isin(EXCLUDED_LABELS), "window_id"]
     )
     positive_windows = pd.concat(
         [
@@ -551,7 +560,7 @@ def training_set(
     if per_positive > 0:
         positives = set(labeled.loc[labeled["y"] == 1, "recording_id"])
         negatives = paired_negatives(
-            grid[~grid["window_id"].isin(labeled["window_id"])],
+            grid[~grid["window_id"].isin(set(labeled["window_id"]) | excluded_windows)],
             recordings,
             positives,
             per_positive,
@@ -673,21 +682,25 @@ def benchmark_folds(
 ) -> dict[str, int]:
     """Pli de chaque point (micro), commun à tous les modèles (DECISIONS n° 91).
 
-    Calculé sur les enregistrements annotés (hors jeu gelé `exclude_recordings`), jamais sur
-    les fenêtres d'un encodeur : deux encodeurs, une baseline ou une fusion voient exactement
-    les mêmes micros tenus à l'écart dans chaque pli.
+    Calculé sur les enregistrements annotés, par labels de fenêtres ou par intervalles (hors
+    jeu gelé `exclude_recordings`), jamais sur les fenêtres d'un encodeur : deux encodeurs,
+    une baseline ou une fusion voient exactement les mêmes micros tenus à l'écart dans chaque
+    pli. Un enregistrement est positif s'il a un label positif ou un intervalle positif
+    valable (n° 182).
     """
     from blanci.evaluation.evaluate import fold_assignment
 
     labels = current_labels(con)
     labels = labels[~labels["label"].isin(EXCLUDED_LABELS)]
+    spans, intervals = load_spans(con)
     if exclude_recordings:
         labels = labels[~labels["recording_id"].isin(exclude_recordings)]
-    per_recording = (
-        labels.assign(pos=labels["label"].isin(POSITIVE_LABELS))
-        .groupby("recording_id")["pos"]
-        .max()
+        spans = spans[~spans["recording_id"].isin(exclude_recordings)]
+    positives = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"]) | set(
+        _positive_intervals(spans, intervals)["recording_id"]
     )
+    annotated = sorted(set(labels["recording_id"]) | set(spans["recording_id"]))
+    per_recording = pd.Series([rid in positives for rid in annotated], index=annotated)
     points = recordings_table(con).set_index("recording_id")["point"]
     points = points[~points.index.duplicated()]
     known = per_recording.index.intersection(points.index)

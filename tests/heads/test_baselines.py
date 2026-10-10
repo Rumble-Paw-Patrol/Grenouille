@@ -196,6 +196,24 @@ def test_evaluation_windows_mix_annotations_and_paired_negatives(corpus):
     assert windows["point"].nunique() == 4
 
 
+def test_evaluation_windows_read_the_intervals_like_the_heads(corpus):
+    """Un enregistrement annoté seulement par intervalles (n° 182) : ses fenêtres sont jugées,
+    comme celles que voient les têtes (`training_set`)."""
+    from blanci.service import append_span
+
+    con, cfg, _ = corpus
+    cfg["benchmark"]["pairing"] = "other_day"
+    (rid,) = con.execute(
+        "SELECT recording_id FROM recordings WHERE path LIKE '%M1_20260211%'"
+    ).fetchone()
+    append_span(con, rid, 0.0, 12.0, [(4.0, 4.4, "blanci")], "background", source="random")
+    windows = evaluation_windows(con, cfg)
+    sung = windows[windows["recording_id"] == rid]
+    assert sorted(sung.loc[sung["y"] == 1, "offset_s"]) == [1.5, 3.0]
+    assert (sung.loc[~sung["presumed"], "y"] == 0).sum() > 0  # le reste de l'extrait
+    assert (sung["dur_s"] == 3.0).all() and sung["path"].str.contains("20260211").all()
+
+
 def test_evaluation_windows_take_the_nearest_negatives_first(corpus):
     """Stratégie nearest (défaut, DECISIONS n° 101) : dans l'enregistrement positif d'abord.
     Annotations à 0, 3 et 6 s sur 12 s : seule la fenêtre à 9 s ne chevauche aucune d'elles ;

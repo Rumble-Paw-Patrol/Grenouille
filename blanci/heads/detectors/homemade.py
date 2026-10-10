@@ -1,5 +1,8 @@
 """Emplacement du modèle fait maison (§3, DECISIONS n° 97) — à programmer plus tard.
 
+EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas signaler
+comme code mort à l'audit.
+
 Un réseau conçu et entraîné ici, directement sur les labels (sans professeur, à la différence
 de la distillation) : par exemple un petit CNN sur le spectrogramme de la bande de la note, ou
 un modèle qui exploite ce que les encodeurs généralistes voient mal — une note de 0,09 s qui

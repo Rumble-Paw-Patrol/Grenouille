@@ -218,14 +218,22 @@ def store_onsets(
 
 
 def load_onsets(con: sqlite3.Connection, recording_ids=None) -> dict[str, np.ndarray]:
-    """{recording_id: débuts de notes (s)} pour les enregistrements déjà traités."""
-    rows = con.execute("SELECT recording_id, onsets_json FROM onsets").fetchall()
-    wanted = None if recording_ids is None else set(recording_ids)
-    return {
-        rid: np.asarray(json.loads(text), dtype=float)
-        for rid, text in rows
-        if wanted is None or rid in wanted
-    }
+    """{recording_id: débuts de notes (s)} pour les enregistrements déjà traités. Avec
+    `recording_ids`, seules leurs lignes sont lues (filtre SQL, par paquets) : `embed` le
+    demande pour chaque enregistrement."""
+    if recording_ids is None:
+        rows = con.execute("SELECT recording_id, onsets_json FROM onsets").fetchall()
+    else:
+        wanted = list(dict.fromkeys(recording_ids))
+        rows = []
+        for i in range(0, len(wanted), 500):  # sous la limite de paramètres de SQLite
+            chunk = wanted[i : i + 500]
+            rows += con.execute(
+                "SELECT recording_id, onsets_json FROM onsets "
+                f"WHERE recording_id IN ({', '.join('?' * len(chunk))})",
+                chunk,
+            ).fetchall()
+    return {rid: np.asarray(json.loads(text), dtype=float) for rid, text in rows}
 
 
 RHYTHM_COLUMNS = ("onset_rate_hz", "ioi_median_s", "ioi_cv", "frac_ioi_blanci", "frac_ioi_short")

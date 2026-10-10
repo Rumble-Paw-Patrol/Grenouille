@@ -1,5 +1,8 @@
 """Emplacement du fine-tuning et du LoRA (§3, DECISIONS n° 97) — à programmer plus tard.
 
+EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas signaler
+comme code mort à l'audit.
+
 Adapter l'encodeur de fondation lui-même, en tout (fine-tuning) ou en partie (LoRA : de petites
 matrices de rang faible ajoutées aux projections d'attention, le reste gelé). §3 : demande des
 centaines à des milliers d'annotations (AnuraSet aidera), risque de sur-apprentissage au site,

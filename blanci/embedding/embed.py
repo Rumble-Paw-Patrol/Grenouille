@@ -41,6 +41,7 @@ from blanci.heads.signal_processing import (
 )
 from blanci.inputs.qc import (
     EXCLUDING_FLAGS,
+    apply_audio_flags,
     is_excluded,
     merge_audio_flags,
     parse_flags,
@@ -60,7 +61,7 @@ class EmbedReport:
     encode_s: float = 0.0
     errors: int = 0
     qc_checked: int = 0  # contrôle audio fait pendant ce passage
-    qc_excluded: int = 0  # écartés par ce contrôle (silencieux, micro dans sac)
+    qc_excluded: int = 0  # écartés par ce contrôle (silencieux ; micro dans sac : voir plus bas)
     gated: int = 0  # fenêtres arrêtées par les portes du seuillage en amont (non encodées)
     wall_s: float = 0.0  # durée réelle du passage, lecture et écriture comprises
 
@@ -199,8 +200,10 @@ def embed_recordings(
 ) -> EmbedReport:
     """Encode les enregistrements. Avec `qc_thresholds`, l'audio lu sert aussi au contrôle
     audio de chaque enregistrement qui ne l'a pas encore eu (`blanci qc` le fait d'avance) ;
-    s'il lève un drapeau d'exclusion (silencieux, micro dans sac), l'enregistrement n'est pas
-    encodé, sauf si A. blanci y a été entendu.
+    s'il lève un drapeau d'exclusion (silencieux), l'enregistrement n'est pas encodé, sauf si
+    A. blanci y a été entendu. Micro dans sac : un enregistrement seul n'est qu'un candidat,
+    il est encodé ; la règle des suites (`qc.apply_audio_flags`, n° 194) est appliquée en fin
+    de passage. Pour ne pas encoder les suites de micro dans sac, lancer `blanci qc` d'abord.
 
     `overlap` : chevauchement des fenêtres (0 à 0,99) ; hors 50 %, le stock porte le
     chevauchement dans son nom (`stock_id`).
@@ -221,12 +224,16 @@ def embed_recordings(
     else:
         gates = None
     mode = resample_mode(encoder, resample)
-    check_stock_identity(con, eid, stock_identity(encoder, channel, mode))
+    identity = stock_identity(encoder, channel, mode, gates)
+    check_stock_identity(con, eid, identity)
     protected = positive_recordings(con) if qc_thresholds is not None else set()
     store = EmbeddingStore(store_root, eid)
     window_s = round(encoder.window_s, 2)
     hop_s = hop_for_overlap(window_s, overlap)
     report = EmbedReport(eid)
+    # Identité rangée avant le premier lot : un premier passage interrompu ne laisse pas un
+    # stock sans identité, qu'une reprise avec d'autres réglages compléterait sans refus.
+    _register_identity(con, encoder, hop_s, identity, gates, eid)
     began = perf_counter()
     recordings = recordings.assign(month=recordings["start_utc"].map(month_of))
 
@@ -239,7 +246,9 @@ def embed_recordings(
         audio = _Audio(wav, sr)
         known = parse_flags(rec.qc_flags)
         if qc_thresholds is not None and "indices" not in known:
-            audio.flags = qc_flags(qc_indices(wav, sr), qc_thresholds)
+            # `in_bag` n'est qu'un candidat ici : jugé en fin de passage (règle des suites).
+            fresh = qc_flags(qc_indices(wav, sr), qc_thresholds)
+            audio.flags = {k: v for k, v in fresh.items() if k != "in_bag"}
             if is_excluded(known | audio.flags) and rec.recording_id not in protected:
                 return audio  # sera écarté : rien à découper
         audio.windows = window_grid(len(wav) / sr, window_s, hop_s)
@@ -329,30 +338,47 @@ def embed_recordings(
         _flush(store, con, metas, embs, dataset, site, month)
         store.consolidate(dataset, site, month)
 
+    if report.qc_checked:  # micro dans sac : candidats rangés, jugés par suites (n° 194)
+        apply_audio_flags(con, qc_thresholds)
     report.wall_s = perf_counter() - began
     register_encoder(con, encoder, hop_s, report, channel, gates, mode)
     return report
 
 
-# Réglage d'un stock rangé avant que ce réglage n'existe.
-LEGACY_IDENTITY = {"resample": "window"}
+# Réglage d'un stock rangé avant que ce réglage n'existe : la valeur d'alors.
+LEGACY_IDENTITY = {"resample": "window", "openvino_precision": "f32"}
 
 
 def stock_identity(
-    encoder: Encoder, channel: int | str, resample: str = "window"
+    encoder: Encoder,
+    channel: int | str,
+    resample: str = "window",
+    gates: Upstream | None = None,
 ) -> dict[str, Any]:
     """Réglages qui font qu'un embedding se compare aux autres de son stock sans être dans son
-    nom : le canal lu, le checkpoint (bacpipe `birdmae_base`), les transformations en amont
-    avec tous leurs réglages, le rééchantillonnage (`resample_mode`). Rangés avec l'encodeur
-    (`register_encoder`)."""
-    identity: dict[str, Any] = {"channel": channel, "resample": resample}
+    nom : le canal lu, la durée de fenêtre (`window_s`, réglable pour avex), le checkpoint
+    (bacpipe `birdmae_base`), la précision OpenVINO, les transformations en amont avec tous
+    leurs réglages, le rééchantillonnage (`resample_mode`), les réglages `signal` des portes
+    actives (ils décident des fenêtres encodées). Rangés avec l'encodeur (`register_encoder`).
+    `window_s` est rangé depuis toujours dans les paramètres de l'encodeur ; la précision n'est
+    lue que si l'encodeur garde ses réglages `openvino`."""
+    identity: dict[str, Any] = {
+        "channel": channel,
+        "resample": resample,
+        "window_s": encoder.window_s,
+    }
     inner = getattr(encoder, "inner", encoder)  # UpstreamEncoder, LowpassEncoder
     checkpoint = getattr(encoder, "checkpoint", None) or getattr(inner, "checkpoint", None)
     if checkpoint:
         identity["checkpoint"] = checkpoint
+    openvino = getattr(encoder, "openvino", None) or getattr(inner, "openvino", None)
+    if isinstance(openvino, dict) and openvino:
+        identity["openvino_precision"] = openvino.get("precision", "f32")
     upstream = getattr(encoder, "upstream", None)
     if upstream is not None and upstream.transforms:
         identity["transforms"] = upstream.transforms
+    if gates is not None and gates.gates:
+        identity["gate_signal"] = gates.signal_cfg
     return json.loads(json.dumps(identity))  # comme relu de la base (listes, pas tuples)
 
 
@@ -374,6 +400,46 @@ def check_stock_identity(con: sqlite3.Connection, eid: str, identity: dict[str, 
                 "les embeddings ne se comparent pas ; reprendre avec le même réglage, ou "
                 "encoder sous un autre nom (config encoders)"
             )
+
+
+def _static_params(
+    encoder: Encoder, hop_s: float, identity: dict[str, Any], gates: Upstream | None
+) -> dict[str, Any]:
+    """Paramètres de l'encodeur connus avant tout encodage (sans débit ni cumul)."""
+    return {
+        "sample_rate": encoder.sample_rate,
+        "window_s": encoder.window_s,
+        "hop_s": hop_s,
+        "overlap": round(overlap_of(encoder.window_s, hop_s), 4),
+        **identity,  # canal, checkpoint… (n° 143)
+        "dim": encoder.dim,
+        "has_tokens": encoder.has_tokens,
+        "gates": {"thresholds": gates.gates, "combine": gates.combine} if gates else None,
+    }
+
+
+def _register_identity(
+    con: sqlite3.Connection,
+    encoder: Encoder,
+    hop_s: float,
+    identity: dict[str, Any],
+    gates: Upstream | None,
+    eid: str,
+) -> None:
+    """Range l'identité d'un stock nouveau dès le début de son premier passage ; sans effet
+    sur un stock déjà rangé (`check_stock_identity` l'a déjà comparé)."""
+    con.execute(
+        "INSERT INTO models (model_id, kind, name, version, params_json, created_at) "
+        "VALUES (?, 'encoder', ?, ?, ?, ?) ON CONFLICT(model_id) DO NOTHING",
+        (
+            eid,
+            encoder.name,
+            encoder.version,
+            json.dumps(_static_params(encoder, hop_s, identity, gates)),
+            utc_now(),
+        ),
+    )
+    con.commit()
 
 
 def _add_totals(con: sqlite3.Connection, report: EmbedReport) -> dict[str, float]:
@@ -401,15 +467,9 @@ def register_encoder(
     gates: Upstream | None = None,
     resample: str = "window",
 ) -> None:
+    identity = stock_identity(encoder, channel, resample, gates)
     params: dict[str, Any] = {
-        "sample_rate": encoder.sample_rate,
-        "window_s": encoder.window_s,
-        "hop_s": hop_s,
-        "overlap": round(overlap_of(encoder.window_s, hop_s), 4),
-        **stock_identity(encoder, channel, resample),  # canal, checkpoint… (n° 143)
-        "dim": encoder.dim,
-        "has_tokens": encoder.has_tokens,
-        "gates": {"thresholds": gates.gates, "combine": gates.combine} if gates else None,
+        **_static_params(encoder, hop_s, identity, gates),
         "last_run": asdict(report)
         | {"windows_per_s": report.windows_per_s, "realtime_factor": report.realtime_factor},
         "totals": _add_totals(con, report),

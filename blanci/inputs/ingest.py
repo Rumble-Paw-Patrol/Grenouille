@@ -23,7 +23,13 @@ import soundfile as sf
 
 from blanci.core.audio import load_audio
 from blanci.core.db import recording_id_for
-from blanci.inputs.qc import apply_annotation_flags, apply_metadata_flags, qc_flags, qc_indices
+from blanci.inputs.qc import (
+    apply_annotation_flags,
+    apply_audio_flags,
+    apply_metadata_flags,
+    qc_flags,
+    qc_indices,
+)
 
 # <préfixe>_<AAAAMMJJ>_<HHMMSS>[_suffixe] — convention Wildlife Acoustics.
 SONGMETER_NAME = re.compile(r"^(?P<prefix>.+?)_(?P<date>\d{8})_(?P<time>\d{6})(?:_.*)?$")
@@ -285,6 +291,8 @@ def ingest(
     con.commit()
     # Les drapeaux d'inventaire dépendent de toute la série d'un micro : recalculés ici.
     report.flagged = apply_metadata_flags(con, cfg["qc"], cfg["recorder"]["filename_utc_offset_h"])
+    if run_qc:  # `in_bag` rangé n'est qu'un candidat : règle des suites du même micro (n° 194)
+        apply_audio_flags(con, cfg["qc"])
     # Un contrôle audio refait réécrit qc_flags : les drapeaux posés à l'écoute sont remis.
     apply_annotation_flags(con)
     return report

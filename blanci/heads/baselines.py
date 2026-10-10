@@ -5,9 +5,10 @@ rappel ≥ 0,8 à précision ≥ 0,1, le détecteur primaire sera « DSP + templ
 sont jugées exactement comme les encodeurs : mêmes fenêtres annotées, mêmes négatifs appariés,
 plis groupés par micro, mêmes métriques (`evaluate`).
 
-Fenêtres évaluées : les fenêtres annotées (3 s, décalage de l'annotation) et
-`negatives_per_positive` négatifs appariés présumés par enregistrement positif, tirés sur la
-grille w3 des candidats de `benchmark_recordings`.
+Fenêtres évaluées : celles des têtes (`dataset.training_set`) sur la grille w3 des
+enregistrements de `benchmark_recordings` : fenêtres étiquetées par les labels de fenêtres et
+par les intervalles (n° 182), et `negatives_per_positive` négatifs appariés présumés par
+enregistrement positif.
 
 Scores (plus haut = plus probablement A. blanci) :
 - `band_energy` : pic d'énergie en bande 4,4–5,5 kHz au-dessus de sa médiane dans la fenêtre,
@@ -42,17 +43,13 @@ from blanci.evaluation.evaluate import evaluate, grouped_folds
 from blanci.evaluation.oof import labels_fingerprint, oof_frame, save_oof
 from blanci.heads.signal_processing import detect_onsets
 from blanci.inputs.dataset import (
-    EXCLUDED_LABELS,
     benchmark_recordings,
-    current_labels,
     folds_for,
-    paired_negatives,
     pairing_options,
-    positive_annotations,
     recordings_table,
+    training_set,
 )
 from blanci.inputs.frozen import frozen_recordings
-from blanci.inputs.labels import POSITIVE_LABELS
 
 FIXED = ("band_energy", "band_contrast", "notes", "rhythm")
 LEARNED = ("template_mean", "template_max")
@@ -77,27 +74,15 @@ class WindowFeatures:
 
 def evaluation_windows(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
     """Fenêtres annotées + négatifs appariés présumés : window_id, recording_id, path,
-    offset_s, dur_s, label, y, presumed, point, site."""
+    offset_s, dur_s, label, y, presumed, point, site.
+
+    Mêmes fenêtres que les têtes (`dataset.training_set`, labels de fenêtres et intervalles,
+    n° 182) sur la grille w3 des enregistrements de `benchmark_recordings` (annotés et
+    candidats aux négatifs appariés), jeu gelé exclu (§6)."""
     bench = cfg["benchmark"]
-    recordings = recordings_table(con)
-
     frozen = frozen_recordings(cfg)  # jeu gelé : jamais vu en développement (§6)
-    labels = current_labels(con)
-    labels = labels[~labels["label"].isin(EXCLUDED_LABELS)]
-    labels = labels[~labels["recording_id"].isin(frozen)].copy()
-    labels["y"] = labels["label"].isin(POSITIVE_LABELS).astype(int)
-    labelled = labels[["window_id", "recording_id", "offset_s", "dur_s", "label", "y"]].assign(
-        presumed=False
-    )
-
-    positives = set(labelled.loc[labelled["y"] == 1, "recording_id"])
     candidates = benchmark_recordings(con, **pairing_options(cfg))
-    # Candidats aux négatifs appariés, plus les enregistrements positifs eux-mêmes (stratégie
-    # nearest, DECISIONS n° 101) ; jamais une fenêtre déjà annotée.
-    candidates = candidates[
-        ((candidates["role"] == "paired_candidate") | candidates["recording_id"].isin(positives))
-        & ~candidates["recording_id"].isin(frozen)
-    ]
+    candidates = candidates[~candidates["recording_id"].isin(frozen)]
     w3 = cfg["grids"]["w3"]
     grid = pd.DataFrame(
         [
@@ -107,21 +92,17 @@ def evaluation_windows(con: sqlite3.Connection, cfg: dict) -> pd.DataFrame:
         ],
         columns=["window_id", "recording_id", "offset_s", "dur_s"],
     )
-    grid = grid[~grid["window_id"].isin(labelled["window_id"])].reset_index(drop=True)
-    negatives = paired_negatives(
+    data = training_set(
+        con,
         grid,
-        recordings,
-        positives,
-        bench["negatives_per_positive"],
+        per_positive=bench["negatives_per_positive"],
         seed=cfg["head"]["seed"],
-        positive_windows=positive_annotations(labels),
+        exclude_recordings=frozen,
         **pairing_options(cfg),
-    ).assign(dur_s=w3["window_s"], presumed=True)
-
-    data = pd.concat([labelled, negatives], ignore_index=True)
-    return data.merge(
-        recordings[["recording_id", "path", "point", "site"]], on="recording_id", how="left"
     )
+    data["dur_s"] = grid["dur_s"].to_numpy()[data["row"].to_numpy()]
+    recordings = recordings_table(con)
+    return data.merge(recordings[["recording_id", "path"]], on="recording_id", how="left")
 
 
 def read_windows(
