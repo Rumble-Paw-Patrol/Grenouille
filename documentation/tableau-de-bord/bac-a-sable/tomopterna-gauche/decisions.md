@@ -179,3 +179,9 @@ l'ébauche et le croquis.
   aplatis par la tranche là où ils s'enroulent sous la branche (orteils droits, doigts III et
   IV des deux mains), le pouce plus petit. Seules les mains et les bouts bougent ; le croquis
   et le modelé fidèle seront gelés de nouveau après validation.
+- Retouche des mains et éclat (10/10/2026) : Léonard juge la grenouille parfaite. Le croquis
+  est gelé de nouveau (`gauche_croquis_valide.json`, avec les mains et les bouts relevés), le
+  modelé fidèle aussi (`gauche_details_valide.json`) ; l'éclat, avec la pupille en
+  demi-pixels, est gelé en `gauche_eclat_valide.json` : c'est lui que l'étape 4 animera.
+- Léonard passe ensuite à la grenouille de droite (`../tomopterna-droite/`) ; l'étape 4 de
+  la grenouille de gauche reste à faire.
