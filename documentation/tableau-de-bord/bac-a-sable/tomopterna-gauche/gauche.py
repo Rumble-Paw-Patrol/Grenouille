@@ -486,9 +486,6 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     Px, Py = (X - ORIGINE[0]) * ECHELLE - 0.5, (Y - ORIGINE[1]) * ECHELLE - 0.5
     Pxt, Pyt = (xt - ORIGINE[0]) * ECHELLE - 0.5, (yt - ORIGINE[1]) * ECHELLE - 0.5
     rang, rang_levre = np.floor(2 * yt), np.floor(2 * ligne)
-    # l'avant-bras droit va jusqu'au ventre : sa face interne, orangée et barrée, est la bande
-    # qu'on prenait pour le flanc (correction de Léonard à l'étape 3a)
-    bras_d |= corps & (Px >= 33) & (Px <= 37.5) & (Py >= 43.5)
     # le vert s'arrête, côté ventre, sur une droite relevée colonne par colonne, de l'arrière du
     # bras droit à la commissure, puis sur la lèvre ; dessous, la peau claire du ventre
     vert = 38.5 - 0.27 * (Pxt - 35)
@@ -527,7 +524,12 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # sa face interne, pâle sur sa rangée du haut, orangée dessous, barrée de cinq barres
     haut = bras_d & (Px >= 33.5) & (Py <= 44.5)
     dessus = haut & bande(bras_d, 0, -1, 1)
-    interne = bras_d & ~haut & bande(bras_d, 1, 0, 3) & (Py <= 62)
+    # la limite entre les deux faces : une droite parallèle à l'avant-bras, à 2 pixels de son
+    # bord droit (le cinquième de sa largeur), du coude au poignet
+    (ex, ey), (px_, py_) = S["coude_d"], S["poignet_d"]
+    long = math.hypot(px_ - ex, py_ - ey)
+    droite = ((X - ex) * (py_ - ey) - (Y - ey) * (px_ - ex)) / long  # vers la droite de l'image
+    interne = bras_d & ~haut & (droite > 0.95) & (Py >= 43.5) & (Py <= 62)
     zones_bras_d = {
         "membre": haut | interne,
         "pale": dessus,
@@ -556,13 +558,13 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         | barres([S["hanche_g"], S["genou_g"]], px((76.6, 44.8))),
         "dos": bande(patte_g, 1, 0, 2) & (Py >= 34) & (Py <= 52) & (Px >= 86),
     }
-    # le bras gauche : orangé, bordé de vert à gauche, quatre barres (pas de gris : correction
-    # de Léonard à l'étape 3a)
+    # le bras gauche : orangé, quatre barres ; on voit à peine le vert de sa face externe, à
+    # droite de l'image (corrections de Léonard à l'étape 3b)
     zones_bras_g = {
         "barre": barres(
             [S[n] for n in MEMBRES["bras_g"][0]], px((81.6, 39), (83.8, 45), (84.5, 50), (84.7, 55))
         ),
-        "dos": bande(bras_g, -1, 0, 2) & (Py >= 40) & (Py <= 51),
+        "dos": bande(bras_g, 1, 0, 1) & (Py >= 40) & (Py <= 55),
     }
     # barres des doigts et des orteils (centres en pixels) et taches des disques, par doigt
     barres_orteils_d = [([(21.6, 74.0), (20.7, 77.0)], ()), ([(26.4, 74.0), (26.2, 77.0)], ())]

@@ -138,3 +138,10 @@ l'ébauche et le croquis.
   - 100 couleurs.
 - 3b : le rendu détaillé du modèle éclairait le côté opposé à LUMIERE (signe inversé) ; corrigé
   dans modele.py, gauche.py et branche.py.
+- 3b (tour 2) : l'avant-bras droit élargi avait perdu sa forme : il revient à celle du croquis
+  validé à l'étape 2 (le croquis gelé est de nouveau celui-là, pixel pour pixel). Sa face
+  interne orangée et barrée est une bande de 2 pixels (le cinquième de sa largeur), séparée
+  du vert par une droite parallèle à l'avant-bras, sans zigzag. La place rendue est du ventre,
+  dans ses couleurs.
+- 3b (tour 2) : avant-bras gauche : le vert, à peine visible, est sur sa face externe, à droite
+  de l'image (un pixel), et non à gauche.
