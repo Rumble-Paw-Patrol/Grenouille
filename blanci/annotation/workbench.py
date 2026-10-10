@@ -222,9 +222,17 @@ def annotation_status(
     window_id ; `label`, celui que lui donnent les intervalles (`interval_labels`), sinon son
     dernier label de fenêtre ; `heard`, l'un ou l'autre existe (fenêtre étiquetée, ou couverte
     par un extrait annoté par intervalles, n° 182) ; `positive`, dernier label positif ou
-    intervalle positif courant. `ignore_sources` : labels de fenêtre de ces sources non comptés
+    intervalle positif courant. Comme `_merge_labelled`, un label de fenêtre et un intervalle
+    en désaccord (positif / négatif) écartent la fenêtre : elle reste écoutée (jamais
+    reproposée), de label `blanci_uncertain` et jamais positive ferme.
+    `ignore_sources` : labels de fenêtre de ces sources non comptés
     (« bulk » : ce qui a été entendu, pas ce qui a été propagé)."""
-    from blanci.inputs.dataset import current_labels, interval_labels, load_spans
+    from blanci.inputs.dataset import (
+        EXCLUDED_LABELS,
+        current_labels,
+        interval_labels,
+        load_spans,
+    )
     from blanci.inputs.labels import POSITIVE_LABELS
 
     ids = _window_ids(frame) if len(frame) else []
@@ -243,12 +251,26 @@ def annotation_status(
     spans = dict(zip(derived["window_id"], derived["label"], strict=True))
     y = dict(zip(derived["window_id"], derived["y"], strict=True))
     label = [spans.get(i, own.get(i)) for i in ids]
+
+    def clash(i: str) -> bool:
+        mine, theirs = own.get(i), spans.get(i)
+        if mine is None or theirs is None:
+            return False
+        if mine in EXCLUDED_LABELS or theirs in EXCLUDED_LABELS:
+            return False
+        return (mine in POSITIVE_LABELS) != (y.get(i) == 1)
+
+    conflict = [clash(i) for i in ids]
+    label = ["blanci_uncertain" if c else lab for c, lab in zip(conflict, label, strict=True)]
     return pd.DataFrame(
         {
             "window_id": ids,
             "label": pd.Series(label, dtype=object).to_numpy(),
             "heard": [lab is not None for lab in label],
-            "positive": [own.get(i) in POSITIVE_LABELS or y.get(i) == 1 for i in ids],
+            "positive": [
+                not c and (own.get(i) in POSITIVE_LABELS or y.get(i) == 1)
+                for c, i in zip(conflict, ids, strict=True)
+            ],
         },
         index=frame.index,
     )

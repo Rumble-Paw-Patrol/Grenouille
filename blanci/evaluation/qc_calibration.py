@@ -23,7 +23,9 @@ import numpy as np
 import pandas as pd
 import soundfile as sf
 
-from blanci.inputs.dataset import interval_labels, load_spans
+from blanci.core.db import window_id_for
+from blanci.embedding.grid import window_grid
+from blanci.inputs.dataset import EXCLUDED_LABELS, interval_labels, load_spans
 from blanci.inputs.labels import POSITIVE_LABELS
 from blanci.inputs.qc import in_bag_runs, qc_flags, qc_indices
 
@@ -50,8 +52,10 @@ def _group(label: pd.Series, tags: pd.Series) -> np.ndarray:
 def labelled_windows(con: sqlite3.Connection) -> pd.DataFrame:
     """Dernier label de chaque fenêtre, avec ses conditions et le chemin de l'enregistrement ;
     plus les fenêtres couvertes par un extrait écouté (annotation par intervalles, `spans`),
-    étiquetées comme `interval_labels` le fait pour l'entraînement. Un label d'une fenêtre
-    prime sur celui de l'extrait.
+    étiquetées comme `interval_labels` le fait pour l'entraînement, sur la grille w3 découpée
+    dans les extraits (la table `windows` n'en a pas besoin). Un label de fenêtre prime sur celui
+    de l'extrait quand ils s'accordent ; en désaccord (positif / négatif), la fenêtre est
+    écartée, comme `_merge_labelled`.
 
     `attrs["series"]` : indices déjà rangés par le contrôle audio pour tous les enregistrements
     (voisins compris), dont la règle des suites d'`in_bag` a besoin."""
@@ -68,20 +72,49 @@ def labelled_windows(con: sqlite3.Connection) -> pd.DataFrame:
     df = df.drop(columns="conditions")
     spans, intervals = load_spans(con)
     if not spans.empty:
-        grid = pd.read_sql_query(
-            f"""SELECT w.window_id, w.recording_id, w.offset_s, w.dur_s, {cols}
-               FROM windows w JOIN recordings r USING (recording_id)
-               WHERE w.recording_id IN (SELECT recording_id FROM spans)""",
-            con,
-        )
+        grid = _span_grid(con)
         found = interval_labels(spans, intervals, grid)
-        found = found[~found["window_id"].isin(df["window_id"])]
+        # Même règle que `_merge_labelled` : une fenêtre que son label et un intervalle étiquettent
+        # en désaccord (positive / négative) est écartée ; d'accord, le label de fenêtre prime.
+        own_y = df.set_index("window_id")["label"].isin(POSITIVE_LABELS)
+        own_y = own_y[~own_y.index.duplicated()]
+        certain = ~found["label"].isin(EXCLUDED_LABELS)
+        clash = (
+            found["window_id"].isin(df.loc[~df["label"].isin(EXCLUDED_LABELS), "window_id"])
+            & certain
+            & (found["y"].to_numpy() != found["window_id"].map(own_y).fillna(False).to_numpy())
+        )
+        df = df[~df["window_id"].isin(found.loc[clash, "window_id"])]
+        found = found[~found["window_id"].isin(df["window_id"]) & ~clash]
         if len(found):
             found = found[["window_id", "label"]].merge(grid, on="window_id", how="left")
             found["group"] = _group(found["label"], pd.Series([set()] * len(found)))
             df = pd.concat([df, found], ignore_index=True)
     df.attrs["series"] = _stored_indices(con)
     return df
+
+
+def _span_grid(con: sqlite3.Connection, window_s: float = 3.0, hop_s: float = 1.5) -> pd.DataFrame:
+    """Grille des fenêtres (w3 par défaut, comme `estimate_prevalence`) des enregistrements
+    qui ont un extrait écouté. Elle ne dépend pas de la table `windows`, que `append_span`
+    ne remplit pas : un enregistrement écouté mais jamais encodé y compte aussi."""
+    recordings = pd.read_sql_query(
+        """SELECT r.recording_id, r.path, r.dataset, r.site, r.mic_id, r.start_utc,
+                  r.duration_s, MAX(s.end_s) AS last_end_s
+           FROM recordings r JOIN spans s USING (recording_id) GROUP BY r.recording_id""",
+        con,
+    )
+    rows = [
+        (window_id_for(r.recording_id, offset, dur), r.recording_id, offset, dur, r.path,
+         r.dataset, r.site, r.mic_id, r.start_utc)
+        for r in recordings.itertuples()
+        for offset, dur in window_grid(r.duration_s or r.last_end_s, window_s, hop_s)
+    ]  # fmt: skip
+    return pd.DataFrame(
+        rows,
+        columns=["window_id", "recording_id", "offset_s", "dur_s", "path", "dataset", "site",
+                 "mic_id", "start_utc"],
+    )  # fmt: skip
 
 
 def _stored_indices(con: sqlite3.Connection) -> pd.DataFrame:
@@ -197,6 +230,25 @@ def _flagged_now(
     return _raised(values, threshold, direction)
 
 
+def _flagged_suggested(
+    targets: pd.Series,
+    suggestion: float,
+    direction: str,
+    flag: str,
+    indices: pd.DataFrame,
+    thresholds: dict[str, Any],
+    key: str,
+) -> int:
+    """Cibles signalées au seuil proposé, par la même règle que « aux seuils actuels » :
+    pour `in_bag`, la règle des suites avec le seuil proposé à la place de l'actuel."""
+    if flag != "in_bag":
+        return _raised(targets, suggestion, direction)
+    if not np.isfinite(suggestion):
+        return 0
+    bagged = bagged_recordings(indices, thresholds | {key: suggestion})
+    return _flagged_now(targets, suggestion, direction, flag, bagged)
+
+
 def suggest_thresholds(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.DataFrame:
     """Par drapeau : effet du seuil actuel et seuil proposé, au niveau de l'enregistrement
     (celui où le drapeau décide de l'encodage). Un enregistrement est « à protéger » s'il
@@ -230,7 +282,9 @@ def suggest_thresholds(indices: pd.DataFrame, thresholds: dict[str, Any]) -> pd.
                 "blanci_recordings": len(protected),
                 "blanci_flagged_now": _flagged_now(protected, current, direction, flag, bagged),
                 "suggested": suggestion,
-                "targets_flagged_suggested": _raised(targets, suggestion, direction),
+                "targets_flagged_suggested": _flagged_suggested(
+                    targets, suggestion, direction, flag, indices, thresholds, key
+                ),
                 "reason": why,
             }
         )

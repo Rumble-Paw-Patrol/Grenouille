@@ -438,3 +438,29 @@ def test_windows_heard_by_intervals_count_as_heard(corpus):
     assert status["positive"].tolist() == [True, False, False]
     whole = recording_candidates(con, cfg, n=len(rids))
     assert rids[0] not in set(whole["recording_id"]) and len(whole) == len(rids) - 1
+
+
+def test_window_label_and_interval_in_conflict_stay_heard_but_not_positive(corpus):
+    """Même règle que `_merge_labelled` : label de fenêtre et intervalle en désaccord
+    (positif / négatif) écartent la fenêtre ; écoutée (pas reproposée), jamais positive ferme."""
+    from blanci.annotation.workbench import annotation_status
+    from blanci.service import append_span
+
+    con, _, _ = corpus
+    rid = con.execute("SELECT recording_id FROM recordings ORDER BY path").fetchone()[0]
+
+    def label(offset, name):
+        cand = {"recording_id": rid, "offset_s": offset, "dur_s": 3.0, "source": "random"}
+        save_answer(con, cand, name, "léonard")
+
+    label(3.0, "bird")  # négatif, mais un intervalle d'A. blanci le couvre : conflit
+    label(6.0, "blanci")  # positif, mais l'extrait ne porte que du fond : conflit
+    label(9.0, "blanci")  # positif et couvert par un intervalle positif : d'accord
+    append_span(
+        con, rid, 0.0, 12.0, [(3.0, 6.0, "blanci"), (9.5, 11.5, "blanci")], "background", "audit"
+    )
+    frame = pd.DataFrame({"recording_id": [rid] * 3, "offset_s": [3.0, 6.0, 9.0], "dur_s": 3.0})
+    status = annotation_status(con, frame)
+    assert status["heard"].tolist() == [True, True, True]
+    assert status["positive"].tolist() == [False, False, True]
+    assert status["label"].tolist() == ["blanci_uncertain", "blanci_uncertain", "blanci"]

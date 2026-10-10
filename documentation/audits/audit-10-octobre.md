@@ -86,9 +86,12 @@ lisait encore que les labels de fenêtres.
 - `finetune.py`, détecteurs `distilled` et `homemade`, aides R61–R63 : **gardés**, marqués « EN ATTENTE » dans le code, le README et le skill d'audit.
 - Tests renommés d'après ce qu'ils testent ; ruff propre.
 
-Tests après : 794 réussis, 0 échoué (62 lents non lancés), ruff propre. Relecture par un agent
-distinct : trois défauts mineurs dans `qc_calibration` et la règle « label ou intervalle »,
-corrigés ensuite (voir le dernier commit de la branche).
+Relecture par un agent distinct : trois défauts mineurs, corrigés. `qc-calibrate` ignorait les
+extraits d'un enregistrement jamais encodé ; le compte « suggéré » du micro dans sac oubliait la
+règle des suites ; un label de fenêtre et un intervalle en désaccord étaient tranchés
+différemment selon le module (désormais : écoutée, jamais positive ferme, comme l'entraînement).
+
+Tests après : 799 réussis, 0 échoué (62 lents non lancés), ruff propre.
 
 ## 2. Erreurs trouvées, non corrigées
 
