@@ -280,6 +280,15 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
      3 pixels »).
    - La publier en artefact privé, toujours le même fichier. Montrer la lecture et la
      superposition dans la conversation.
+   - **Léonard corrige le squelette à la souris** : bouton « Déplacer les points » (ébauche et
+     croquis). Il fait glisser les repères (au demi-pixel, flèches du clavier pour affiner),
+     écrit une remarque, puis « Envoyer à Claude ». Publier la planche avec
+     `capabilities: {"db": {}}` pour que l'envoi marche ; sans base, « Copier le texte » donne la
+     même liste à coller. Pour lire l'envoi : `ArtifactData` `get`, collection `squelettes`,
+     document = le nom du sprite sans l'étape (`droite`) ; `reperes` donne les nouvelles places
+     et `base` les anciennes, en pixels du sprite (x, y). Les reporter dans `SQUELETTE` en
+     unités (ORIGINE + pixel / ECHELLE ; avec MIROIR, x retourné et côtés échangés), refaire le
+     rendu, puis effacer le document (`delete`) une fois appliqué.
 5. **Dans le message**, un tableau de lecture, une ligne par membre : côté de l'animal, plan,
    articulations visibles, largeurs mesurées en pixels, doigts ou orteils visibles sur combien,
    contact avec le support.

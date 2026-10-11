@@ -60,3 +60,14 @@ droite ») ; elle sert de premier jet.
   7 × 2 pixels, inclinée de 8°, en avant du centre ; le haut de l'avant-bras gauche fondu dans le
   dos, sans contour ; doigt I gauche de 2 pixels, à gauche de l'avant-bras ; pied droit en
   trapèze relevé sur la photo, ses orteils soudés.
+- 1 (11/10) : le museau est bugué (un creux entre le dessus du museau et la bosse de l'autre
+  œil) : le dessus du museau monte en droite jusqu'à la bosse. On doit voir l'autre œil : le
+  haut de son globe, gris, sur la bosse. La pupille : en demi-pixels dès l'ébauche (résolution
+  de l'œil doublée à toutes les étapes), une fente fine, inclinée. Le coude droit se voit : le
+  bras et l'épaule droits ne sont pas cachés derrière le corps, ils passent devant. Le corps est
+  svelte, pas de ventre rond (morphologie différente de la grenouille de gauche). La cuisse
+  gauche est trop grosse : on voit nettement le flanc gauche à sa gauche. Pied droit : le tarse
+  est le point le plus bas, les trois orteils en partent en éventail. Le haut de l'avant-bras
+  gauche ne se fond pas dans le dos : un membre à part, cerné, mais sans bosse.
+- 1 (11/10) : Léonard veut placer et déplacer lui-même les points du squelette, à la souris,
+  sur la planche : bouton « Déplacer les points », envoi à Claude par la base de la page.

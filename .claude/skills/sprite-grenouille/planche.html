@@ -38,6 +38,20 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 figcaption { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
 .images { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 14px; }
 .images .scene { padding: 12px 8px 0; }
+/* l'édition du squelette : Léonard déplace les repères à la souris (ou au doigt) et les envoie */
+canvas.edition { cursor: crosshair; touch-action: none; }
+canvas.edition.prise { cursor: grabbing; }
+.edition-panneau { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.edition-panneau[hidden] { display: none; }
+.edition-panneau p { margin: 0; color: var(--muted); max-width: 75ch; }
+.edition-panneau ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-family: var(--f-mono); font-size: 12.5px; }
+.edition-panneau li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.edition-panneau li button { padding: 1px 10px; font-size: 12px; }
+.edition-panneau textarea { font: inherit; font-size: 14px; color: var(--ink); background: rgba(0, 0, 0, .35); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-height: 64px; resize: vertical; width: 100%; }
+.edition-panneau .vide { color: var(--muted); font-family: var(--f-body); font-size: 14px; }
+.edition-panneau .etat { font-family: var(--f-mono); font-size: 12px; color: var(--gold); min-height: 1.2em; }
+button.principal { background: linear-gradient(135deg, #F5A53A, #E4573F); color: #1A0B03; border-color: transparent; }
+button:disabled { opacity: .45; cursor: default; }
 </style>
 
 <div class="page">
@@ -55,6 +69,19 @@ figcaption { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted);
       <button type="button" id="b-grille" aria-pressed="false">Grille de pixels</button>
       <button type="button" id="b-anim" aria-pressed="true">Animation</button>
       <button type="button" id="b-mosaique" aria-pressed="true">Mosaïque de pixels</button>
+      <button type="button" id="b-edition" aria-pressed="false" hidden>Déplacer les points</button>
+    </div>
+    <div class="edition-panneau" id="edition" hidden>
+      <p>Faites glisser un point du squelette sur le dessin, à la souris ou au doigt ; il se pose au demi-pixel. Un point choisi se déplace aussi aux flèches du clavier. L'ancienne place reste marquée d'un cercle vide. Puis envoyez : Claude lit vos points et refait le dessin.</p>
+      <ul id="deplaces"></ul>
+      <label style="display:grid;gap:6px"><span style="font-size:13px;color:var(--muted)">Remarque (facultative)</span><textarea id="remarque" placeholder="Par exemple : le genou plus haut, la cuisse plus fine…"></textarea></label>
+      <div class="controles">
+        <button type="button" class="principal" id="b-envoyer" hidden>Envoyer à Claude</button>
+        <button type="button" id="b-copier">Copier le texte</button>
+        <button type="button" id="b-annuler">Annuler le dernier</button>
+        <button type="button" id="b-remettre">Tout remettre</button>
+      </div>
+      <div class="etat" id="etat" aria-live="polite"></div>
     </div>
   </section>
 
@@ -99,7 +126,14 @@ const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;
 // squelette : repères nommés (articulations, bouts des doigts, visage) et os, couleur selon le plan
 const SQUELETTE = C.grenouilles.some((g) => g.sprite.reperes);
 const PLAN = { devant: "#FF9A2E", corps: "#FFE05A", fond: "#3FA7FF" };
-const reglages = { anim: ANIME && !calme, mosaique: true, grille: false, squelette: C.grenouilles.some((g) => g.sprite.squelette_visible) };
+const reglages = { anim: ANIME && !calme, mosaique: true, grille: false, squelette: C.grenouilles.some((g) => g.sprite.squelette_visible), edition: false };
+// édition : les repères déplacés, par grenouille ({nom: [x, y]}, en pixels de son sprite), et
+// l'ordre des déplacements (pour « annuler le dernier »)
+for (const g of C.grenouilles) g.deplaces = {};
+const historique = [];
+let choisi = null;  // [grenouille, nom] : le point pris ou choisi au clavier
+const pos = (g, nom) => g.deplaces[nom] || g.sprite.reperes[nom];
+const nomDe = (g) => (g.nom || "sprite").replace(/_(ebauche|croquis|aplats|details|animation)$/, "");
 
 function scene(toile, fixe) {
   const pxCss = +toile.dataset.px, ctx = toile.getContext("2d"), avecGrille = !!toile.dataset.grille;
@@ -170,14 +204,21 @@ function scene(toile, fixe) {
       const X = (x) => (x + g.x + DX) * p, Y = (y) => (y + g.y + DY) * p;
       ctx.lineWidth = Math.max(1, p / 3);
       for (const [a, b, plan] of g.sprite.os) {
+        const [xa, ya] = pos(g, a), [xb, yb] = pos(g, b);
         ctx.strokeStyle = PLAN[plan]; ctx.beginPath();
-        ctx.moveTo(X(r[a][0]), Y(r[a][1])); ctx.lineTo(X(r[b][0]), Y(r[b][1])); ctx.stroke();
+        ctx.moveTo(X(xa), Y(ya)); ctx.lineTo(X(xb), Y(yb)); ctx.stroke();
       }
       ctx.font = `${Math.max(10, p * 1.7)}px "JetBrains Mono", monospace`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-      for (const [nom, [x, y, plan]] of Object.entries(r)) {
-        ctx.fillStyle = PLAN[plan]; ctx.strokeStyle = "#000";
-        ctx.beginPath(); ctx.arc(X(x), Y(y), Math.max(2, p * 0.6), 0, 6.283); ctx.fill(); ctx.lineWidth = 1; ctx.stroke();
-        if (avecGrille) { ctx.lineWidth = 3; ctx.strokeText(nom, X(x) + p, Y(y)); ctx.fillText(nom, X(x) + p, Y(y)); }
+      for (const [nom, [x0, y0, plan]] of Object.entries(r)) {
+        const [x, y] = pos(g, nom), bouge = nom in g.deplaces, pris = choisi && choisi[0] === g && choisi[1] === nom;
+        if (bouge && avecGrille) {  // l'ancienne place : un cercle vide, relié à la nouvelle
+          ctx.strokeStyle = PLAN[plan]; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(X(x0), Y(y0)); ctx.lineTo(X(x), Y(y)); ctx.stroke(); ctx.setLineDash([]);
+          ctx.beginPath(); ctx.arc(X(x0), Y(y0), Math.max(2, p * 0.6), 0, 6.283); ctx.stroke();
+        }
+        ctx.fillStyle = PLAN[plan]; ctx.strokeStyle = bouge || pris ? "#FFFFFF" : "#000";
+        ctx.beginPath(); ctx.arc(X(x), Y(y), Math.max(2, p * (pris ? 0.9 : 0.6)), 0, 6.283); ctx.fill(); ctx.lineWidth = bouge || pris ? 2 : 1; ctx.stroke();
+        if (avecGrille) { ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(nom, X(x) + p, Y(y)); ctx.fillText(nom, X(x) + p, Y(y)); }
       }
     }
     // grille de pixels de la toile, numérotée tous les 10, pour désigner un pixel précis
@@ -199,8 +240,92 @@ function scene(toile, fixe) {
   }
   dimension();
   addEventListener("resize", dimension);
+  if (avecGrille && SQUELETTE) {
+    // en pixels du sprite de la grenouille g, depuis un événement de pointeur
+    const lieu = (e, g) => {
+      const b = toile.getBoundingClientRect(), k = toile.width / b.width;
+      return [(e.clientX - b.left) * k / p - DX - g.x, (e.clientY - b.top) * k / p - DY - g.y];
+    };
+    const plusProche = (e) => {
+      let meilleur = null;
+      const seuil = Math.max(1.6, 14 * (toile.width / toile.getBoundingClientRect().width) / p);
+      for (const g of C.grenouilles) {
+        if (!g.sprite.reperes) continue;
+        const [x, y] = lieu(e, g);
+        for (const nom of Object.keys(g.sprite.reperes)) {
+          const [px_, py_] = pos(g, nom), d = Math.hypot(px_ - x, py_ - y);
+          if (d < seuil && (!meilleur || d < meilleur[2])) meilleur = [g, nom, d];
+        }
+      }
+      return meilleur;
+    };
+    let prise = null;
+    toile.addEventListener("pointerdown", (e) => {
+      if (!reglages.edition) return;
+      const m = plusProche(e);
+      if (!m) { choisi = null; dessiner(performance.now() / 1000); return; }
+      e.preventDefault();
+      choisi = [m[0], m[1]];
+      prise = { g: m[0], nom: m[1], avant: m[0].deplaces[m[1]] };
+      toile.setPointerCapture(e.pointerId); toile.classList.add("prise");
+      dessiner(performance.now() / 1000);
+    });
+    toile.addEventListener("pointermove", (e) => {
+      if (!prise) return;
+      const [x, y] = lieu(e, prise.g);
+      deplacer(prise.g, prise.nom, [Math.round(x * 2) / 2, Math.round(y * 2) / 2], false);
+      dessiner(performance.now() / 1000);
+    });
+    const lacher = () => {
+      if (!prise) return;
+      const { g, nom, avant } = prise;
+      prise = null; toile.classList.remove("prise");
+      const apres = g.deplaces[nom];
+      if (String(apres) !== String(avant)) historique.push([g, nom, avant]);
+      liste();
+    };
+    toile.addEventListener("pointerup", lacher);
+    toile.addEventListener("pointercancel", lacher);
+  }
   return dessiner;
 }
+
+// déplacer un repère (à sa place d'origine, il n'est plus « déplacé »)
+function deplacer(g, nom, xy, noter = true) {
+  const [x0, y0] = g.sprite.reperes[nom], avant = g.deplaces[nom];
+  if (Math.abs(xy[0] - x0) < 0.01 && Math.abs(xy[1] - y0) < 0.01) delete g.deplaces[nom];
+  else g.deplaces[nom] = xy;
+  if (noter && String(avant) !== String(g.deplaces[nom])) historique.push([g, nom, avant]);
+}
+const nombre = (v) => String(Math.round(v * 2) / 2);
+// le texte des déplacements, en pixels de chaque sprite (lisible, et à coller dans la conversation)
+function texte() {
+  const lignes = [`${document.querySelector("h1").textContent} — ${document.querySelector(".eyebrow").textContent.split(" · ").slice(0, 2).join(" · ")}`];
+  for (const g of C.grenouilles) for (const [nom, [x, y]] of Object.entries(g.deplaces)) {
+    const [x0, y0] = g.sprite.reperes[nom];
+    lignes.push(`${nomDe(g)} · ${nom} : (${nombre(x0)}, ${nombre(y0)}) → (${nombre(x)}, ${nombre(y)})`);
+  }
+  const r = document.getElementById("remarque").value.trim();
+  if (r) lignes.push("Remarque : " + r);
+  return lignes.join("\n");
+}
+function liste() {
+  const ul = document.getElementById("deplaces");
+  ul.replaceChildren();
+  let n = 0;
+  for (const g of C.grenouilles) for (const [nom, [x, y]] of Object.entries(g.deplaces)) {
+    n++;
+    const [x0, y0] = g.sprite.reperes[nom], li = document.createElement("li"), t = document.createElement("span"), b = document.createElement("button");
+    t.textContent = `${nom} : (${nombre(x0)}, ${nombre(y0)}) → (${nombre(x)}, ${nombre(y)})`;
+    b.type = "button"; b.textContent = "remettre"; b.setAttribute("aria-label", `Remettre ${nom} à sa place`);
+    b.addEventListener("click", () => { deplacer(g, nom, g.sprite.reperes[nom].slice(0, 2)); liste(); redessiner(); });
+    li.append(t, b); ul.append(li);
+  }
+  if (!n) { const li = document.createElement("li"); li.className = "vide"; li.textContent = "Aucun point déplacé pour l'instant."; ul.append(li); }
+  document.getElementById("b-annuler").disabled = !historique.length;
+  document.getElementById("b-remettre").disabled = !n;
+}
+const redessiner = () => scenes.forEach((d) => d(performance.now() / 1000));
 
 const scenes = [...document.querySelectorAll("canvas[data-px]")].map((c) => scene(c));
 if (ANIME) {
@@ -221,6 +346,85 @@ function bascule(id, cle) {
   b.addEventListener("click", () => { reglages[cle] = !reglages[cle]; b.setAttribute("aria-pressed", String(reglages[cle])); scenes.forEach((d) => d(performance.now() / 1000)); });
 }
 if (!SQUELETTE) document.getElementById("b-squelette").hidden = true;
+if (SQUELETTE) {
+  const b = document.getElementById("b-edition"), panneau = document.getElementById("edition"), grand = document.getElementById("grand");
+  const etat = (m) => { document.getElementById("etat").textContent = m; };
+  b.hidden = false;
+  b.addEventListener("click", () => {
+    reglages.edition = !reglages.edition;
+    b.setAttribute("aria-pressed", String(reglages.edition));
+    panneau.hidden = !reglages.edition;
+    grand.classList.toggle("edition", reglages.edition);
+    if (reglages.edition && !reglages.squelette) document.getElementById("b-squelette").click();
+    redessiner();
+  });
+  // au clavier : les flèches déplacent le point choisi d'un demi-pixel (Maj : de deux pixels)
+  addEventListener("keydown", (e) => {
+    if (!reglages.edition || !choisi || e.target.closest("textarea")) return;
+    const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    const [g, nom] = choisi, [x, y] = pos(g, nom), pas = e.shiftKey ? 2 : 0.5;
+    deplacer(g, nom, [x + d[0] * pas, y + d[1] * pas]); liste(); redessiner();
+  });
+  document.getElementById("b-annuler").addEventListener("click", () => {
+    const h = historique.pop();
+    if (!h) return;
+    const [g, nom, avant] = h;
+    if (avant) g.deplaces[nom] = avant; else delete g.deplaces[nom];
+    liste(); redessiner();
+  });
+  document.getElementById("b-remettre").addEventListener("click", () => {
+    for (const g of C.grenouilles) { for (const nom of Object.keys(g.deplaces)) historique.push([g, nom, g.deplaces[nom]]); g.deplaces = {}; }
+    liste(); redessiner();
+  });
+  document.getElementById("b-copier").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(texte()); etat("Texte copié : collez-le dans la conversation."); }
+    catch { etat("La copie n'a pas marché ici : sélectionnez la liste ci-dessus et copiez-la."); }
+  });
+  liste();
+  // l'envoi à Claude : un document par grenouille dans la base de la page, que Claude lit ; la
+  // base porte aussi l'ancienne place (« base ») de chaque point, pour qu'un envoi déjà appliqué
+  // ne revienne pas au chargement suivant
+  (async () => {
+    const db = window.claude?.use ? await window.claude.use("db").catch(() => null) : null;
+    if (!db) return;  // pas de base ici : « Copier le texte » reste
+    const ref = (g) => db.doc(`squelettes/${nomDe(g)}`);
+    for (const g of C.grenouilles) {
+      if (!g.sprite.reperes) continue;
+      try {
+        const snap = await ref(g).get();
+        if (!snap.exists) continue;
+        const d = snap.data(), base = d.base || {};
+        let repris = 0;
+        for (const [nom, v] of Object.entries(d.reperes || {})) {
+          const b0 = base[nom], r = g.sprite.reperes[nom];
+          if (r && b0 && Math.abs(b0.x - r[0]) < 0.01 && Math.abs(b0.y - r[1]) < 0.01) { g.deplaces[nom] = [v.x, v.y]; repris++; }
+        }
+        if (repris) etat(`Envoi du ${new Date(d.envoye).toLocaleString("fr-FR")} repris : ${repris} point(s) pas encore appliqué(s).`);
+        if (repris && d.remarque) document.getElementById("remarque").value = d.remarque;
+      } catch { /* lecture refusée : on part de zéro */ }
+    }
+    liste(); redessiner();
+    const envoyer = document.getElementById("b-envoyer");
+    envoyer.hidden = false;
+    envoyer.addEventListener("click", async () => {
+      envoyer.disabled = true; etat("Envoi…");
+      try {
+        const etape = document.querySelector(".eyebrow").textContent.split(" · ").slice(0, 2).join(" · ");
+        for (const g of C.grenouilles) {
+          if (!g.sprite.reperes) continue;
+          const reperes = {}, base = {};
+          for (const [nom, [x, y]] of Object.entries(g.deplaces)) { reperes[nom] = { x, y }; const r = g.sprite.reperes[nom]; base[nom] = { x: r[0], y: r[1] }; }
+          await ref(g).set({ etape, reperes, base, remarque: document.getElementById("remarque").value.trim(), envoye: new Date().toISOString(), texte: texte() });
+        }
+        etat("Envoyé. Dites à Claude « regarde mes points » dans la conversation.");
+      } catch (err) {
+        etat(`L'envoi n'a pas marché (${err?.code || "erreur"}) : utilisez « Copier le texte ».`);
+      } finally { envoyer.disabled = false; }
+    });
+  })();
+}
 bascule("b-anim", "anim"); bascule("b-mosaique", "mosaique"); bascule("b-grille", "grille"); bascule("b-squelette", "squelette");
 let dernier = -1;
 function boucle(ms) {

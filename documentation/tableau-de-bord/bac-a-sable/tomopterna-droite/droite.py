@@ -119,19 +119,21 @@ SQUELETTE = {
     "sacrum": (158, 39.5),
     "cloaque": (160, 46),
     # bras gauche (devant) : le bras, fin, à l'horizontale de l'épaule au coude ; l'avant-bras,
-    # vert, épais, sort du dos (le coude ne fait pas de bosse) et descend sur la branche
-    "epaule_g": (138, 41.5),
-    "coude_g": (152.25, 41),
+    # vert, épais, part du coude, juste sous le dos, sans bosse au-dessus, et descend sur la
+    # branche : un membre à part, cerné, même s'il a la couleur du dos
+    "epaule_g": (140, 42.25),
+    "coude_g": (151.25, 40),
     "poignet_g": (149, 51.25),
     "main_g": (146.75, 53),
     "doigt1_g": (146.25, 49.25),  # quasi invisible : il monte sur la branche, derrière l'avant-bras
     "doigt2_g": (140.75, 51.65),  # le long du dessus de la branche, vers la main droite
     "doigt3_g": (139.25, 58.25),
     "doigt4_g": (144.75, 59.15),
-    # bras droit (fond) : de la main, l'avant-bras part en arrière-plan vers la droite et le
-    # haut jusqu'au coude, sous la poitrine ; le bras remonte à l'épaule, une légère bosse
-    "epaule_d": (135.5, 43.5),
-    "coude_d": (139.25, 45.75),
+    # bras droit : de l'autre côté, mais pas caché derrière le corps : de l'épaule, une légère
+    # bosse sur la poitrine, le bras descend jusqu'au coude, pointu, bien visible sous le ventre ;
+    # l'avant-bras revient vers la gauche jusqu'à la main posée sur la branche
+    "epaule_d": (136.5, 43.25),
+    "coude_d": (142, 46),
     "poignet_d": (131, 49.5),
     "main_d": (129.75, 50.25),
     "doigt1_d": (137.5, 50.75),  # le long de la branche vers la droite ; il touche presque doigt2_g
@@ -147,16 +149,17 @@ SQUELETTE = {
     "orteil_a_g": (158.25, 51),
     "orteil_b_g": (161.5, 54),
     "orteil_c_g": (165.75, 52.25),
-    # patte arrière droite (fond) : cachée derrière la branche jusqu'au tarse ; le pied pend
-    # dessous, la plante vers le haut ; deux orteils remontent derrière la branche, le troisième
-    # part à l'horizontale vers la droite, dans le vide
-    "hanche_d": (159, 46.5),
-    "genou_d": (156, 51.5),
-    "talon_d": (152, 54),
-    "tarse_d": (151.75, 58),
-    "orteil_a_d": (149.5, 55.5),
-    "orteil_b_d": (154.5, 55.5),
-    "orteil_c_d": (156.5, 60.5),
+    # patte arrière droite (fond) : la cuisse et le genou cachés ; le tibia descend derrière la
+    # branche puis derrière le pied jusqu'au talon ; le tarse est le point le plus bas, d'où les
+    # trois orteils partent en éventail : deux remontent derrière la branche, le troisième part à
+    # l'horizontale vers la droite, dans le vide (correction de Léonard)
+    "hanche_d": (158, 46),
+    "genou_d": (154.5, 52),
+    "talon_d": (149.75, 60.25),
+    "tarse_d": (150.75, 61.5),
+    "orteil_a_d": (149, 55.5),
+    "orteil_b_d": (154, 55.5),
+    "orteil_c_d": (156.75, 60.5),
 }
 MEMBRES = {
     "patte_d": (
@@ -504,37 +507,42 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     Py = (Y - ORIGINE[1]) * ECHELLE - 0.5
     corps = dans(
         [
-            # le museau tronqué, en droites : du bout (à la lèvre) au coin de la narine, puis
-            # jusqu'à la nuque ; le crâne ne suit pas la courbure des yeux, qui en dépassent
+            # le museau tronqué, en droites, comme la grenouille de gauche : une verticale du bout
+            # (à la lèvre) au coin de la narine ; puis le dessus du museau monte en droite jusqu'à
+            # la bosse de l'autre œil, sans creux ; puis le crâne, droit, jusqu'à la nuque
             S["museau"],
-            *px((8.5, 22.0)),
             S["narine_g"],
+            *px((17.5, 15.8)),
             S["nuque"],
             # le dos, en pente douce puis plus raide jusqu'à la croupe, cachée par la cuisse
             *px((47.0, 16.6), (54.0, 18.4), (60.5, 20.8), (67.0, 24.2), (73.5, 28.2)),
             *px((78.5, 32.0), (82.0, 36.0), (83.0, 41.0), (82.0, 47.0)),
-            # le ventre, au-dessus de la branche, puis la poitrine et la gorge
-            *px((77.0, 49.5 + s * 0.5), (66.0, 49.5 + s), (56.0, 48.5 + s), (48.0, 47.0 + s)),
-            *px((42.0, 45.0), (37.0, 43.5), (33.0, 41.5 + g * 0.5), (29.0, 38.5 + g)),
-            *px((25.0, 34.5 + g * 0.8), (20.0, 31.0 + g * 0.4), (14.0, 29.5), (9.0, 28.5)),
+            # le ventre, svelte : une droite qui remonte du flanc, derrière l'avant-bras, jusqu'à
+            # la poitrine, derrière le coude droit ; puis la gorge, en pente, jusqu'au menton
+            *px((77.0, 49.5 + s * 0.5), (66.0, 49.5 + s * 0.5), (59.0, 48.5 + s)),
+            *px((50.0, 44.6 + s), (42.0, 42.6), (37.5, 41.5), (33.5, 38.2 + g * 0.5)),
+            *px((29.5, 34.6 + g), (25.0, 31.4 + g * 0.8), (20.0, 30.2 + g * 0.4), (14.0, 29.4)),
+            *px((9.0, 28.5)),
         ],
         xt,
         yt,
     )
     ox, oy = S["oeil"]
     corps |= ellipse(ox, oy, 3.4, 4.0, xt, yt) & (yt < oy + 0.5)  # la paupière : l'œil dépasse
-    autre = ellipse(*S["autre_oeil"], 1.5, 1.0, xt, yt)  # l'autre œil : une bosse verte
+    autre = ellipse(*S["autre_oeil"], 1.5, 1.05, xt, yt)  # l'autre œil : une bosse verte
     corps |= autre
     br = dans_branche(X, Y)
-    # patte arrière droite (fond), derrière la branche : le tibia en sort et rejoint le pied, qui
-    # pend dessous, plante vers le haut ; la plante en trapèze, pas en rond : un bord gauche en
-    # diagonale, le dessous presque droit, l'orteil horizontal à droite
-    patte_d = os_(MEMBRES["patte_d"][0], [1.6, 1.5, 1.3, 1.3]) & ~br
+    # patte arrière droite (fond), derrière la branche : le tibia en sort derrière le pied et
+    # descend au talon ; du tarse, tout en bas, les orteils s'ouvrent en éventail vers le haut,
+    # reliés par la palmure : la plante, en trapèze, pas en rond (bord gauche en diagonale le
+    # long de l'orteil a, dessous presque droit le long de l'orteil c)
+    patte_d = os_(["genou_d", "talon_d", "tarse_d"], [1.5, 1.2, 1.1]) & ~br
     pied_d = dans(
-        px((61.5, 62.0), (72.0, 62.0), (73.5, 70.5), (74.5, 73.5), (75.0, 77.5), (66.0, 78.0)),
+        [S["tarse_d"], *px((61.0, 68.0), (61.5, 62.0), (72.0, 62.0), (73.5, 70.5), (74.5, 73.5))]
+        + px((75.0, 77.0), (68.0, 78.0)),
         X,
         Y,
-    ) | dans(px((61.5, 62.0), (66.0, 78.0), (63.5, 76.5), (61.0, 70.0)), X, Y)
+    )
     pied_d &= ~br
     orteils_d = cernes("orteil_d", "tarse_d", MEMBRES["patte_d"][2], "fond")
     for o in orteils_d:
@@ -543,26 +551,31 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # n'en sortent que par leur racine, le troisième part de son bord droit
     for o in orteils_d:
         o["soude"] = ("pied_d", "patte_d")
-    # bras droit (fond) : le bras, fin, de l'épaule au coude, sous la poitrine ; l'avant-bras,
-    # plus épais, du coude à la main posée sur la branche
-    bras_d = fuseau("epaule_d", "coude_d", [0.9, 0.7, 0.8])
-    bras_d |= os_(["coude_d", "poignet_d", "main_d"], [1.2, 1.15, 0.9])
+    # bras droit, de l'autre côté mais devant le corps (correction de Léonard) : le bras part de
+    # l'épaule, sur la poitrine, jusqu'au coude, pointu ; l'avant-bras, plus épais, revient à la
+    # main posée sur la branche
+    bras_d = fuseau("epaule_d", "coude_d", [1.0, 1.05, 0.7])
+    bras_d |= fuseau("coude_d", "poignet_d", [0.7, 1.3, 1.05], milieu=0.35)
+    bras_d |= os_(["poignet_d", "main_d"], [1.05, 0.9])
     # patte arrière gauche (devant) : la cuisse, verticale, derrière le tibia mais devant la
-    # croupe, se voit des deux côtés du tibia ; le tibia, gros, du genou en haut à la branche
+    # croupe, se voit à peine : un liseré à gauche du tibia, du vert à sa droite ; à gauche, on
+    # voit nettement le flanc (corrections de Léonard) ; le tibia, gros, du genou à la branche
     cuisse_g = dans(
-        px((69.5, 37.0), (75.0, 32.0), (83.0, 29.5), (92.0, 30.0), (97.0, 33.5), (97.5, 46.0)),
+        px((79.0, 34.0), (82.0, 30.0), (88.0, 28.8), (93.0, 30.0), (97.0, 33.5), (97.5, 46.0))
+        + px((94.0, 48.5), (80.0, 49.0), (78.5, 42.0)),
         X,
         Y,
     )
-    cuisse_g |= dans(px((97.5, 46.0), (93.0, 48.5), (80.0, 49.5), (69.0, 47.5), (69.5, 37.0)), X, Y)
     tibia_g = os_(["genou_g", "talon_g", "tarse_g"], [2.2, 1.7, 1.2])
     eventail_g = [px((85.0, 51.0)), px((87.5, 53.0)), px((91.0, 51.5))]
-    # bras gauche (devant) : le bras, fin, à l'horizontale ; l'avant-bras, épais, sort du dos
-    # sans bosse : le haut du coude se fond dans le dos, sans contour
+    # bras gauche (devant) : le bras, fin, à l'horizontale ; l'avant-bras, épais, part du coude,
+    # juste sous le dos : son haut est coupé droit, parallèle au dos, sans capuchon qui ferait une
+    # bosse ; un membre à part, cerné, même de la couleur du dos (corrections de Léonard)
     bras_g = os_(["epaule_g", "coude_g"], [0.9, 0.85])
-    bras_g |= fuseau("coude_g", "poignet_g", [2.2, 2.0, 1.6])
+    bras_g |= fuseau("coude_g", "poignet_g", [2.4, 2.1, 1.6], milieu=0.4)
     bras_g |= os_(["poignet_g", "main_g"], [1.6, 1.2])
-    coude_g = bras_g & (Py < 34) & (X > S["coude_g"][0] - 2.4)
+    Px = (X - ORIGINE[0]) * ECHELLE - 0.5
+    bras_g &= Py > 31.0 + 0.12 * (Px - 66.0)
     bases_d, bases_g = ([px(b) for b in MAINS[m]["bases"]] for m in ("bras_d", "bras_g"))
     doigts_g = cernes("doigt_g", "main_g", MEMBRES["bras_g"][2], "devant", bases_g)
     # le doigt qui monte sur la branche, derrière l'avant-bras : fin, quasi invisible
@@ -573,22 +586,23 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("patte_d", patte_d, "membre", "fond", cernee=True),
         forme("pied_d", pied_d, "membre", "fond", cernee=True, soude=("patte_d",)),
         *orteils_d,
-        forme("bras_d", bras_d, "membre", "fond", cernee=True),
-        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "fond", bases_d),
-        forme("main_d", main("bras_d"), "membre", "fond", True, soude=("doigt_d", "bras_d")),
         forme("corps", corps, "dos", cernee=True),
+        forme("bras_d", bras_d, "membre", "corps", cernee=True),
+        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "corps", bases_d),
+        forme("main_d", main("bras_d"), "membre", "corps", True, soude=("doigt_d", "bras_d")),
         forme("cuisse_g", cuisse_g, "membre", "corps", cernee=True),
         forme("tibia_g", tibia_g, "membre", "devant", cernee=True),
         *cernes("orteil_g", "tarse_g", MEMBRES["patte_g"][2], "devant", eventail_g),
         doigt1_g,
         forme("bras_g", bras_g, "dos", "devant", cernee=True),
-        forme("coude_g", coude_g, "dos", "corps", soude=("corps", "bras_g")),
         *doigts_g,
         forme("main_g", main("bras_g"), "membre", "devant", True, soude=("doigt_g", "bras_g")),
     ]
     oeil = {"x": ox, "y": oy, "r": 2.9, "ferme": cligne, "tete": tete}
     oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
     oeil["u"], oeil["v"] = (xt - ox) / oeil["r"], (yt - oy) / oeil["r"]
+    # l'autre œil : sur la bosse, le haut de son globe, gris, se voit (correction de Léonard)
+    oeil["autre"] = autre & ellipse(127.25, 29.75, 0.95, 0.6, xt, yt)
     # traits du visage : la bouche (un pixel par colonne, sur la droite du museau à la
     # commissure) ; la narine ; le tympan ; le pli sous la bosse de l'autre œil
     (mx, my), (cx, cy) = S["museau"], S["commissure"]
@@ -1110,6 +1124,34 @@ PUPILLE_FINE = True
 NOIRS = ("#120E22",)  # la fente, avec l'éclat
 
 
+def fente_fine(img, oeil, iris, noir):
+    """La pupille en demi-pixels dès l'ébauche (Léonard : la résolution de l'œil est doublée à
+    toutes les étapes) : une pièce deux fois plus fine posée sur le globe, où l'iris est
+    repeint et la fente redessinée à cette résolution, inclinée comme sur la photo, pointue en
+    haut, un peu plus large en bas. Renvoie (colonne, rangée) de son coin et la pièce."""
+    m = oeil["masque"]
+    jj, ii = np.nonzero(m)
+    j0, j1, i0, i1 = jj.min(), jj.max() + 1, ii.min(), ii.max() + 1
+
+    def double(a):
+        return np.repeat(np.repeat(a[j0:j1, i0:i1], 2, 0), 2, 1)
+
+    piece = double(img)
+    hj, hi = np.mgrid[2 * j0 : 2 * j1, 2 * i0 : 2 * i1]
+    x2 = ORIGINE[0] + (hi + 0.5) / (2 * ECHELLE)
+    y2 = ORIGINE[1] + (hj + 0.5) / (2 * ECHELLE)
+    xt, yt = tete_tournee(oeil["tete"], x2, y2)
+    u, v = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
+    a = math.radians(PUPILLE_INCL)
+    u, v = (u - PUPILLE_U) * math.cos(a) + v * math.sin(a), v * math.cos(a) - (u - PUPILLE_U) * math.sin(a)
+    dedans = double(m & ~bord(m))
+    largeur, long_ = PUPILLE_FENTE
+    profil = np.clip(1 - (v / long_) ** 2, 0, 1) ** 0.9 * (1 + 0.3 * v / long_)
+    piece[dedans] = iris
+    piece[dedans & (np.abs(u) < largeur * profil)] = noir
+    return int(i0), int(j0), piece
+
+
 def pupille_fine(img, oeil):
     """La pièce en demi-pixels du globe : (colonne, rangée) de son coin en pixels du sprite et
     l'image deux fois plus fine ; les pixels de l'image, sauf la fente, refaite à cette
@@ -1266,6 +1308,9 @@ def produire(etape):
         fine = PUPILLE_FINE and ECLAT_ACTIF and etape in ("details", "animation")
         if fine and not oeil["ferme"]:
             *coins[cle], images["fin " + cle] = pupille_fine(images[cle], oeil)
+        elif etape in ("ebauche", "croquis") and not oeil["ferme"]:
+            c = SILHOUETTE if etape == "ebauche" else CROQUIS
+            *coins[cle], images["fin " + cle] = fente_fine(images[cle], oeil, c["globe"], c["pupille"])
     sprite = coder(images)
     if coins:  # les pièces en demi-pixels, à part : la planche les pose sur l'image
         sprite["fins"] = {
