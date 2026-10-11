@@ -75,6 +75,9 @@ OEIL = {
     "paupiere": "membrane",
 }
 PUPILLE = "verticale"  # fente verticale des phyllomédusines
+# le regard : la fente décalée dans le globe, en part du rayon (négatif : vers la gauche, vers
+# l'avant de cette grenouille ; Léonard : « très sensiblement vers la gauche »)
+REGARD = -0.1
 CONTOUR, CONTOUR_CLAIR = "#24120A", "#5A2B14"
 # CONTOUR_TEINTE : au rendu détaillé, le contour prend la couleur qu'il borde, assombrie, au lieu
 # d'un trait sombre uniforme (choix de l'étape 3b ; C. tomopterna l'a pris, A. blanci non)
@@ -530,7 +533,11 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         yt,
     )
     ox, oy = S["oeil"]
-    corps |= ellipse(ox, oy, 3.4, 4.0, xt, yt) & (yt < oy + 0.5)  # la paupière : l'œil dépasse
+    # l'œil entier de la grenouille de gauche, jugé parfait (correction de Léonard) : le globe de
+    # 3,4 unités de rayon, la paupière en cercle de 4 unités sur sa moitié haute ; ici décalée
+    # vers la droite et un peu vers le bas, pour que la peau verte se voie à droite et en haut à
+    # droite du globe, presque pas à gauche : l'œil regarde un peu vers la gauche
+    corps |= ellipse(ox + 0.35, oy + 0.15, 4.0, 4.0, xt, yt) & (yt < oy + 0.15)
     autre = ellipse(*S["autre_oeil"], 1.5, 1.05, xt, yt)  # l'autre œil : une bosse verte
     corps |= autre
     br = dans_branche(X, Y)
@@ -611,7 +618,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         *doigts_g,
         forme("main_g", main("bras_g"), "membre", "devant", True, soude=("doigt_g", "bras_g")),
     ]
-    oeil = {"x": ox, "y": oy, "r": 2.9, "ferme": cligne, "tete": tete}
+    oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne, "tete": tete}
     oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
     oeil["u"], oeil["v"] = (xt - ox) / oeil["r"], (yt - oy) / oeil["r"]
     # l'autre œil : on n'en voit que la bosse verte, pas le globe (correction de Léonard)
@@ -622,11 +629,8 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     tx, ty = S["tympan"]
     rt = np.hypot(xt - tx, yt - ty)
     ax, ay = S["autre_oeil"]
-    autour = dilater(oeil["masque"])
     traits = {
         "bouche": corps & (xt > mx) & (xt < cx) & (np.floor(2 * yt) == np.floor(2 * ligne)),
-        # sous le globe, à un pixel, le pli de la paupière inférieure
-        "pli_oeil": dilater(autour) & ~autour & (yt > oy + 1.6) & (np.abs(xt - ox) < 2.4),
         "narine": (np.abs(xt - S["narine"][0]) < 0.5) & (np.abs(yt - S["narine"][1]) < 0.5),
         "tympan": (rt > 0.9) & (rt < 1.4),
         "pli_autre_oeil": bord(autre) & (yt > ay) & ~oeil["masque"],
@@ -717,7 +721,7 @@ def rendu_oeil(img, oeil, couleurs, ferme_couleur):
         "ronde": u * u + v * v < 0.3,
         "horizontale": (u / 0.75) ** 2 + (v / 0.32) ** 2 < 1,
         # une fente en amande : 3 pixels au milieu, pointue aux deux bouts
-        "verticale": np.abs(u) < 0.26 * (1 - (v / 0.82) ** 2),
+        "verticale": np.abs(u - REGARD) < 0.26 * (1 - (v / 0.82) ** 2),
     }[PUPILLE]
     img[m & p] = couleurs["pupille"]
     return img
@@ -1116,7 +1120,7 @@ def oeil_detaille(img, oeil, eclat=False):
     reticule = semis(m & ~bord(m), 0.22, 13)
     img[reticule] = np.array(tons, object)[np.clip(idx - 2, 0, n)][reticule]
     img[bord(m)] = "#211A33" if eclat else OEIL["cercle"]
-    fente = np.abs(u) < 0.26 * (1 - (v / 0.82) ** 2)
+    fente = np.abs(u - REGARD) < 0.26 * (1 - (v / 0.82) ** 2)
     img[m & fente] = "#120E22" if eclat else OEIL["pupille"]
     # le haut de la fente bleuté du modelé validé ; avec l'éclat, une fente d'un seul noir
     # (correction de Léonard)
@@ -1153,7 +1157,7 @@ def fente_fine(img, oeil, iris, noir):
     u, v = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
     dedans = double(m & ~bord(m))
     piece[dedans] = iris
-    piece[dedans & (np.abs(u) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4)] = noir
+    piece[dedans & (np.abs(u - REGARD) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4)] = noir
     return int(i0), int(j0), piece
 
 
@@ -1175,7 +1179,7 @@ def pupille_fine(img, oeil):
     xt, yt = tete_tournee(oeil["tete"], x2, y2)
     u, v = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
     dedans = double(m & ~bord(m))
-    fente = dedans & (np.abs(u) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4)
+    fente = dedans & (np.abs(u - REGARD) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4)
     tons = rampe_eclat(OEIL["iris"], 0.62, 0.11, 9)
     trame = np.tile(BAYER, (piece.shape[0] // 4 + 1, piece.shape[1] // 4 + 1))
     trame = trame[: piece.shape[0], : piece.shape[1]]

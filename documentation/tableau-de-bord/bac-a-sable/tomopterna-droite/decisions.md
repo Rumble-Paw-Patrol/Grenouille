@@ -80,3 +80,9 @@ droite ») ; elle sert de premier jet.
   (droite_ebauche_valide.json, branche_ebauche_valide.json).
 - 2 (11/10) : croquis : genou rond et mollet au tibia gauche, pli sous l'œil ; les orteils du
   pied droit soudés entre eux aussi.
+- 2 (11/10) : l'œil est encore raté : la pupille ne correspond pas, un cerne dessous (le pli
+  ajouté au croquis), trop de peau au-dessus. La peau verte autour de l'œil se voit surtout à
+  droite et en haut à droite. Copier l'œil entier de la grenouille de gauche, pas seulement la
+  pupille (globe de 3,4 unités, paupière en cercle de 4, fente en amande), puis orienter l'œil
+  très légèrement vers la gauche : paupière décalée à droite, fente décalée d'un dixième de
+  rayon vers la gauche (REGARD).

@@ -389,6 +389,11 @@ Les règles de forme, toutes espèces :
   amande, pointue aux deux bouts. Pas de pixel isolé qui dépasse au bout d'une bosse. L'autre œil se
   voit comme une bosse de peau sur le crâne, de la couleur de la peau ; on n'en voit au plus
   qu'un mince croissant de globe, jamais de cercle.
+- **Plusieurs grenouilles de la même espèce :** un œil validé chez l'une se reprend **en entier**
+  chez l'autre (taille du globe, paupière, fente, pièce en demi-pixels), jamais la pupille seule
+  sur un autre globe (correction de Léonard). On l'adapte ensuite par le regard : la paupière
+  décalée du côté où la peau se voit sur la photo, la fente décalée de quelques centièmes de
+  rayon vers où l'animal regarde. Pas de pli sous le globe que la photo ne montre pas.
 
 Les règles de forme d'A. blanci (pose assise, de profil) :
 - **Allure :** ventre haut, avec du vide entre le bras et la patte ; dos peu incliné ; tête haute.
