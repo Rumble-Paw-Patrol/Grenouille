@@ -477,22 +477,22 @@ BARRES = {
     "orteil_g": [([(83.2, 51.7)], ()), ([(87.3, 55.5)], ()), ([(93.2, 53.2)], ())],
     "orteil_d": [((), ()), ((), ()), ((), ())],
 }
-DECALQUE_FORMES = ("corps", "bras_g", "cuisse_g", "patte_d", "pied_d")
+DECALQUE_FORMES = ("corps", "epaule_d", "epaule_g", "bras_g", "cuisse_g", "patte_d", "pied_d")
 DECALQUE_LETTRES = {"w": "granule", "t": "tache", "B": "barre"}
 DECALQUE_COIN = (28, 31)
 DECALQUE = [
-    "ttBBBBBBBt..twwww........................................",  # 31
-    "..tttBttBBBBBBttBBBtw..Bww...............................",  # 32
-    "...t..tt.....wwwwwwww.B.w..w..ww.........................",  # 33
-    ".......t............BB...................................",  # 34
-    "..................BBB...........t........................",  # 35
-    "...................BB......BBBB.B....................B...",  # 36
+    ".............wwww........................................",  # 31
+    "....................w...ww...............................",  # 32
+    ".............wwwwwwww...w..w..ww.........................",  # 33
+    ".........................................................",  # 34
+    "................................t........................",  # 35
+    "...........................BBBB.B....................B...",  # 36
     "..........................BBBBB.B...................BB...",  # 37
-    ".....................ttt..BBBB...............w.BBBB..B...",  # 38
-    "..........tt.ttttBtB....tBBBBB.................BB.....B..",  # 39
-    "............BBBBBBBBBtBt....BB.................BB...BBBB.",  # 40
-    "..............tBttBt..........................BBB...Bt.B.",  # 41
-    "..................t...........................BB....Bt..B",  # 42
+    "..........................BBBB...............w.BBBB..B...",  # 38
+    "........................tBBBBB.................BB.....B..",  # 39
+    "............................BB.................BB...BBBB.",  # 40
+    "..............................................BBB...Bt.B.",  # 41
+    "..............................................BB....Bt..B",  # 42
     ".............................................BBB....Bt...",  # 43
     ".............................................BBB....tB...",  # 44
     "..............................................BB....BB..B",  # 45
@@ -683,9 +683,15 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # bosse ; un membre à part, cerné, même de la couleur du dos (corrections de Léonard)
     avant_g = fuseau("coude_g", "poignet_g", [2.4, 2.1, 1.6], milieu=0.4)
     avant_g |= os_(["poignet_g", "main_g"], [1.6, 1.2])
-    bras_g = os_(["epaule_g", "coude_g"], [0.9, 0.85]) | avant_g
     Px = (X - ORIGINE[0]) * ECHELLE - 0.5
-    bras_g &= Py > 31.0 + 0.12 * (Px - 66.0)
+    coupe = Py > 31.0 + 0.12 * (Px - 66.0)
+    bras_g = avant_g & coupe
+    # le bras, de l'épaule au coude, à part : il s'implante dans le corps en fondu, sans contour,
+    # et prend le relief du corps (correction de Léonard à l'étape 3b) ; l'avant-bras y est soudé
+    epaule_g = os_(["epaule_g", "coude_g"], [0.9, 0.85]) & coupe & ~avant_g
+    # l'épaule droite : une bague de peau du corps recouvre le contour du bras partout où il
+    # longe la poitrine, de l'épaule jusqu'au vide sous le coude, pour qu'il s'y fonde, sans trait
+    epaule_d = ellipse(*S["epaule_d"], 3.9, 3.9, X, Y) & dilater(bras_d) & ~bras_d & corps
     bases_d, bases_g = ([px(b) for b in MAINS[m]["bases"]] for m in ("bras_d", "bras_g"))
     doigts_g = cernes(
         "doigt_g", "main_g", MEMBRES["bras_g"][2], "devant", bases_g, BARRES["doigt_g"]
@@ -700,6 +706,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         *orteils_d,
         forme("corps", corps, "dos", cernee=True),
         forme("bras_d", bras_d, "membre", "corps", cernee=True),
+        forme("epaule_d", epaule_d, "dos", "corps", volume="corps", soude=("bras_d",)),
         *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "corps", bases_d, BARRES["doigt_d"]),
         forme("main_d", main("bras_d"), "membre", "corps", True, soude=("doigt_d", "bras_d")),
         forme("cuisse_g", cuisse_g, "jaune", "corps", cernee=True),
@@ -709,7 +716,8 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         ),
         forme("pied_g", main("patte_g"), "membre", "devant", True, soude=("orteil_g", "tibia_g")),
         doigt1_g,
-        forme("bras_g", bras_g, "dos", "devant", cernee=True),
+        forme("epaule_g", epaule_g, "pale", "devant", volume="corps"),
+        forme("bras_g", bras_g, "dos", "devant", cernee=True, soude=("epaule_g",)),
         *doigts_g,
         forme("main_g", main("bras_g"), "membre", "devant", True, soude=("doigt_g", "bras_g")),
     ]
@@ -745,16 +753,16 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         # granules blanches, du coude au poignet, semées au hasard, jamais deux voisines, pas en
         # damier (correction de Léonard)
         "bras_g": {
-            "pale": bras_g & ~avant_g,
-            "granule": semis(bande(bras_g & avant_g, -1, 0, 2) & (Py >= 37) & (Py <= 55), 0.5, 62),
+            "granule": semis(bande(bras_g, -1, 0, 2) & (Py >= 37) & (Py <= 55), 0.5, 62),
         },
         # la cuisse gauche : sa face interne, jaune, à gauche du tibia ; le vert à sa droite
         "cuisse_g": {"dos": Px >= 88},
-        # le bras droit : deux barres sur le bras, au milieu et au coude, deux sur l'avant-bras
-        # (les creux de lumière le long de chaque os)
+        # le bras droit : une barre au milieu du bras, une sur l'avant-bras (les creux de
+        # lumière le long de chaque os), chacune sur la largeur de son os seulement ; pas près du
+        # coude, dans son ombre : elles y faisaient une masse sombre, près de l'épaule
         "bras_d": {
-            "barre": barres([S["epaule_d"], S["coude_d"]], px((43.9, 44.6), (46.9, 46.4)))
-            | barres([S["coude_d"], S["poignet_d"]], px((42.7, 47.8), (36.5, 49.8)))
+            "barre": barres([S["epaule_d"], S["coude_d"]], px((43.9, 44.6)), portee=1.5)
+            | barres([S["coude_d"], S["poignet_d"]], px((36.5, 49.8)), portee=1.5)
         },
         # le tibia gauche : le dessus du genou granuleux, de granules blanches semées au
         # hasard (correction de Léonard : pas en damier) ; deux barres
@@ -763,16 +771,19 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             "barre": barres([S["genou_g"], S["talon_g"]], px((87.5, 37.0), (88.0, 41.9))),
         },
     }
+    zones["epaule_d"] = zones["corps"]  # la bague de l'épaule droite : la peau du corps
     for fo in f:
         fo["zones"] = fo["zones"] | zones.get(fo["nom"], {})
         if fo["nom"] in DECALQUE_FORMES:  # les autres membres : leurs barres sont mesurées
-            i, j = (Pxt, Pyt) if fo["nom"] == "corps" else (Px, Py)
+            i, j = (Pxt, Pyt) if fo["nom"] in ("corps", "epaule_d") else (Px, Py)
             for c, mot in DECALQUE_LETTRES.items():
                 fo["zones"][mot] = fo["zones"].get(mot, False) | decalque(c, i, j)
     # les granules décalquées au bord du vert : jamais deux voisines
     for fo in f:
         if fo["nom"] == "corps":
             fo["zones"]["granule"] = semis(fo["zones"]["granule"] & fo["masque"], 1.0, 63)
+        elif fo["nom"] == "epaule_d":
+            fo["zones"]["granule"] = fo["zones"]["granule"] & False
     return f, traits, {}, oeil
 
 
@@ -978,6 +989,9 @@ ECLAT = {
 # avec l'éclat, quelques matières partent d'une teinte plus vive que leur aplat : le flanc,
 # orangé pêche devant, doré derrière l'avant-bras
 ECLAT_TEINTES = {"flanc": "#C4784E", "flanc_arriere": "#C68A3C"}
+# les épaules qui s'implantent dans le corps en fondu, et leur bras : sans trait (une bague de
+# peau du corps couvre le contour du bras), sans bord sombre, les couleurs mêlées
+EPAULES = {"epaule_d": "bras_d"}
 # les traits qu'on assombrit moins au modelé : le tympan, à peine visible sur la photo
 TRAITS_FORCE = {"tympan": 0.8}
 # les motifs restent sombres : seule la part basse de leur rampe sert, même en pleine lumière
@@ -1070,6 +1084,9 @@ def details(f, traits, motifs, oeil, eclat=None):
     points de brillance et un reflet froid sur les bords à l'ombre."""
     eclat = ECLAT_ACTIF if eclat is None else eclat
     mat, plan, num = etiqueter(f)
+    # le bras gauche, de l'épaule au coude, pâle : au modelé, il entre dans le fondu du ventre,
+    # entre la gorge et le flanc (correction de Léonard : il s'implante dans le corps en fondu)
+    mat[mat == "pale"] = "ventre"
     lx, ly = LUMIERE
     lum = np.full((H, W), 0.5)
     for k, fo in enumerate(f):
@@ -1094,10 +1111,20 @@ def details(f, traits, motifs, oeil, eclat=None):
     bombe = np.clip(1 - ((X - 146.0) / 9) ** 2 - ((Y - 42.5) / 4.5) ** 2, 0, 1)
     lum[flanc] += 0.2 * bombe[flanc]
     lum[flanc] = np.maximum(lum[flanc], 0.4)
-    lum[mat == "gorge"] -= 0.1
+    lum[mat == "gorge"] -= 0.05
+    # les épaules s'implantent dans le corps en fondu, sans pixels sombres qui fassent frontière
+    # (correction de Léonard, plusieurs fois) : autour de chacune, la lumière lissée sur le corps
+    # et le bras ensemble, ce qui efface le bord ombré du corps et l'ombre portée du bras
+    autour_epaules = {}
+    for epaule, bras in EPAULES.items():
+        ex, ey = _pixel(*SQUELETTE[epaule])
+        rond = np.hypot(np.arange(W)[None, :] + 0.5 - ex, np.arange(H)[:, None] + 0.5 - ey) < 7
+        ici = rond & np.isin(num, [noms(f).index(n) for n in ("corps", epaule, bras)])
+        lum[ici] = lisser(lum, ici, 2)[ici]
+        autour_epaules[bras] = ici
     # pustules du flanc, de la gorge et du bras pâle, granuleux : un pixel plus clair, son ombre
     # dessous
-    peau = np.isin(mat, ["flanc", "gorge", "pale"])
+    peau = np.isin(mat, ["flanc", "gorge", "ventre"])
     pustules = semis(peau, 0.16, 11)
     lum[pustules] += 0.14
     dessous = decaler(pustules, 0, 1) & peau
@@ -1170,6 +1197,21 @@ def details(f, traits, motifs, oeil, eclat=None):
         bords &= np.isin(zone, ["dos", "membre", "disque", "flanc", "jaune", "plante", "gorge"])
         for j, i in zip(*np.nonzero(bords), strict=False):
             img[j, i] = melanger(img[j, i], REFLET_FROID, 0.3)
+    # puis, autour de chaque épaule, le bras prend peu à peu la couleur du corps : aux deux
+    # rangées de pixels qui le bordent, mêlé à la peau voisine, aux deux tiers puis au tiers
+    for bras, ici in autour_epaules.items():
+        k = noms(f).index(bras)
+        peau_ici = ici & (num != k) & (img != "")
+        neuf = img.copy()
+        for j, i in zip(*np.nonzero(ici & (num == k)), strict=False):
+            for d, t in ((1, 0.62), (2, 0.3)):
+                q = peau_ici[max(j - d, 0) : j + d + 1, max(i - d, 0) : i + d + 1]
+                if q.any():
+                    voisins = img[max(j - d, 0) : j + d + 1, max(i - d, 0) : i + d + 1][q]
+                    rvb = np.mean([[int(c[n : n + 2], 16) for n in (1, 3, 5)] for c in voisins], 0)
+                    neuf[j, i] = melanger(img[j, i], hexa_de(*(rvb / 255)), t)
+                    break
+        img[:] = neuf
     img = contour(img, f, num)
     img = tracer(img, traits, num, oeil, force=TRAITS_FORCE)
     if eclat:  # la lèvre nacrée, claire dans la lumière, lilas dans l'ombre
@@ -1202,7 +1244,7 @@ FONDUS = ("dos", "gorge", "ventre", "flanc")
 # l'entre-deux (correction de Léonard : 1 500 couleurs, c'était trop) : les transitions se font
 # en quelques paliers, sans trame ; 5 paliers entre les verts, 7 dans le ventre, et les tons de
 # chaque rampe pris tels quels (11)
-PALIERS_VERT, PALIERS_VENTRE = 5, 7
+PALIERS_VERT, PALIERS_VENTRE = 5, 9
 
 
 def peindre_fondus(img, zone, lum, mat):
@@ -1239,7 +1281,7 @@ def peindre_fondus(img, zone, lum, mat):
     poids = []
     for k, n in enumerate(FONDUS[1:]):
         bruit = _flou(np.random.default_rng(40 + k).random((H, W)), 3)
-        poids.append(_flou(_flou((mat == n).astype(float), 3), 3) * (0.6 + bruit))
+        poids.append(_flou(_flou((mat == n).astype(float), 4), 4) * (0.8 + 0.4 * bruit))
     total = np.maximum(sum(poids), 1e-6)
     sv = (poids[2] - poids[0]) / total
     m = (PALIERS_VENTRE - 1) / 2

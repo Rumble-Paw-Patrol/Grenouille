@@ -107,3 +107,12 @@ droite ») ; elle sert de premier jet.
   par le blanc rosé au flanc pêche, doré derrière l'avant-bras ; la cuisse jaune ; le pied droit
   à l'ombre sous la branche ; le tympan moins marqué ; granules clairsemées sur le vert un peu
   moins denses. 392 couleurs (378 à gauche).
+- 3b (11/10) : revoir le fondu des couleurs du ventre ; les épaules s'implantent dans le corps
+  en fondu, sans pixels foncés qui fassent frontière (« ça fait plusieurs fois qu'on doit revoir
+  ce point ») ; une tache de pixels sombres dans la gorge, à enlever.
+- 3b (11/10) : corrigé : le bras gauche, de l'épaule au coude, forme à part sans contour, au
+  relief du corps, dans le fondu du ventre (gorge lilas → blanc rosé → flanc pêche), sur 8 pixels
+  et 9 paliers ; l'épaule droite couverte d'une bague de peau sur tout le bord qu'elle partage
+  avec la poitrine, lumière lissée autour, couleurs mêlées sur deux rangées ; plus de taches
+  sombres dans la gorge ni sous l'épaule (le décalque y prenait l'ombre) ; les barres du bras
+  droit à la largeur de l'os, sans celle du coude ; ombre de la tête sur la gorge allégée.

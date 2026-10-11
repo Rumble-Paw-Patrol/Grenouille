@@ -479,6 +479,8 @@ commit.
   - le calculer avec un décalque vide : sinon les motifs déjà posés changent les matières, et
     le calcul suivant les perd ;
   - enlever les pixels sombres seuls, sans voisin sombre (du bruit), sauf les très sombres ;
+  - **pas l'ombre** : sous la mâchoire, sous un membre, la photo est sombre sans motif ; ne
+    rien décalquer dans la gorge ni le long d'une épaule (corrections de Léonard au 3b) ;
   - **pas sur les doigts ni les membres fins** : le fond s'y mêle et fait de fausses barres.
     Là, une barre par creux de lumière le long de l'os ou du doigt (`profil`, `barres()`) ;
   - une zone du décalque s'ajoute (ou) à une zone de même nom posée à la main, sans la
@@ -525,6 +527,26 @@ des pieds et `poser`, `nuancer`, `pustules`, `retoucher`.
 ### Règles de rendu, toutes espèces
 
 La fiche morphologique l'emporte sur ces règles quand l'espèce le demande.
+- **Les épaules s'implantent dans le corps en fondu, sans aucun pixel sombre qui fasse
+  frontière** (correction de Léonard, revenue plusieurs fois, sur A. blanci et sur les deux
+  tomopterna : l'appliquer d'emblée, sans attendre qu'il le redemande). Trois sources de
+  pixels sombres à couper, toutes :
+  - **le contour** : le bras (de l'épaule au coude) qui passe sur le corps est une forme à part,
+    non cernée, qui prend le relief du corps (`volume="corps"`), l'avant-bras cerné y étant
+    soudé ; un bras qui sort du corps reçoit une bague de peau du corps sur **tout** le bord
+    qu'il partage avec lui, jusqu'au vide sous le coude, pas seulement autour du point d'épaule
+    (un pixel de contour qui reste au bout de la bague se voit) ;
+  - **le modelé** : le bord du corps, tourné vers l'ombre, et l'ombre portée du bras font une
+    ligne sombre ; autour de l'épaule, lisser la lumière sur le corps et le bras ensemble ;
+  - **les motifs** : l'ombre sous un membre, sur la photo, n'est pas un motif ; aucune barre ni
+    tache décalquée le long de l'épaule. Les barres d'un membre ne débordent pas de son os
+    (portée à sa largeur), sinon elles se rejoignent au coude en une masse sombre.
+  Puis mêler les couleurs : le bras prend celle de la peau voisine sur deux rangées (aux deux
+  tiers, puis au tiers) ; un bras pâle entre dans le fondu du ventre.
+- **La gorge reste propre** : pas de taches sombres que la photo doit à l'ombre de la mâchoire
+  (correction de Léonard) ; une ombre de la tête sur la gorge, légère.
+- **Le fondu du ventre** (gorge → ventre → flanc) : poids flous sur 8 pixels environ, peu de
+  bruit, 9 paliers ; rien ne doit le couper (contour, motif, bord ombré d'une autre forme).
 - **Ombre de contact** (par exemple le flanc derrière un bras) : le pixel de base, même teinte,
   assombri et un peu grisé. Jamais des pixels d'une autre matière. Elle se calcule : chaque
   forme plus proche porte son ombre sur les plus lointaines, décalée du côté opposé à la
