@@ -590,6 +590,25 @@ modelé validé, sans suivre la photo, pour faire ressortir la brillance.
   pixel prend un ton de la rampe tel quel : 300 à 400 couleurs en tout.
 - Aucune forme ne bouge, et le rendu fidèle reste reproductible (`fidele`, identique au gelé).
 
+**Deuxième grenouille de la même espèce** (la grenouille de droite de tomopterna, carte blanche
+d'emblée) : partir de l'éclat validé de la première, pas d'un modelé fidèle à refaire.
+- Reprendre ses réglages (rampes, plaques, fondus, brillance, reflet froid, contour, œil) et
+  n'ajouter que ses matières propres, chacune avec sa teinte d'ombre et de lumière. Viser le
+  même nombre de couleurs.
+- Une matière peut partir, à l'éclat, d'une teinte plus vive que son aplat
+  (`ECLAT_TEINTES`) : le flanc pêche devant, doré derrière l'avant-bras, la limite cachée sous
+  lui.
+- Un fondu d'une face à l'autre (gorge lilas → flanc orangé) passe par la couleur du ventre de
+  la première, même sans zone à elle : il suffit qu'elle soit au milieu de `FONDUS`.
+- Adapter ce qui dépend de l'individu : les formes à l'ombre (`OMBRES`), le centre du bombé,
+  les matières qui brillent.
+- Les comparer côte à côte, chacune à sa place dans la scène (`composer`) : même vert, même
+  orangé, même densité de granules.
+- Un trait que la photo montre à peine (le tympan) s'assombrit moins (`TRAITS_FORCE`).
+- **Les granules jamais en damier** (correction de Léonard) : même en zone posée à la main
+  (le genou, le bord d'un avant-bras), `semis()`, au hasard à places fixes, jamais deux
+  voisines.
+
 **La pupille en demi-pixels** (essai sur tomopterna) : au rendu détaillé, une pièce deux fois
 plus fine posée sur le globe (`fins` dans le JSON : coin en pixels du sprite et rangées en
 demi-pixels, par image), où seule la fente est redessinée ; une fente verticale y devient une

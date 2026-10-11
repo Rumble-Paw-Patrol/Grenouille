@@ -741,14 +741,12 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         # la gorge, le menton et la poitrine, gris lilas, jusque sous le coude droit ; derrière,
         # le flanc orangé
         "corps": {"gorge": dessous & (Pxt < 47), "flanc": dessous & (Pxt >= 47)},
-        # le bras gauche, de l'épaule au coude, pâle ; l'avant-bras, vert, liseré à gauche d'une
-        # rangée de granules blanches, une sur deux, du coude au poignet
+        # le bras gauche, de l'épaule au coude, pâle ; l'avant-bras, vert, liseré à gauche de
+        # granules blanches, du coude au poignet, semées au hasard, jamais deux voisines, pas en
+        # damier (correction de Léonard)
         "bras_g": {
             "pale": bras_g & ~avant_g,
-            "granule": bande(bras_g & avant_g, -1, 0, 1)
-            & (Py >= 38)
-            & (Py <= 54)
-            & (np.round(Py) % 2 == 0),
+            "granule": semis(bande(bras_g & avant_g, -1, 0, 2) & (Py >= 37) & (Py <= 55), 0.5, 62),
         },
         # la cuisse gauche : sa face interne, jaune, à gauche du tibia ; le vert à sa droite
         "cuisse_g": {"dos": Px >= 88},
@@ -758,9 +756,10 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             "barre": barres([S["epaule_d"], S["coude_d"]], px((43.9, 44.6), (46.9, 46.4)))
             | barres([S["coude_d"], S["poignet_d"]], px((42.7, 47.8), (36.5, 49.8)))
         },
-        # le tibia gauche : le dessus du genou granuleux, blanc ; deux barres
+        # le tibia gauche : le dessus du genou granuleux, de granules blanches semées au
+        # hasard (correction de Léonard : pas en damier) ; deux barres
         "tibia_g": {
-            "granule": tibia_g & (Py <= 29) & ((np.round(Px) + np.round(Py)) % 2 == 0),
+            "granule": semis(tibia_g & (Py <= 31), 0.45, 61),
             "barre": barres([S["genou_g"], S["talon_g"]], px((87.5, 37.0), (88.0, 41.9))),
         },
     }
@@ -770,6 +769,10 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             i, j = (Pxt, Pyt) if fo["nom"] == "corps" else (Px, Py)
             for c, mot in DECALQUE_LETTRES.items():
                 fo["zones"][mot] = fo["zones"].get(mot, False) | decalque(c, i, j)
+    # les granules décalquées au bord du vert : jamais deux voisines
+    for fo in f:
+        if fo["nom"] == "corps":
+            fo["zones"]["granule"] = semis(fo["zones"]["granule"] & fo["masque"], 1.0, 63)
     return f, traits, {}, oeil
 
 
@@ -862,9 +865,10 @@ def rendu_oeil(img, oeil, couleurs, ferme_couleur):
     return img
 
 
-def tracer(img, traits, num, oeil, couleur=None):
+def tracer(img, traits, num, oeil, couleur=None, force=None):
     """Les traits (bouche, narine, tympan, plis) : d'une couleur donnée (ébauche, croquis) ou,
-    sans couleur donnée, de la couleur du dessous assombrie (aplats, détails)."""
+    sans couleur donnée, de la couleur du dessous assombrie (aplats, détails) ; force : pour
+    certains traits, de combien (1 : pas du tout)."""
     hors_oeil = ~oeil["masque"] if oeil else True
     for nom, m in traits.items():
         ici = m & (num >= 0) & hors_oeil & (img != CONTOUR)
@@ -872,7 +876,7 @@ def tracer(img, traits, num, oeil, couleur=None):
             img[ici] = MATIERES[TRAITS_MATIERE[nom]]
             continue
         for j, i in zip(*np.nonzero(ici), strict=False):
-            img[j, i] = couleur or assombrir(img[j, i])
+            img[j, i] = couleur or assombrir(img[j, i], (force or {}).get(nom, 0.55))
     return miettes(img, bord=couleur) if couleur else img
 
 
@@ -940,9 +944,18 @@ def rampe(hexa, n=7):
     return out
 
 
-# étape 3b : les formes à l'ombre sur la photo (la patte et le bras gauches, derrière le ventre),
-# de combien ; les granules blanches de tomopterna, sur le vert
-OMBRES = {"patte_g": 0.16, "orteil_g": 0.12, "bras_g": 0.08, "main_g": 0.07, "doigt_g": 0.06}
+# étape 3b : les formes à l'ombre sur la photo, de combien : le pied droit sous la branche, le
+# bras droit de l'autre côté, la cuisse gauche entre l'avant-bras et le tibia ; les granules
+# blanches de tomopterna, sur le vert
+OMBRES = {
+    "patte_d": 0.2,
+    "pied_d": 0.16,
+    "orteil_d": 0.16,
+    "bras_d": 0.06,
+    "main_d": 0.04,
+    "doigt_d": 0.04,
+    "cuisse_g": 0.08,
+}
 GRANULE = "#E2EEDA"
 # l'éclat (carte blanche de Léonard, avant l'étape 4) : des teintes au-delà de la photo, qui font
 # ressortir la brillance et la beauté. Par matière : la teinte où glissent les ombres, celle où
@@ -954,14 +967,22 @@ ECLAT = {
     "ventre": (0.80, 0.07, 0.025),  # nacre : crème dans la lumière, lilas dans l'ombre
     "bas_ventre": (0.985, 0.095, 0.035),  # abricot et rose
     "gorge": (0.68, 0.88, 0.02),  # lavande, bleutée dans l'ombre de la tête
-    "pale": (0.70, 0.90, 0.02),
+    "pale": (0.80, 0.07, 0.02),  # nacre rosée, comme le ventre de la grenouille de gauche
+    "flanc": (0.975, 0.105, 0.035),  # abricot dans la lumière, rose cramoisi dans l'ombre
+    "jaune": (0.02, 0.135, 0.03),  # or, ambre dans l'ombre
+    "plante": (0.985, 0.115, 0.03),  # abricot pâle
     "levre": (0.72, 0.12, 0.0),
     "barre": (0.72, 0.87, 0.02),  # violet-noir, indigo dans l'ombre, prune dans la lumière
     "tache": (0.85, 0.97, 0.02),  # marbrures prune et vieux rose
 }
+# avec l'éclat, quelques matières partent d'une teinte plus vive que leur aplat : le flanc,
+# orangé pêche devant, doré derrière l'avant-bras
+ECLAT_TEINTES = {"flanc": "#C4784E", "flanc_arriere": "#C68A3C"}
+# les traits qu'on assombrit moins au modelé : le tympan, à peine visible sur la photo
+TRAITS_FORCE = {"tympan": 0.8}
 # les motifs restent sombres : seule la part basse de leur rampe sert, même en pleine lumière
 PLAFOND = {"barre": 0.5, "tache": 0.7}
-ECLAT_ACTIF = True  # False : le modelé fidèle à la photo, gelé dans gauche_details_valide.json
+ECLAT_ACTIF = True  # False : le modelé fidèle à la photo (rendu « fidele »)
 REFLET_FROID = "#86E8E0"  # la lumière du ciel renvoyée sur les bords à l'ombre
 ECLAT_HUMIDE = "#FFFFFF"  # les points de brillance de la peau mouillée
 
@@ -1068,14 +1089,15 @@ def details(f, traits, motifs, oeil, eclat=None):
         porte = decaler(np.isin(num, proches), round(-lx * 2), round(-ly * 2))
         lum[ici] -= 0.32 * _flou(porte.astype(float), 1)[ici]
         lum[ici] -= next((v for n, v in OMBRES.items() if fo["nom"].startswith(n)), 0.0)
-    # le ventre, bombé, plus clair au milieu ; la gorge, dans l'ombre de la tête
-    ventre = np.isin(mat, ["ventre", "bas_ventre", "tache"]) & (num == noms(f).index("corps"))
-    bombe = np.clip(1 - ((X - 76.0) / 10) ** 2 - ((Y - 56.0) / 5.5) ** 2, 0, 1)
-    lum[ventre] += 0.2 * bombe[ventre]
-    lum[ventre] = np.maximum(lum[ventre], 0.4)  # le bas du ventre, face à nous, reste éclairé
+    # le flanc, bombé, plus clair au milieu, face à nous ; la gorge, dans l'ombre de la tête
+    flanc = np.isin(mat, ["flanc", "gorge", "tache", "barre"]) & (num == noms(f).index("corps"))
+    bombe = np.clip(1 - ((X - 146.0) / 9) ** 2 - ((Y - 42.5) / 4.5) ** 2, 0, 1)
+    lum[flanc] += 0.2 * bombe[flanc]
+    lum[flanc] = np.maximum(lum[flanc], 0.4)
     lum[mat == "gorge"] -= 0.1
-    # pustules du ventre et de la gorge : un pixel plus clair, son ombre dessous
-    peau = np.isin(mat, ["ventre", "bas_ventre", "gorge"])
+    # pustules du flanc, de la gorge et du bras pâle, granuleux : un pixel plus clair, son ombre
+    # dessous
+    peau = np.isin(mat, ["flanc", "gorge", "pale"])
     pustules = semis(peau, 0.16, 11)
     lum[pustules] += 0.14
     dessous = decaler(pustules, 0, 1) & peau
@@ -1091,10 +1113,10 @@ def details(f, traits, motifs, oeil, eclat=None):
     for nom, m in motifs.items():
         zone[m & (num >= 0)] = nom
     if not eclat:
-        zone = fondre(fondre(zone, "ventre", "bas_ventre"), "gorge", "ventre")
+        zone = fondre(zone, "gorge", "flanc")
     for nom, coul in couleurs.items():
         ici = zone == nom
-        if not ici.any() or (eclat and nom in FONDUS):
+        if not ici.any() or (eclat and nom in FONDUS) or nom == "granule":
             continue
         if eclat and nom in ECLAT:
             ombre, lumiere, ecart = ECLAT[nom]
@@ -1121,8 +1143,10 @@ def details(f, traits, motifs, oeil, eclat=None):
     vert = mat == "dos"
     lisere = vert & dilater(~vert & (num >= 0))[:H, :W] & (decaler(num, 1, 0) == num)
     lisere |= vert & dilater(~vert & (num >= 0))[:H, :W] & (decaler(num, 0, 1) == num)
-    granules = semis(lisere, 0.5, 7)
-    granules |= semis(vert & ~lisere, 0.035, 8, pris=granules)
+    # chez celle-ci, le liseré est déjà posé en zones (au bord du vert, sur l'avant-bras et le
+    # genou) : seulement quelques granules clairsemées sur le vert
+    granules = zone == "granule"
+    granules |= semis(vert & ~lisere, 0.02, 8, pris=granules)
     img[granules & ~oeil["masque"]] = GRANULE
     # reflets humides : un point clair en haut à gauche de chaque disque
     for k, fo in enumerate(f):
@@ -1136,17 +1160,18 @@ def details(f, traits, motifs, oeil, eclat=None):
     if eclat:
         img[granules & ~oeil["masque"]] = "#F2FFEE"
         # des points de brillance, là où la lumière frappe la peau mouillée
-        brille = np.isin(zone, ["dos", "membre", "disque", "ventre", "bas_ventre"]) & (lum > 0.88)
+        brille = np.isin(zone, ["dos", "membre", "disque", "flanc", "jaune", "plante", "pale"])
+        brille &= lum > 0.88
         for j, i in zip(*np.nonzero(semis(brille & ~granules, 0.3, 31)), strict=False):
             img[j, i] = melanger(img[j, i], ECLAT_HUMIDE, 0.55)
         # un reflet froid sur les bords à l'ombre, à droite et en bas de la silhouette
         sil = num >= 0
         bords = sil & (~decaler(sil, -1, 0) | ~decaler(sil, 0, -1)) & (lum < 0.62)
-        bords &= np.isin(zone, ["dos", "membre", "disque", "ventre", "bas_ventre", "gorge"])
+        bords &= np.isin(zone, ["dos", "membre", "disque", "flanc", "jaune", "plante", "gorge"])
         for j, i in zip(*np.nonzero(bords), strict=False):
             img[j, i] = melanger(img[j, i], REFLET_FROID, 0.3)
     img = contour(img, f, num)
-    img = tracer(img, traits, num, oeil)
+    img = tracer(img, traits, num, oeil, force=TRAITS_FORCE)
     if eclat:  # la lèvre nacrée, claire dans la lumière, lilas dans l'ombre
         levre = traits["bouche"] & (num >= 0) & (img == MATIERES["levre"])
         img[levre & (lum > 0.5)] = "#FBF5F3"
@@ -1169,7 +1194,9 @@ def details(f, traits, motifs, oeil, eclat=None):
 # avec l'éclat, ces matières se peignent sans grain ni trame : le vert en grandes zones plus
 # jaunes ou plus bleues qui se mêlent ; gorge, ventre et bas du ventre fondus l'un dans l'autre
 # sur plusieurs pixels, par une limite irrégulière (corrections de Léonard)
-FONDUS = ("dos", "gorge", "ventre", "bas_ventre")
+# (chez celle-ci : de la gorge lilas au flanc orangé, en passant par le blanc rosé du ventre, qui
+# n'a pas de zone à lui : il ne vient que dans le fondu)
+FONDUS = ("dos", "gorge", "ventre", "flanc")
 
 
 # l'entre-deux (correction de Léonard : 1 500 couleurs, c'était trop) : les transitions se font
@@ -1218,8 +1245,14 @@ def peindre_fondus(img, zone, lum, mat):
     m = (PALIERS_VENTRE - 1) / 2
     sv = (np.round(sv * m) / m)[..., None]
     gorge, ventre, bas = (
-        ton(rampe_eclat(MATIERES[n], *ECLAT[n][:2]), lum * 10) for n in FONDUS[1:]
+        ton(rampe_eclat(ECLAT_TEINTES.get(n, MATIERES[n]), *ECLAT[n][:2]), lum * 10)
+        for n in FONDUS[1:]
     )
+    # le flanc, derrière l'avant-bras gauche, plus doré que devant (sur la photo, jaune orangé) ;
+    # la limite passe sous l'avant-bras, on ne la voit pas
+    arriere = ((X - ORIGINE[0]) * ECHELLE > 66)[..., None]
+    dore = ton(rampe_eclat(ECLAT_TEINTES["flanc_arriere"], *ECLAT["flanc"][:2]), lum * 10)
+    bas = np.where(arriere, dore, bas)
     rvb = np.where(sv < 0, ventre * (1 + sv) - gorge * sv, ventre * (1 - sv) + bas * sv)
     poser(peau, rvb)
 

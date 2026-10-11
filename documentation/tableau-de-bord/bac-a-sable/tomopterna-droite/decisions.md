@@ -96,3 +96,14 @@ droite ») ; elle sert de premier jet.
   cuisse, le bras gauche et le pied droit ; barres mesurées le long des os pour le bras droit, le
   tibia, les doigts et les orteils. Branche : le lichen décalqué, la bosse sous la main droite
   sombre, violacée. La fente de l'œil reste en demi-pixels.
+- 3a (11/10) : « tout décalqué, c'est bien pour une première approche » ; Léonard passe au 3b.
+  Aplats gelés (droite_aplats_valide.json, branche_aplats_valide.json).
+- 3b (11/10) : carte blanche pour coloriser, en s'inspirant des aplats, avec autant de couleurs
+  que la grenouille de gauche et les mêmes consignes (l'éclat). Les granules blanches du genou
+  gauche et de l'avant-bras gauche ne sont pas en damier, ce n'est pas réaliste : semées au
+  hasard, jamais deux voisines.
+- 3b (11/10) : premier tour, l'éclat de la grenouille de gauche repris tel quel (rampes,
+  plaques, fondus, brillance, reflet froid, contour teinté, œil), adapté : la gorge lilas passe
+  par le blanc rosé au flanc pêche, doré derrière l'avant-bras ; la cuisse jaune ; le pied droit
+  à l'ombre sous la branche ; le tympan moins marqué ; granules clairsemées sur le vert un peu
+  moins denses. 392 couleurs (378 à gauche).
