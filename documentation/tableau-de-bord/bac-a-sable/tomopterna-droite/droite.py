@@ -685,13 +685,13 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     avant_g |= os_(["poignet_g", "main_g"], [1.6, 1.2])
     Px = (X - ORIGINE[0]) * ECHELLE - 0.5
     coupe = Py > 31.0 + 0.12 * (Px - 66.0)
-    bras_g = avant_g & coupe
-    # le bras, de l'épaule au coude, à part : il s'implante dans le corps en fondu, sans contour,
-    # et prend le relief du corps (correction de Léonard à l'étape 3b) ; l'avant-bras y est soudé
-    epaule_g = os_(["epaule_g", "coude_g"], [0.9, 0.85]) & coupe & ~avant_g
-    # l'épaule droite : une bague de peau du corps recouvre le contour du bras partout où il
-    # longe la poitrine, de l'épaule jusqu'au vide sous le coude, pour qu'il s'y fonde, sans trait
-    epaule_d = ellipse(*S["epaule_d"], 3.9, 3.9, X, Y) & dilater(bras_d) & ~bras_d & corps
+    bras_g = (os_(["epaule_g", "coude_g"], [0.9, 0.85]) | avant_g) & coupe
+    # les épaules, et elles seules, s'implantent dans le corps en douceur (corrections de Léonard
+    # à l'étape 3b) : autour de chacune, une bague de peau du corps recouvre le contour du bras,
+    # sans trait ; plus loin, le bras garde son contour, c'est un membre
+    epaule_d = ellipse(*S["epaule_d"], 2.2, 2.2, X, Y) & dilater(bras_d) & ~bras_d & corps
+    epaule_g = ellipse(*S["epaule_g"], 2.2, 2.2, X, Y) & dilater(bras_g) & ~bras_g & corps
+    epaule_g &= ~bras_d  # la bague ne passe pas sur le bras droit, devant le corps
     bases_d, bases_g = ([px(b) for b in MAINS[m]["bases"]] for m in ("bras_d", "bras_g"))
     doigts_g = cernes(
         "doigt_g", "main_g", MEMBRES["bras_g"][2], "devant", bases_g, BARRES["doigt_g"]
@@ -716,8 +716,8 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         ),
         forme("pied_g", main("patte_g"), "membre", "devant", True, soude=("orteil_g", "tibia_g")),
         doigt1_g,
-        forme("epaule_g", epaule_g, "pale", "devant", volume="corps"),
-        forme("bras_g", bras_g, "dos", "devant", cernee=True, soude=("epaule_g",)),
+        forme("bras_g", bras_g, "dos", "devant", cernee=True),
+        forme("epaule_g", epaule_g, "dos", "corps", volume="corps", soude=("bras_g",)),
         *doigts_g,
         forme("main_g", main("bras_g"), "membre", "devant", True, soude=("doigt_g", "bras_g")),
     ]
@@ -753,7 +753,8 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         # granules blanches, du coude au poignet, semées au hasard, jamais deux voisines, pas en
         # damier (correction de Léonard)
         "bras_g": {
-            "granule": semis(bande(bras_g, -1, 0, 2) & (Py >= 37) & (Py <= 55), 0.5, 62),
+            "pale": bras_g & ~avant_g,
+            "granule": semis(bande(bras_g & avant_g, -1, 0, 2) & (Py >= 37) & (Py <= 55), 0.5, 62),
         },
         # la cuisse gauche : sa face interne, jaune, à gauche du tibia ; le vert à sa droite
         "cuisse_g": {"dos": Px >= 88},
@@ -771,18 +772,18 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
             "barre": barres([S["genou_g"], S["talon_g"]], px((87.5, 37.0), (88.0, 41.9))),
         },
     }
-    zones["epaule_d"] = zones["corps"]  # la bague de l'épaule droite : la peau du corps
+    zones["epaule_d"] = zones["epaule_g"] = zones["corps"]  # les bagues : la peau du corps
     for fo in f:
         fo["zones"] = fo["zones"] | zones.get(fo["nom"], {})
         if fo["nom"] in DECALQUE_FORMES:  # les autres membres : leurs barres sont mesurées
-            i, j = (Pxt, Pyt) if fo["nom"] in ("corps", "epaule_d") else (Px, Py)
+            i, j = (Pxt, Pyt) if fo["nom"] in ("corps", "epaule_d", "epaule_g") else (Px, Py)
             for c, mot in DECALQUE_LETTRES.items():
                 fo["zones"][mot] = fo["zones"].get(mot, False) | decalque(c, i, j)
     # les granules décalquées au bord du vert : jamais deux voisines
     for fo in f:
         if fo["nom"] == "corps":
             fo["zones"]["granule"] = semis(fo["zones"]["granule"] & fo["masque"], 1.0, 63)
-        elif fo["nom"] == "epaule_d":
+        elif fo["nom"] in ("epaule_d", "epaule_g"):
             fo["zones"]["granule"] = fo["zones"]["granule"] & False
     return f, traits, {}, oeil
 
@@ -989,9 +990,11 @@ ECLAT = {
 # avec l'éclat, quelques matières partent d'une teinte plus vive que leur aplat : le flanc,
 # orangé pêche devant, doré derrière l'avant-bras
 ECLAT_TEINTES = {"flanc": "#C4784E", "flanc_arriere": "#C68A3C"}
-# les épaules qui s'implantent dans le corps en fondu, et leur bras : sans trait (une bague de
-# peau du corps couvre le contour du bras), sans bord sombre, les couleurs mêlées
-EPAULES = {"epaule_d": "bras_d"}
+# les épaules qui s'implantent dans le corps en fondu, et leur bras : sur 5 pixels autour de
+# l'épaule seulement, sans trait (une bague de peau du corps couvre le contour du bras), sans
+# bord sombre, les couleurs mêlées ; plus loin, le bras reste un membre cerné (Léonard : « c'est
+# l'épaule qui doit s'implanter en douceur, pas tout le bras »)
+EPAULES = {"epaule_d": "bras_d", "epaule_g": "bras_g"}
 # les traits qu'on assombrit moins au modelé : le tympan, à peine visible sur la photo
 TRAITS_FORCE = {"tympan": 0.8}
 # les motifs restent sombres : seule la part basse de leur rampe sert, même en pleine lumière
@@ -1084,9 +1087,6 @@ def details(f, traits, motifs, oeil, eclat=None):
     points de brillance et un reflet froid sur les bords à l'ombre."""
     eclat = ECLAT_ACTIF if eclat is None else eclat
     mat, plan, num = etiqueter(f)
-    # le bras gauche, de l'épaule au coude, pâle : au modelé, il entre dans le fondu du ventre,
-    # entre la gorge et le flanc (correction de Léonard : il s'implante dans le corps en fondu)
-    mat[mat == "pale"] = "ventre"
     lx, ly = LUMIERE
     lum = np.full((H, W), 0.5)
     for k, fo in enumerate(f):
@@ -1118,13 +1118,13 @@ def details(f, traits, motifs, oeil, eclat=None):
     autour_epaules = {}
     for epaule, bras in EPAULES.items():
         ex, ey = _pixel(*SQUELETTE[epaule])
-        rond = np.hypot(np.arange(W)[None, :] + 0.5 - ex, np.arange(H)[:, None] + 0.5 - ey) < 7
+        rond = np.hypot(np.arange(W)[None, :] + 0.5 - ex, np.arange(H)[:, None] + 0.5 - ey) < 5
         ici = rond & np.isin(num, [noms(f).index(n) for n in ("corps", epaule, bras)])
         lum[ici] = lisser(lum, ici, 2)[ici]
         autour_epaules[bras] = ici
     # pustules du flanc, de la gorge et du bras pâle, granuleux : un pixel plus clair, son ombre
     # dessous
-    peau = np.isin(mat, ["flanc", "gorge", "ventre"])
+    peau = np.isin(mat, ["flanc", "gorge", "pale"])
     pustules = semis(peau, 0.16, 11)
     lum[pustules] += 0.14
     dessous = decaler(pustules, 0, 1) & peau

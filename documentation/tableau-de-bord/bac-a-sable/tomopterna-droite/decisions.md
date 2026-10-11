@@ -116,3 +116,9 @@ droite ») ; elle sert de premier jet.
   avec la poitrine, lumière lissée autour, couleurs mêlées sur deux rangées ; plus de taches
   sombres dans la gorge ni sous l'épaule (le décalque y prenait l'ombre) ; les barres du bras
   droit à la largeur de l'os, sans celle du coude ; ombre de la tête sur la gorge allégée.
+- 3b (11/10) : « c'est l'épaule qui doit s'implanter en douceur, pas tout le bras ; y'a plus de
+  bras » : le bras gauche (épaule-coude) remis, entier, cerné, de sa couleur pâle ; le fondu
+  seulement autour de l'épaule, à gauche comme à droite (le bras droit avait aussi perdu son
+  contour sur tout son bord).
+  Fait : bras gauche entier, cerné, pâle ; bagues de peau de 2,2 unités autour des deux points
+  d'épaule ; lumière lissée et couleurs mêlées sur 5 pixels autour d'eux seulement.
