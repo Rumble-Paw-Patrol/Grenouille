@@ -86,3 +86,5 @@ droite ») ; elle sert de premier jet.
   pupille (globe de 3,4 unités, paupière en cercle de 4, fente en amande), puis orienter l'œil
   très légèrement vers la gauche : paupière décalée à droite, fente décalée d'un dixième de
   rayon vers la gauche (REGARD).
+- 2 (11/10) : « go étape suivante » : croquis gelé (droite_croquis_valide.json,
+  branche_croquis_valide.json).
