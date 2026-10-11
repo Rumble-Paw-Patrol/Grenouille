@@ -75,9 +75,6 @@ OEIL = {
     "paupiere": "membrane",
 }
 PUPILLE = "verticale"  # fente verticale des phyllomédusines
-# la fente, relevée sur la photo : 7 pixels de long et 2 au plus large, pointue aux deux bouts ;
-# elle penche, le haut vers la droite, et se tient un peu en avant du centre du globe
-PUPILLE_INCL, PUPILLE_U, PUPILLE_FENTE = 8.0, -0.15, (0.21, 0.64)
 CONTOUR, CONTOUR_CLAIR = "#24120A", "#5A2B14"
 # CONTOUR_TEINTE : au rendu détaillé, le contour prend la couleur qu'il borde, assombrie, au lieu
 # d'un trait sombre uniforme (choix de l'étape 3b ; C. tomopterna l'a pris, A. blanci non)
@@ -133,7 +130,7 @@ SQUELETTE = {
     # bosse sur la poitrine, le bras descend jusqu'au coude, pointu, bien visible sous le ventre ;
     # l'avant-bras revient vers la gauche jusqu'à la main posée sur la branche
     "epaule_d": (136.5, 43.25),
-    "coude_d": (142, 46),
+    "coude_d": (141.5, 46.25),  # déplacé par Léonard sur la planche
     "poignet_d": (131, 49.5),
     "main_d": (129.75, 50.25),
     "doigt1_d": (137.5, 50.75),  # le long de la branche vers la droite ; il touche presque doigt2_g
@@ -145,7 +142,7 @@ SQUELETTE = {
     "hanche_g": (160, 45),
     "genou_g": (161.5, 39),
     "talon_g": (162.25, 46.25),
-    "tarse_g": (162, 47.5),
+    "tarse_g": (162, 46.75),  # remonté par Léonard : des orteils plus longs
     "orteil_a_g": (158.25, 51),
     "orteil_b_g": (161.5, 54),
     "orteil_c_g": (165.75, 52.25),
@@ -199,6 +196,11 @@ MAINS = {
         ],
         "bases": [(28.5, 54.0), (20.0, 54.5), (21.5, 57.0), (26.5, 57.3)],
         "palmes": [(1, 2), (2, 3)],
+    },
+    "patte_g": {
+        "paume": [(85.5, 46.5), (90.5, 46.5), (92.5, 49.5), (90.5, 52.0), (86.0, 52.0), (83.5, 49.5)],
+        "bases": [(84.3, 50.0), (87.5, 52.0), (91.8, 50.0)],
+        "palmes": [(0, 1), (1, 2)],
     },
     "bras_g": {
         "paume": [
@@ -550,13 +552,18 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # les orteils continuent le pied, sans contour : les deux qui remontent derrière la branche
     # n'en sortent que par leur racine, le troisième part de son bord droit
     for o in orteils_d:
-        o["soude"] = ("pied_d", "patte_d")
+        o["soude"] = ("pied_d", "patte_d", "orteil_d")
     # bras droit, de l'autre côté mais devant le corps (correction de Léonard) : le bras part de
     # l'épaule, sur la poitrine, jusqu'au coude, pointu ; l'avant-bras, plus épais, revient à la
     # main posée sur la branche
     bras_d = fuseau("epaule_d", "coude_d", [1.0, 1.05, 0.7])
     bras_d |= fuseau("coude_d", "poignet_d", [0.7, 1.3, 1.05], milieu=0.35)
     bras_d |= os_(["poignet_d", "main_d"], [1.05, 0.9])
+    # le bras, de l'épaule au coude, rogné d'un pixel sur son bord droit : un petit vide entre le
+    # coude et le ventre (correction de Léonard)
+    haut_d = fuseau("epaule_d", "coude_d", [1.0, 1.05, 0.7])
+    rogne = haut_d & ~np.roll(haut_d, -1, axis=1) & (Y <= S["coude_d"][1] + 0.6)
+    bras_d &= ~rogne
     # patte arrière gauche (devant) : la cuisse, verticale, derrière le tibia mais devant la
     # croupe, se voit à peine : un liseré à gauche du tibia, du vert à sa droite ; à gauche, on
     # voit nettement le flanc (corrections de Léonard) ; le tibia, gros, du genou à la branche
@@ -566,8 +573,13 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         X,
         Y,
     )
-    tibia_g = os_(["genou_g", "talon_g", "tarse_g"], [2.2, 1.7, 1.2])
-    eventail_g = [px((85.0, 51.0)), px((87.5, 53.0)), px((91.0, 51.5))]
+    # le tibia : un genou large et rond en haut (5 pixels de rayon), un mollet bombé vers la
+    # droite, puis il s'affine vers la cheville
+    tibia_g = fuseau("genou_g", "talon_g", [2.5, 2.2, 1.6], milieu=0.35, decale=(0.25, 0.0))
+    tibia_g |= os_(["talon_g", "tarse_g"], [1.6, 1.3])
+    # les orteils partent du pied, de leur base, reliés par une petite palmure (correction de
+    # Léonard : ils se superposaient à leur départ)
+    eventail_g = [px(b) for b in MAINS["patte_g"]["bases"]]
     # bras gauche (devant) : le bras, fin, à l'horizontale ; l'avant-bras, épais, part du coude,
     # juste sous le dos : son haut est coupé droit, parallèle au dos, sans capuchon qui ferait une
     # bosse ; un membre à part, cerné, même de la couleur du dos (corrections de Léonard)
@@ -593,6 +605,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("cuisse_g", cuisse_g, "membre", "corps", cernee=True),
         forme("tibia_g", tibia_g, "membre", "devant", cernee=True),
         *cernes("orteil_g", "tarse_g", MEMBRES["patte_g"][2], "devant", eventail_g),
+        forme("pied_g", main("patte_g"), "membre", "devant", True, soude=("orteil_g", "tibia_g")),
         doigt1_g,
         forme("bras_g", bras_g, "dos", "devant", cernee=True),
         *doigts_g,
@@ -601,8 +614,7 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     oeil = {"x": ox, "y": oy, "r": 2.9, "ferme": cligne, "tete": tete}
     oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
     oeil["u"], oeil["v"] = (xt - ox) / oeil["r"], (yt - oy) / oeil["r"]
-    # l'autre œil : sur la bosse, le haut de son globe, gris, se voit (correction de Léonard)
-    oeil["autre"] = autre & ellipse(127.25, 29.75, 0.95, 0.6, xt, yt)
+    # l'autre œil : on n'en voit que la bosse verte, pas le globe (correction de Léonard)
     # traits du visage : la bouche (un pixel par colonne, sur la droite du museau à la
     # commissure) ; la narine ; le tympan ; le pli sous la bosse de l'autre œil
     (mx, my), (cx, cy) = S["museau"], S["commissure"]
@@ -610,8 +622,11 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     tx, ty = S["tympan"]
     rt = np.hypot(xt - tx, yt - ty)
     ax, ay = S["autre_oeil"]
+    autour = dilater(oeil["masque"])
     traits = {
         "bouche": corps & (xt > mx) & (xt < cx) & (np.floor(2 * yt) == np.floor(2 * ligne)),
+        # sous le globe, à un pixel, le pli de la paupière inférieure
+        "pli_oeil": dilater(autour) & ~autour & (yt > oy + 1.6) & (np.abs(xt - ox) < 2.4),
         "narine": (np.abs(xt - S["narine"][0]) < 0.5) & (np.abs(yt - S["narine"][1]) < 0.5),
         "tympan": (rt > 0.9) & (rt < 1.4),
         "pli_autre_oeil": bord(autre) & (yt > ay) & ~oeil["masque"],
@@ -698,17 +713,11 @@ def rendu_oeil(img, oeil, couleurs, ferme_couleur):
         img[autour] = couleurs["bord"]
     img[m] = couleurs["iris"]
     img[bord(m)] = couleurs.get("cercle", CONTOUR)  # un cercle continu d'un pixel
-    # la fente, inclinée (le haut vers la droite) et décalée vers l'avant, comme sur la photo
-    a = math.radians(PUPILLE_INCL)
-    u, v = (
-        (u - PUPILLE_U) * math.cos(a) + v * math.sin(a),
-        v * math.cos(a) - (u - PUPILLE_U) * math.sin(a),
-    )
     p = {
         "ronde": u * u + v * v < 0.3,
         "horizontale": (u / 0.75) ** 2 + (v / 0.32) ** 2 < 1,
         # une fente en amande : 3 pixels au milieu, pointue aux deux bouts
-        "verticale": np.abs(u) < PUPILLE_FENTE[0] * (1 - (v / PUPILLE_FENTE[1]) ** 2),
+        "verticale": np.abs(u) < 0.26 * (1 - (v / 0.82) ** 2),
     }[PUPILLE]
     img[m & p] = couleurs["pupille"]
     return img
@@ -1126,9 +1135,9 @@ NOIRS = ("#120E22",)  # la fente, avec l'éclat
 
 def fente_fine(img, oeil, iris, noir):
     """La pupille en demi-pixels dès l'ébauche (Léonard : la résolution de l'œil est doublée à
-    toutes les étapes) : une pièce deux fois plus fine posée sur le globe, où l'iris est
-    repeint et la fente redessinée à cette résolution, inclinée comme sur la photo, pointue en
-    haut, un peu plus large en bas. Renvoie (colonne, rangée) de son coin et la pièce."""
+    toutes les étapes), celle de la grenouille de gauche, jugée parfaite, telle quelle : une
+    pièce deux fois plus fine posée sur le globe, où l'iris est repeint et la fente, verticale,
+    en amande, redessinée à cette résolution. Renvoie (colonne, rangée) de son coin et la pièce."""
     m = oeil["masque"]
     jj, ii = np.nonzero(m)
     j0, j1, i0, i1 = jj.min(), jj.max() + 1, ii.min(), ii.max() + 1
@@ -1142,13 +1151,9 @@ def fente_fine(img, oeil, iris, noir):
     y2 = ORIGINE[1] + (hj + 0.5) / (2 * ECHELLE)
     xt, yt = tete_tournee(oeil["tete"], x2, y2)
     u, v = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
-    a = math.radians(PUPILLE_INCL)
-    u, v = (u - PUPILLE_U) * math.cos(a) + v * math.sin(a), v * math.cos(a) - (u - PUPILLE_U) * math.sin(a)
     dedans = double(m & ~bord(m))
-    largeur, long_ = PUPILLE_FENTE
-    profil = np.clip(1 - (v / long_) ** 2, 0, 1) ** 0.9 * (1 + 0.3 * v / long_)
     piece[dedans] = iris
-    piece[dedans & (np.abs(u) < largeur * profil)] = noir
+    piece[dedans & (np.abs(u) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4)] = noir
     return int(i0), int(j0), piece
 
 

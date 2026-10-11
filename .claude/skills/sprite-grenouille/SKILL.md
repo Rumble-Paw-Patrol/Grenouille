@@ -316,7 +316,7 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
       par-dessus le haut du coude), au lieu d'y poser un capuchon cerné.
 - [ ] Un pied ou une main en partie caché (sous une branche) suit la silhouette de la photo,
       jamais un disque par défaut ; ses doigts cachés, qui n'en sortent que par leur racine, y
-      sont soudés, sinon leurs bouts de contour font des miettes.
+      sont soudés, au pied et entre eux, sinon leurs bouts de contour font des miettes.
 
 ## Étape 2 — Croquis sans couleur
 

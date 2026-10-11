@@ -71,3 +71,12 @@ droite ») ; elle sert de premier jet.
   gauche ne se fond pas dans le dos : un membre à part, cerné, mais sans bosse.
 - 1 (11/10) : Léonard veut placer et déplacer lui-même les points du squelette, à la souris,
   sur la planche : bouton « Déplacer les points », envoi à Claude par la base de la page.
+- 1 (11/10, points envoyés depuis la planche) : coude droit de (48 ; 46) à (47 ; 46,5) pixels ;
+  tarse gauche de (88 ; 49) à (88 ; 47,5), pour allonger les orteils. Les trois orteils du pied
+  gauche se superposaient : une petite palmure, comme aux mains. La pupille est ratée : reprendre
+  telle quelle celle de la grenouille de gauche, parfaite. L'autre œil : seulement la bosse
+  verte, pas le globe. Le bras droit un pixel plus fin, rogné sur sa droite, pour un petit vide
+  entre le coude et le corps. Puis « passe au croquis » : ébauche gelée
+  (droite_ebauche_valide.json, branche_ebauche_valide.json).
+- 2 (11/10) : croquis : genou rond et mollet au tibia gauche, pli sous l'œil ; les orteils du
+  pied droit soudés entre eux aussi.
