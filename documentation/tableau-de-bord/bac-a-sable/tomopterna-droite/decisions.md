@@ -50,3 +50,13 @@ droite ») ; elle sert de premier jet.
 - 0 (10/10/2026) : la grenouille de gauche est finie (éclat validé, animation à faire) ;
   Léonard passe à celle de droite, en partant de la grenouille de la session du 8/10 et en
   l'améliorant étape par étape avec le skill.
+- 0 (11/10) : cadrage validé. À corriger en partant de l'ancienne grenouille : la pupille (une
+  fente fine en amande, comme sur la photo, pas une barre) ; le coude gauche fait une bosse qui
+  n'existe pas ; le doigt de la main gauche qui monte, quasi invisible ; tous les doigts selon
+  les conventions de la grenouille de gauche (paume, bases, palmure, disques relevés) ; le pied
+  droit n'est pas circulaire ; le museau est trop arrondi : le faire comme celui de la
+  grenouille de gauche, « parfait » (des droites).
+- 1 (11/10) : ébauche faite avec ces corrections : museau tronqué en deux droites ; pupille de
+  7 × 2 pixels, inclinée de 8°, en avant du centre ; le haut de l'avant-bras gauche fondu dans le
+  dos, sans contour ; doigt I gauche de 2 pixels, à gauche de l'avant-bras ; pied droit en
+  trapèze relevé sur la photo, ses orteils soudés.

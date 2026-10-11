@@ -302,6 +302,12 @@ quel plan, dans quelle position, avec combien de doigts) avant de dessiner bien.
       en montre.
 - [ ] Le nombre de doigts et d'orteils et leur formule ; le contact avec le support.
 - [ ] Rien ne touche les bords de la toile.
+- [ ] Une articulation ne fait pas de bosse que la photo ne montre pas : un avant-bras qui sort
+      du dos s'y fond sans contour (une forme de la matière du dos, soudée au corps et au bras,
+      par-dessus le haut du coude), au lieu d'y poser un capuchon cerné.
+- [ ] Un pied ou une main en partie caché (sous une branche) suit la silhouette de la photo,
+      jamais un disque par défaut ; ses doigts cachés, qui n'en sortent que par leur racine, y
+      sont soudés, sinon leurs bouts de contour font des miettes.
 
 ## Étape 2 — Croquis sans couleur
 
