@@ -465,6 +465,26 @@ commit.
   au lieu de multiplier les agrandissements ; `profil` pour les barres de chaque os ;
   `pipette` sur toutes les zones en un appel, au même éclairement ; puis un seul rendu à
   corriger.
+- **Deuxième grenouille de la même espèce, sur la même photo** : reprendre la palette validée
+  de la première pour les matières communes (même lumière ; la pipette ne sert qu'à le
+  confirmer), et n'ajouter que les matières propres à celle-ci (le flanc qu'on voit de côté, la
+  face interne d'une cuisse). Les deux se posent côte à côte : des verts ou des orangés
+  différents se verraient.
+- **Le décalque, pour aller vite sur les formes larges** (flanc, cuisse, pied, bras pâle) : la
+  photo réduite au pixel du sprite (`Image.BOX`), et, forme par forme, les pixels plus sombres
+  que la médiane des pixels de la même matière autour d'eux (rayon 8, seuil 0,7 environ) sont
+  des barres ou des taches, un peu moins sombres et violacés des marbrures, clairs au bord du
+  vert des granules. Le garder dans le code comme un dessin (une chaîne par rangée, une lettre
+  par motif), qu'on corrige à la main. Pièges :
+  - le calculer avec un décalque vide : sinon les motifs déjà posés changent les matières, et
+    le calcul suivant les perd ;
+  - enlever les pixels sombres seuls, sans voisin sombre (du bruit), sauf les très sombres ;
+  - **pas sur les doigts ni les membres fins** : le fond s'y mêle et fait de fausses barres.
+    Là, une barre par creux de lumière le long de l'os ou du doigt (`profil`, `barres()`) ;
+  - une zone du décalque s'ajoute (ou) à une zone de même nom posée à la main, sans la
+    remplacer (les granules de l'avant-bras avaient disparu).
+- **Le lichen d'une branche** : décalqué aussi (les pixels clairs et gris de l'écorce, là où la
+  grenouille ne la cache pas), pas en ellipses : des bandes lisses font des rayures.
 - **Rien d'autre** : ni dégradé, ni ombre, ni lumière, ni reflet, ni effet mouillé, ni grain,
   ni tramage.
 - **Aucune forme ne bouge** : `outils.py comparer <code>_croquis_valide.json <code>_aplats.json`

@@ -88,3 +88,11 @@ droite ») ; elle sert de premier jet.
   rayon vers la gauche (REGARD).
 - 2 (11/10) : « go étape suivante » : croquis gelé (droite_croquis_valide.json,
   branche_croquis_valide.json).
+- 3a (11/10) : couleurs à plat. La palette de la grenouille de gauche pour les matières communes
+  (même photo, même lumière) ; propres à celle-ci : le flanc orangé pêche, la face interne jaune
+  de la cuisse gauche (à gauche du tibia ; vert à sa droite), la plante claire du pied droit,
+  le bras gauche de l'épaule au coude blanc rosé, les granules blanches (au bord du vert, sur le
+  genou, une sur deux le long de l'avant-bras). Motifs décalqués sur la photo pour le flanc, la
+  cuisse, le bras gauche et le pied droit ; barres mesurées le long des os pour le bras droit, le
+  tibia, les doigts et les orteils. Branche : le lichen décalqué, la bosse sous la main droite
+  sombre, violacée. La fente de l'œil reste en demi-pixels.

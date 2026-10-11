@@ -48,19 +48,26 @@ TRAME = np.tile(BAYER, (H // 4 + 1, W // 4 + 1))[:H, :W]
 # une couleur à plat par matière ; les rampes du rendu détaillé en sont tirées. Étape 3a :
 # teintes prises à la pipette sur la photo, dans les zones éclairées, sans reflet ni ombre
 MATIERES = {
-    "dos": "#4F9C43",  # vert feuille : dos, tête, faces externes des membres
-    "ventre": "#C4A9AA",  # poitrine et ventre, blanc rosé
-    "bas_ventre": "#B9866A",  # bas du ventre, pêche orangé
-    "gorge": "#B3A3B0",  # gorge, gris lilas
+    # les teintes de la grenouille de gauche, validées, pour les matières que les deux ont en
+    # commun (même photo, même lumière) ; la pipette sur celle-ci les confirme
+    "dos": "#4F9C43",  # vert feuille : dos, tête, face externe de l'avant-bras gauche, cuisse
+    "ventre": "#C4A9AA",  # blanc rosé (le rendu détaillé en tire ses fondus)
+    "bas_ventre": "#B9866A",  # pêche orangé (idem)
+    "gorge": "#B3A3B0",  # gorge, poitrine et menton, gris lilas
     "levre": "#E4DCDB",  # liseré blanc de la lèvre
-    "membre": "#AE6C38",  # faces internes des membres, mains, pieds : orangé
-    "pale": "#B3A4AC",  # dessus du bras droit, pâle
+    "membre": "#AE6C38",  # membres orangés, mains, pieds
+    "pale": "#C4A6A2",  # le bras gauche, de l'épaule au coude : sa face interne, blanc rosé
     "disque": "#C2884F",  # disques, plus clairs que le doigt
     "membrane": "#A9A3B8",  # paupière inférieure, lilas (œil fermé)
+    # propres à celle-ci, qu'on voit de flanc
+    "flanc": "#B4744F",  # le flanc, orangé pêche, sous le vert
+    "jaune": "#B8843E",  # la face interne de la cuisse gauche, jaune orangé
+    "plante": "#C99058",  # la plante du pied droit, tournée vers le haut, claire
+    "granule": "#DDD8D6",  # granules blanches : au bord du vert, sur le genou, l'avant-bras
 }
 MOTIFS = {
-    "barre": "#2B1E33",  # barres violet-noir des membres, mouchetures sous la lèvre
-    "tache": "#6B3F50",  # marbrures violettes du ventre et du bras gauche
+    "barre": "#2B1E33",  # barres et taches violet-noir du flanc et des membres
+    "tache": "#6B3F50",  # marbrures violettes, mouchetures sous la lèvre
 }
 # les traits du croquis prennent la couleur qu'ils traversent, assombrie ; sauf ceux-ci, qui ont
 # leur matière : chez cette grenouille, la lèvre est un liseré blanc
@@ -201,7 +208,14 @@ MAINS = {
         "palmes": [(1, 2), (2, 3)],
     },
     "patte_g": {
-        "paume": [(85.5, 46.5), (90.5, 46.5), (92.5, 49.5), (90.5, 52.0), (86.0, 52.0), (83.5, 49.5)],
+        "paume": [
+            (85.5, 46.5),
+            (90.5, 46.5),
+            (92.5, 49.5),
+            (90.5, 52.0),
+            (86.0, 52.0),
+            (83.5, 49.5),
+        ],
         "bases": [(84.3, 50.0), (87.5, 52.0), (91.8, 50.0)],
         "palmes": [(0, 1), (1, 2)],
     },
@@ -443,6 +457,81 @@ def main(membre_, palmure=2.0):
 
 
 # ------------------------------------------------------------------ couleurs et motifs (3a)
+# le vert du dos s'arrête, en arrière de la commissure, sur cette ligne brisée relevée sur la
+# photo, colonne par colonne (pixels du sprite : colonnes, puis rangées) ; dessous, le flanc. Elle
+# descend plus vite derrière l'avant-bras gauche, vers la croupe
+LIMITE_VERT = ([41, 49, 58, 63, 68, 72, 83], [30.5, 31.5, 32.5, 33.5, 35.5, 37.5, 37.5])
+# Les motifs de cet individu, décalqués sur la photo réduite au pixel du sprite : forme par forme,
+# les pixels nettement plus sombres que leur voisinage (barres et taches violet-noir), un peu plus
+# sombres et violacés (marbrures), clairs au bord du vert et sur le genou (granules) ; puis
+# repris à la main. Une chaîne par rangée, à partir du coin (colonne, rangée).
+# Les doigts et les orteils, trop fins pour le décalque (le fond s'y mêle) : leurs barres, une
+# par creux de lumière le long du doigt sur la photo (centres en pixels du sprite), de la base
+# au bout ; aucune sur ceux que la branche met dans l'ombre. Les membres aussi (formes()) : le
+# décalque ne sert qu'au flanc, à la cuisse, au bras et au pied droit (DECALQUE_FORMES)
+BARRES = {
+    "doigt_d": [([(32.5, 54.6)], ()), ([(18.5, 55.1)], ()), ([(20.0, 62.0)], ())]
+    + [([(27.6, 59.8)], ())],
+    "doigt_g": [([(56.7, 53.6)], ()), ([(48.6, 57.7)], ()), ([(50.0, 65.2), (46.7, 67.5)], ())]
+    + [([(55.4, 68.1)], ())],
+    "orteil_g": [([(83.2, 51.7)], ()), ([(87.3, 55.5)], ()), ([(93.2, 53.2)], ())],
+    "orteil_d": [((), ()), ((), ()), ((), ())],
+}
+DECALQUE_FORMES = ("corps", "bras_g", "cuisse_g", "patte_d", "pied_d")
+DECALQUE_LETTRES = {"w": "granule", "t": "tache", "B": "barre"}
+DECALQUE_COIN = (28, 31)
+DECALQUE = [
+    "ttBBBBBBBt..twwww........................................",  # 31
+    "..tttBttBBBBBBttBBBtw..Bww...............................",  # 32
+    "...t..tt.....wwwwwwww.B.w..w..ww.........................",  # 33
+    ".......t............BB...................................",  # 34
+    "..................BBB...........t........................",  # 35
+    "...................BB......BBBB.B....................B...",  # 36
+    "..........................BBBBB.B...................BB...",  # 37
+    ".....................ttt..BBBB...............w.BBBB..B...",  # 38
+    "..........tt.ttttBtB....tBBBBB.................BB.....B..",  # 39
+    "............BBBBBBBBBtBt....BB.................BB...BBBB.",  # 40
+    "..............tBttBt..........................BBB...Bt.B.",  # 41
+    "..................t...........................BB....Bt..B",  # 42
+    ".............................................BBB....Bt...",  # 43
+    ".............................................BBB....tB...",  # 44
+    "..............................................BB....BB..B",  # 45
+    "..............................................BB........t",  # 46
+    ".........................................................",  # 47
+    ".........................................................",  # 48
+    ".........................................................",  # 49
+    ".........................................................",  # 50
+    ".........................................................",  # 51
+    ".........................................................",  # 52
+    ".........................................................",  # 53
+    ".........................................................",  # 54
+    ".........................................................",  # 55
+    ".........................................................",  # 56
+    ".........................................................",  # 57
+    ".........................................................",  # 58
+    ".........................................................",  # 59
+    ".........................................................",  # 60
+    ".........................................................",  # 61
+    ".........................................................",  # 62
+    ".........................................................",  # 63
+    ".........................................................",  # 64
+    ".........................................................",  # 65
+    "......................................BBB................",  # 66
+    ".....................................BBBB................",  # 67
+    ".....................................B...................",  # 68
+    ".....................................B...................",  # 69
+]
+
+
+def decalque(lettre, i, j):
+    """Les pixels du décalque marqués de cette lettre, lus aux coordonnées (i, j), en pixels du
+    sprite (tournées avec la tête pour le corps)."""
+    g = np.array([list(r) for r in DECALQUE]) == lettre
+    a, b = np.round(i).astype(int) - DECALQUE_COIN[0], np.round(j).astype(int) - DECALQUE_COIN[1]
+    dedans = (a >= 0) & (b >= 0) & (a < g.shape[1]) & (b < g.shape[0])
+    return dedans & g[np.clip(b, 0, g.shape[0] - 1), np.clip(a, 0, g.shape[1] - 1)]
+
+
 def pixels(*pts):
     """Un motif posé au pixel près : les pixels (i, j) du sprite, relevés sur la photo."""
     m = np.zeros((H, W), bool)
@@ -553,7 +642,9 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         Y,
     )
     pied_d &= ~br
-    orteils_d = cernes("orteil_d", "tarse_d", MEMBRES["patte_d"][2], "fond")
+    orteils_d = cernes(
+        "orteil_d", "tarse_d", MEMBRES["patte_d"][2], "fond", None, BARRES["orteil_d"]
+    )
     for o in orteils_d:
         o["masque"] &= ~br
     # les orteils continuent le pied, sans contour : les deux qui remontent derrière la branche
@@ -590,28 +681,32 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
     # bras gauche (devant) : le bras, fin, à l'horizontale ; l'avant-bras, épais, part du coude,
     # juste sous le dos : son haut est coupé droit, parallèle au dos, sans capuchon qui ferait une
     # bosse ; un membre à part, cerné, même de la couleur du dos (corrections de Léonard)
-    bras_g = os_(["epaule_g", "coude_g"], [0.9, 0.85])
-    bras_g |= fuseau("coude_g", "poignet_g", [2.4, 2.1, 1.6], milieu=0.4)
-    bras_g |= os_(["poignet_g", "main_g"], [1.6, 1.2])
+    avant_g = fuseau("coude_g", "poignet_g", [2.4, 2.1, 1.6], milieu=0.4)
+    avant_g |= os_(["poignet_g", "main_g"], [1.6, 1.2])
+    bras_g = os_(["epaule_g", "coude_g"], [0.9, 0.85]) | avant_g
     Px = (X - ORIGINE[0]) * ECHELLE - 0.5
     bras_g &= Py > 31.0 + 0.12 * (Px - 66.0)
     bases_d, bases_g = ([px(b) for b in MAINS[m]["bases"]] for m in ("bras_d", "bras_g"))
-    doigts_g = cernes("doigt_g", "main_g", MEMBRES["bras_g"][2], "devant", bases_g)
+    doigts_g = cernes(
+        "doigt_g", "main_g", MEMBRES["bras_g"][2], "devant", bases_g, BARRES["doigt_g"]
+    )
     # le doigt qui monte sur la branche, derrière l'avant-bras : fin, quasi invisible
     doigt1_g = doigts_g.pop(0)
     doigt1_g["masque"] = doigt("main_g", "doigt1_g", largeur=2, via=bases_g[0])
     doigt1_g["plan"] = "corps"
     f = [
         forme("patte_d", patte_d, "membre", "fond", cernee=True),
-        forme("pied_d", pied_d, "membre", "fond", cernee=True, soude=("patte_d",)),
+        forme("pied_d", pied_d, "plante", "fond", cernee=True, soude=("patte_d",)),
         *orteils_d,
         forme("corps", corps, "dos", cernee=True),
         forme("bras_d", bras_d, "membre", "corps", cernee=True),
-        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "corps", bases_d),
+        *cernes("doigt_d", "main_d", MEMBRES["bras_d"][2], "corps", bases_d, BARRES["doigt_d"]),
         forme("main_d", main("bras_d"), "membre", "corps", True, soude=("doigt_d", "bras_d")),
-        forme("cuisse_g", cuisse_g, "membre", "corps", cernee=True),
+        forme("cuisse_g", cuisse_g, "jaune", "corps", cernee=True),
         forme("tibia_g", tibia_g, "membre", "devant", cernee=True),
-        *cernes("orteil_g", "tarse_g", MEMBRES["patte_g"][2], "devant", eventail_g),
+        *cernes(
+            "orteil_g", "tarse_g", MEMBRES["patte_g"][2], "devant", eventail_g, BARRES["orteil_g"]
+        ),
         forme("pied_g", main("patte_g"), "membre", "devant", True, soude=("orteil_g", "tibia_g")),
         doigt1_g,
         forme("bras_g", bras_g, "dos", "devant", cernee=True),
@@ -635,6 +730,46 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         "tympan": (rt > 0.9) & (rt < 1.4),
         "pli_autre_oeil": bord(autre) & (yt > ay) & ~oeil["masque"],
     }
+    # Étape 3a : les matières de chaque forme, relevées sur la photo réduite au pixel du sprite,
+    # puis par-dessus les motifs de cet individu, décalqués (DECALQUE). En pixels du sprite :
+    # Px, Py pour les membres, Pxt, Pyt pour le corps, qui tourne avec la tête
+    Pxt, Pyt = (xt - ORIGINE[0]) * ECHELLE - 0.5, (yt - ORIGINE[1]) * ECHELLE - 0.5
+    # sous le vert : en avant de la commissure, sous la lèvre ; en arrière, sous LIMITE_VERT
+    sous_levre = np.floor(2 * yt) > np.floor(2 * ligne)
+    dessous = np.where(xt < cx, sous_levre, Pyt > np.interp(Pxt, *LIMITE_VERT))
+    zones = {
+        # la gorge, le menton et la poitrine, gris lilas, jusque sous le coude droit ; derrière,
+        # le flanc orangé
+        "corps": {"gorge": dessous & (Pxt < 47), "flanc": dessous & (Pxt >= 47)},
+        # le bras gauche, de l'épaule au coude, pâle ; l'avant-bras, vert, liseré à gauche d'une
+        # rangée de granules blanches, une sur deux, du coude au poignet
+        "bras_g": {
+            "pale": bras_g & ~avant_g,
+            "granule": bande(bras_g & avant_g, -1, 0, 1)
+            & (Py >= 38)
+            & (Py <= 54)
+            & (np.round(Py) % 2 == 0),
+        },
+        # la cuisse gauche : sa face interne, jaune, à gauche du tibia ; le vert à sa droite
+        "cuisse_g": {"dos": Px >= 88},
+        # le bras droit : deux barres sur le bras, au milieu et au coude, deux sur l'avant-bras
+        # (les creux de lumière le long de chaque os)
+        "bras_d": {
+            "barre": barres([S["epaule_d"], S["coude_d"]], px((43.9, 44.6), (46.9, 46.4)))
+            | barres([S["coude_d"], S["poignet_d"]], px((42.7, 47.8), (36.5, 49.8)))
+        },
+        # le tibia gauche : le dessus du genou granuleux, blanc ; deux barres
+        "tibia_g": {
+            "granule": tibia_g & (Py <= 29) & ((np.round(Px) + np.round(Py)) % 2 == 0),
+            "barre": barres([S["genou_g"], S["talon_g"]], px((87.5, 37.0), (88.0, 41.9))),
+        },
+    }
+    for fo in f:
+        fo["zones"] = fo["zones"] | zones.get(fo["nom"], {})
+        if fo["nom"] in DECALQUE_FORMES:  # les autres membres : leurs barres sont mesurées
+            i, j = (Pxt, Pyt) if fo["nom"] == "corps" else (Px, Py)
+            for c, mot in DECALQUE_LETTRES.items():
+                fo["zones"][mot] = fo["zones"].get(mot, False) | decalque(c, i, j)
     return f, traits, {}, oeil
 
 
@@ -1317,9 +1452,10 @@ def produire(etape):
         fine = PUPILLE_FINE and ECLAT_ACTIF and etape in ("details", "animation")
         if fine and not oeil["ferme"]:
             *coins[cle], images["fin " + cle] = pupille_fine(images[cle], oeil)
-        elif etape in ("ebauche", "croquis") and not oeil["ferme"]:
-            c = SILHOUETTE if etape == "ebauche" else CROQUIS
-            *coins[cle], images["fin " + cle] = fente_fine(images[cle], oeil, c["globe"], c["pupille"])
+        elif etape in ("ebauche", "croquis", "aplats") and not oeil["ferme"]:
+            c = {"ebauche": SILHOUETTE, "croquis": CROQUIS}.get(etape)
+            iris, noir = (c["globe"], c["pupille"]) if c else (OEIL["iris"], OEIL["pupille"])
+            *coins[cle], images["fin " + cle] = fente_fine(images[cle], oeil, iris, noir)
     sprite = coder(images)
     if coins:  # les pièces en demi-pixels, à part : la planche les pose sur l'image
         sprite["fins"] = {

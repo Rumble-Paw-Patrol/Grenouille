@@ -50,7 +50,10 @@ MATIERES = {
     "fond": "#9C5223",  # membres de l'autre côté
     "levre": "#F2CC98",
 }
-MOTIFS = {"lichen": "#8E8D94"}  # plaques de lichen gris argenté
+MOTIFS = {
+    "lichen": "#8E8D94",  # plaques de lichen gris argenté (celles de la branche de gauche)
+    "noeud": "#35262E",  # la petite bosse sous la main droite, sombre, violacée
+}
 # œil : iris, pupille, cercle autour du globe, matière de la paupière fermée ; la forme de la
 # pupille (et sa taille, dans rendu_oeil) vient des photos
 OEIL = {"iris": "#C9A05A", "pupille": "#0B0705", "cercle": "#24120A", "paupiere": "dos"}
@@ -185,8 +188,49 @@ def dans_branche(x, y):
     return (np.abs(y - suivre(BRANCHE, x)) <= suivre(EPAISSEUR, x)) | ellipse(*BOSSE, x, y)
 
 
+# le lichen, décalqué sur la photo réduite au pixel du sprite : sur le dessus éclairé de la
+# branche, les pixels clairs et gris, là où la grenouille ne la cache pas. Par rangée, les
+# colonnes (ou plages de colonnes) en pixels du sprite
+LICHEN = {
+    48: "104-106",
+    49: "94 96-98 100-101",
+    50: "94 99-100 102-103 108",
+    51: "95 101 103-105 107",
+    52: "72 75 95 97-98",
+    53: "66-68 75-76 95 98",
+    54: "58 66-67 71 76 95-96",
+    55: "50-51 66-67 71-73 76 96",
+    56: "19 28 41 65-66 72-76",
+    57: "17-19 65-66 71",
+    58: "15-18 24 38 40-41 64-65 74 76",
+    59: "15-16 22-24 33 37 40 63-64",
+    60: "17 23-25 37 39-41 47 62-63 79 82",
+    61: "8-9 13-17 24-26 40 42-43 45 61-63 67-68",
+    62: "2 4-5 7-8 13-14 16-17 23 26 43 62",
+    63: "1-3 5 10 13 16 60-61",
+    64: "1 12 16 45 59",
+    65: "1 5 39 42-44",
+    66: "44",
+    67: "40 43",
+}
+
+
+def pixels_lichen():
+    m = np.zeros((H, W), bool)
+    for j, plages in LICHEN.items():
+        for p in plages.split():
+            a, _, b = p.partition("-")
+            m[j, int(a) : int(b or a) + 1] = True
+    return m
+
+
 def formes(**_):
-    return [forme("branche", dans_branche(X, Y), "ecorce", "fond")], {}, {}, None
+    """La branche et sa bosse. Étape 3a : la bosse sous la main droite, sombre (décision de
+    Léonard) ; le lichen gris argenté décalqué sur la photo (LICHEN)."""
+    br = dans_branche(X, Y)
+    bosse = ellipse(*BOSSE, X, Y) & (np.abs(Y - suivre(BRANCHE, X)) > suivre(EPAISSEUR, X))
+    motifs = {"lichen": pixels_lichen() & br, "noeud": bosse}
+    return [forme("branche", br, "ecorce", "fond")], {}, motifs, None
 
 
 # ------------------------------------------------------------------ rendus
