@@ -661,6 +661,13 @@ outils l'ignorent.
 - **Plusieurs grenouilles :** chacune a ses propres rythmes, décalés (la planche le fait). Leurs
   regards suivent l'image : deux grenouilles face à face se regardent, se détournent un instant
   et reviennent.
+- **Le regard qui se détourne** : un réglage `regard` de `formes()` fait glisser la fente vers
+  l'arrière de l'œil (`DETOURNE`, un quart du rayon environ, pupille fine comprise) ; 12 images
+  de plus, œil ouvert, aux clés suivies de « r » (36 par grenouille). Le reflet blanc reste sur
+  la fente. La planche, qui lit les clés à 4 caractères, les ignore.
+- **Vérifier chaque image, pas seulement le repos** : tête tournée, une granule tombée sous le
+  trait du tympan, assombrie par lui, virait au vert fluo (tomopterna). Pas de granule sous un
+  trait du visage ; chercher dans la palette de l'animation les couleurs aberrantes.
 - **Les poses de comportement** (bouche ouverte, yeux rentrés pour avaler, regard vers une
   proie) s'ajoutent en réglages de `formes()`. Avec tous les réglages à zéro, l'image doit être
   la validée, pixel pour pixel : le vérifier avec `comparer`.
@@ -707,6 +714,24 @@ jamais copiée : on en relève une grille de couleurs grossière et la place des
 repeint en pixels tramés. Le reflet est un calque calculé depuis les sprites (miroir autour de
 la ligne d'eau relevée, assombri, teinté, étiré pour une grenouille vue d'en dessous), animé
 seulement en 5d.
+
+Ce que Léonard a corrigé dans la scène de tomopterna (`bac-a-sable/tomopterna/`) :
+- **L'herbe floue n'est pas que verticale.** Relever à la main, sur la photo quadrillée (le
+  tracé automatique échoue sur un fond flou), les brins qu'on y distingue : tracé (penché à
+  gauche ou à droite, courbé, cassé, presque couché), largeur, éclat (clair ou sombre), vert ou
+  paille. Les peindre en traits flous, et faire suivre au grain de l'herbe un champ de
+  directions tiré des brins voisins (des traînées intégrées le long de ce champ), la verticale
+  seulement là où il n'y a pas de brin. Garder l'herbe olive : le rouge ne dépasse pas le vert.
+- **Là où le support touche l'eau, l'eau s'y colle** (tension superficielle) : un ménisque sous
+  la branche, bleu-gris (il reflète le ciel), sombre contre l'écorce, clair en bas avec un
+  liseré argenté qui scintille ; il remonte en courbe vers la branche là où elle quitte l'eau.
+  Un sprite à part, reflété comme la branche.
+- **Un support fait de morceaux validés** (un par cadre de grenouille) : la branche entière est
+  peinte comme eux hors des cadres, bords raccordés en douceur ; dans les cadres, les morceaux
+  pixel pour pixel, sauf leurs 4 colonnes de bord, dont la lumière est faussée (leur flou boucle
+  d'un bord à l'autre) et qu'on repeint.
+- **La pupille en demi-pixels dans une scène** : la scène se peint au pixel sur une toile cachée,
+  montrée à 2× ; les pièces fines se posent ensuite sur la vue.
 
 **5c. Lumière et ambiance**, montrées en planche fixe à plusieurs heures ou météos :
 - la teinte de l'heure, en multiplication ;

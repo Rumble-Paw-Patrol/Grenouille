@@ -185,3 +185,10 @@ l'ébauche et le croquis.
   demi-pixels, est gelé en `gauche_eclat_valide.json` : c'est lui que l'étape 4 animera.
 - Léonard passe ensuite à la grenouille de droite (`../tomopterna-droite/`) ; l'étape 4 de
   la grenouille de gauche reste à faire.
+- 4 (11/10) : la grenouille de droite validée à son tour, Léonard met les deux dans la scène
+  animée (`../tomopterna/`, « Tomopterna au-dessus de l'eau ») à la place des anciennes.
+  Animation : 36 images (gorge × flanc × œil × tête, et 12 où elle se détourne de l'autre : la
+  fente glisse vers l'arrière de l'œil, le reflet blanc reste dessus ; clés suivies de « r ») ;
+  la pose de repos est l'éclat gelé, pixel pour pixel. Tête tournée, une granule tombait sous
+  le trait du tympan et, assombrie, virait au vert fluo : plus de granule sous un trait du
+  visage (sans effet sur la pose de repos).

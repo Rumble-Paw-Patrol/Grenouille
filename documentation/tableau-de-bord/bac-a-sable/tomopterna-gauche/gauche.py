@@ -73,6 +73,9 @@ OEIL = {
     "paupiere": "membrane",
 }
 PUPILLE = "verticale"  # fente verticale des phyllomédusines
+# DETOURNE : à l'étape 4, quand elle se détourne de l'autre un instant, la fente glisse vers
+# l'arrière de l'œil (vers la gauche), en part du rayon
+DETOURNE = -0.24
 CONTOUR, CONTOUR_CLAIR = "#24120A", "#5A2B14"
 # CONTOUR_TEINTE : au rendu détaillé, le contour prend la couleur qu'il borde, assombrie, au lieu
 # d'un trait sombre uniforme (choix de l'étape 3b ; C. tomopterna l'a pris, A. blanci non)
@@ -493,7 +496,7 @@ def cernes(nom, base, bouts, plan, via=None, motifs=None):
     return out
 
 
-def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
+def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0, regard=0.0):
     """Étape 2, croquis : les contours relevés sur la photo, quadrillée au pixel du sprite.
     Le profil de la tête, le dos et la mâchoire en droites ; le ventre en galbe ; les membres
     en fuseaux sur le squelette validé à l'ébauche ; les doigts posés au pixel près."""
@@ -681,6 +684,8 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0):
         forme("main_d", main("bras_d"), "membre", "devant", True, soude=("doigt_d", "bras_d")),
     ]
     oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne, "tete": tete}
+    oeil["decalage"] = regard * DETOURNE  # la fente, quand elle se détourne
+    oeil["repos"] = 0.0
     oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
     oeil["u"], oeil["v"] = (xt - ox) / oeil["r"], (yt - oy) / oeil["r"]
     ax, ay = S["autre_oeil"]
@@ -1054,6 +1059,10 @@ def details(f, traits, motifs, oeil, eclat=None):
     lisere |= vert & dilater(~vert & (num >= 0))[:H, :W] & (decaler(num, 0, 1) == num)
     granules = semis(lisere, 0.5, 7)
     granules |= semis(vert & ~lisere, 0.035, 8, pris=granules)
+    # pas de granule sous un trait du visage : assombrie par lui, elle virait au vert fluo
+    # quand la tête tourne (étape 4)
+    for m in traits.values():
+        granules &= ~m
     img[granules & ~oeil["masque"]] = GRANULE
     # reflets humides : un point clair en haut à gauche de chaque disque
     for k, fo in enumerate(f):
@@ -1186,7 +1195,7 @@ def oeil_detaille(img, oeil, eclat=False):
     reticule = semis(m & ~bord(m), 0.22, 13)
     img[reticule] = np.array(tons, object)[np.clip(idx - 2, 0, n)][reticule]
     img[bord(m)] = "#211A33" if eclat else OEIL["cercle"]
-    fente = np.abs(u) < 0.26 * (1 - (v / 0.82) ** 2)
+    fente = np.abs(u - oeil["decalage"]) < 0.26 * (1 - (v / 0.82) ** 2)
     img[m & fente] = "#120E22" if eclat else OEIL["pupille"]
     # le haut de la fente bleuté du modelé validé ; avec l'éclat, une fente d'un seul noir
     # (correction de Léonard)
@@ -1221,13 +1230,17 @@ def pupille_fine(img, oeil):
     xt, yt = tete_tournee(oeil["tete"], x2, y2)
     u, v = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
     dedans = double(m & ~bord(m))
-    fente = dedans & (np.abs(u) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4)
+    fente = dedans & (
+        np.abs(u - oeil["decalage"]) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4
+    )
     tons = rampe_eclat(OEIL["iris"], 0.62, 0.11, 9)
     trame = np.tile(BAYER, (piece.shape[0] // 4 + 1, piece.shape[1] // 4 + 1))
     trame = trame[: piece.shape[0], : piece.shape[1]]
     idx = np.clip(np.floor(8 * (0.57 - 0.33 * v - 0.15 * u) + trame * 0.9), 0, 8).astype(int)
     iris = dedans & np.isin(piece, NOIRS) & ~fente
     piece[iris] = np.array(tons, object)[idx][iris]
+    if oeil["decalage"] != oeil["repos"]:  # détournée, le reflet blanc reste sur la fente
+        fente &= piece != "#FFFFFF"
     piece[fente] = NOIRS[0]
     return int(i0), int(j0), piece
 
@@ -1347,6 +1360,13 @@ def produire(etape):
             for g in (0, 1)
             for s in (0, 1)
             for c in (0, 1)
+            for t in (-1, 0, 1)
+        }
+        # œil ouvert, elle se détourne un instant de l'autre : la clé suivie de « r »
+        poses |= {
+            f"{g}{s}0{t + 1}r": (g * 0.9, s * 0.7, False, t, 1.0)
+            for g in (0, 1)
+            for s in (0, 1)
             for t in (-1, 0, 1)
         }
     else:

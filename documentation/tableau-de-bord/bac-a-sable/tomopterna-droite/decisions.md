@@ -122,3 +122,15 @@ droite ») ; elle sert de premier jet.
   contour sur tout son bord).
   Fait : bras gauche entier, cerné, pâle ; bagues de peau de 2,2 unités autour des deux points
   d'épaule ; lumière lissée et couleurs mêlées sur 5 pixels autour d'eux seulement.
+- 3b (11/10) : « parfait ». Modelé gelé : `droite_details_valide.json` (l'éclat, avec la pupille
+  en demi-pixels) et `branche_details_valide.json`.
+- 4 (11/10) : Léonard demande de mettre les deux nouvelles grenouilles dans la scène animée
+  (« Tomopterna au-dessus de l'eau », `../tomopterna/`) à la place des anciennes ; de revoir le
+  fond, trop « vertical » alors que l'herbe de la photo part dans des directions variées ; et,
+  à gauche, de dessiner l'eau qui se colle à la branche (tension superficielle), qu'on voie que
+  la branche touche l'eau.
+  Fait : 36 images (gorge × flanc × œil × tête, et 12 où elle se détourne de l'autre, la fente
+  glissée vers l'arrière de l'œil : clés suivies de « r ») ; la pose de repos est l'image gelée,
+  pixel pour pixel (pupille fine comprise). Détournée, le reflet blanc de l'œil reste sur la
+  fente. Dans la scène : branche entière, ménisque, herbe relevée brin par brin
+  (`../tomopterna/branche.py`, `decor.py`).
