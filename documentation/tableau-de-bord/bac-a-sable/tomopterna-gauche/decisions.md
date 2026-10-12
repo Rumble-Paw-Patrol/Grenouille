@@ -192,3 +192,10 @@ l'ébauche et le croquis.
   la pose de repos est l'éclat gelé, pixel pour pixel. Tête tournée, une granule tombait sous
   le trait du tympan et, assombrie, virait au vert fluo : plus de granule sous un trait du
   visage (sans effet sur la pose de repos).
+- 4 (12/10) : « le ventre de ces deux grenouilles manque un petit peu de rayures et de motifs » ;
+  « le sprite du clignement est très rudimentaire et mérite d'être détaillé ».
+  Fait : le ventre : le réseau violet relevé sur la photo (86 pixels de plus, en taches d'au moins deux), 111 pixels recolorés ; silhouette inchangée. Le gel de l'étape 3b sera refait quand Léonard aura validé.
+  Clignement : l'œil passe par mi-clos, fermé, mi-clos (0,3 s ; 48 images) ; la paupière
+  supérieure, verte, descend en croissant mince ; la membrane inférieure, lilas translucide,
+  bombée, porte un réseau de veines dorées en cellules (dessiné en demi-pixels), la fente devinée
+  dessous, un reflet mouillé ; son bord : un liseré pâle mi-close, un pli sombre en arc fermée.

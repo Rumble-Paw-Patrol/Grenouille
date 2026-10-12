@@ -472,6 +472,8 @@ LIMITE_VERT = ([41, 49, 58, 63, 68, 72, 83], [30.5, 31.5, 32.5, 33.5, 35.5, 37.5
 # par creux de lumière le long du doigt sur la photo (centres en pixels du sprite), de la base
 # au bout ; aucune sur ceux que la branche met dans l'ombre. Les membres aussi (formes()) : le
 # décalque ne sert qu'au flanc, à la cuisse, au bras et au pied droit (DECALQUE_FORMES)
+# 12/10 (« le ventre manque un peu de motifs ») : des mouchetures violettes (t) sous le vert,
+# de la joue à l'épaule mais pas dans la gorge, et une tache sombre de plus sur le flanc (B)
 BARRES = {
     "doigt_d": [([(32.5, 54.6)], ()), ([(18.5, 55.1)], ()), ([(20.0, 62.0)], ())]
     + [([(27.6, 59.8)], ())],
@@ -485,16 +487,16 @@ DECALQUE_LETTRES = {"w": "granule", "t": "tache", "B": "barre"}
 DECALQUE_COIN = (28, 31)
 DECALQUE = [
     ".............wwww........................................",  # 31
-    "....................w...ww...............................",  # 32
-    ".............wwwwwwww...w..w..ww.........................",  # 33
-    ".........................................................",  # 34
-    "................................t........................",  # 35
+    "...................tw..tww...............................",  # 32
+    ".............wwwwwwww.t.w..wt.ww.........................",  # 33
+    "...................tt....................................",  # 34
+    "...................t............t........................",  # 35
     "...........................BBBB.B....................B...",  # 36
     "..........................BBBBB.B...................BB...",  # 37
     "..........................BBBB...............w.BBBB..B...",  # 38
     "........................tBBBBB.................BB.....B..",  # 39
-    "............................BB.................BB...BBBB.",  # 40
-    "..............................................BBB...Bt.B.",  # 41
+    "...................B........BB.................BB...BBBB.",  # 40
+    "...................BB.........................BBB...Bt.B.",  # 41
     "..............................................BB....Bt..B",  # 42
     ".............................................BBB....Bt...",  # 43
     ".............................................BBB....tB...",  # 44
@@ -724,7 +726,9 @@ def formes(gorge=0.0, souffle=0.0, cligne=False, tete=0, regard=0.0):
         *doigts_g,
         forme("main_g", main("bras_g"), "membre", "devant", True, soude=("doigt_g", "bras_g")),
     ]
-    oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne, "tete": tete}
+    oeil = {"x": ox, "y": oy, "r": 3.4, "ferme": cligne is True, "tete": tete}
+    # le clignement : 0 ouvert, 0,5 mi-clos, 1 fermé (étape 4)
+    oeil["voile"] = 1.0 if cligne is True else float(cligne or 0)
     oeil["decalage"] = REGARD + regard * DETOURNE  # la fente, quand elle se détourne
     oeil["repos"] = REGARD
     oeil["masque"] = (xt - ox) ** 2 + (yt - oy) ** 2 <= oeil["r"] ** 2
@@ -1308,6 +1312,82 @@ def noms(f):
     return [fo["nom"] for fo in f]
 
 
+# le clignement (étape 4 ; Léonard : « très rudimentaire, il mérite d'être détaillé ») : la
+# paupière supérieure, verte, descend un peu sur le globe ; la paupière inférieure, membrane
+# lilas translucide, remonte : bombée (claire en haut à gauche), parcourue d'un réseau de
+# veines dorées en cellules irrégulières, la fente devinée par transparence, un reflet mouillé ;
+# son bord est un liseré pâle (mi-close) ou, fermée, le pli sombre où elle rejoint la paupière
+# du haut. Mi-close, elle couvre le bas du globe et l'œil regarde encore au-dessus.
+def reseau(u, v, pas, epaisseur, graine):
+    """Les veines : les bords des cellules d'un pavage irrégulier (Voronoï) du globe, en unités
+    de son rayon ; des points jetés sur une grille de ce pas, chacun un peu décalé."""
+    rng = np.random.default_rng(graine)
+    g = np.arange(-1.5, 1.51, pas)
+    pts = [
+        (a + rng.uniform(-0.4, 0.4) * pas, b + rng.uniform(-0.4, 0.4) * pas) for a in g for b in g
+    ]
+    d = np.sort(np.stack([np.hypot(u - a, v - b) for a, b in pts]), axis=0)
+    return (d[1] - d[0]) < epaisseur
+
+
+def paupieres(img, m, u, v, oeil, trame, eclat=True, fin=False):
+    """Peint le clignement sur l'œil (masque m, coordonnées u et v du globe, à la résolution de
+    img : celle du sprite, ou fin, celle de la pièce en demi-pixels)."""
+    voile = oeil["voile"]
+    if not voile:
+        return img
+    ferme = voile >= 1
+    arc = 1 - np.clip(u, -1, 1) ** 2
+    # les bords, en arc, plus hauts au milieu : la paupière du haut, un croissant mince ; le
+    # bord de la membrane, qui remonte jusqu'à elle (fermée) ou jusqu'au milieu (mi-close)
+    haut = m & (v < (-0.42 - 0.22 * arc if ferme else -0.86 + 0.1 * arc))
+    bas = m & ~haut if ferme else m & (v > 0.22 - 0.3 * arc) & ~haut
+
+    def dessous(a):  # le pixel du dessous est-il dans a ?
+        b = np.zeros_like(a)
+        b[:-1] = a[1:]
+        return b
+
+    def dessus(a):
+        b = np.zeros_like(a)
+        b[1:] = a[:-1]
+        return b
+
+    # la paupière supérieure : la peau verte, éclairée d'en haut ; son bord, plus clair
+    tons_v = rampe_eclat(MATIERES["dos"], *ECLAT["dos"][:2]) if eclat else rampe(MATIERES["dos"])
+    nv = len(tons_v) - 1
+    iv = np.clip(np.floor(nv * (0.66 - 0.25 * v - 0.2 * u) + trame * 0.9), 0, nv).astype(int)
+    img[haut] = np.array(tons_v, object)[iv][haut]
+    lisere_v = haut & ~dessous(haut)
+    img[lisere_v] = np.array(tons_v, object)[np.clip(iv + 2, 0, nv)][lisere_v]
+    # la membrane, bombée, la fente devinée dessous
+    membrane = MATIERES["membrane"]
+    tons_m = rampe_eclat(membrane, 0.70, 0.95, 9) if eclat else rampe(membrane)
+    k = len(tons_m) - 1
+    fente = np.abs(u - oeil["decalage"]) < 0.2 * np.clip(1 - (v / 0.9) ** 2, 0, 1)
+    clair = 0.64 - 0.3 * v - 0.22 * u - 0.2 * fente
+    im = np.clip(np.floor(k * clair + trame * 0.9), 0, k).astype(int)
+    img[bas] = np.array(tons_m, object)[im][bas]
+    # le réseau doré : or dans la lumière, ocre dans l'ombre
+    # (fines, plus marquées vers le bas, où la membrane est plus épaisse)
+    veines = bas & reseau(u, v, *((0.4, 0.045) if fin else (0.55, 0.06)), 41)
+    veines &= (v > -0.2) | ((np.floor(4 * (u + v) * (2 if fin else 1)) % 3) != 0)
+    img[veines] = np.where(clair > 0.5, "#DCBC6E", "#A9884A")[veines]
+    # un reflet mouillé, en haut à gauche de la membrane
+    cy = -0.12 if ferme else 0.45
+    img[bas & ((u + 0.36) ** 2 + (v - cy) ** 2 < (0.012 if fin else 0.02))] = "#F6F1FA"
+    # son bord : fermée, le pli sombre contre la paupière du haut ; mi-close, un liseré pâle,
+    # et l'ombre qu'elle porte sur l'iris juste au-dessus
+    lisere_m = bas & ~dessus(bas)
+    if ferme:
+        img[lisere_m] = "#2C2338"
+    else:
+        img[lisere_m] = "#ECE6F2"
+        ombre = m & ~bas & ~haut & dessous(lisere_m) & ~np.isin(img, NOIRS)
+        img[ombre] = np.array(tons_m, object)[np.clip(im - 3, 0, k)][ombre]
+    return img
+
+
 def oeil_detaille(img, oeil, eclat=False):
     """L'œil du modelé : le bord pâle de la paupière, le globe bombé (clair en haut à gauche),
     l'iris argenté finement réticulé, le cercle, la fente, un reflet blanc et un petit reflet
@@ -1319,14 +1399,7 @@ def oeil_detaille(img, oeil, eclat=False):
     if oeil.get("autre") is not None:  # l'autre œil ne cligne jamais
         img[oeil["autre"] & (img != "") & (img != CONTOUR)] = tons[n // 2]
     if oeil["ferme"]:  # sans cercle ni bord autour : pas d'effet lunettes
-        membrane = MATIERES["membrane"]
-        tons_m = rampe_eclat(membrane, 0.70, 0.95, 9) if eclat else rampe(membrane)
-        k = len(tons_m) - 1
-        clair = k * (0.53 - 0.33 * v) if eclat else 3.2 - 2.0 * v
-        idx = np.clip(np.floor(clair + TRAME * 0.9), 0, k).astype(int)
-        img[m] = np.array(tons_m, object)[idx][m]
-        img[semis(m & ~bord(m), 0.2, 21)] = "#D9B55E" if eclat else "#B49C6E"
-        return img
+        return paupieres(img, m, u, v, oeil, TRAME, eclat)
     autour = dilater(m)[:H, :W] & ~m & (v > -0.3) & (img != "") & (img != CONTOUR)
     img[autour] = "#BDEBB2" if eclat else OEIL["bord"]
     clair = n * (0.57 - 0.33 * v - 0.15 * u) if eclat else 3.4 - 2.0 * v - 0.9 * u
@@ -1343,7 +1416,7 @@ def oeil_detaille(img, oeil, eclat=False):
     img[m & fente & (v < -0.35) & (np.abs(u) < 0.12)] = bleu  # le haut de la fente bleuté
     img[m & ((u + 0.42) ** 2 + (v + 0.42) ** 2 < 0.035)] = "#FFFFFF"
     img[m & ((u - 0.4) ** 2 + (v - 0.45) ** 2 < 0.02) & ~fente] = "#9FB4C0"
-    return img
+    return paupieres(img, m, u, v, oeil, TRAME, eclat)  # mi-close
 
 
 # la pupille en double résolution (essai de Léonard) : au rendu détaillé, une pièce à
@@ -1394,19 +1467,21 @@ def pupille_fine(img, oeil):
     xt, yt = tete_tournee(oeil["tete"], x2, y2)
     u, v = (xt - oeil["x"]) / oeil["r"], (yt - oeil["y"]) / oeil["r"]
     dedans = double(m & ~bord(m))
+    trame = np.tile(BAYER, (piece.shape[0] // 4 + 1, piece.shape[1] // 4 + 1))
+    trame = trame[: piece.shape[0], : piece.shape[1]]
+    if oeil["ferme"]:  # fermé : la membrane et son réseau doré, en demi-pixels
+        return int(i0), int(j0), paupieres(piece, double(m), u, v, oeil, trame, fin=True)
     fente = dedans & (
         np.abs(u - oeil["decalage"]) < 0.25 * np.clip(1 - (v / 0.9) ** 2, 0, 1) ** 1.4
     )
     tons = rampe_eclat(OEIL["iris"], 0.62, 0.11, 9)
-    trame = np.tile(BAYER, (piece.shape[0] // 4 + 1, piece.shape[1] // 4 + 1))
-    trame = trame[: piece.shape[0], : piece.shape[1]]
     idx = np.clip(np.floor(8 * (0.57 - 0.33 * v - 0.15 * u) + trame * 0.9), 0, 8).astype(int)
     iris = dedans & np.isin(piece, NOIRS) & ~fente
     piece[iris] = np.array(tons, object)[idx][iris]
     if oeil["decalage"] != oeil["repos"]:  # détournée, le reflet blanc reste sur la fente
         fente &= piece != "#FFFFFF"
     piece[fente] = NOIRS[0]
-    return int(i0), int(j0), piece
+    return int(i0), int(j0), paupieres(piece, double(m), u, v, oeil, trame, fin=True)
 
 
 def _decaler(hexa, dh):
@@ -1520,10 +1595,10 @@ def squelette():
 def produire(etape):
     if etape == "animation":
         poses = {
-            f"{g}{s}{c}{t + 1}": (g * 0.9, s * 0.7, bool(c), t)
+            f"{g}{s}{c}{t + 1}": (g * 0.9, s * 0.7, (False, True, 0.5)[c], t)
             for g in (0, 1)
             for s in (0, 1)
-            for c in (0, 1)
+            for c in (0, 1, 2)  # œil ouvert, fermé, mi-clos
             for t in (-1, 0, 1)
         }
         # œil ouvert, elle se détourne un instant de l'autre : la clé suivie de « r »
@@ -1541,7 +1616,7 @@ def produire(etape):
         f, traits, motifs, oeil = formes(*reglage)
         images[cle] = rendu(f, traits, motifs, oeil)
         fine = PUPILLE_FINE and ECLAT_ACTIF and etape in ("details", "animation")
-        if fine and not oeil["ferme"]:
+        if fine:
             *coins[cle], images["fin " + cle] = pupille_fine(images[cle], oeil)
         elif etape in ("ebauche", "croquis", "aplats") and not oeil["ferme"]:
             c = {"ebauche": SILHOUETTE, "croquis": CROQUIS}.get(etape)

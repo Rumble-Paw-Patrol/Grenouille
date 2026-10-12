@@ -134,3 +134,10 @@ droite ») ; elle sert de premier jet.
   pixel pour pixel (pupille fine comprise). Détournée, le reflet blanc de l'œil reste sur la
   fente. Dans la scène : branche entière, ménisque, herbe relevée brin par brin
   (`../tomopterna/branche.py`, `decor.py`).
+- 4 (12/10) : « le ventre de ces deux grenouilles manque un petit peu de rayures et de motifs » ;
+  « le sprite du clignement est très rudimentaire et mérite d'être détaillé ».
+  Fait : sous le vert, de la joue à l'épaule mais pas dans la gorge, des mouchetures violettes relevées sur la photo, et une tache sombre de plus sur le flanc pêche (51 pixels recolorés) ; silhouette inchangée. Le gel de l'étape 3b sera refait quand Léonard aura validé.
+  Clignement : l'œil passe par mi-clos, fermé, mi-clos (0,3 s ; 48 images) ; la paupière
+  supérieure, verte, descend en croissant mince ; la membrane inférieure, lilas translucide,
+  bombée, porte un réseau de veines dorées en cellules (dessiné en demi-pixels), la fente devinée
+  dessous, un reflet mouillé ; son bord : un liseré pâle mi-close, un pli sombre en arc fermée.

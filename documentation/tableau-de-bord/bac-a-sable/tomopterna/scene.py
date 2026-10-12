@@ -4,8 +4,8 @@
 
 D'après la photo d'Olivier Louguet. Les deux grenouilles sont celles dessinées pas à pas et
 validées (../tomopterna-gauche/gauche.py et ../tomopterna-droite/droite.py) : la page en reprend
-les images d'animation (36 chacune : gorge, flanc, paupière, tête, et le regard qui se
-détourne), avec leur pupille en demi-pixels. Puis la branche entière et son ménisque
+les images d'animation (48 chacune : gorge, flanc, œil ouvert, mi-clos ou fermé, tête, et le
+regard qui se détourne), avec l'œil en demi-pixels. Puis la branche entière et son ménisque
 (branche.py) et le décor (decor.py). Écrit la page : scene.html avec les données intégrées
 (index.html à côté par défaut, non suivi).
 
@@ -31,8 +31,11 @@ GRENOUILLES = {  # script, sortie, coin du cadre sur la toile, côté où est l'
     "gauche": (ICI.parent / "tomopterna-gauche/gauche.py", 96, 60, 1),
     "droite": (ICI.parent / "tomopterna-droite/droite.py", 236, 46, -1),
 }
-AXE = (161.8, 0.0083)  # hauteur de l'eau sous la branche : a + b·x
+AXE = branche.AXE  # hauteur de l'eau sous la branche : a + b·x
+# décalage du reflet vers la droite : 2 pixels, sauf à gauche où la branche touche l'eau (son
+# reflet y est collé à elle, sous le ménisque) ; il passe de 0 à 2 entre ces deux abscisses
 DX = 2
+DX_COLLE = (62, 100)
 ETIRE = {"gauche": 1.22, "droite": 1.17}
 CENTRE = {"gauche": 150, "droite": 290}  # où leur reflet s'accroche à celui de la branche
 # d'où tombent les gouttes : sous la branche (pas à gauche, où elle touche l'eau)
@@ -79,15 +82,16 @@ def donnees():
         sprites[nom] = {"x": x, "y": y, **s}
         yeux[nom] = (*oeil(s, x, y), sens)
         print(f"{nom} : {len(s['images'])} images, {len(s['palette'])} couleurs")
-    supports, eclats = branche.produire()
-    sprites |= supports
     calques, _ = decor.calques()
+    supports, eclats, eclats_branche = branche.produire()
+    sprites |= supports
     return {
         "fond": calques["fond"],
         "sprites": sprites,
         "geo": {
             "axe": AXE,
             "dx": DX,
+            "dx_colle": DX_COLLE,
             "etire": ETIRE,
             "contact": {nom: round(bord_branche(x, 0), 1) for nom, x in CENTRE.items()},
             "centre": CENTRE,
@@ -95,6 +99,7 @@ def donnees():
             "gouttes": [[x, round(bord_branche(x, 1), 1)] for x in GOUTTES]
             + [pied(sprites["droite"], *GRENOUILLES["droite"][1:3])],
             "menisque": eclats,
+            "eclats": eclats_branche,
         },
     }
 

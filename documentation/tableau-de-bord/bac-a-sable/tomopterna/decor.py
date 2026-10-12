@@ -36,7 +36,7 @@ BAYER = (_B[Y.astype(int) % 4, X.astype(int) % 4] + 0.5) / 16
 HERBE_BAS = 118  # sous cette rangée, plus d'herbe : la berge, puis l'eau
 EAU_HAUT = 128  # l'eau lointaine commence (reflets étirés)
 EAU_PROCHE = 160  # l'eau proche, où tombent les reflets
-NUANCES = 34  # couleurs de la palette du décor
+NUANCES = 30  # couleurs de chacune des deux palettes du décor (l'herbe, l'eau)
 
 # ------------------------------------------------------------------ relevés sur la photo
 # GRILLE : une rangée par case de 16 pixels (de haut en bas), 29 couleurs par rangée (RRGGBB).
@@ -247,6 +247,49 @@ def trainees(angle, ex, ey, longueur, graine):
     return somme / poids
 
 
+# le fond de l'eau, vu à travers elle (relevé sur la photo : des taches claires, sable, feuilles
+# et galets, et des creux sombres entre elles, aplaties par la perspective ; petites, serrées et
+# nettes au loin, larges et floues de près) : par sorte, la probabilité, l'écart de couleur
+LIT = {
+    "sable": (0.36, (34, 28, 14)),  # feuilles et sable ocre, éclairés
+    "creux": (0.44, (-20, -18, -12)),  # les creux et l'ombre entre eux
+    "algue": (0.13, (-4, 10, -1)),  # un peu de vert
+    "galet": (0.07, (18, 20, 20)),  # galets gris
+}
+
+
+def lit():
+    """L'écart de couleur (RGB) que le fond de l'eau ajoute, rangée par rangée : des taches
+    elliptiques couchées, d'autant plus grandes, plus hautes et plus floues qu'elles sont
+    proches (p : 0 au loin, 1 au bas de la toile)."""
+    out = np.zeros((H, W, 3))
+    rng = np.random.default_rng(31)
+    sortes = list(LIT)
+    proba = np.array([LIT[k][0] for k in sortes])
+    y = float(EAU_HAUT - 2)
+    while y < H + 4:
+        p = np.clip((y - EAU_HAUT) / (H - EAU_HAUT), 0, 1)
+        larg = 1.8 + 12 * p**1.4  # demi-largeur d'une tache
+        haut = max(0.5, larg * (0.13 + 0.15 * p))  # demi-hauteur : la perspective l'écrase
+        flou_ = 0.7 + 3.2 * p  # bord adouci (de près, hors de la mise au point)
+        for _ in range(int(W / (larg * 1.9))):
+            cx = rng.uniform(-larg, W + larg)
+            cy = y + rng.uniform(-0.5, 0.5) * haut
+            lx, hy = larg * rng.uniform(0.55, 1.4), haut * rng.uniform(0.7, 1.3)
+            sorte = sortes[rng.choice(len(sortes), p=proba)]
+            force = rng.uniform(0.25, 0.7)
+            x0, x1 = int(max(cx - lx - 4, 0)), int(min(cx + lx + 5, W))
+            y0, y1 = int(max(cy - hy - 3, 0)), int(min(cy + hy + 4, H))
+            if x1 <= x0 or y1 <= y0:
+                continue
+            xx, yy = X[y0:y1, x0:x1], Y[y0:y1, x0:x1]
+            r = np.hypot((xx - cx) / lx, (yy - cy) / hy)
+            m = np.clip((1 - r) * lx / flou_ + 0.5, 0, 1)  # 1 dedans, fondu sur le bord
+            out[y0:y1, x0:x1] += m[..., None] * force * np.array(LIT[sorte][1], float)
+        y += max(0.8, haut * 1.1)
+    return out
+
+
 def palette(c, n, graine=7):
     """Une palette courte tirée du décor lui-même (k-moyennes sur un échantillon)."""
     px = c.reshape(-1, 3)
@@ -276,11 +319,17 @@ def fond():
     fin, large = trainees(angle, 5.0, 5.0, 18, 11), trainees(angle, 12.0, 12.0, 26, 12)
     v = (fin - 0.5) * 24 + (large - 0.5) * 44
     v = flou(v, 1)
-    loin = (bruit(26, 1.6, 13) - 0.5) * 30 * (1 - lisse(EAU_PROCHE, EAU_PROCHE + 30, Y))
-    pres = (bruit(13, 3.2, 14) - 0.5) * 20 + (bruit(40, 9, 15) - 0.5) * 12
-    pres *= lisse(EAU_PROCHE - 10, EAU_PROCHE + 20, Y)
-    d = v * herbe + (loin + pres) * eau
+    # sur l'eau, au loin, les reflets étirés de la berge, plus discrets que le fond qu'on voit
+    # à travers l'eau
+    loin = (bruit(26, 1.6, 13) - 0.5) * 18 * (1 - lisse(EAU_PROCHE, EAU_PROCHE + 30, Y))
+    d = v * herbe + loin * eau
     c += d[..., None] * np.array([0.9, 1.0, 0.75])
+    # l'eau, transparente : on y voit le fond, plus net au milieu, voilé au loin par les
+    # reflets et de près par la profondeur ; l'eau elle-même, un peu verte
+    p = np.clip((Y - EAU_HAUT) / (H - EAU_HAUT), 0, 1)
+    voile = (0.5 + 0.5 * lisse(0.0, 0.2, p)) * (1 - 0.4 * lisse(0.55, 1.0, p))
+    c += (lit() * (eau * voile)[..., None]).clip(-60, 70)
+    c += (eau * (0.6 + 0.4 * p))[..., None] * np.array([-3.0, 3.0, 1.0])
     # l'herbe reste olive : là où la grille tire sur le roux (des brins secs flous), le rouge
     # ne dépasse pas le vert
     c[..., 0] = np.where(herbe > 0, np.minimum(c[..., 0], 0.94 * c[..., 1]), c[..., 0])
@@ -289,12 +338,16 @@ def fond():
     c = moy + (c - moy) * 1.18
     c = c * 1.06 + 4
     c = np.clip(c, 0, 255)
-    pal = palette(c, NUANCES)
     # tramage ordonné : on décale chaque pixel d'un seuil Bayer avant de prendre la nuance la
-    # plus proche ; les dégradés se font en damier fin, sans bruit
+    # plus proche ; les dégradés se font en damier fin, sans bruit. Une palette courte pour
+    # l'herbe et la berge, une pour l'eau
     seuil = (BAYER - 0.5)[..., None] * 14
-    k = np.argmin((((c + seuil)[..., None, :] - pal) ** 2).sum(-1), axis=-1)
-    return pal[k].astype(np.uint8), lum
+    out = np.zeros((H, W, 3), np.uint8)
+    for zone in (Y < EAU_HAUT - 4, Y >= EAU_HAUT - 4):
+        pal = palette(c[zone][None], NUANCES)
+        k = np.argmin((((c[zone] + seuil[zone])[:, None, :] - pal) ** 2).sum(-1), axis=-1)
+        out[zone] = pal[k]
+    return out, lum
 
 
 def png(rgb):

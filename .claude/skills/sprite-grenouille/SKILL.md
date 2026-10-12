@@ -655,6 +655,12 @@ outils l'ignorent.
     pendant 1,6 à 4 s, toutes les 4 à 9 s.
 - **Le clignement** suit la fiche : peau qui couvre le globe, ou paupière inférieure qui remonte
   (membrane lilas au réseau doré chez tomopterna).
+- **Un clignement détaillé, pas un disque uni** (correction de Léonard) : ouvert, mi-clos, fermé,
+  mi-clos (clé de l'œil 0, 2, 1, 2 ; 0,3 s). La paupière du haut descend en croissant mince ;
+  la membrane, bombée (claire en haut à gauche), porte un réseau de veines en cellules
+  irrégulières (Voronoï), laisse deviner la fente, prend un reflet mouillé ; son bord est un
+  liseré pâle (mi-close) ou un pli sombre en arc (fermée). Avec la pupille en demi-pixels,
+  l'œil qui cligne a aussi sa pièce fine.
 - **Jamais de saut, jamais de chant** : pas de sac vocal gonflé, pas de notes.
 - **Pour une autre pose**, garder le principe : respiration, clignement, regard. Par exemple, une
   grenouille agrippée à une branche bouge la tête mais pas les mains.
@@ -665,6 +671,9 @@ outils l'ignorent.
   l'arrière de l'œil (`DETOURNE`, un quart du rayon environ, pupille fine comprise) ; 12 images
   de plus, œil ouvert, aux clés suivies de « r » (36 par grenouille). Le reflet blanc reste sur
   la fente. La planche, qui lit les clés à 4 caractères, les ignore.
+- **Les motifs du ventre** se vérifient encore à l'étape 4, la grenouille entière sous les yeux :
+  Léonard les a trouvés trop maigres ; relevés de nouveau sur la photo (taches violettes d'au
+  moins deux pixels), jamais dans la gorge s'il l'a voulue claire.
 - **Vérifier chaque image, pas seulement le repos** : tête tournée, une granule tombée sous le
   trait du tympan, assombrie par lui, virait au vert fluo (tomopterna). Pas de granule sous un
   trait du visage ; chercher dans la palette de l'animation les couleurs aberrantes.
@@ -723,13 +732,29 @@ Ce que Léonard a corrigé dans la scène de tomopterna (`bac-a-sable/tomopterna
   directions tiré des brins voisins (des traînées intégrées le long de ce champ), la verticale
   seulement là où il n'y a pas de brin. Garder l'herbe olive : le rouge ne dépasse pas le vert.
 - **Là où le support touche l'eau, l'eau s'y colle** (tension superficielle) : un ménisque sous
-  la branche, bleu-gris (il reflète le ciel), sombre contre l'écorce, clair en bas avec un
-  liseré argenté qui scintille ; il remonte en courbe vers la branche là où elle quitte l'eau.
-  Un sprite à part, reflété comme la branche.
-- **Un support fait de morceaux validés** (un par cadre de grenouille) : la branche entière est
-  peinte comme eux hors des cadres, bords raccordés en douceur ; dans les cadres, les morceaux
-  pixel pour pixel, sauf leurs 4 colonnes de bord, dont la lumière est faussée (leur flou boucle
-  d'un bord à l'autre) et qu'on repeint.
+  la branche. C'est un miroir courbe, pas un voile gris ni du verre : relever ses couleurs sur
+  la photo, colonne par colonne (sombre contre l'écorce, bleu ardoise, liseré clair, ligne
+  sombre de l'eau plate). Il descend jusqu'à la ligne d'eau, si bien que son reflet le touche :
+  la branche et son reflet se rejoignent presque. Court ; son bout est un coin mouillé (l'eau
+  monte encore un peu le long de la branche et de la surface, l'air entre en arrondi entre
+  les deux). Un sprite à part, reflété sans décalage là où la branche touche l'eau ; le reflet
+  se calcule par colonne d'arrivée, prolongé au bord de la toile (sinon des colonnes manquent).
+- **L'eau est transparente** : on y voit le fond (sable, feuilles, galets) en fines taches
+  couchées par la perspective, nettes au milieu, voilées au loin et de près, qui ondulent un
+  peu quand l'eau bouge ; sinon, une eau unie a l'air de « gadoue ». Une palette pour l'herbe,
+  une pour l'eau.
+- **Un support fait de morceaux validés** (un par cadre de grenouille) : la branche entière
+  reprend leurs bords, raccordés en douceur (et la bosse). D'abord peinte comme eux hors des
+  cadres (leurs 4 colonnes de bord ont une lumière faussée, le flou y boucle), elle a fini
+  repeinte d'un seul tenant quand Léonard a voulu plus de détails.
+- **Une branche mouillée et détaillée** : relever sa matière sur la photo, pixel par pixel
+  (écorce, écorce noire luisante, lichen, bois clair là où l'écorce est déchirée, éclats
+  mouillés), lisser le relevé en plaques (la matière la plus présente autour de chaque pixel)
+  sinon c'est du sel et du poivre, une rampe par matière, un reflet bleuté sur le dessus, des
+  éclats qui s'allument et s'éteignent dans la page.
+- **Le reflet n'est pas un miroir parfait**, mais seulement là où la photo le montre : celui de
+  la branche reste net au centre et à droite, et ne se perd un peu dans le fond qu'à gauche,
+  près de la surface (adouci, sans contour, plus transparent).
 - **La pupille en demi-pixels dans une scène** : la scène se peint au pixel sur une toile cachée,
   montrée à 2× ; les pièces fines se posent ensuite sur la vue.
 
