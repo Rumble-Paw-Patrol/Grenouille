@@ -14,3 +14,7 @@ seulement ceux de Léonard. La colonne `annotator` dit qui a écrit chaque ligne
 
 Les chemins sont ceux des enregistrements sur le disque d'origine, relatifs à sa racine
 (`paths.raw` dans `config/local.yaml`).
+
+`files_ecoute/` : copie des files d'écoute de `paths.queues` (16/10/2026), pour les retrouver
+sur une autre machine (y pointer `paths.queues` dans `config/local.yaml`). Des références
+seulement (enregistrement, début, durée), pas d'audio.
