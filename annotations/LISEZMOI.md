@@ -10,3 +10,7 @@ Biophonia, qui restent dans la base, hors git).
 
 Les chemins sont ceux des enregistrements sur le disque d'origine (`audio.renamed` dans
 `config/default.yaml` donne leur nom sur les disques BLANCI_2023-24 et BLANCI_2025-26).
+
+`files_ecoute/` : copie des files d'écoute de `paths.queues` (16/10/2026), pour les retrouver
+sur une autre machine (y pointer `paths.queues` dans `config/local.yaml`). Des références
+seulement (enregistrement, début, durée), pas d'audio.

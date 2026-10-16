@@ -31,3 +31,7 @@ span_id,path,site,mic_id,start_utc,start_s,end_s,label,quality,valable
 23,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05247_SYL01/Data/2LA05247_20260110_173000.wav,Mataroni,2LA05247,2026-01-10T20:30:00Z,79.6,109.6,false_friend,A,True
 24,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04530_MGM06/Data/2LA04530_20260113_093000.wav,Mataroni,2LA04530,2026-01-13T12:30:00Z,54.8,76.9,blanci,A,True
 28,Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026/2MA07942/2MA07942_20251230_163000.wav,PatawaOuest,2MA07942,2025-12-30T19:30:00Z,22.4,52.4,false_friend,A,True
+36,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03571_SYL15/Data/2LA03571_20260109_170000.wav,Mataroni,2LA03571,2026-01-09T20:00:00Z,61.57,70.8,false_friend,A,True
+36,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03571_SYL15/Data/2LA03571_20260109_170000.wav,Mataroni,2LA03571,2026-01-09T20:00:00Z,42.22,48.32,false_friend,A,True
+37,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03546_SYL07/Data/2LA03546_20260107_173000.wav,Mataroni,2LA03546,2026-01-07T20:30:00Z,58.1,88.1,false_friend,A,True
+38,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260107_070000.wav,Mataroni,SMA13417,2026-01-07T10:00:00Z,30.1,60.1,blanci_chorus,B,True
