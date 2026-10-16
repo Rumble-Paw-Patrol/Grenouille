@@ -72,6 +72,7 @@ $B ingest --dataset 2026 --site CDR --no-qc --no-hash "D:/Projet blanci 2025/REL
 $B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026"
 
 $B export-labels     # fenêtres annotées : label, qualité, espèce, commentaire
+$B import-labels     # les recharge dans la base d'une autre machine (sans doublon)
 
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid

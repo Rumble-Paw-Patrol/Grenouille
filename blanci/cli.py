@@ -65,6 +65,7 @@ from blanci.service import (
     compute_tokens,
     evaluate_frozen,
     evaluate_holdout,
+    import_annotations,
     ranked_points,
     run_clustering,
     score_and_decide,
@@ -287,6 +288,30 @@ def export_labels(ctx: typer.Context) -> None:
     reports = config_path(cfg, "reports")
     _write_csv(extracts, reports / "extraits_annotes.csv", f"{len(extracts)} extraits écoutés")
     _write_csv(intervals, reports / "intervalles_annotes.csv", f"{len(intervals)} intervalles")
+
+
+@app.command("import-labels")
+def import_labels(
+    ctx: typer.Context,
+    dossier: Annotated[
+        Path | None, typer.Option(help="Dossier des CSV (défaut : annotations/ du dépôt).")
+    ] = None,
+) -> None:
+    """Recharge dans la base de cette machine les annotations exportées ailleurs
+    (`export-labels`, poussées dans annotations/) : le poste d'annotation reprend alors là où
+    l'écoute s'était arrêtée. Sans doublon : on peut relancer après chaque `git pull`."""
+    cfg = _cfg(ctx)
+    folder = dossier or project_path("annotations")
+    report = import_annotations(connect(config_path(cfg, "db")), folder)
+    typer.echo(
+        f"{report['spans']} extraits ({report['intervals']} intervalles) et "
+        f"{report['labels']} fenêtres importés ; {report['already']} déjà dans la base"
+    )
+    if report["unknown"]:
+        typer.echo(
+            f"  {report['unknown']} lignes sautées : enregistrement absent de cette base "
+            "(blanci ingest d'abord)"
+        )
 
 
 @app.command("check-grid")
