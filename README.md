@@ -60,25 +60,38 @@ Documents utiles pour entrer dans le projet : les
 
 ### Le code : le paquet `blanci/`
 
-Chaque dossier est une étape de la chaîne, dans l'ordre où les données la traversent.
+La chaîne, telle qu'elle est dessinée sur le tableau de bord : du fichier audio au score par
+point d'écoute, puis la boucle d'annotation qui revient aux têtes.
 
 ```
-inputs ─> embedding ─> heads ─> combination ─> results
-                         └──────────┴─> evaluation       mesure les têtes et leurs combinaisons
-annotation ─> inputs                                     les labels écoutés repartent en entrée
+Inventaire ─> Contrôle qualité ─> Traitement du signal* ─> Encodage
+                                                              │
+     ┌────────────────────────────────────────────────────────┘
+     ▼
+   Têtes ─> Fusion* ─> Score et agrégation ─> Évaluation
+     ▲                          │
+     │                          ▼
+Réentraînement <─ Poste d'annotation <─ File de vérification
+
+* facultatif : seulement si besoin
 ```
 
-| Dossier | Étape | Ce qu'il fait |
-|---|---|---|
-| `inputs/` | 1. enregistrements et annotations | inventaire des enregistrements, contrôle qualité (fichiers cassés, silencieux, micro dans un sac…), import des annotations, jeu de test gelé |
-| `embedding/` | 2. encodage | découpe en fenêtres, passage dans un modèle pré-entraîné (Perch, BirdNET…) qui résume chaque fenêtre en un vecteur (embedding) |
-| `heads/` | 3. détection | têtes de classification entraînées sur les embeddings (prototypes, logistique, attention…), et un détecteur sans encodeur fondé sur le rythme des notes |
-| `combination/` | 4. combinaison | fusion des scores de plusieurs têtes |
-| `evaluation/` | 5. mesure | validation croisée par micro, précision moyenne (AP), rappel, intervalles de confiance |
-| `annotation/` | 6. écoute | tirage des extraits à écouter, poste d'annotation dans le navigateur |
-| `results/` | 7. sorties écologiques | agrégation fenêtre → enregistrement → point d'écoute, courbes d'activité |
-| `core/` | socle | réglages, base de données, lecture de l'audio |
-| `exploration/` | notebooks | fonctions et figures des notebooks |
+| Étape | Ce qu'elle fait | Code | Commandes |
+|---|---|---|---|
+| Inventaire | range chaque enregistrement en base avec sa campagne, son site, son micro et son heure | `inputs/ingest.py` | `ingest`, `flag`, `status` |
+| Contrôle qualité | une passe sur tout le corpus avant l'encodage : écarte les fichiers cassés, silencieux, hors relevé, micro resté allumé dans le sac | `inputs/qc.py` | `qc` |
+| Traitement du signal* | filtre la bande 4,4–5,5 kHz, repère les fenêtres candidates et mesure le rythme du chant (une note de 0,09 s toutes les 1,2 à 1,9 s), sans apprentissage | `heads/signal_processing.py` | `onsets` |
+| Encodage | un encodeur pré-entraîné et gelé (Perch, BirdNET…) résume chaque fenêtre en un vecteur (embedding), et en jetons pour les têtes qui les lisent | `embedding/` | `embed`, `tokens` |
+| Têtes | une petite couche posée sur les embeddings donne un score par fenêtre : prototypes, régression logistique, sondes sur les jetons | `heads/` | `train`, `heads`, `heads-curve` |
+| Fusion* | combine plusieurs têtes, ou une tête et le traitement du signal | `combination/` | `fusion`, `fusion-bench`, `ensemble` |
+| Score et agrégation | passe de la fenêtre à l'enregistrement puis au point d'écoute, avec un seuil par site ; courbes d'activité | `results/` | `score`, `activity` |
+| Évaluation | AP et rappel par enregistrement, sur des points d'écoute tenus à l'écart et sur le jeu de test gelé | `evaluation/` | `evaluate`, `freeze`, `benchmark` |
+| File de vérification | choisit quoi faire écouter : plan de tirage pour le premier lot, puis apprentissage actif (incertains, meilleurs scores, hasard…) | `annotation/selection.py` | `select`, `candidates` |
+| Poste d'annotation | écoute dans le navigateur, spectrogramme zoomable, chant délimité à la souris | `annotation/app.py` | `annotate`, `label`, `clips-export`, `clips-import` |
+| Réentraînement | apprend une nouvelle tête sur tous les labels, l'adopte seulement si elle n'est pas moins bonne sur le jeu gelé | `service.py` | `retrain` |
+
+Hors de la chaîne : `core/` (réglages, base de données, lecture de l'audio) et `exploration/`
+(fonctions et figures des notebooks). Les tests (`tests/`) sont rangés comme `blanci/`.
 
 La commande `blanci` (`cli.py`) donne accès à toutes les étapes. Quelques emplacements sont
 réservés pour plus tard : réglage fin des encodeurs, distillation, modèle maison, export ONNX.
