@@ -343,9 +343,15 @@ function wavURL(x, rate) {  // WAV 16 bits mono
   }
   return URL.createObjectURL(new Blob([v.buffer], {type: "audio/wav"}));
 }
+// Le dernier son filtré de chaque lecteur reste en mémoire (`el._fft`) : décocher puis recocher
+// « n'écouter qu'elle » le remet aussitôt, sans refaire la FFT ; seule une nouvelle bande la
+// relance (et libère l'ancien son).
 function swapSource(el, url, key) {
   const t = el.currentTime, playing = !el.paused;
-  if (el.src !== el._orig) URL.revokeObjectURL(el.src);
+  if (key && el._fft?.key !== key) {
+    if (el._fft) URL.revokeObjectURL(el._fft.url);
+    el._fft = {key, url};
+  }
   el._key = key; el.src = url;
   el.addEventListener("loadedmetadata", () => {
     el.currentTime = t; if (playing) el.play();
@@ -356,10 +362,12 @@ function applyFFT() {
   const todo = players.filter(el => el._key !== key);
   if (!todo.length) return;
   if (!key) { todo.forEach(el => swapSource(el, el._orig, "")); return; }
+  todo.filter(el => el._fft?.key === key).forEach(el => swapSource(el, el._fft.url, key));
+  if (players.every(el => el._key === key)) return;
   if (players.some((_, i) => !buffers[i])) return;  // repris à la fin du décodage
   $("status").textContent = "filtrage FFT…";
   setTimeout(() => {  // laisse le temps d'afficher le message
-    const token = loading, idx = players.map((el, i) => i).filter(i => todo.includes(players[i]));
+    const token = loading, idx = players.map((el, i) => i).filter(i => players[i]._key !== key);
     const rate = buffers.rate, lo = Math.max(S.band[0], 1), hi = S.band[1];
     for (let k = 0; k < idx.length; k += 2) {
       const [a, b] = [idx[k], idx[k + 1]];
@@ -489,7 +497,7 @@ function render(args) {
 async function load() {
   const token = ++loading;
   players.forEach(p => {
-    p.pause(); URL.revokeObjectURL(p.src); if (p._orig !== p.src) URL.revokeObjectURL(p._orig);
+    p.pause(); URL.revokeObjectURL(p._orig); if (p._fft) URL.revokeObjectURL(p._fft.url);
   });
   const box = $("players");
   box.innerHTML = ""; players = []; graphs = []; active = 0;
