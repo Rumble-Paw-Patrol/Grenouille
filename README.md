@@ -28,18 +28,6 @@ Prochaines étapes : partition des points d'écoute et plan de tirage, première
 invitation) : chaîne de traitement, données, benchmarks à explorer, rapports et travail en cours,
 avec un bouton « Commenter » sur chaque carte. Sources : `documentation/tableau-de-bord/`.
 
-1. **[DECISIONS.md](DECISIONS.md)** : le *cadre du projet* en tête (objectifs et critères §0,
-   protocole d'annotation §5, évaluation §6, livrable §7, planning §8, risques §9), puis le
-   journal des décisions numérotées (n° 1 à 200 à ce jour) qui dit pourquoi le code est comme il est.
-2. **[documentation/benchmarks/](documentation/benchmarks/LISEZMOI.md)** : les huit rapports de
-   benchmark AnuraSet (têtes, régularisations, encodeurs), chacun avec ses données, ses figures et
-   le script qui les produit. Le plus récent, `2026-09-30_anuraset_encodeurs`, compare 24 encodeurs.
-3. **[documentation/tableaux/](documentation/tableaux/LISEZMOI.md)** : un tableau par benchmark, en
-   image (protocole, encodeurs, têtes, régularisations…).
-4. **[documentation/biblio/biblio.md](documentation/biblio/biblio.md)** : bibliographie commentée.
-5. **[notebooks/](notebooks/)** : quatre notebooks pour voir la chaîne fonctionner sur un
-   enregistrement (voir plus bas).
-
 ## Structure du dépôt
 
 ```
