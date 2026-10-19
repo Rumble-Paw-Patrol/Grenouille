@@ -9,18 +9,19 @@ peut réentraîner seul.
 
 Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
 
-## Où en est le projet (01/10/2026)
+## Où en est le projet (19/10/2026)
 
 | | État |
 |---|---|
-| Chaîne de traitement | écrite et testée : inventaire des enregistrements, embeddings, têtes de classification, module de traitement du signal (rythme des notes), fusion, évaluation, files de vérification, poste d'annotation, réentraînement |
+| Chaîne de traitement | écrite et testée : inventaire des enregistrements, embeddings, têtes de classification, module de traitement du signal (rythme des notes), fusion, évaluation, files d'écoute, poste d'annotation, réentraînement |
 | Choix de l'encodeur | pré-benchmark sur **AnuraSet** (jeu public d'anoures néotropicaux) : 24 encodeurs comparés, chacun avec la tête adaptée à sa sortie. Indicateur, pas verdict : le choix final se fera sur les données de l'ONF le 20/11/2026 |
 | Contrainte d'accès | l'encodeur livré doit être **libre d'accès** (poids publics, licence compatible avec l'usage par l'ONF). Meilleur libre à ce jour : `perch_v2` + sonde à prototypes (AP moyenne par site 0,81) |
-| Annotations | reprises de zéro, par plan de tirage stratifié (point d'écoute, heure, période), vérifiées à l'aveugle par des experts. **Aucun benchmark sur les données de l'ONF avant leur accord** |
+| Encodage du corpus ONF | Perch 2.0 terminé (61 h sur un processeur Intel Core i5), BirdNET 2.4 terminé, BirdNET 3.0 en cours |
+| Annotations | reprises de zéro, par plan de tirage stratifié (point d'écoute, heure, période), les points d'écoute étant répartis entre entraînement et test avant toute écoute. Poste d'annotation terminé ; 40 extraits écoutés au 16/10. Les labels seront vérifiés par des experts. **Aucun benchmark sur les données de l'ONF avant leur accord** |
 | Livrable | application Windows installable sans code : à venir (essai d'empaquetage prévu) |
 
-Prochaines étapes : partition des points d'écoute et plan de tirage, première série d'annotations
-(par intervalles, DECISIONS n° 182), essai d'empaquetage `.exe`.
+Prochaines étapes : annoter le lot 1 (424 extraits de 30 s), puis le jeu de test (250
+enregistrements entiers) ; finir l'encodage BirdNET 3.0 ; essai d'empaquetage `.exe`.
 
 ## Pour les encadrants : par où commencer
 
@@ -32,146 +33,128 @@ avec un bouton « Commenter » sur chaque carte. Sources : `documentation/tablea
 
 ```
 Grenouille/
-├── blanci/               le paquet Python, un dossier par étape de la chaîne (voir ci-dessous)
-├── tests/                suite pytest, rangée comme blanci/ (tests/heads/ teste blanci/heads/…)
-├── config/               default.yaml, local.example.yaml
-├── notebooks/            4 notebooks d'exploration, committés sans sorties
-├── annotations/          copie des annotations exportées (CSV), voir son LISEZMOI.md
-├── .claude/skills/       skills de Claude Code du projet (benchmark, audit, prez, tableau de bord…)
-├── anuraset/             pré-benchmark AnuraSet, terminé : config, scripts, notes (reproductibilité)
-├── documentation/
-│   ├── benchmarks/       rapports 01 à 08, fiches des encodeurs, modèle de rapport
-│   ├── tableaux/         un tableau PNG par benchmark et le script qui les dessine
-│   ├── regularizations/  catalogue des régularisations des têtes (R1 à R84)
-│   ├── biblio/           bibliographie, offre de stage
-│   ├── prez/             présentations de suivi (.pptx) et leurs sources
-│   ├── sprites/          grenouille en 8-bit : bac à sable de dessin, évolution du sprite
-│   ├── audits/           rapports d'audit du dépôt
-│   ├── rapport-stage/    notes pour le rapport
-│   ├── old/              anciennes feuilles de route (V1 à V4)
-│   └── commandes.md, encodeurs-bacpipe.md, glossaire-bioacoustique.md
-├── DECISIONS.md          cadre du projet et journal des décisions
-└── pyproject.toml, uv.lock, .python-version
+├── blanci/               le code : un dossier par étape de la chaîne (voir ci-dessous)
+├── tests/                tests automatiques, rangés comme blanci/
+├── config/               réglages (default.yaml) et modèle de réglages locaux
+├── notebooks/            4 notebooks pour voir la chaîne fonctionner sur un enregistrement
+├── annotations/          annotations exportées (CSV) et files d'écoute
+├── anuraset/             pré-benchmark AnuraSet, terminé : réglages et scripts
+└── documentation/
+    ├── benchmarks/       les 8 rapports de benchmark AnuraSet, avec données, figures et scripts
+    ├── tableaux/         un tableau récapitulatif (PNG) par benchmark
+    ├── tableau-de-bord/  sources du tableau de bord
+    ├── regularizations/  catalogue des régularisations des têtes (R1 à R85)
+    ├── biblio/           bibliographie commentée, offre de stage
+    ├── prez/             présentations de suivi (.pptx)
+    ├── audits/           relectures complètes du dépôt
+    ├── sprites/          la grenouille en 8-bit du tableau de bord
+    ├── old/              anciennes feuilles de route
+    └── commandes.md, glossaire-bioacoustique.md, encodeurs-bacpipe.md
 ```
 
-**Emplacements en attente.** Gardés volontairement pour plus tard (EN ATTENTE, à ne pas
-supprimer comme code mort) : le réglage fin des encodeurs (`blanci/heads/finetune.py`), les détecteurs distillé et
-maison (`blanci/heads/detectors/distilled.py`, `homemade.py`), les aides de distillation
-(R61 à R63, `distillation_loss`) et l'export ONNX (`blanci/embedding/encoders/export.py`).
+Documents utiles pour entrer dans le projet : les
+[rapports de benchmark](documentation/benchmarks/LISEZMOI.md), leurs
+[tableaux](documentation/tableaux/LISEZMOI.md), la
+[bibliographie](documentation/biblio/biblio.md) et le
+[glossaire](documentation/glossaire-bioacoustique.md).
 
-### Le paquet `blanci/`
+### Le code : le paquet `blanci/`
 
-Chaque dossier est une étape de la chaîne, dans l'ordre où les données la traversent. Le
-`__init__.py` de chaque dossier donne en une ligne le rôle de chacun de ses modules.
+Chaque dossier est une étape de la chaîne, dans l'ordre où les données la traversent.
 
 ```
-inputs ─► embedding ─► heads ─► combination ─► results
-                         └──────────┴─► evaluation       mesure les têtes et leurs combinaisons
-annotation ─► inputs                                      les labels écoutés repartent en entrée
+inputs ─> embedding ─> heads ─> combination ─> results
+                         └──────────┴─> evaluation       mesure les têtes et leurs combinaisons
+annotation ─> inputs                                     les labels écoutés repartent en entrée
 ```
 
-| Dossier | Étape | Modules |
+| Dossier | Étape | Ce qu'il fait |
 |---|---|---|
-| `core/` | socle | `config`, `db` (SQLite, labels en ajout seul), `audio` |
-| `inputs/` | 1. enregistrements et annotations | `ingest` (inventaire), `qc` (drapeaux : fichiers cassés, silencieux, micro dans un sac…), `labels` (import des annotations), `dataset`, `frozen` (jeu gelé) |
-| `embedding/` | 2. fenêtres → embeddings | `grid` (fenêtres), `encoders/` (bacpipe, esp-aves2, ONNX du livrable, passe-bas, export), `embed`, `store` et `index` (Parquet, similarité) |
-| `heads/` | 3. têtes de détection | `head` (prototypes, logistique…), `attentive`, `proto_probe`, `gated`, `dann`, `pooling`, `losses`, `regularization/` (R1 à R84), `cluster` ; sans encodeur : `signal_processing` (rythme des notes), `baselines`, `detectors/` |
-| `combination/` | 4. combiner les modèles | `stacking`, `fusion` (fusion à deux niveaux), `ensemble` |
-| `evaluation/` | 5. mesurer | `evaluate` (plis par micro, AP, rappel, bootstrap, Wilson), `oof` (scores hors-pli), `benchmark`, `head_benchmark`, `full_benchmark`, `throughput`, `qc_calibration`, `anuraset` (archivé) |
-| `annotation/` | 6. boucle d'écoute | `selection`, `workbench`, `app` (poste d'annotation Streamlit), `viewer` (spectrogramme zoomable, tracé des intervalles) `style` et `bandeau` (habillage du tableau de bord) |
-| `results/` | 7. sorties écologiques | `aggregate` (fenêtre → enregistrement → point), `activity` (courbes d'activité) |
-| `exploration/` | notebooks | `explore`, `explore_plots`, `attention_map` |
-| racine | interfaces | `cli` (commandes Typer ; AnuraSet regroupé sous `blanci anuraset …`), `service` (couche appelée par la CLI et par la future application) |
+| `inputs/` | 1. enregistrements et annotations | inventaire des enregistrements, contrôle qualité (fichiers cassés, silencieux, micro dans un sac…), import des annotations, jeu de test gelé |
+| `embedding/` | 2. encodage | découpe en fenêtres, passage dans un modèle pré-entraîné (Perch, BirdNET…) qui résume chaque fenêtre en un vecteur (embedding) |
+| `heads/` | 3. détection | têtes de classification entraînées sur les embeddings (prototypes, logistique, attention…), et un détecteur sans encodeur fondé sur le rythme des notes |
+| `combination/` | 4. combinaison | fusion des scores de plusieurs têtes |
+| `evaluation/` | 5. mesure | validation croisée par micro, précision moyenne (AP), rappel, intervalles de confiance |
+| `annotation/` | 6. écoute | tirage des extraits à écouter, poste d'annotation dans le navigateur |
+| `results/` | 7. sorties écologiques | agrégation fenêtre → enregistrement → point d'écoute, courbes d'activité |
+| `core/` | socle | réglages, base de données, lecture de l'audio |
+| `exploration/` | notebooks | fonctions et figures des notebooks |
 
-Réservés : `heads/finetune`, `heads/detectors/distilled`, `heads/detectors/homemade` sont des
-emplacements documentés, à programmer plus tard (fine-tuning, distillation, modèle maison).
-
-`service.py` regroupe les opérations de la chaîne de décision (entraîner et enregistrer une
-tête, scorer, file de vérification, labels, jeu gelé, réentraînement, courbes d'activité) : c'est
-la couche que la future application appellera comme la CLI. Les commandes d'inventaire,
-d'encodage et de benchmark de `cli.py` appellent directement leurs modules.
-
-## Installation
-
-Python 3.11 et [uv](https://docs.astral.sh/uv/).
-
-```sh
-uv sync --inexact             # tout : base, dev, research (torch, bacpipe…), app, notebook
-uv run pytest                 # ≈ 850 tests, ~2 min
-uv run blanci --help
-```
-
-**`uv run` ne touche plus à l'environnement** (DECISIONS n° 193) : une fois pour toutes, sous
-Windows, `setx UV_NO_SYNC 1` (puis rouvrir le terminal). Sans cela, chaque `uv run` remet
-`.venv` à l'identique du verrou et réinstalle torch ou TensorFlow dès qu'ils diffèrent d'un
-cheveu (roue CPU, `uv pip install` à la main), y compris sous un encodage en cours. Les
-paquets ne changent alors que par un `uv sync --inexact` lancé exprès, quand rien ne tourne.
-
-Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`,
-ignorée par git) : racine du disque externe, jamais modifié. **Pour écouter, ce n'est pas
-nécessaire** : `uv run blanci annotate` cherche chaque enregistrement sur les disques branchés
-(`/Volumes/*` sur Mac, `D:`… sur Windows), et sinon demande le dossier une fois (DECISIONS
-n° 195). Les files de candidats sont des dossiers, `data/reports/files/<nom>/` : `candidats.csv`
-(références, pas d'audio) et `LISEZMOI.md` (d'où vient la file).
+La commande `blanci` (`cli.py`) donne accès à toutes les étapes. Quelques emplacements sont
+réservés pour plus tard : réglage fin des encodeurs, distillation, modèle maison, export ONNX.
 
 ## Données
 
-**Le dépôt ne contient aucun enregistrement de l'ONF.** L'audio, la base SQLite, les embeddings
-et les modèles vivent sous `data/`, ignoré par git. Seuls trois extraits courts, pour les
-présentations (`documentation/prez/presentation-suivi-2/audio/*.wav`), et le chant du bandeau du
-tableau de bord (`documentation/tableau-de-bord/chant.mp3`) sont versionnés.
+**Le dépôt ne contient aucun enregistrement de l'ONF.** L'audio, la base de données, les
+embeddings et les modèles restent en local, sous `data/`. Seuls quelques extraits courts sont
+versionnés, pour les présentations et le tableau de bord.
 
-Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), dont les
-embeddings et la base servent aux benchmarks. Elles sont rangées dans les branches
-`donnees-anuraset-*`, hors de `main` ; `anuraset/importer_stock.py` les importe.
+Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), qui
+servent aux benchmarks. Elles sont rangées dans les branches `donnees-anuraset-*`, hors de
+`main`.
 
 Inventaire (base au 29/09/2026) : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an,
 66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé
 d'une semaine chacun, 29 513 enregistrements. Détail dans
 [documentation/commandes.md](documentation/commandes.md#inventaire-base-au-29092026).
 
-## Utilisation
+## Installation et utilisation
 
-La référence complète des commandes (inventaire, annotation, encodage, benchmarks, détection,
-évaluation) est dans **[documentation/commandes.md](documentation/commandes.md)**. Aperçu :
+Python 3.11 et [uv](https://docs.astral.sh/uv/).
+
+```sh
+uv sync --inexact             # installe tout
+uv run pytest                 # ≈ 860 tests, ~2 min
+uv run blanci --help
+```
+
+Sous Windows, lancer une fois `setx UV_NO_SYNC 1` : sinon chaque `uv run` peut réinstaller torch
+au milieu d'un encodage.
+
+Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`) :
+racine du disque externe, qui n'est jamais modifié. Pour écouter, ce n'est pas nécessaire :
+`blanci annotate` cherche lui-même les enregistrements sur les disques branchés.
+
+Toutes les commandes sont décrites dans **[documentation/commandes.md](documentation/commandes.md)**.
+Les principales :
 
 ```sh
 B="uv run blanci --config config/local.yaml"
 $B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "<dossier du relevé>"   # inventaire
 $B status                                                  # ce que contient la base
-uv run blanci embed --encoder birdmae --subset benchmark   # embeddings des fenêtres annotées
-uv run blanci heads --encoder perch_v2-bacpipe1.3.5        # toutes les têtes, mêmes plis
+$B embed --encoder birdmae --subset benchmark              # embeddings des fenêtres annotées
+$B heads --encoder perch_v2-bacpipe1.3.5                   # toutes les têtes, mêmes plis
 $B annotate                                                # poste d'annotation (navigateur)
-$B export-labels                                            # annotations en CSV (rapports)
+$B export-labels                                           # annotations en CSV
+$B import-labels                                           # reprendre l'écoute sur une autre machine
 ```
 
-Les benchmarks AnuraSet utilisent leur propre configuration (`anuraset/anuraset.yaml`) et leur
-propre base, séparées des données de l'ONF :
+Les benchmarks AnuraSet ont leurs propres réglages et leur propre base, séparés des données de
+l'ONF :
 
 ```sh
 A="uv run blanci --config anuraset/anuraset.yaml"
 $A anuraset prepare && $A anuraset profile
 ```
 
-## Notebooks d'exploration
+## Notebooks
 
 | Notebook | Pour |
 |---|---|
-| `01_explorer_une_fenetre` | un enregistrement et une fenêtre à travers la chaîne : écoute, grille, portes, module de traitement du signal, négatif apparié, embeddings, prototype différentiel |
-| `02_negatifs_apparies` | ce que contiennent les négatifs appariés de chaque stratégie ; feuille d'écoute, taux de contamination |
-| `03_traitement_du_signal` | régler la détection des notes et les seuils des portes, sans encodeur |
-| `04_attention_jetons` | voir sur le spectrogramme les jetons que pèse la tête d'attention |
+| `01_explorer_une_fenetre` | suivre un enregistrement à travers la chaîne : écoute, fenêtres, traitement du signal, embeddings |
+| `02_negatifs_apparies` | écouter les exemples négatifs choisis pour l'entraînement et mesurer combien contiennent en fait A. blanci |
+| `03_traitement_du_signal` | régler la détection des notes, sans encodeur |
+| `04_attention_jetons` | voir sur le spectrogramme les zones que regarde la tête d'attention |
 
-Ils lisent la base et l'audio en local : il faut les données de l'ONF pour les exécuter. **Ne
-jamais committer leurs sorties** (les lecteurs audio embarquent le son) : *Clear All Outputs*
-avant un commit ; `tests/exploration/test_notebooks.py` le vérifie.
+Il faut les données de l'ONF pour les exécuter. Ils sont versionnés sans leurs sorties, qui
+contiendraient de l'audio.
 
-## Conventions
+## Garanties méthodologiques
 
-- **Labels en ajout seul** : une correction est un nouveau label, jamais une mise à jour
-  (la base refuse `UPDATE` et `DELETE`).
-- **Toute évaluation passe par `evaluate.py` avec des groupes explicites** (plis par micro) :
-  un découpage aléatoire des fenêtres serait une erreur, les fenêtres d'un même micro partageant
-  le fond sonore.
-- **Aucun score n'entre dans la fusion s'il n'est pas hors-pli.**
-- Code : `ruff` (lignes de 100 caractères), tests `pytest` (`-m "not slow"` pour la suite rapide).
+- **Pas de fuite entre entraînement et test** : l'évaluation se fait par validation croisée
+  *par micro*. Couper au hasard entre fenêtres serait optimiste, car les fenêtres d'un même micro
+  partagent le même fond sonore.
+- **Fusion honnête** : les scores qu'on combine sont toujours calculés sur des données que la
+  tête n'a pas vues.
+- **Annotations jamais écrasées** : une correction ajoute un nouveau label, l'historique reste
+  intact.
