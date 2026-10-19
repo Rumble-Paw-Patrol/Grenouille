@@ -5,7 +5,10 @@ description: Crée une présentation PowerPoint (.pptx) de suivi de stage ou de 
 
 # Présentation de suivi
 
-Modèle : `documentation/prez/presentation-suivi-2/`. Lire `deck.js` en entier avant de
+`documentation/prez/` ne garde que les présentations finies (`presentation_<N>.pptx`) et
+`figures/` (images et extraits audio). Les sources de la présentation n° 2 (`deck.js`,
+`generer_figures.py`, `script.md`) restent dans l'historique git :
+`git show 6633dda:documentation/prez/presentation-suivi-2/deck.js`. Lire `deck.js` en entier avant de
 commencer : on reprend ses aides (`content`, `card`, `dot`, `table`, `bullets`,
 `richBullets`, `notes`…) et sa charte telles quelles, on ne les réinvente pas.
 
@@ -22,16 +25,17 @@ précédente (`git log` depuis sa date, rapports de `documentation/benchmarks/` 
 
 ## 2. Dossier
 
-`documentation/prez/presentation-suivi-<N>/` (N = le suivant), avec :
+Travailler dans le scratchpad (`presentation-suivi-<N>/`, N = le suivant), avec :
 
 | Fichier | Rôle |
 |---|---|
 | `deck.js` | construit le .pptx et écrit `script.md` ; en-tête : comment le lancer |
 | `generer_figures.py` | toutes les figures (PNG) et extraits audio, depuis les données du dépôt |
-| `figures/`, `audio/` | sorties de `generer_figures.py`, committées |
+| `figures/`, `audio/` | sorties de `generer_figures.py` |
 | `script.md` | notes orateur, une section par diapo, généré par `deck.js` |
 
-Sortie : `documentation/prez/presentation_suivi_<N>.pptx`.
+Sortie : `documentation/prez/presentation_<N>.pptx` ; les images et extraits audio retenus vont
+dans `documentation/prez/figures/`.
 
 ## 3. Charte (celle des présentations n° 1 et 2)
 
@@ -56,7 +60,7 @@ Sortie : `documentation/prez/presentation_suivi_<N>.pptx`.
 - Spectrogrammes et extraits audio : partir des enregistrements locaux (non versionnés) ;
   le script de figures dit d'où viennent les fichiers et comment le relancer.
 - Notes orateur rédigées comme on parle, assez complètes pour présenter sans la diapo (voir
-  `presentation-suivi-2/script.md`). Expliquer les termes techniques pour des naturalistes.
+  `script.md` de la n° 2 dans l'historique, même commit). Expliquer les termes techniques pour des naturalistes.
 - Pas de renvoi à `DECISIONS.md` ni aux numéros de décision : la raison est dite dans la diapo
   ou les notes.
 - Dernière diapo : ce qui est fait d'ici la prochaine réunion, et les décisions attendues des
@@ -66,8 +70,8 @@ Sortie : `documentation/prez/presentation_suivi_<N>.pptx`.
 
 ```sh
 npm install --prefix /tmp/pptx pptxgenjs     # une fois ; ou npm i -g pptxgenjs
-uv run --group notebook python documentation/prez/presentation-suivi-<N>/generer_figures.py
-NODE_PATH=/tmp/pptx/node_modules node documentation/prez/presentation-suivi-<N>/deck.js
+uv run --group notebook python <scratchpad>/presentation-suivi-<N>/generer_figures.py
+NODE_PATH=/tmp/pptx/node_modules node <scratchpad>/presentation-suivi-<N>/deck.js
 ```
 
 Puis contrôle visuel avec le skill `anthropic-skills:pptx` : rendre chaque diapo en image et
@@ -77,4 +81,4 @@ hors légendes). Corriger, reconstruire, une seule passe.
 ## 6. Rendre
 
 Envoyer le .pptx à Léonard (SendUserFile), avec le plan en une ligne par diapo. Ne pas
-committer sans qu'il le demande ; s'il le demande, committer le dossier source et le .pptx.
+committer sans qu'il le demande ; s'il le demande, committer le .pptx et `figures/`.
