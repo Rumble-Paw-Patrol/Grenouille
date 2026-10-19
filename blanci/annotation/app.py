@@ -455,6 +455,11 @@ def _classes(form_key: str, answers) -> list[str]:
     ]
 
 
+# Le bouton d'envoi reste grisé sans annotateur : un formulaire envoyé se vide
+# (`clear_on_submit`), et un envoi refusé faisait perdre le commentaire tapé.
+_NO_ANNOTATOR = "Indiquer l'annotateur dans le panneau de gauche."
+
+
 def _details(
     multiclass: bool, with_quality: bool = True
 ) -> tuple[str | None, str | None, str | None]:
@@ -490,12 +495,16 @@ def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel, 
             ticked = _classes(form_key, OTHER_ANSWERS)
         quality, species, comment = _details(multiclass, with_quality=False)
         sent = st.form_submit_button(
-            "Envoyer l'extrait ▶", type="primary", use_container_width=True
+            "Envoyer l'extrait ▶",
+            type="primary",
+            use_container_width=True,
+            disabled=not annotator.strip(),
+            help=None if annotator.strip() else _NO_ANNOTATOR,
         )
     if not sent:
         return False
     if not annotator.strip():
-        st.error("Indiquer l'annotateur dans le panneau de gauche.")
+        st.error(_NO_ANNOTATOR)
         return False
     try:
         save_span(
@@ -525,11 +534,17 @@ def _answer_form(con, target, form_key, annotator, channel, multiclass) -> bool:
         st.markdown("**Classes entendues** (plusieurs possibles ; aucune cochée : rien)")
         ticked = _classes(form_key, ANSWERS if multiclass else INTERVAL_ANSWERS)
         quality, species, comment = _details(multiclass)
-        sent = st.form_submit_button("Envoyer ▶", type="primary", use_container_width=True)
+        sent = st.form_submit_button(
+            "Envoyer ▶",
+            type="primary",
+            use_container_width=True,
+            disabled=not annotator.strip(),
+            help=None if annotator.strip() else _NO_ANNOTATOR,
+        )
     if not sent:
         return False
     if not annotator.strip():
-        st.error("Indiquer l'annotateur dans le panneau de gauche.")
+        st.error(_NO_ANNOTATOR)
         return False
     label, extra = ordered_classes(ticked)
     save_answer(
@@ -598,6 +613,20 @@ READONLY_MENUS = """<script>
 </script>"""
 
 
+def _annotator_input(db: Path) -> str:
+    """Champ « Annotateur », prérempli avec le dernier nom tapé sur ce poste (retenu à côté de
+    la base, hors git) : sans lui, l'envoi est impossible."""
+    remembered = db.parent / "annotateur.txt"
+    if "annotator" not in st.session_state and remembered.is_file():
+        st.session_state["annotator"] = remembered.read_text(encoding="utf-8").strip()
+    annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
+    if annotator.strip() and annotator != st.session_state.get("annotator"):
+        remembered.parent.mkdir(parents=True, exist_ok=True)
+        remembered.write_text(annotator.strip() + "\n", encoding="utf-8")
+    st.session_state["annotator"] = annotator
+    return annotator
+
+
 def _recordings_root(cfg) -> list[Path]:
     """Dossiers collés à la main (retenus à côté de la base), en plus des disques branchés que
     `locate` parcourt seul."""
@@ -650,8 +679,7 @@ def main() -> None:
         with st.popover("❓ Mode d'emploi : souris et clavier"):
             st.markdown(HELP)
         st.header("Session")
-        annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
-        st.session_state["annotator"] = annotator
+        annotator = _annotator_input(config_path(cfg, "db"))
         mode, chosen, encoder = _selection_panel(cfg, con, reports)
         candidate_slot = st.container()
         st.header("Écoute")
