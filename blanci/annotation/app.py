@@ -52,7 +52,7 @@ import streamlit.components.v1 as components
 from blanci.annotation.bandeau import bandeau
 from blanci.annotation.selection import NEEDS_ENCODER
 from blanci.annotation.style import BRAND, CHART_COLORS, CSS, LABEL_COLORS, UNHEARD_COLOR
-from blanci.annotation.viewer import HELP, asset, viewer, viewer_args
+from blanci.annotation.viewer import HELP, asset, asset_src, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
     INTERVAL_ANSWERS,
@@ -62,7 +62,7 @@ from blanci.annotation.workbench import (
     next_position,
     ordered_classes,
     progress,
-    read_clip,
+    read_channels,
     save_answer,
     save_span,
     span_intervals,
@@ -401,16 +401,37 @@ def _prefetch(full: str, extract: tuple[float, float] | None = None) -> None:
         pending[args] = pool.submit(_build_media, *args)
 
 
+def _media_key(full: str, offset_s: float, dur_s: float, channel: int) -> str:
+    """Nom du fichier d'écoute d'un micro (`asset_src`), connu avant de lire l'enregistrement."""
+    return f"v1|{full}|{offset_s}|{dur_s}|{channel}"
+
+
+def _next_audios(full: str, offset_s: float, dur_s: float) -> list[tuple[str, str, float]]:
+    """Fichiers d'écoute que `_build_media` écrira pour l'extrait suivant, sans attendre qu'il
+    les écrive : le navigateur les guette et prépare l'extrait d'avance."""
+    return [
+        (name, asset_src(_media_key(full, offset_s, dur_s, c), ".wav"), max(0.0, offset_s))
+        for c, name in CHANNELS.items()
+    ]
+
+
 def _build_media(full: str, offset_s: float, dur_s: float) -> dict:
-    full = Path(full)
-    clips = {c: read_clip(full.parent, full.name, offset_s, dur_s, 0.0, c) for c in CHANNELS}
-    wav, sr, start = clips[0]
+    path = Path(full)
+    wav, sr, start = read_channels(path.parent, path.name, offset_s, dur_s, 0.0)
     return {
         "t0": start,
         "t1": start + len(wav) / sr,
         "audios": [
-            (CHANNELS[c], asset(wav_bytes(w, rate), ".wav"), s0)
-            for c, (w, rate, s0) in clips.items()
+            (
+                name,
+                asset(
+                    wav_bytes(wav[:, min(c, wav.shape[1] - 1)], sr),
+                    ".wav",
+                    name_key=_media_key(full, offset_s, dur_s, c),
+                ),
+                start,
+            )
+            for c, name in CHANNELS.items()
         ],
     }
 
@@ -779,6 +800,22 @@ def main() -> None:
         except Exception as exc:  # fichier ouvert ailleurs, abîmé
             st.error(f"Lecture impossible : {full} ({exc}). Fichier ouvert ailleurs ou abîmé ?")
 
+    # ◀ ▶ : voisin dans la file, ou précédent / prochain jamais écouté (sans faire le tour).
+    before = next_position(done, pos, skip_done, step=-1, wrap=False)
+    after = next_position(done, pos, skip_done, wrap=False)
+    # Chargement d'avance du candidat suivant, pendant qu'on écoute celui-ci : lu sur le disque
+    # ici (`_prefetch`), puis décodé et dessiné par le navigateur (`next_audios`), avant le rendu
+    # du visualiseur pour que les deux commencent tout de suite.
+    next_audios = None
+    if media is not None and after != pos:
+        upcoming = queue.iloc[after].to_dict()
+        next_full = locate(str(upcoming["path"]), raw, extra)
+        if next_full is not None and str(next_full) != str(full):
+            planned_next = upcoming.get("source") == "plan" and not window_mode
+            span = (float(upcoming["offset_s"]), float(upcoming["dur_s"]))
+            _prefetch(str(next_full), span if planned_next else None)
+            next_audios = _next_audios(str(next_full), *(span if planned_next else (0.0, math.inf)))
+
     # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait (mode fenêtres).
     cand_offset, cand_dur = float(candidate["offset_s"]), float(candidate["dur_s"])
     windows = [(cand_offset, cand_dur)]
@@ -834,6 +871,7 @@ def main() -> None:
                 intervals=st.session_state[ikey],
                 interval_mode=not window_mode,
                 channel=spectro_default,
+                next_audios=next_audios,
             ),
             extract,
             ikey,
@@ -895,25 +933,11 @@ def main() -> None:
                 st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
             st.rerun()
 
-    # ◀ ▶ : voisin dans la file, ou précédent / prochain jamais écouté (sans faire le tour).
-    before = next_position(done, pos, skip_done, step=-1, wrap=False)
-    after = next_position(done, pos, skip_done, wrap=False)
     nav = st.columns(2)
     nav[0].button(
         "◀ Candidat précédent", disabled=before == pos, on_click=_goto, args=(key, before)
     )
     nav[1].button("Candidat suivant ▶", disabled=after == pos, on_click=_goto, args=(key, after))
-
-    # Chargement d'avance du candidat suivant, pendant qu'on écoute celui-ci.
-    if media is not None and after != pos:
-        upcoming = queue.iloc[after].to_dict()
-        next_full = locate(str(upcoming["path"]), raw, extra)
-        if next_full is not None and str(next_full) != str(full):
-            planned_next = upcoming.get("source") == "plan" and not window_mode
-            _prefetch(
-                str(next_full),
-                (float(upcoming["offset_s"]), float(upcoming["dur_s"])) if planned_next else None,
-            )
 
 
 main()

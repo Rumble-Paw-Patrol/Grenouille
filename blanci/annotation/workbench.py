@@ -449,13 +449,22 @@ def read_clip(
     Lecture partielle, jamais d'écriture. `channel` : 0 = micro 1 (gain 6 dB), 1 = micro 2
     (gain 18 dB, plus fort, utile pour un chant lointain, DECISIONS n° 58).
     """
+    wav, sr, start = read_channels(raw_root, path, offset_s, dur_s, context_s)
+    return wav[:, min(channel, wav.shape[1] - 1)], sr, start
+
+
+def read_channels(
+    raw_root: Path, path: str, offset_s: float, dur_s: float, context_s: float = 2.0
+) -> tuple[np.ndarray, int, float]:
+    """Comme `read_clip`, tous les canaux d'un coup (échantillons × canaux) : une lecture du
+    fichier au lieu d'une par micro."""
     with sf.SoundFile(Path(raw_root) / path) as f:
         start = max(0.0, offset_s - context_s)
         stop = min(f.frames / f.samplerate, offset_s + dur_s + context_s)
         f.seek(round(start * f.samplerate))
         wav = f.read(round((stop - start) * f.samplerate), dtype="float32", always_2d=True)
         sr = f.samplerate
-    return wav[:, min(channel, wav.shape[1] - 1)], sr, start
+    return wav, sr, start
 
 
 def wav_bytes(
