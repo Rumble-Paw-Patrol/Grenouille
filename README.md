@@ -68,9 +68,9 @@ Inventaire ─> Contrôle qualité ─> Traitement du signal* ─> Encodage
                                                               │
      ┌────────────────────────────────────────────────────────┘
      ▼
-   Têtes ─> Fusion* ─> Score et agrégation ─> Évaluation
-     ▲                          │
-     │                          ▼
+   Têtes ──────────> Fusion* ────────> Score et agrégation ─> Évaluation
+     ▲                                          │
+     │                                          ▼
 Réentraînement <─ Poste d'annotation <─ File de vérification
 
 * facultatif : seulement si besoin
