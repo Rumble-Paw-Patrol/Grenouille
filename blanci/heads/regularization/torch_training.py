@@ -214,12 +214,16 @@ class WeightAverage:
 
 
 # --- R61, R62 : fine-tuning d'un réseau pré-entraîné (`finetune.py`, à écrire) ------------------
+# EN ATTENTE — aides gardées pour plus tard, volontairement non branchées (avec R63,
+# `distillation_loss`) ; ne pas signaler comme code mort à l'audit.
 
 
 def layerwise_lr_groups(
     layers: list, lr: float, decay: float = 0.8, weight_decay: float = 0.0
 ) -> list[dict]:
-    """R61, pas d'apprentissage par couche (LLRD) : la dernière couche de `layers` (de bas en
+    """EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas
+    signaler comme code mort à l'audit.
+    R61, pas d'apprentissage par couche (LLRD) : la dernière couche de `layers` (de bas en
     haut) reçoit `lr`, celle du dessous lr × decay, puis lr × decay²… Les couches basses,
     génériques, bougent peu ; les hautes, spécialisées, s'adaptent. Groupes pour un optimiseur
     torch."""
@@ -235,13 +239,17 @@ def layerwise_lr_groups(
 
 
 def unfreezing_schedule(n_layers: int, epochs: int, every: int) -> list[int]:
-    """R61, dégel progressif (ULMFiT, Howard et Ruder 2018) : nombre de couches du haut qui
+    """EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas
+    signaler comme code mort à l'audit.
+    R61, dégel progressif (ULMFiT, Howard et Ruder 2018) : nombre de couches du haut qui
     apprennent à chaque époque — 1, puis une de plus toutes les `every` époques."""
     return [min(n_layers, 1 + epoch // max(1, every)) for epoch in range(epochs)]
 
 
 def unfreeze_top(layers: list, n_top: int) -> None:
-    """R61 : seules les `n_top` dernières couches de `layers` apprennent, les autres sont
+    """EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas
+    signaler comme code mort à l'audit.
+    R61 : seules les `n_top` dernières couches de `layers` apprennent, les autres sont
     gelées."""
     for i, layer in enumerate(layers):
         for p in layer.parameters():
@@ -249,12 +257,16 @@ def unfreeze_top(layers: list, n_top: int) -> None:
 
 
 def snapshot(model) -> dict:
-    """R62 : copie des poids pré-entraînés d'un réseau torch, avant l'adaptation."""
+    """EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas
+    signaler comme code mort à l'audit.
+    R62 : copie des poids pré-entraînés d'un réseau torch, avant l'adaptation."""
     return {name: p.detach().clone() for name, p in model.named_parameters()}
 
 
 def l2_sp_model_penalty(torch, model, reference: dict, alpha: float, beta: float = 0.0):
-    """R62, L2-SP complet (Li, Grandvalet et Davoine 2018, « SP » = starting point) :
+    """EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas
+    signaler comme code mort à l'audit.
+    R62, L2-SP complet (Li, Grandvalet et Davoine 2018, « SP » = starting point) :
     α/2 Σ ‖θ − θ⁰‖² sur les poids qui existaient avant l'adaptation (`reference`, de
     `snapshot`, clés = noms des poids dans `model`), β/2 Σ ‖θ‖² sur les poids nouveaux (tête,
     adaptateurs LoRA) ; les poids gelés ne comptent pas."""
@@ -334,7 +346,9 @@ def l2_sp_penalty(torch, parameters: list, references: list, strength: float):
 
 
 def distillation_loss(torch, student_logits, teacher_logits, temperature: float = 2.0):
-    """R63 : perte de la distillation (détecteur distillé, `detectors/distilled.py`). L'élève
+    """EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas
+    signaler comme code mort à l'audit.
+    R63 : perte de la distillation (détecteur distillé, `detectors/distilled.py`). L'élève
     apprend les probabilités de l'enseignant (la chaîne gelée), adoucies par la température T :
     entropie croisée binaire entre σ(élève / T) et σ(enseignant / T), × T² pour garder
     l'échelle des gradients (Hinton et al. 2015). Les labels souples de l'enseignant disent

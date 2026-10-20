@@ -34,12 +34,16 @@ def overlap_of(window_s: float, hop_s: float) -> float:
 
 
 def overlap_from_cfg(cfg: dict) -> float:
-    """`encoders.overlap` ; une ancienne config à `grid_hop_ratio` reste lue (1 − ratio)."""
+    """`encoders.overlap` ; une config à `grid_hop_ratio` reste lue (1 − ratio).
+
+    `grid_hop_ratio` a la priorité quand il est fixé : `encoders.overlap` est toujours défini
+    dans config/default.yaml, un `grid_hop_ratio` mis dans une config locale ne serait sinon
+    jamais lu."""
     encoders = cfg.get("encoders", {})
+    if encoders.get("grid_hop_ratio") is not None:
+        return 1.0 - float(encoders["grid_hop_ratio"])
     if "overlap" in encoders:
         return float(encoders["overlap"])
-    if "grid_hop_ratio" in encoders:
-        return 1.0 - float(encoders["grid_hop_ratio"])
     return DEFAULT_OVERLAP
 
 

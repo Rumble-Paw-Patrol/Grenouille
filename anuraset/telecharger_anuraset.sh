@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Télécharge raw_data.zip d'AnuraSet (Zenodo 8342596, 7,2 Go) par 12 plages d'octets en
 # parallèle, reprenable, puis assemble sans doubler la place. À lancer depuis la racine du dépôt.
-# Les étiquettes (strong_labels.zip, weak_labels.csv) sont sur la branche resultats-anuraset-07 :
-#   git archive origin/resultats-anuraset-07 data | tar -x
+# Les étiquettes (strong_labels.zip, weak_labels.csv) restent dans l'historique de main :
+#   git archive 6f2ff13^ data | tar -x
 set -u
 DEST=data/external/anuraset
 mkdir -p "$DEST/parts" && cd "$DEST"

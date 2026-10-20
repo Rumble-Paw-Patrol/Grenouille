@@ -155,6 +155,7 @@ class BacpipeEncoder(BaseEncoder):
             model_name, self.device, Path(model_base_path), checkpoint
         )
         self.model_name = model_name
+        self.openvino = openvino  # sa précision entre dans l'identité du stock (f16 ≠ f32)
         self._light_session(openvino, Path(model_base_path), keep_logits=bool(logit_classes))
         self.sample_rate = int(module.SAMPLE_RATE)
         self.window_s = module.LENGTH_IN_SAMPLES / module.SAMPLE_RATE

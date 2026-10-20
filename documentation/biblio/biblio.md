@@ -2,7 +2,7 @@
 
 Tenue à jour au fil du stage. Chaque référence : lien, et une ligne « ce qu'on en retient pour
 A. blanci ». Mise à jour du 29/09/2026 pour la présentation de suivi n° 2
-(`documentation/prez/presentation-suivi-2/`). Le détail des encodeurs (chiffres, licences, ce qui n'a
+(`documentation/prez/presentation_2.pptx`). Le détail des encodeurs (chiffres, licences, ce qui n'a
 pas été vérifié) reste dans `documentation/encodeurs-bacpipe.md`.
 
 > Ce fichier a été recréé dans le dépôt : la version locale (quasi vide) n'avait pas été poussée.

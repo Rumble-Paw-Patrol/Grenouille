@@ -18,7 +18,7 @@ onnxruntime 1.30.0, tensorflow 2.20.0 (importé, inutilisé), librosa 0.11.0. 19
 | *jetons* logistic:max | 0,330 / 0,647 | 0,286 / 0,112 | 0,454 / 0,302 | 0,365 / 0,090 | 0,941 / 0,759 |
 | *jetons* attentive | 0,385 / 0,813 | **0,339** / 0,080 | 0,703 / 0,578 | 0,316 / 0,080 | 0,951 / 0,804 |
 | *réf.* perch_v2 logistique | 0,666 / 0,911 | 0,507 / 0,150 | 0,960 / 0,946 | 0,824 / 0,253 | 0,985 / 0,964 |
-Autres têtes et scores : `resultats/global/birdmae_large_*` (branche `resultats-anuraset-07`).
+Autres têtes et scores : `resultats/global/birdmae_large_*` (historique : `git show 6f2ff13^:resultats/global/<fichier>`).
 **Courbe d'amorçage** (logistique, AP minute, moyenne des sites, k = 0 → 20 positifs du site) :
 DENMIN 0,50→0,80, PITAZU 0,54→0,90, PHYCUV 0,57→0,79, LEPLAT 0,52→0,82, BOAFAB 0,95→0,96.
 **Lecture** : transformer auto-supervisé **en retrait en sondage linéaire** (n° 151) : en

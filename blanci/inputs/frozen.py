@@ -28,7 +28,7 @@ import pandas as pd
 
 from blanci.core.config import config_path
 from blanci.core.db import utc_now
-from blanci.inputs.dataset import current_labels, recordings_table
+from blanci.inputs.dataset import current_intervals, current_labels, load_spans, recordings_table
 from blanci.inputs.labels import POSITIVE_LABELS
 
 PREFIX = "jeu_gele_"
@@ -63,7 +63,8 @@ def freeze(con: sqlite3.Connection, cfg: dict, source: Path, version: str) -> tu
     """Gèle les enregistrements d'une file CSV (colonne recording_id) sous `version`.
 
     Refuse d'écraser une version existante. Renvoie le chemin et un bilan : nombre
-    d'enregistrements, déjà gelés ailleurs, et labels existants qui sortent de l'entraînement.
+    d'enregistrements, déjà gelés ailleurs, et labels existants qui sortent de l'entraînement ;
+    de même pour l'annotation par intervalles (extraits, intervalles valables, n° 182).
     """
     target = frozen_directory(cfg) / f"{PREFIX}{version}.csv"
     if target.exists():
@@ -78,11 +79,17 @@ def freeze(con: sqlite3.Connection, cfg: dict, source: Path, version: str) -> tu
 
     labels = current_labels(con)
     withdrawn = labels[labels["recording_id"].isin(ids)]
+    spans, intervals = load_spans(con)
+    intervals = current_intervals(spans, intervals)
+    intervals = intervals[intervals["recording_id"].isin(ids)]
     report = {
         "n_recordings": len(table),
         "already_frozen": len(set(ids) & frozen_recordings(cfg)),
         "labels_withdrawn": len(withdrawn),
         "positive_labels_withdrawn": int(withdrawn["label"].isin(POSITIVE_LABELS).sum()),
+        "spans_withdrawn": int(spans["recording_id"].isin(ids).sum()),
+        "intervals_withdrawn": len(intervals),
+        "positive_intervals_withdrawn": int(intervals["label"].isin(POSITIVE_LABELS).sum()),
     }
     target.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(target, index=False)

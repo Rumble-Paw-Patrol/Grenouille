@@ -1,5 +1,8 @@
 """Emplacement du modèle de distillation (§3, DECISIONS n° 97) — à programmer plus tard.
 
+EN ATTENTE — emplacement gardé pour plus tard, volontairement non branché ; ne pas signaler
+comme code mort à l'audit.
+
 Principe : un petit réseau « élève » (CNN sur spectrogramme 3–7 kHz) apprend à imiter la chaîne
 « professeur » gelée (encodeur de fondation + tête + fusion), pour tourner seul sur l'i5 de l'ONF
 sans encodeur de fondation. Livrable léger, hérite des erreurs du professeur.

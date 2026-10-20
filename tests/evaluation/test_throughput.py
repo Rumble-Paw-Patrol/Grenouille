@@ -56,3 +56,17 @@ def test_a_new_measure_updates_its_row_and_keeps_the_others(tmp_path):
     table = pd.read_csv(tmp_path / "debit.csv").set_index("encoder")
     assert sorted(table.index) == ["autre", "toy"]
     assert table.loc["toy", "windows_per_s"] == 1.0 and table.loc["autre", "windows_per_s"] == 99.0
+
+
+def test_subprocess_main_reads_the_local_config_by_default(monkeypatch, tmp_path, capsys):
+    from blanci.evaluation import throughput
+
+    local = tmp_path / "local.yaml"
+    seen = {}
+    monkeypatch.setattr("blanci.core.config.default_user_config", lambda: local)
+    monkeypatch.setattr(
+        "blanci.core.config.load_config", lambda p=None: seen.setdefault("p", p) or {}
+    )
+    monkeypatch.setattr(throughput, "measure_by_name", lambda *a: {"ok": 1})
+    throughput.main(["toy"])
+    assert seen["p"] == local

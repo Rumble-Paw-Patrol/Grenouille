@@ -177,8 +177,8 @@ def test_scoring_one_site_keeps_the_decisions_of_the_others(con, cfg, trained):
 
 
 def test_score_and_queue_follow_the_adopted_head_by_default(con, cfg, trained):
-    """`retrain` crée v2 sans l'adopter : `score` et `queue` restent sur v1, l'adoptée ; `queue`
-    sur la plus récente échouait faute de scores v2."""
+    """`retrain` crée v2 sans l'adopter : `score` et `make_queue` restent sur v1, l'adoptée ;
+    `make_queue` sur la plus récente échouait faute de scores v2."""
     from blanci.service import adopt_head, make_queue
 
     adopt_head(con, "good-1", "v1", "test", {})
@@ -448,3 +448,41 @@ def test_R73_prevalence_counts_only_windows_heard_at_random(con, cfg):
     out = estimate_prevalence(con)
     assert out["n_windows"] == 2 and out["n_positive"] == 1  # « active » : choisie par le détecteur
     assert out["lo"] < 0.5 < out["hi"]
+
+
+# --- Annotation par intervalles (n° 182) ------------------------------------------------------
+
+
+def test_make_queue_excludes_recordings_heard_by_intervals(con, cfg, trained):
+    """Un enregistrement écouté dans le poste (un extrait, sans label de fenêtre) est déjà vu."""
+    from blanci.service import append_span
+
+    score_and_decide(con, "good-1", cfg)
+    first = make_queue(con, "good-1", cfg, n=6)
+    for rid in first["recording_id"]:
+        append_span(con, rid, 0.0, 30.0, [], "background", "active")
+    again = make_queue(con, "good-1", cfg, n=6)
+    assert not set(again["recording_id"]) & set(first["recording_id"])
+
+
+def test_R73_prevalence_counts_an_audit_recording_heard_by_intervals(con):
+    """Un enregistrement d'audit écouté en entier est un extrait de 0 à 120 s : toutes ses
+    fenêtres comptent, positives là où un intervalle d'A. blanci les couvre."""
+    from blanci.service import append_span, estimate_prevalence
+
+    layout = build_recordings(con)
+    rid = next(rid for rid, _, _, positive in layout if not positive)
+    append_span(con, rid, 0.0, 120.0, [(30.0, 36.0, "blanci")], "background", "audit")
+    out = estimate_prevalence(con)
+    assert out["n_windows"] > 70 and out["n_positive"] >= 3
+
+
+def test_append_span_sets_the_listening_flags_like_append_label(con, monkeypatch):
+    """Comme `append_label`, `append_span` réécrit les drapeaux posés à l'écoute."""
+    import blanci.service as service
+
+    layout = build_recordings(con)
+    called = []
+    monkeypatch.setattr(service, "apply_annotation_flags", lambda c, ids: called.append(ids))
+    service.append_span(con, layout[1][0], 0.0, 30.0, [], "rain", "active")
+    assert called == [[layout[1][0]]]

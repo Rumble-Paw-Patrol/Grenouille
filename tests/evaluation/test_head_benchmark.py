@@ -358,3 +358,12 @@ def test_heads_are_also_judged_by_type_of_positive():
     scores = {"a": np.array([9, 8, 7, 1, 1, 1, 2, 2, 0, 0], dtype=float)}
     out = by_positive_type(scores, data, min_windows=3).set_index("positive_type")["ap"]
     assert out["blanci_solo"] == pytest.approx(1.0) and out["blanci_chorus"] < 0.8
+
+
+def test_head_methods_without_tokens_lists_no_token_method():
+    from blanci.evaluation.head_benchmark import TOKEN_METHODS
+    from blanci.heads.head import METHODS
+
+    assert "proto_probe" in TOKEN_METHODS and set(TOKEN_METHODS) <= set(METHODS)
+    assert not set(head_methods(None)) & set(TOKEN_METHODS)
+    assert "proto_probe" in head_methods(np.zeros((2, 3, 2, 4)))

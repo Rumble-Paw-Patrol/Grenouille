@@ -18,7 +18,7 @@ utile ≤ 11 kHz). Pas de jetons. Versions : torch 2.14.0+cpu, transformers 4.57
 | LEPLAT | 0,168 / 0,074 | 0,186 / 0,101 | 0,154 / 0,077 | 0,167 / 0,090 |
 | BOAFAB | 0,916 / 0,793 | 0,770 / 0,365 | 0,863 / 0,785 | 0,472 / 0,164 |
 
-Autres têtes : `resultats/global/`. Seule `lda_shrunk` sort du lot, sur PHYCUV (0,407 et 0,472).
+Autres têtes : `resultats/global/` (historique : `git show 6f2ff13^:resultats/global/<fichier>`). Seule `lda_shrunk` sort du lot, sur PHYCUV (0,407 et 0,472).
 **Courbe d'amorçage** (logistique, AP minute, moyenne des sites, k = 0 puis 20 enregistrements
 positifs du site) : insect66 DENMIN 0,46→0,58, PITAZU 0,51→0,85, PHYCUV 0,42→0,73, LEPLAT
 0,29→0,69, BOAFAB 0,92→0,93 ; insect459 : 0,44→0,58, 0,53→0,90, 0,38→0,73, 0,27→0,64, 0,87→0,95.
@@ -27,4 +27,4 @@ monte avec les exemples locaux. Pas de comparaison à perch_v2 ici (rapport glob
 l'autre n'est déclaré transformer : « en retrait en sondage linéaire » sans objet (non vérifié).
 **Anomalies** : encodage d'insect66 (2219 s) bien plus long que celui d'insect459 (687 s),
 non expliqué. Stocks : branches `donnees-anuraset-insect66` et `-insect459` ; résultats :
-`resultats-anuraset-07`, `resultats/global/insect*`.
+historique : `git show 6f2ff13^:resultats/global/insect66_*`.

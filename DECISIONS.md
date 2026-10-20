@@ -3440,3 +3440,30 @@ de Léonard, 01/10/2026.
      à -1 dBFS, fondus de 20 ms) ; il faut le disque des enregistrements pour le produire, et
      sans lui la page n'affiche pas de bouton. Vérifié dans Chromium avec un faux son (bips à
      5 kHz) : le bouton paraît et se place, la tête suit le son puis reprend son balayage.
+
+## 2026-10-10 — Bord d'un intervalle : la première note, ou 0,2 s de la dernière
+
+201. **Le seuil du « bord » suit la précision du tracé** (Léonard), qui assouplit le n° 183.
+     Avec r = durée commune / min(intervalle, fenêtre) ≥ ½, un chant plus long que la fenêtre
+     devait en remplir la moitié : sur une grille de 5 s, une fenêtre avec 2,49 s de chant
+     était écartée comme « bord ». **Une fenêtre est positive si sa durée commune avec
+     l'intervalle atteint le plus petit de : la moitié de l'intervalle, la moitié de la
+     fenêtre, et le seuil du bord qu'elle coupe** — 0,1 s pour le début
+     (`dataset.INTERVAL_START_S`), 0,2 s pour la fin (`dataset.INTERVAL_END_S`) ; bord en
+     dessous.
+     - **Pourquoi ces seuils** : les intervalles sont tracés au ras des notes, presque au
+       pixel. Une note est une attaque très nette suivie d'une décroissance douce : le début
+       d'un intervalle, posé sur l'attaque de la première note, est sûr ; 0,1 s (la durée
+       d'une note, ≈ 0,09 s) suffit pour que la fenêtre la contienne. La fin, posée dans la
+       décroissance de la dernière note, est deux fois moins précise : 0,2 s.
+     - Un premier jet du même jour plafonnait le seuil à 0,5 s des deux côtés ; trop large
+       pour la précision du tracé.
+     - Un cri court suit la même règle qu'avant tant que sa moitié est sous le seuil du bord
+       coupé (cri ≤ 0,2 s au début, ≤ 0,4 s à la fin).
+     - Le nouveau seuil n'est jamais plus haut que l'ancien : les positifs d'avant le restent,
+       la garantie d'au moins une fenêtre positive par intervalle tient toujours.
+     - Mêmes seuils pour les faux amis : une fenêtre qui en tient le début (0,1 s) ou la fin
+       (0,2 s) devient `false_friend` (négatif dur) au lieu du label de l'extrait.
+     - Le côté coupé se lit sur la fenêtre : elle commence avant l'intervalle → son début,
+       sinon → sa fin. Une fenêtre qui contient l'intervalle, ou y est contenue, passe
+       toujours.

@@ -544,9 +544,7 @@ AUTOMATIQUE = (
     "documentation/tableau-de-bord/",
 )
 # Ce que le tableau de bord ne montre pas, volontairement.
-# resultats/ : sorties brutes des calculs, déjà rassemblées dans les CSV des benchmarks.
 IGNORE = (
-    "resultats/",
     "DECISIONS.md",
     "uv.lock",
     ".gitignore",

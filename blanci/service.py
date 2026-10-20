@@ -20,7 +20,14 @@ import pandas as pd
 
 from blanci.combination.fusion import FusionWeights
 from blanci.core.config import config_path
-from blanci.core.db import encoder_params, model_params, next_version, register_model, utc_now
+from blanci.core.db import (
+    encoder_params,
+    model_params,
+    next_version,
+    recording_id_for,
+    register_model,
+    utc_now,
+)
 from blanci.embedding.index import search
 from blanci.embedding.store import EmbeddingStore, gated_mask
 from blanci.evaluation.evaluate import (
@@ -60,7 +67,7 @@ from blanci.inputs.dataset import (
     training_set,
 )
 from blanci.inputs.frozen import frozen_recordings, frozen_versions
-from blanci.inputs.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES
+from blanci.inputs.labels import LABELS, POSITIVE_LABELS, QUALITIES, SOURCES, comment_fields
 from blanci.inputs.qc import apply_annotation_flags, is_excluded
 from blanci.results.activity import (
     curve_correlation,
@@ -70,8 +77,6 @@ from blanci.results.activity import (
     reference_checks,
 )
 from blanci.results.aggregate import aggregate_recording, rank_points
-
-SCORE_CHUNK = 200_000
 
 
 def head_id(encoder_id: str, version: str) -> str:
@@ -296,17 +301,41 @@ def write_operating_curve(
     return csv
 
 
-def estimate_prevalence(con: sqlite3.Connection, sources=("random", "audit")) -> dict[str, Any]:
+def estimate_prevalence(
+    con: sqlite3.Connection,
+    sources=("random", "audit"),
+    window_s: float = 3.0,
+    hop_s: float = 1.5,
+) -> dict[str, Any]:
     """R73 : part des fenêtres positives parmi celles écoutées **sans que le détecteur les ait
     choisies** (strate aléatoire de la file, audit d'enregistrements entiers), avec
     l'intervalle de Wilson. Jamais sur les autres sources : elles sont choisies parce qu'elles
-    ont l'air positives."""
-    from blanci.inputs.labels import POSITIVE_LABELS
+    ont l'air positives. Fenêtres annotées une à une, et fenêtres de la grille (`window_s`,
+    `hop_s` : celle de w3 par défaut) couvertes par un extrait annoté par intervalles (n° 182) :
+    un enregistrement d'audit écouté en entier compte toutes ses fenêtres."""
+    from blanci.annotation.workbench import annotation_status  # workbench importe ce module
+    from blanci.embedding.grid import window_grid
 
     labels = current_labels(con)
-    labels = labels[labels["source"].isin(sources) & ~labels["label"].isin(EXCLUDED_LABELS)]
-    n = int(len(labels))
-    k = int(labels["label"].isin(POSITIVE_LABELS).sum())
+    frames = [labels.loc[labels["source"].isin(sources), ["recording_id", "offset_s", "dur_s"]]]
+    marks = ",".join("?" * len(sources))
+    spans = con.execute(
+        "SELECT s.recording_id, s.start_s, s.end_s, r.duration_s FROM spans s "
+        f"JOIN recordings r USING (recording_id) WHERE s.source IN ({marks})",
+        tuple(sources),
+    ).fetchall()
+    for rid, start, end, duration in spans:
+        offsets = [
+            offset
+            for offset, _ in window_grid(duration or end, window_s, hop_s)
+            if offset >= start - 1e-6 and offset + window_s <= end + 1e-6
+        ]
+        frames.append(pd.DataFrame({"recording_id": rid, "offset_s": offsets, "dur_s": window_s}))
+    heard = pd.concat(frames, ignore_index=True)
+    status = annotation_status(con, heard).drop_duplicates("window_id")
+    status = status[status["heard"] & ~status["label"].isin(EXCLUDED_LABELS)]
+    n = int(len(status))
+    k = int(status["positive"].sum())
     lo, hi = wilson_interval(k, n)
     return {
         "n_windows": n,
@@ -561,7 +590,10 @@ def make_queue(
     offset = cfg["recorder"]["filename_utc_offset_h"]
     scores["hour"] = (local_minutes(scores["start_utc"], offset) // 60).astype("Int64")
 
-    labelled = current_labels(con)[["recording_id"]].drop_duplicates()
+    from blanci.annotation.workbench import annotated_recordings
+
+    heard, _ = annotated_recordings(con)  # labels de fenêtre et extraits (n° 182)
+    labelled = pd.DataFrame({"recording_id": sorted(heard)})
     queue = build_queue(
         scores,
         labelled,
@@ -701,6 +733,7 @@ def append_span(
         [(span_id, *interval) for interval in cleaned],
     )
     con.commit()
+    apply_annotation_flags(con, [recording_id])  # comme `append_label` : drapeaux de l'écoute
     return span_id
 
 
@@ -736,6 +769,128 @@ def append_labels_bulk(
     con.commit()
     apply_annotation_flags(con, sorted({r for _, r in found}))
     return len(window_ids)
+
+
+def _text(value: Any) -> str | None:
+    """Cellule d'un CSV relu par pandas : None pour une case vide."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None
+    return str(value).strip() or None
+
+
+def import_annotations(con: sqlite3.Connection, folder: Path) -> dict[str, int]:
+    """Recharge les annotations d'`export-labels` (extraits_annotes.csv, intervalles_annotes.csv,
+    fenetres_annotees.csv dans `folder`) dans une autre base, pour reprendre l'écoute sur une
+    autre machine. Les identifiants d'enregistrement viennent du nom de fichier
+    (`recording_id_for`) : ils sont les mêmes partout. Ajout seul et sans doublon : un extrait
+    déjà présent (même enregistrement, bornes, annotateur, date) ou un label de fenêtre déjà
+    présent (même fenêtre, label, annotateur, source) est sauté, on peut relancer sans risque.
+    Un enregistrement absent de la base (pas encore inventorié ici) est compté, pas importé."""
+    known = {r for (r,) in con.execute("SELECT recording_id FROM recordings")}
+    report = {"spans": 0, "intervals": 0, "labels": 0, "already": 0, "unknown": 0}
+    touched: set[str] = set()
+
+    extracts_csv = folder / "extraits_annotes.csv"
+    if extracts_csv.exists():
+        extracts = pd.read_csv(extracts_csv).sort_values(["created_at", "span_id"])
+        intervals_csv = folder / "intervalles_annotes.csv"
+        intervals = pd.read_csv(intervals_csv) if intervals_csv.exists() else pd.DataFrame()
+        by_span = dict(tuple(intervals.groupby("span_id"))) if len(intervals) else {}
+        for row in extracts.itertuples(index=False):
+            rid = recording_id_for(row.path)
+            if rid not in known:
+                report["unknown"] += 1
+                continue
+            start_s, end_s = round(float(row.start_s), 2), round(float(row.end_s), 2)
+            annotator, created_at = _text(row.annotator), str(row.created_at)
+            if con.execute(
+                "SELECT 1 FROM spans WHERE recording_id = ? AND ABS(start_s - ?) < 0.006 "
+                "AND ABS(end_s - ?) < 0.006 AND annotator IS ? AND created_at = ?",
+                (rid, start_s, end_s, annotator, created_at),
+            ).fetchone():
+                report["already"] += 1
+                continue
+            comment = _text(row.comment)
+            conditions: dict[str, Any] = {}
+            if comment:
+                conditions |= comment_fields(comment) | {"comment": comment}
+            if str(row.multiclass).strip().lower() == "false":
+                conditions["multiclass"] = False
+            classes = [c.strip() for c in (_text(row.classes) or "").split(",") if c.strip()]
+            cursor = con.execute(
+                "INSERT INTO spans (recording_id, start_s, end_s, other_label, classes, "
+                "quality, species, conditions, annotator, source, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    rid,
+                    start_s,
+                    end_s,
+                    row.other_label,
+                    json.dumps(classes, ensure_ascii=False) if classes else None,
+                    _text(row.quality),
+                    _text(row.species),
+                    json.dumps(conditions, ensure_ascii=False) if conditions else None,
+                    annotator,
+                    row.source,
+                    created_at,
+                ),
+            )
+            span = by_span.get(row.span_id, pd.DataFrame(columns=["start_s"]))
+            con.executemany(
+                "INSERT INTO intervals (span_id, start_s, end_s, label, quality) "
+                "VALUES (?, ?, ?, ?, ?)",
+                [
+                    (cursor.lastrowid, float(i.start_s), float(i.end_s), i.label, _text(i.quality))
+                    for i in span.sort_values("start_s").itertuples(index=False)
+                ],
+            )
+            report["spans"] += 1
+            report["intervals"] += len(span)
+            touched.add(rid)
+
+    windows_csv = folder / "fenetres_annotees.csv"
+    if windows_csv.exists():
+        now = utc_now()
+        for row in pd.read_csv(windows_csv).itertuples(index=False):
+            rid = recording_id_for(row.path)
+            if rid not in known:
+                report["unknown"] += 1
+                continue
+            annotator = _text(row.annotator)
+            if con.execute(
+                "SELECT 1 FROM labels WHERE window_id = ? AND label = ? AND annotator IS ? "
+                "AND source = ?",
+                (row.window_id, row.label, annotator, row.source),
+            ).fetchone():
+                report["already"] += 1
+                continue
+            con.execute(  # fenêtre d'une autre grille (drapeau sur 120 s…) : créée ici
+                "INSERT OR IGNORE INTO windows (window_id, recording_id, offset_s, dur_s) "
+                "VALUES (?, ?, ?, ?)",
+                (row.window_id, rid, float(row.offset_s), float(row.dur_s)),
+            )
+            comment = _text(row.comment)
+            conditions = comment_fields(comment) | {"comment": comment} if comment else None
+            con.execute(
+                "INSERT INTO labels (window_id, label, quality, species, conditions, annotator, "
+                "source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    row.window_id,
+                    row.label,
+                    _text(row.quality),
+                    _text(row.species),
+                    json.dumps(conditions, ensure_ascii=False) if conditions else None,
+                    annotator,
+                    row.source,
+                    now,
+                ),
+            )
+            report["labels"] += 1
+            touched.add(rid)
+    con.commit()
+    if touched:
+        apply_annotation_flags(con, sorted(touched))
+    return report
 
 
 # --- Recherche par similarité -----------------------------------------------------------------

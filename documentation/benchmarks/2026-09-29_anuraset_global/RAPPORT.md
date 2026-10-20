@@ -1,5 +1,12 @@
 # Benchmark 07 — Six encodeurs côte à côte, et l'amorçage d'un site (AnuraSet)
 
+> **Note de l'audit du 10/10/2026 :** les p-valeurs de ce rapport sont calculées par amorçage
+> avec 1 000 tirages, selon p = 2·k/n. Quand aucun tirage ne traverse 0, p vaut 0. Environ la
+> moitié des comparaisons sont dans ce cas et sortent « significatives après Holm ». Avec le calcul
+> corrigé, p = 2·(k+1)/(n+1) a un plancher, et plus aucune comparaison ne survivrait à Holm sur
+> 115 à 245 comparaisons. Les intervalles de confiance restent valables. Lire « après Holm »
+> comme « intervalle à 95 % qui exclut 0 », en attendant une relance avec plus de tirages.
+
 29/09/2026 · commit `1176c87` · statut : **indicateur** (d'autres anoures qu'A. blanci ; 2 à 4
 sites par espèce ; un seul tirage des négatifs d'apprentissage).
 
@@ -148,8 +155,8 @@ Seuil choisi sur les autres sites (perch_v2, logistique, fenêtre, précision vi
 Outils : `anuraset/` (`global_bench.py`, `rassembler_global.py`).
 Stocks sur les branches `donnees-anuraset` (perch_v2) et `donnees-anuraset-<encodeur>`. Leurs
 modèles (table `models`) et leurs fenêtres (table `windows`) sont réunis dans une même
-`data/db/anuraset.sqlite`. Sorties brutes (scores hors-pli, courbes) : branche
-`resultats-anuraset-07`, dossier `resultats/global/`.
+`data/db/anuraset.sqlite`. Sorties brutes (scores hors-pli, courbes) : retirées de main, dans l'historique
+(`git show 6f2ff13^:resultats/global/<fichier>`).
 
 ```
 uv run python anuraset/global_bench.py <encodeur> <ESPECE> <sorties> --curve

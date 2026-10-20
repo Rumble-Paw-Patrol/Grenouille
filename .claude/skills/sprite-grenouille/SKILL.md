@@ -7,8 +7,8 @@ description: Dessine une ou plusieurs grenouilles en sprite 8-bit animé, dans l
 
 Références :
 - A. blanci, le sprite du tableau de bord : `documentation/tableau-de-bord/grenouille.py`. Son
-  histoire est visible pas à pas dans `documentation/tableau-de-bord/evolution-grenouille/`.
-- Le décor de référence : la scène de chasse de `documentation/tableau-de-bord/bac-a-sable/chasse/`
+  histoire est visible pas à pas dans `documentation/sprites/evolution-grenouille/`.
+- Le décor de référence : la scène de chasse de `documentation/sprites/bac-a-sable/chasse/`
   (`decor.py`, `chasse.py`, `page.html`).
 - Outils du skill : `outils.py`, `planche.html` et `modele.py`, le script modèle à copier.
 
@@ -42,9 +42,10 @@ Les règles du passage d'une étape à l'autre :
 - **Une correction de forme demandée à l'étape 2 ou plus tard** se fait dans `formes()`. Les
   rendus suivent. Le dire à Léonard et lui remontrer la silhouette si elle change beaucoup.
 - **Où travailler :**
-  - dans `documentation/tableau-de-bord/bac-a-sable/<projet>/`, sur la branche de travail, avec
+  - dans `documentation/sprites/bac-a-sable/<projet>/` (le dossier est versionné sur main), avec
     un commit par étape validée (« <espèce> : étape N validée ») ;
-  - rien sur le tableau de bord ni sur main avant son go explicite pour la destination.
+  - rien sur le tableau de bord (`documentation/tableau-de-bord/`) ni sur la page publiée avant
+    son go explicite pour la destination.
 - **Les photos de référence** restent dans le scratchpad : jamais dans le dépôt, jamais dans une
   page publiée. Les images de superposition contiennent la photo. Les montrer seulement dans la
   conversation (`SendUserFile` si l'outil existe), jamais en artefact.
@@ -337,7 +338,7 @@ Ce qui a marché dans la scène de chasse :
 - **Autre page :** reprendre le JavaScript de `planche.html` (décodage par plages, rythmes,
   composition) ou celui de la scène de chasse.
 - **Évolution :** ajouter chaque version validée à
-  `documentation/tableau-de-bord/evolution-grenouille/`.
+  `documentation/sprites/evolution-grenouille/`.
 
 ## Outils (`python3 .claude/skills/sprite-grenouille/outils.py …`)
 

@@ -6,8 +6,8 @@
 - **Mode de sélection** (panneau de gauche) : une file déjà écrite, ou une nouvelle file tirée
   sur place par n'importe quelle méthode de l'outil de sélection (`blanci/annotation/selection.py` :
   60-20-20 à proportions réglables, similarité, couverture, groupes, audit, hasard, negative
-  mining, phénologie, suspects, congénères), ou la **carte des embeddings** (YAPAT fait
-  maison) : on entoure une zone de points, on l'écoute.
+  mining, phénologie, suspects, trous dans un chant), ou la **carte des embeddings** (YAPAT
+  fait maison) : on entoure une zone de points, on l'écoute.
 - **Navigation** : sous la file, la liste de ses candidats (numérotés dans la file entière,
   ✓ et label pour ceux déjà écoutés) ; on peut revenir sur n'importe lequel et le
   réécouter, une nouvelle réponse s'ajoute à l'ancienne (correction, jamais écrasée).
@@ -50,8 +50,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from blanci.annotation.bandeau import bandeau
+from blanci.annotation.selection import NEEDS_ENCODER
 from blanci.annotation.style import BRAND, CHART_COLORS, CSS, LABEL_COLORS, UNHEARD_COLOR
-from blanci.annotation.viewer import HELP, asset, viewer, viewer_args
+from blanci.annotation.viewer import HELP, asset, asset_src, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
     INTERVAL_ANSWERS,
@@ -61,7 +62,7 @@ from blanci.annotation.workbench import (
     next_position,
     ordered_classes,
     progress,
-    read_clip,
+    read_channels,
     save_answer,
     save_span,
     span_intervals,
@@ -92,15 +93,7 @@ MODES = {
     "suspects": "Détections isolées (« suspect »)",
     "gaps": "Trous dans un chant (faux négatifs suspects)",
 }
-NEEDS_ENCODER = (
-    "active",
-    "similarity",
-    "coverage",
-    MAP,
-    "cluster",
-    "negative_mining",
-    "suspects",
-)
+ENCODER_MODES = (*NEEDS_ENCODER, MAP)  # la carte lit aussi un stock d'embeddings
 
 
 def _config_file() -> Path | None:
@@ -122,9 +115,9 @@ def _setup(config: Path | None):
 
 
 def _queues(reports: Path) -> list[Path]:
-    """Files de candidats : un dossier par file (`files/<nom>/candidats.csv`), et les anciens
-    CSV posés à plat dans `paths.reports`."""
-    patterns = ("files/*/candidats.csv", "candidats_*.csv", "queue_*.csv", "search_*.csv")
+    """Files de candidats : un dossier par file (`files/<nom>/candidats.csv`), et celles que
+    `blanci candidates` (hors `--plan`) pose à plat dans `paths.reports`."""
+    patterns = ("files/*/candidats.csv", "candidats_*.csv")
     found = {p for pattern in patterns for p in reports.glob(pattern)}
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
@@ -166,10 +159,10 @@ def _selection_panel(cfg, con, reports: Path) -> tuple[str, Path | None, str | N
     mode = st.selectbox("Mode de sélection", list(MODES), format_func=MODES.get, key="mode")
     encoder = None
     encoders = _encoders(con)
-    if mode in NEEDS_ENCODER and not encoders:
+    if mode in ENCODER_MODES and not encoders:
         st.info("Aucun encodeur encodé : `blanci embed` d'abord.")
         return mode, None, None
-    if (mode in NEEDS_ENCODER or mode == "gaps") and encoders:
+    if (mode in ENCODER_MODES or mode == "gaps") and encoders:
         encoder = st.selectbox("Encodeur", encoders, key="encoder")
     if mode == EXISTING:
         queues = _queues(reports)
@@ -408,16 +401,37 @@ def _prefetch(full: str, extract: tuple[float, float] | None = None) -> None:
         pending[args] = pool.submit(_build_media, *args)
 
 
+def _media_key(full: str, offset_s: float, dur_s: float, channel: int) -> str:
+    """Nom du fichier d'écoute d'un micro (`asset_src`), connu avant de lire l'enregistrement."""
+    return f"v1|{full}|{offset_s}|{dur_s}|{channel}"
+
+
+def _next_audios(full: str, offset_s: float, dur_s: float) -> list[tuple[str, str, float]]:
+    """Fichiers d'écoute que `_build_media` écrira pour l'extrait suivant, sans attendre qu'il
+    les écrive : le navigateur les guette et prépare l'extrait d'avance."""
+    return [
+        (name, asset_src(_media_key(full, offset_s, dur_s, c), ".wav"), max(0.0, offset_s))
+        for c, name in CHANNELS.items()
+    ]
+
+
 def _build_media(full: str, offset_s: float, dur_s: float) -> dict:
-    full = Path(full)
-    clips = {c: read_clip(full.parent, full.name, offset_s, dur_s, 0.0, c) for c in CHANNELS}
-    wav, sr, start = clips[0]
+    path = Path(full)
+    wav, sr, start = read_channels(path.parent, path.name, offset_s, dur_s, 0.0)
     return {
         "t0": start,
         "t1": start + len(wav) / sr,
         "audios": [
-            (CHANNELS[c], asset(wav_bytes(w, rate), ".wav"), s0)
-            for c, (w, rate, s0) in clips.items()
+            (
+                name,
+                asset(
+                    wav_bytes(wav[:, min(c, wav.shape[1] - 1)], sr),
+                    ".wav",
+                    name_key=_media_key(full, offset_s, dur_s, c),
+                ),
+                start,
+            )
+            for c, name in CHANNELS.items()
         ],
     }
 
@@ -462,6 +476,11 @@ def _classes(form_key: str, answers) -> list[str]:
     ]
 
 
+# Le bouton d'envoi reste grisé sans annotateur : un formulaire envoyé se vide
+# (`clear_on_submit`), et un envoi refusé faisait perdre le commentaire tapé.
+_NO_ANNOTATOR = "Indiquer l'annotateur dans le panneau de gauche."
+
+
 def _details(
     multiclass: bool, with_quality: bool = True
 ) -> tuple[str | None, str | None, str | None]:
@@ -497,12 +516,16 @@ def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel, 
             ticked = _classes(form_key, OTHER_ANSWERS)
         quality, species, comment = _details(multiclass, with_quality=False)
         sent = st.form_submit_button(
-            "Envoyer l'extrait ▶", type="primary", use_container_width=True
+            "Envoyer l'extrait ▶",
+            type="primary",
+            use_container_width=True,
+            disabled=not annotator.strip(),
+            help=None if annotator.strip() else _NO_ANNOTATOR,
         )
     if not sent:
         return False
     if not annotator.strip():
-        st.error("Indiquer l'annotateur dans le panneau de gauche.")
+        st.error(_NO_ANNOTATOR)
         return False
     try:
         save_span(
@@ -532,11 +555,17 @@ def _answer_form(con, target, form_key, annotator, channel, multiclass) -> bool:
         st.markdown("**Classes entendues** (plusieurs possibles ; aucune cochée : rien)")
         ticked = _classes(form_key, ANSWERS if multiclass else INTERVAL_ANSWERS)
         quality, species, comment = _details(multiclass)
-        sent = st.form_submit_button("Envoyer ▶", type="primary", use_container_width=True)
+        sent = st.form_submit_button(
+            "Envoyer ▶",
+            type="primary",
+            use_container_width=True,
+            disabled=not annotator.strip(),
+            help=None if annotator.strip() else _NO_ANNOTATOR,
+        )
     if not sent:
         return False
     if not annotator.strip():
-        st.error("Indiquer l'annotateur dans le panneau de gauche.")
+        st.error(_NO_ANNOTATOR)
         return False
     label, extra = ordered_classes(ticked)
     save_answer(
@@ -605,6 +634,20 @@ READONLY_MENUS = """<script>
 </script>"""
 
 
+def _annotator_input(db: Path) -> str:
+    """Champ « Annotateur », prérempli avec le dernier nom tapé sur ce poste (retenu à côté de
+    la base, hors git) : sans lui, l'envoi est impossible."""
+    remembered = db.parent / "annotateur.txt"
+    if "annotator" not in st.session_state and remembered.is_file():
+        st.session_state["annotator"] = remembered.read_text(encoding="utf-8").strip()
+    annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
+    if annotator.strip() and annotator != st.session_state.get("annotator"):
+        remembered.parent.mkdir(parents=True, exist_ok=True)
+        remembered.write_text(annotator.strip() + "\n", encoding="utf-8")
+    st.session_state["annotator"] = annotator
+    return annotator
+
+
 def _recordings_root(cfg) -> list[Path]:
     """Dossiers collés à la main (retenus à côté de la base), en plus des disques branchés que
     `locate` parcourt seul."""
@@ -657,8 +700,7 @@ def main() -> None:
         with st.popover("❓ Mode d'emploi : souris et clavier"):
             st.markdown(HELP)
         st.header("Session")
-        annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
-        st.session_state["annotator"] = annotator
+        annotator = _annotator_input(config_path(cfg, "db"))
         mode, chosen, encoder = _selection_panel(cfg, con, reports)
         candidate_slot = st.container()
         st.header("Écoute")
@@ -758,6 +800,22 @@ def main() -> None:
         except Exception as exc:  # fichier ouvert ailleurs, abîmé
             st.error(f"Lecture impossible : {full} ({exc}). Fichier ouvert ailleurs ou abîmé ?")
 
+    # ◀ ▶ : voisin dans la file, ou précédent / prochain jamais écouté (sans faire le tour).
+    before = next_position(done, pos, skip_done, step=-1, wrap=False)
+    after = next_position(done, pos, skip_done, wrap=False)
+    # Chargement d'avance du candidat suivant, pendant qu'on écoute celui-ci : lu sur le disque
+    # ici (`_prefetch`), puis décodé et dessiné par le navigateur (`next_audios`), avant le rendu
+    # du visualiseur pour que les deux commencent tout de suite.
+    next_audios = None
+    if media is not None and after != pos:
+        upcoming = queue.iloc[after].to_dict()
+        next_full = locate(str(upcoming["path"]), raw, extra)
+        if next_full is not None and str(next_full) != str(full):
+            planned_next = upcoming.get("source") == "plan" and not window_mode
+            span = (float(upcoming["offset_s"]), float(upcoming["dur_s"]))
+            _prefetch(str(next_full), span if planned_next else None)
+            next_audios = _next_audios(str(next_full), *(span if planned_next else (0.0, math.inf)))
+
     # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait (mode fenêtres).
     cand_offset, cand_dur = float(candidate["offset_s"]), float(candidate["dur_s"])
     windows = [(cand_offset, cand_dur)]
@@ -813,6 +871,7 @@ def main() -> None:
                 intervals=st.session_state[ikey],
                 interval_mode=not window_mode,
                 channel=spectro_default,
+                next_audios=next_audios,
             ),
             extract,
             ikey,
@@ -874,25 +933,11 @@ def main() -> None:
                 st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
             st.rerun()
 
-    # ◀ ▶ : voisin dans la file, ou précédent / prochain jamais écouté (sans faire le tour).
-    before = next_position(done, pos, skip_done, step=-1, wrap=False)
-    after = next_position(done, pos, skip_done, wrap=False)
     nav = st.columns(2)
     nav[0].button(
         "◀ Candidat précédent", disabled=before == pos, on_click=_goto, args=(key, before)
     )
     nav[1].button("Candidat suivant ▶", disabled=after == pos, on_click=_goto, args=(key, after))
-
-    # Chargement d'avance du candidat suivant, pendant qu'on écoute celui-ci.
-    if media is not None and after != pos:
-        upcoming = queue.iloc[after].to_dict()
-        next_full = locate(str(upcoming["path"]), raw, extra)
-        if next_full is not None and str(next_full) != str(full):
-            planned_next = upcoming.get("source") == "plan" and not window_mode
-            _prefetch(
-                str(next_full),
-                (float(upcoming["offset_s"]), float(upcoming["dur_s"])) if planned_next else None,
-            )
 
 
 main()

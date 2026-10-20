@@ -1,16 +1,25 @@
-# Annotations de Léonard
+# Annotations
 
-Écrites par `blanci export-labels` à la fin de chaque session d'écoute, puis poussées sur GitHub.
-Seulement les annotations de Léonard : rien d'importé (vérifications et scores BlanciNet de
-Biophonia, qui restent dans la base, hors git).
+Copie versionnée des annotations exportées par `blanci export-labels`. La commande écrit dans le
+dossier des rapports (`paths.reports`, soit `data/reports/` par défaut, ignoré par git). La copie
+dans ce dossier est manuelle : copier les trois CSV ici à la fin d'une session d'écoute, puis les
+pousser sur GitHub.
+
+L'export prend tous les annotateurs, y compris les vérifications et les scores importés, pas
+seulement ceux de Léonard. La colonne `annotator` dit qui a écrit chaque ligne.
 
 - `extraits_annotes.csv` : extraits écoutés dans le poste d'annotation (files `lot1`, `lot2`…) ;
 - `intervalles_annotes.csv` : un intervalle marqué (A. blanci, chœur, faux ami…) par ligne ;
 - `fenetres_annotees.csv` : fenêtres annotées une à une.
 
-Les chemins sont ceux des enregistrements sur le disque d'origine (`audio.renamed` dans
-`config/default.yaml` donne leur nom sur les disques BLANCI_2023-24 et BLANCI_2025-26).
+Les chemins sont ceux des enregistrements sur le disque d'origine, relatifs à sa racine
+(`paths.raw` dans `config/local.yaml`). `audio.renamed` dans `config/default.yaml` donne leur nom
+sur les disques BLANCI_2023-24 et BLANCI_2025-26.
 
 `files_ecoute/` : copie des files d'écoute de `paths.queues` (16/10/2026), pour les retrouver
 sur une autre machine (y pointer `paths.queues` dans `config/local.yaml`). Des références
 seulement (enregistrement, début, durée), pas d'audio.
+
+**Reprendre l'écoute sur une autre machine** : `git pull`, puis `blanci import-labels` (relit
+les trois CSV de ce dossier dans la base de la machine, sans doublon ; à relancer après chaque
+`git pull`). Le poste d'annotation coche alors les candidats déjà écoutés.

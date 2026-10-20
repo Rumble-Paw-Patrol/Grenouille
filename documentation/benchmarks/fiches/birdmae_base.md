@@ -18,7 +18,7 @@ fréquences × 768, moyennés sur la fréquence. torch 2.6.0+cpu, transformers 4
 | *jetons* attentive | 0,444 / **0,891** | 0,358 / 0,073 | 0,723 / 0,530 | 0,552 / 0,167 | 0,954 / 0,887 |
 | *réf.* birdmae_large proto_probe | 0,654 / 0,917 | 0,334 / 0,102 | 0,906 / 0,708 | 0,579 / 0,102 | 0,979 / 0,944 |
 | *réf.* perch_v2 logistique | 0,666 / 0,911 | 0,507 / 0,150 | 0,960 / 0,946 | 0,824 / 0,253 | 0,985 / 0,964 |
-Scores : `resultats/global/birdmae_base_*` (`resultats-anuraset-07`, transfert refait).
+Scores : `resultats/global/birdmae_base_*` (historique : `git show 6f2ff13^:resultats/global/<fichier>`, transfert refait).
 **Lecture** (verdict suspendu des n° 147 et 149) : Bird-MAE est **en retrait en sondage
 linéaire**, pas mauvais. Avec la sonde à prototypes sur jetons (tête de ses auteurs), Base gagne
 +0,04 (BOAFAB) à +0,40 (DENMIN) d'AP par site sur la logistique. Sur DENMIN, il **dépasse

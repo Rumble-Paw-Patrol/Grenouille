@@ -40,7 +40,7 @@ le commit pour l'annexe « Reproduire ».
 | Fichier | Contenu |
 |---|---|
 | `donnees/*.csv` | tout ce dont le rapport tire un chiffre ; colonnes en anglais comme les CSV existants (`encoder`, `species`, `head`, `level`, `ap`, `ap_site`…) |
-| `generer.py` | figures et tableaux recalculés depuis `donnees/` seul, sans rien relancer |
+| `generer.py` | figures et tableaux recalculés depuis `donnees/` seul, sans rien relancer ; partir de `documentation/benchmarks/generer_modele.py` |
 | `figures/N_nom.png` | numérotées dans l'ordre du rapport ; tableau lourd en PNG |
 | `RAPPORT.md` | plan de `MODELE_RAPPORT.md` |
 

@@ -449,10 +449,11 @@ def test_a_window_takes_the_quality_of_its_interval(con):
 
 
 def test_windows_that_only_graze_an_interval_are_edges(con):
-    """Intervalle 10,2–11,2 s (1 s) : 7,5–10,5 n'en a que 0,3 s (< ½) → bord, écarté ;
-    10,5–13,5 en a 0,7 s → positive ; 9–12 le contient. Toucher la limite ne compte pas."""
+    """Intervalle 10,45–11,45 s (1 s) : 7,5–10,5 n'en a que 0,05 s (moins d'une note) → bord,
+    écarté ; 10,5–13,5 en a 0,95 s → positive ; 9–12 le contient. Toucher la limite ne
+    compte pas."""
     rid = add_recording(con, "2026/mataroni/M1/a.wav")
-    _span(con, rid, 0.0, 30.0, [(10.2, 11.2, "blanci"), (18.0, 19.0, "blanci_chorus")])
+    _span(con, rid, 0.0, 30.0, [(10.45, 11.45, "blanci"), (18.0, 19.0, "blanci_chorus")])
     data = _interval_labels(con, grid_frame([rid]))
     assert data.loc[7.5, "label"] == "edge" and data.loc[7.5, "y"] == 0
     assert data.loc[9.0, "y"] == 1 and data.loc[10.5, "y"] == 1
@@ -460,6 +461,24 @@ def test_windows_that_only_graze_an_interval_are_edges(con):
     assert data.loc[16.5, "label"] == "blanci_chorus"
     training = training_set(con, grid_frame([rid])).set_index("offset_s")
     assert 7.5 not in training.index and training.loc[9.0, "y"] == 1
+
+
+def test_a_long_song_needs_its_first_note_or_the_end_of_its_last(con):
+    """Grille de 5 s au pas de 2,5 s, longs chants (n° 201). Début coupé : 0,12 s suffisent
+    (une note, 7,5–12,5 sur 12,38–20,0), 0,05 s non (27,5–32,5 sur 32,45–40,0 : bord). Fin
+    coupée : 0,25 s suffisent (77,5–82,5 sur 70,0–77,75), 0,15 s non (57,5–62,5 sur
+    50,0–57,65 : bord). 2,4 s de chant dans une fenêtre de 5 s : positive."""
+    rid = add_recording(con, "2026/mataroni/M1/a.wav")
+    songs = [(12.38, 20.0), (32.45, 40.0), (50.0, 57.65), (70.0, 77.75), (92.6, 100.0)]
+    _span(con, rid, 0.0, 120.0, [(a, b, "blanci") for a, b in songs])
+    grid = grid_frame([rid], window_s=5.0, hop_s=2.5)
+    grid["window_id"] = [window_id_for(rid, o, 5.0) for o in grid["offset_s"]]
+    data = _interval_labels(con, grid)
+    assert data.loc[7.5, "y"] == 1 and data.loc[5.0, "label"] == "background"
+    assert data.loc[27.5, "label"] == "edge" and data.loc[30.0, "y"] == 1
+    assert data.loc[57.5, "label"] == "edge" and data.loc[55.0, "y"] == 1
+    assert data.loc[77.5, "y"] == 1
+    assert data.loc[90.0, "y"] == 1  # 90–95 : 2,4 s de chant
 
 
 def test_half_overlapping_windows_never_lose_an_interval(con):

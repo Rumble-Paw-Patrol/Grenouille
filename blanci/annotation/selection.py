@@ -48,7 +48,8 @@ from blanci.annotation.workbench import (
     CANDIDATE_COLUMNS,
     _drop_labelled,
     _round_robin,
-    labelled_windows,
+    annotated_recordings,
+    annotation_status,
 )
 from blanci.core.config import config_path
 from blanci.core.db import encoder_params
@@ -68,6 +69,7 @@ SELECTION_METHODS = (
     "suspects",
     "gaps",
 )
+# Méthodes qui lisent un stock d'embeddings (le poste y ajoute sa carte).
 NEEDS_ENCODER = (
     "active",
     "similarity",
@@ -205,16 +207,17 @@ def active_candidates(
 
 
 def similarity_candidates(
-    con, cfg, encoder_id, n=300, site=None, paired_negatives=True, **_
+    con, cfg, encoder_id, n=300, site=None, dataset=None, paired_negatives=True, **_
 ) -> pd.DataFrame:
     from blanci.service import similarity_search
 
+    filters = {key: value for key, value in (("site", site), ("dataset", dataset)) if value}
     found = similarity_search(
         con,
         encoder_id,
         cfg,
         k=n,
-        filters={"site": site} if site else None,
+        filters=filters or None,
         use_paired_negatives=paired_negatives,
     )
     found["dur_s"] = encoder_params(con, encoder_id)["window_s"]
@@ -319,10 +322,7 @@ def negative_mining_candidates(
         )
         if scores.empty:
             raise ValueError(f"aucun score pour {model_id} (lancer `blanci score`)")
-        from blanci.inputs.labels import POSITIVE_LABELS
-
-        labels = current_labels(con)
-        positives = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"])
+        _, positives = annotated_recordings(con)  # labels et intervalles (n° 182)
         rec = recordings_table(con).set_index("recording_id")
         offset = cfg["recorder"]["filename_utc_offset_h"]
         local = pd.to_datetime(rec["start_utc"], utc=True) + pd.Timedelta(hours=offset)
@@ -445,14 +445,31 @@ def gap_candidates(
 
     radius = float(cfg.get("signal_processing", {}).get("gap_radius_s", GAP_RADIUS_S))
     if mode == "labels":
-        from blanci.inputs.dataset import positive_annotations
+        from blanci.inputs.dataset import current_intervals, load_spans, positive_annotations
         from blanci.inputs.labels import POSITIVE_LABELS
 
         labels = current_labels(con)
-        positives = positive_annotations(labels)
+        valid = current_intervals(*load_spans(con))
+        valid = valid[valid["label"].isin(POSITIVE_LABELS)]
+        # Positifs : fenêtres et intervalles (n° 182) ; un négatif qu'un intervalle plus récent
+        # rend positif n'est plus un négatif.
+        positives = pd.concat(
+            [
+                positive_annotations(labels),
+                pd.DataFrame(
+                    {
+                        "recording_id": valid["recording_id"],
+                        "offset_s": valid["start_s"],
+                        "dur_s": valid["end_s"] - valid["start_s"],
+                    }
+                ),
+            ],
+            ignore_index=True,
+        )
         negatives = labels[
             ~labels["label"].isin(POSITIVE_LABELS + ("blanci_uncertain", "uncertain"))
         ]
+        negatives = negatives[~annotation_status(con, negatives)["positive"].to_numpy()]
         rows = []
         for rid, part in negatives.groupby("recording_id"):
             pos = positives[positives["recording_id"] == rid]
@@ -581,8 +598,9 @@ def cluster_status(
     if not path.exists():
         raise ValueError(f"aucun groupe pour {encoder_id} (blanci select --method cluster)")
     assignments = pd.read_parquet(path)
-    labels = current_labels(con)[["window_id", "label", "source"]]
-    heard = assignments.merge(labels[labels["source"] != "bulk"], on="window_id")
+    # Écoutées une à une : labels de fenêtre (hors « bulk ») et intervalles (n° 182).
+    status = annotation_status(con, assignments, ignore_sources=("bulk",))
+    heard = assignments.assign(label=status["label"])[status["heard"]]
     rows = []
     for cluster, part in assignments.groupby("cluster"):
         mine = heard[heard["cluster"] == cluster]
@@ -637,8 +655,7 @@ def label_cluster(
         raise ValueError(f"le groupe {cluster} a été entendu « {heard} », pas « {label} »")
     assignments = pd.read_parquet(cluster_path(cfg, encoder_id))
     members = assignments.loc[assignments["cluster"] == cluster]
-    done = labelled_windows(con)
-    todo = [w for w in members["window_id"] if w not in done]
+    todo = members.loc[~annotation_status(con, members)["heard"], "window_id"].tolist()
     return append_labels_bulk(
         con,
         todo,
@@ -699,10 +716,9 @@ def embedding_map(
         xy = Z[:, :2]
     else:
         raise ValueError(f"projection inconnue : {method!r} (umap, tsne, pca)")
-    labels = current_labels(con)[["window_id", "label"]]
     out = meta.assign(x=xy[:, 0], y=xy[:, 1], dur_s=encoder_params(con, encoder_id)["window_s"])
-    out = out.merge(labels, on="window_id", how="left")
-    return out.assign(label=out["label"].fillna("non écouté"))
+    status = annotation_status(con, out)  # labels de fenêtre et intervalles (n° 182)
+    return out.assign(label=status["label"].where(status["heard"], "non écouté"))
 
 
 def map_selection(con: sqlite3.Connection, selected: pd.DataFrame) -> pd.DataFrame:

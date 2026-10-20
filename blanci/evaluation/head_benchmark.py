@@ -90,7 +90,7 @@ from blanci.heads.regularization import (
 from blanci.inputs.dataset import embedded_training_set, folds_for, pairing_options
 from blanci.inputs.frozen import frozen_recordings
 
-TOKEN_METHODS = ("attentive", "cascade")
+TOKEN_METHODS = ("attentive", "proto_probe", "cascade")
 LEVELS = ("window", "recording")
 # R39 (DECISIONS n° 115) : k voisins dans la liste par défaut, juste après `knn` ; toutes les
 # variantes dans le groupe `neighbors`, pour amorcer un nouveau site avec quelques exemples.

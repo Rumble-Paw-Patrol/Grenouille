@@ -5,19 +5,24 @@ Labels courants, transfert vers la grille, négatifs appariés.
 - Transfert (DECISIONS n° 4) : une fenêtre de grille hérite du label d'une annotation si elle la
   contient (annotation courte, 3 s) ou si elle y est contenue (annotation d'enregistrement
   entier, §5). Les fenêtres qui ne font que chevaucher l'annotation sont écartées.
-- Intervalles (§5.6, DECISIONS n° 182, 183) : sur un extrait écouté (span), recouvrement
-  r = durée commune / min(durée de l'intervalle, durée de la fenêtre). Une fenêtre est
-  **positive si r ≥ `MIN_INTERVAL_OVERLAP` (½)** pour un intervalle (elle contient le chant,
-  ou le chant la remplit, au moins à moitié) ; **« bord »** si elle ne fait qu'effleurer un
-  intervalle (0 < r < ½) : label `edge`, écartée de l'entraînement ; négative si elle est
-  entièrement dans l'extrait sans toucher d'intervalle ; sans label sinon (pas entièrement
-  écoutée). Avec des fenêtres glissantes à moitié recouvrantes (`encoders.overlap: 0.5`),
-  chaque intervalle a au moins une fenêtre positive, quelle que soit sa durée : écarter les
-  bords ne perd aucun chant. Un intervalle « A. blanci ? » rend incertaine toute fenêtre non
-  positive qui le touche (`blanci_uncertain`, écartée). Un intervalle « faux ami » (un son
-  qui ressemble à A. blanci, n° 186) donne `false_friend` (négatif dur) aux fenêtres qu'il
-  remplit à moitié, si aucun intervalle d'A. blanci ne les touche ; une fenêtre qui ne fait
-  que l'effleurer garde le label du reste de l'extrait. Valable pour toute grille (3, 5 s…).
+- Intervalles (§5.6, DECISIONS n° 182, 183, 201) : sur un extrait écouté (span), une fenêtre
+  est **positive si sa durée commune avec un intervalle atteint le plus petit de : la moitié
+  de l'intervalle (`MIN_INTERVAL_OVERLAP`), la moitié de la fenêtre, et un seuil de bord :
+  `INTERVAL_START_S` (0,1 s, une note) si elle coupe le début de l'intervalle,
+  `INTERVAL_END_S` (0,2 s) si elle en coupe la fin**. Un cri court doit donc être à moitié
+  dans la fenêtre ; d'un long chant, la fenêtre doit tenir sa première note (le début, tracé
+  au ras de l'attaque, est sûr) ou les 0,2 s de sa dernière (la fin, tracée dans la
+  décroissance de la note, l'est deux fois moins). **« Bord »** si elle ne fait qu'effleurer
+  un intervalle (durée commune non nulle sous ce seuil) : label `edge`, écartée de
+  l'entraînement ; négative si elle est entièrement dans l'extrait sans toucher
+  d'intervalle ; sans label sinon (pas entièrement écoutée). Avec des fenêtres glissantes à
+  moitié recouvrantes (`encoders.overlap: 0.5`), chaque intervalle a au moins une fenêtre
+  positive, quelle que soit sa durée : écarter les bords ne perd aucun chant. Un intervalle
+  « A. blanci ? » rend incertaine toute fenêtre non positive qui le touche
+  (`blanci_uncertain`, écartée). Un intervalle « faux ami » (un son qui ressemble à
+  A. blanci, n° 186) donne `false_friend` (négatif dur) aux fenêtres qui le recouvrent au
+  même seuil, si aucun intervalle d'A. blanci ne les touche ; une fenêtre qui ne fait que
+  l'effleurer garde le label du reste de l'extrait. Valable pour toute grille (3, 5 s…).
 - Négatifs appariés (§2) : fenêtres du même micro, dans des enregistrements sans label positif.
   Ce sont des négatifs *présumés* (colonne `presumed`) : jamais écrits dans la table labels.
   En saison, à l'heure de pic, une partie peut contenir A. blanci : bruit d'étiquette identique
@@ -51,9 +56,15 @@ from blanci.inputs.qc import EXCLUDING_FLAGS, is_excluded
 
 # « edge » : fenêtre qui ne fait qu'effleurer un intervalle annoté (jamais rangé dans labels).
 EXCLUDED_LABELS = ("blanci_uncertain", "uncertain", "edge")
-# Recouvrement minimal d'un intervalle pour qu'une fenêtre soit positive ; ½ garantit, avec
-# des fenêtres recouvrantes de moitié, au moins une fenêtre positive par intervalle.
+# Recouvrement minimal d'un intervalle pour qu'une fenêtre soit positive : la moitié de
+# l'intervalle ou de la fenêtre, plafonnée au seuil du bord coupé (n° 201). La moitié
+# garantit, avec des fenêtres recouvrantes de moitié, au moins une fenêtre positive par
+# intervalle ; les plafonds suivent la précision du tracé : le début d'un intervalle est posé
+# sur l'attaque d'une note (0,1 s : la note entière), la fin dans sa décroissance, deux fois
+# moins nette (0,2 s).
 MIN_INTERVAL_OVERLAP = 0.5
+INTERVAL_START_S = 0.1
+INTERVAL_END_S = 0.2
 PAIRING_STRATEGIES = ("nearest", "other_day", "same_day", "mixed")
 
 
@@ -167,13 +178,17 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
 
 def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFrame:
     """Intervalles encore valables : un extrait réécouté plus tard qui couvre entièrement un
-    intervalle le remplace (correction en ajout seul, comme les labels)."""
+    intervalle le remplace (correction en ajout seul, comme les labels). Un intervalle dont
+    l'enregistrement n'a aucun extrait dans `spans` (filtré : jeu gelé) n'est pas corrigé."""
     if intervals.empty:
         return intervals
     keep = []
     by_recording = {rid: g for rid, g in spans.groupby("recording_id")}
     for row in intervals.itertuples(index=False):
-        later = by_recording[row.recording_id]
+        later = by_recording.get(row.recording_id)
+        if later is None:
+            keep.append(True)
+            continue
         later = later[later["span_id"] > row.span_id]
         covered = (later["start_s"] <= row.start_s + 1e-6) & (later["end_s"] >= row.end_s - 1e-6)
         keep.append(not covered.any())
@@ -185,6 +200,8 @@ def interval_labels(
     intervals: pd.DataFrame,
     grid: pd.DataFrame,
     min_overlap: float = MIN_INTERVAL_OVERLAP,
+    start_s: float = INTERVAL_START_S,
+    end_s: float = INTERVAL_END_S,
     eps: float = 1e-6,
 ) -> pd.DataFrame:
     """Labels des fenêtres de grille déduits des intervalles (règle en tête du module).
@@ -212,7 +229,11 @@ def interval_labels(
         common = np.minimum(w1[:, None], i1[None, :]) - np.maximum(w0[:, None], i0[None, :])
         touch = common > eps
         shorter = np.minimum((w1 - w0)[:, None], (i1 - i0)[None, :])
-        enough = touch & (common >= min_overlap * shorter - eps)
+        # Seuil du bord coupé : le début de l'intervalle si la fenêtre commence avant lui, sa
+        # fin sinon (une fenêtre qui contient l'intervalle ou y est contenue passe toujours).
+        cut = np.where(w0[:, None] <= i0[None, :] + eps, start_s, end_s)
+        needed = np.minimum(min_overlap * shorter, cut)
+        enough = touch & (common >= needed - eps)
         labels = iv["label"].to_numpy()
         friend = labels == "false_friend"
         certain = ~friend & (labels != "blanci_uncertain")
@@ -526,6 +547,8 @@ def training_set(
     négatifs appariés. `row` reste l'indice dans la grille complète.
     Colonne `suspect_fn` : négatif annoté encadré d'annotations positives à moins de
     `gap_radius_s` — faux négatif suspect, à réécouter ; il reste négatif (n° 85, 102).
+    Une fenêtre écartée (« A. blanci ? », bord, incertaine : `EXCLUDED_LABELS`) n'est pas non
+    plus tirée comme négatif présumé (n° 182).
     """
     grid = grid.reset_index(drop=True)
     if exclude_recordings:
@@ -534,9 +557,12 @@ def training_set(
     spans, intervals = load_spans(con)
     if exclude_recordings:
         spans = spans[~spans["recording_id"].isin(exclude_recordings)]
-    labeled = _merge_labelled(
-        transfer_labels(annotations, grid),
-        interval_labels(spans, intervals, grid).query("label not in @EXCLUDED_LABELS"),
+        intervals = intervals[intervals["span_id"].isin(spans["span_id"])]
+    from_intervals = interval_labels(spans, intervals, grid)
+    doubtful = from_intervals["label"].isin(EXCLUDED_LABELS)
+    labeled = _merge_labelled(transfer_labels(annotations, grid), from_intervals[~doubtful])
+    excluded_windows = set(from_intervals.loc[doubtful, "window_id"]) | set(
+        annotations.loc[annotations["label"].isin(EXCLUDED_LABELS), "window_id"]
     )
     positive_windows = pd.concat(
         [
@@ -551,7 +577,7 @@ def training_set(
     if per_positive > 0:
         positives = set(labeled.loc[labeled["y"] == 1, "recording_id"])
         negatives = paired_negatives(
-            grid[~grid["window_id"].isin(labeled["window_id"])],
+            grid[~grid["window_id"].isin(set(labeled["window_id"]) | excluded_windows)],
             recordings,
             positives,
             per_positive,
@@ -673,21 +699,25 @@ def benchmark_folds(
 ) -> dict[str, int]:
     """Pli de chaque point (micro), commun à tous les modèles (DECISIONS n° 91).
 
-    Calculé sur les enregistrements annotés (hors jeu gelé `exclude_recordings`), jamais sur
-    les fenêtres d'un encodeur : deux encodeurs, une baseline ou une fusion voient exactement
-    les mêmes micros tenus à l'écart dans chaque pli.
+    Calculé sur les enregistrements annotés, par labels de fenêtres ou par intervalles (hors
+    jeu gelé `exclude_recordings`), jamais sur les fenêtres d'un encodeur : deux encodeurs,
+    une baseline ou une fusion voient exactement les mêmes micros tenus à l'écart dans chaque
+    pli. Un enregistrement est positif s'il a un label positif ou un intervalle positif
+    valable (n° 182).
     """
     from blanci.evaluation.evaluate import fold_assignment
 
     labels = current_labels(con)
     labels = labels[~labels["label"].isin(EXCLUDED_LABELS)]
+    spans, intervals = load_spans(con)
     if exclude_recordings:
         labels = labels[~labels["recording_id"].isin(exclude_recordings)]
-    per_recording = (
-        labels.assign(pos=labels["label"].isin(POSITIVE_LABELS))
-        .groupby("recording_id")["pos"]
-        .max()
+        spans = spans[~spans["recording_id"].isin(exclude_recordings)]
+    positives = set(labels.loc[labels["label"].isin(POSITIVE_LABELS), "recording_id"]) | set(
+        _positive_intervals(spans, intervals)["recording_id"]
     )
+    annotated = sorted(set(labels["recording_id"]) | set(spans["recording_id"]))
+    per_recording = pd.Series([rid in positives for rid in annotated], index=annotated)
     points = recordings_table(con).set_index("recording_id")["point"]
     points = points[~points.index.duplicated()]
     known = per_recording.index.intersection(points.index)

@@ -23,6 +23,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -123,8 +124,13 @@ def save_oof(cfg: dict, frame: pd.DataFrame) -> Path:
     return path
 
 
+_IGNORED: set[str] = set()  # sources d'un ancien type déjà signalées (une seule fois)
+
+
 def load_oof(cfg: dict, sources: list[str] | None = None) -> pd.DataFrame:
-    """Toutes les sources enregistrées (ou celles demandées)."""
+    """Toutes les sources enregistrées (ou celles demandées). Sans `sources`, les fichiers
+    d'un type qui n'est plus dans `KINDS` (anciennes sources `external/…`) sont ignorés, avec
+    un message une seule fois : aucune commande ne sait les relancer."""
     directory = config_path(cfg, "reports") / "oof"
     if sources is not None:
         paths = [source_path(cfg, s) for s in sources]
@@ -135,7 +141,15 @@ def load_oof(cfg: dict, sources: list[str] | None = None) -> pd.DataFrame:
         paths = sorted(directory.glob("*.parquet")) if directory.exists() else []
     if not paths:
         return pd.DataFrame(columns=OOF_COLUMNS)
-    return pd.concat([pd.read_parquet(p) for p in paths], ignore_index=True)
+    table = pd.concat([pd.read_parquet(p) for p in paths], ignore_index=True)
+    if sources is None:
+        old = ~table["kind"].isin(KINDS)
+        new = sorted(set(table.loc[old, "source"]) - _IGNORED)
+        if new:
+            _IGNORED.update(new)
+            print(f"sources d'un ancien type ignorées (hors {KINDS}) : {new}", file=sys.stderr)
+        table = table[~old].reset_index(drop=True)
+    return table
 
 
 def list_sources(cfg: dict) -> pd.DataFrame:

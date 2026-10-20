@@ -19,7 +19,7 @@ transformers 4.57.6, onnxruntime 1.30.0, librosa 0.11.0, sans TensorFlow. 19 166
 | *jetons* logistic:max | 0,443 / 0,853 | 0,406 / 0,123 | 0,846 / 0,540 | 0,866 / 0,165 | 0,973 / 0,930 |
 | *jetons* attentive | 0,540 / 0,832 | 0,319 / 0,107 | 0,760 / 0,554 | 0,706 / 0,513 | 0,950 / 0,908 |
 
-Autres têtes et scores : `resultats/global/naturebeats_*` (branche `resultats-anuraset-07`).
+Autres têtes et scores : `resultats/global/naturebeats_*` (historique : `git show 6f2ff13^:resultats/global/<fichier>`).
 **Courbe d'amorçage** (logistique, AP minute, moyenne des sites, k = 0 → 20 positifs du site) :
 DENMIN 0,62→0,92, PITAZU 0,60→0,97, PHYCUV 0,87→0,96, LEPLAT 0,82→0,95, BOAFAB 0,96→0,97.
 **Lecture** : transformer auto-supervisé **en retrait en sondage linéaire** (n° 151) : la sonde

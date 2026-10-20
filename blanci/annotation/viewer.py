@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import threading
 from pathlib import Path
 
 from blanci.annotation.style import FONTS, LABEL_COLORS
@@ -191,8 +192,8 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
     <input type="number" id="lo" min="0" max="24" step="0.1"> –
     <input type="number" id="hi" min="0" max="24" step="0.1"> kHz
     <label><input type="checkbox" id="bandonly"> n'écouter qu'elle</label>
-    <select id="slope" title="Raideur du filtre hors de la bande : plus elle est forte, plus les sons
- hors bande sont coupés, mais plus le filtre « sonne » sur les claquements">
+    <select id="slope" title="Raideur du filtre hors de la bande : plus elle est forte, plus les
+ sons hors bande sont coupés, mais plus le filtre « sonne » sur les claquements">
       <option value="12">12 dB/oct</option><option value="24">24 dB/oct</option>
       <option value="48">48 dB/oct</option><option value="96">96 dB/oct</option>
       <option value="fft" title="Coupure franche : rien hors de la bande, mais pré-écho et
@@ -234,9 +235,11 @@ const MEDALS = {A: "or : chant net", B: "argent : chant chevauché (pluie, bruit
                 C: "bronze : chant lointain"};
 const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
+let raw = [], decoding = [];  // fichiers chargés, décodages lancés (`decode`)
 let view = null, intervals = [], selected = -1, vmax = [], loading = 0, newLabel = null;
 let newQuality = null;  // qualité des prochains intervalles (null : non dite)
-const spec = document.createElement("canvas"); let specKey = "", specView = null;
+let spec = document.createElement("canvas"), specKey = "", specView = null;
+const specCache = new Map();  // clé → toile : dernières vues calculées (et celle préparée)
 // Pendant un zoom ou un déplacement, l'image déjà calculée est seulement étirée ; le calcul à
 // pleine résolution attend que l'on ait lâché la molette ou la souris.
 let settling = false, settle = null;
@@ -261,15 +264,17 @@ function showSettings() {
 }
 // Passe-haut et passe-bas de Butterworth d'ordre 2n, chacun fait de n biquads d'ordre 2 dont
 // les Q sont ceux des paires de pôles : −3 dB pile sur la frontière, puis 12 n dB par octave.
-// (Mettre des biquads à Q = 0,707 en cascade amollirait le coude.) En mode FFT, ils laissent
-// tout passer : c'est le son lu qui est déjà filtré (`applyFFT`).
+// (Mettre des biquads à Q = 0,707 en cascade amollirait le coude.) Web Audio lit le Q d'un
+// passe-haut ou d'un passe-bas en dB (α = sin ω0 / (2·10^(Q/20))) : on lui passe 20 log10 Q,
+// sinon chaque étage bombe à la coupure (+1,9 dB à 24 dB/oct, +17 dB à 96 dB/oct). En mode
+// FFT, ils laissent tout passer : c'est le son lu qui est déjà filtré (`applyFFT`).
 const stages = () => S.slope === "fft" ? 1 : S.slope / 12;
 function butterQ(n) {
   return Array.from({length: n}, (_, k) => 1 / (2 * Math.cos((2 * k + 1) * Math.PI / (4 * n))));
 }
 function wire(g) {
   g.source.disconnect(); [...g.hp, ...g.lp].forEach(f => f.disconnect());
-  const qs = butterQ(stages());
+  const qs = butterQ(stages()).map(q => 20 * Math.log10(q));  // Q en dB pour Web Audio
   g.hp = qs.map(Q => new BiquadFilterNode(actx, {type: "highpass", Q}));
   g.lp = qs.map(Q => new BiquadFilterNode(actx, {type: "lowpass", Q}));
   [g.source, ...g.hp, ...g.lp, g.gain].reduce((a, b) => (a.connect(b), b));
@@ -284,13 +289,13 @@ function applyAudio() {
     g.lp.forEach(f => f.frequency.value = hi);
     g.gain.gain.value = Math.pow(10, S.gain / 20);
   });
-  clearTimeout(fftTimer); fftTimer = setTimeout(applyFFT, 250);  // pas à chaque pas d'un glisser
+  clearTimeout(fftTimer);  // pas à chaque pas d'un glisser
+  fftTimer = setTimeout(() => { applyFFT(); prepareNext(); }, 250);
 }
 
 // --- Mode FFT : tout l'extrait passe en fréquences, ce qui sort de la bande est mis à zéro, on
-// revient au signal et le lecteur bascule sur ce son, au même instant. Les canaux vont par
-// deux dans une même FFT complexe (l'un en partie réelle, l'autre en imaginaire) : le masque
-// étant réel et symétrique, il les filtre tous deux sans les mélanger.
+// revient au signal et le lecteur bascule sur ce son, au même instant. Seule la piste écoutée
+// (`active`) est filtrée ; une autre l'est quand on la lance.
 let fftTimer = null;
 function fftInPlace(re, im, inverse) {
   const n = re.length;
@@ -312,21 +317,19 @@ function fftInPlace(re, im, inverse) {
     }
   }
 }
-function brickwall(x, y, rate, lo, hi) {  // x, y : deux canaux (y peut manquer)
+function brickwall(x, rate, lo, hi) {
   const len = x.length;
   let n = 1; while (n < len + rate) n *= 2;  // au moins 1 s de zéros : pas de repliement
   const re = new Float64Array(n), im = new Float64Array(n);
-  re.set(x); if (y) im.set(y);
+  re.set(x);
   fftInPlace(re, im, false);
   for (let k = 0; k < n; k++) {
     const f = Math.min(k, n - k) * rate / n;
     if (f < lo || f > hi) { re[k] = 0; im[k] = 0; }
   }
   fftInPlace(re, im, true);
-  const out = [new Float32Array(len), y ? new Float32Array(len) : null];
-  for (let i = 0; i < len; i++) {
-    out[0][i] = re[i] / n; if (y) out[1][i] = im[i] / n;
-  }
+  const out = new Float32Array(len);
+  for (let i = 0; i < len; i++) out[i] = re[i] / n;
   return out;
 }
 function wavURL(x, rate) {  // WAV 16 bits mono
@@ -341,33 +344,62 @@ function wavURL(x, rate) {  // WAV 16 bits mono
   }
   return URL.createObjectURL(new Blob([v.buffer], {type: "audio/wav"}));
 }
+// Le dernier son filtré de chaque lecteur reste en mémoire (`el._fft`) : décocher puis recocher
+// « n'écouter qu'elle » le remet aussitôt, sans refaire la FFT ; seule une nouvelle bande la
+// relance (et libère l'ancien son).
 function swapSource(el, url, key) {
   const t = el.currentTime, playing = !el.paused;
-  if (el.src !== el._orig) URL.revokeObjectURL(el.src);
+  if (key && el._fft?.key !== key) {
+    if (el._fft) URL.revokeObjectURL(el._fft.url);
+    el._fft = {key, url};
+  }
   el._key = key; el.src = url;
   el.addEventListener("loadedmetadata", () => {
     el.currentTime = t; if (playing) el.play();
   }, {once: true});
 }
+const fftKey = () => S.bandOnly && S.slope === "fft" ? S.band.join("-") : "";
 function applyFFT() {
-  const key = S.bandOnly && S.slope === "fft" ? S.band.join("-") : "";
-  const todo = players.filter(el => el._key !== key);
-  if (!todo.length) return;
-  if (!key) { todo.forEach(el => swapSource(el, el._orig, "")); return; }
-  if (players.some((_, i) => !buffers[i])) return;  // repris à la fin du décodage
-  $("status").textContent = "filtrage FFT…";
-  setTimeout(() => {  // laisse le temps d'afficher le message
-    const token = loading, idx = players.map((el, i) => i).filter(i => todo.includes(players[i]));
-    const rate = buffers.rate, lo = Math.max(S.band[0], 1), hi = S.band[1];
-    for (let k = 0; k < idx.length; k += 2) {
-      const [a, b] = [idx[k], idx[k + 1]];
-      const out = brickwall(buffers[a], b === undefined ? null : buffers[b], rate, lo, hi);
-      if (token !== loading) return;
-      swapSource(players[a], wavURL(out[0], rate), key);
-      if (b !== undefined) swapSource(players[b], wavURL(out[1], rate), key);
-    }
+  const key = fftKey(), i = active, el = players[i];
+  if (!el || el._key === key || el._busy === key) return;
+  if (!key) { swapSource(el, el._orig, ""); return; }
+  if (el._fft?.key === key) { swapSource(el, el._fft.url, key); return; }
+  if (!buffers[i]) { decode(i)?.then(applyFFT); return; }
+  $("status").textContent = "filtrage FFT…"; el._busy = key;
+  const token = loading, rate = buffers.rate;
+  filtered(buffers[i], rate, Math.max(S.band[0], 1), S.band[1]).then(out => {
+    el._busy = null;
+    if (token !== loading) return;
+    swapSource(el, wavURL(out, rate), key);
     $("status").textContent = "";
-  }, 30);
+  });
+}
+// La FFT tourne dans un fil à part (Web Worker) : l'interface ne gèle pas pendant le filtrage,
+// ni pendant celui de l'extrait suivant, préparé en cours d'annotation. Sans Worker (refusé
+// par le navigateur), elle se fait sur place.
+let worker, jobId = 0;
+const jobs = new Map();
+function filtered(x, rate, lo, hi) {
+  if (worker === undefined) {
+    try {
+      const code = `${fftInPlace}\n${brickwall}\nonmessage = e => {
+        const {id, x, rate, lo, hi} = e.data, y = brickwall(x, rate, lo, hi);
+        postMessage({id, y}, [y.buffer]);
+      };`;
+      worker = new Worker(URL.createObjectURL(new Blob([code], {type: "text/javascript"})));
+      worker.onmessage = e => { jobs.get(e.data.id).ok(e.data.y); jobs.delete(e.data.id); };
+      worker.onerror = () => {
+        worker = null;
+        jobs.forEach(({ok, args}) => ok(brickwall(...args))); jobs.clear();
+      };
+    } catch (e) { worker = null; }
+  }
+  if (!worker) return new Promise(ok => setTimeout(() => ok(brickwall(x, rate, lo, hi)), 30));
+  const id = ++jobId, copy = x.slice();
+  return new Promise(ok => {
+    jobs.set(id, {ok, args: [x, rate, lo, hi]});
+    worker.postMessage({id, x: copy, rate, lo, hi}, [copy.buffer]);
+  });
 }
 function setBand(lo, hi) {
   lo = Math.max(0, Math.min(lo, hi - 100)); hi = Math.max(hi, lo + 100);
@@ -385,13 +417,17 @@ $("slope").onchange = () => {
 $("gain").oninput = () => {
   S.gain = +$("gain").value; showSettings(); applyAudio(); saveSettings();
 };
-$("range").oninput = () => { S.range = +$("range").value; showSettings(); saveSettings(); draw(); };
+$("range").oninput = () => {
+  S.range = +$("range").value; showSettings(); saveSettings(); draw(); prepSoon();
+};
 function setContrast(c) {
-  S.contrast = Math.max(0, Math.min(8, c)); showSettings(); saveSettings(); draw();
+  S.contrast = Math.max(0, Math.min(8, c)); showSettings(); saveSettings(); draw(); prepSoon();
 }
 $("cless").onclick = () => setContrast(S.contrast - 1);
 $("cmore").onclick = () => setContrast(S.contrast + 1);
-function setChannel(c) { S.channel = c; showSettings(); saveSettings(); draw(); }
+function setChannel(c) {
+  S.channel = c; showSettings(); saveSettings(); draw(); decode(c); prepSoon();
+}
 
 // --- Étiquette des intervalles : un bouton par étiquette, toujours visibles ---------------
 // Deux choses distinctes : l'étiquette des prochains intervalles (touches 1 à 4, ou un clic
@@ -442,6 +478,7 @@ function emit() {
 
 function render(args) {
   const fresh = !D || args.extract !== D.extract;
+  const nextChanged = !D || JSON.stringify(args.next) !== JSON.stringify(D.next);
   D = args;
   if (S.band === undefined) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
@@ -479,7 +516,7 @@ function render(args) {
     selected = -1; vmax = []; specKey = ""; specView = null; settling = false; buffers = [];
     load();
     list();
-  }
+  } else if (nextChanged) prepareNext();
   resize(); setHeight();
 }
 
@@ -487,43 +524,116 @@ function render(args) {
 async function load() {
   const token = ++loading;
   players.forEach(p => {
-    p.pause(); URL.revokeObjectURL(p.src); if (p._orig !== p.src) URL.revokeObjectURL(p._orig);
+    p.pause(); URL.revokeObjectURL(p._orig); if (p._fft) URL.revokeObjectURL(p._fft.url);
   });
   const box = $("players");
-  box.innerHTML = ""; players = []; graphs = []; active = 0;
+  box.innerHTML = ""; players = []; graphs = []; active = 0; raw = []; decoding = [];
+  prepToken++;  // la préparation en cours visait cet extrait ou un autre : on reprend ce qu'elle a
+  given = {};
+  for (const [src, p] of Object.entries(ahead)) {
+    if (D.audios.some(a => a.src === src)) given[src] = p;
+    else if (p.fft) URL.revokeObjectURL(p.fft.url);
+  }
+  ahead = {};
   $("status").textContent = "chargement de l'audio…";
   if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-  const data = await Promise.all(D.audios.map(a => fetch(a.src).then(r => r.arrayBuffer())));
+  const data = await Promise.all(D.audios.map(a =>
+    given[a.src]?.raw || fetch(a.src).then(r => r.arrayBuffer())));
   if (token !== loading) return;
+  raw = data;
   D.audios.forEach((a, i) => {
     const div = document.createElement("div");
     div.innerHTML = `<span>${a.name}</span>`;
     const el = document.createElement("audio");
     el.controls = true; el.preload = "auto";
     el.src = el._orig = URL.createObjectURL(new Blob([data[i]], {type: "audio/wav"}));
-    el._key = "";
+    el._key = ""; el._fft = given[a.src]?.fft;
     const source = actx.createMediaElementSource(el);
     const g = {source, hp: [], lp: [], gain: new GainNode(actx)};
     g.gain.connect(actx.destination); wire(g); graphs.push(g);
     el.addEventListener("play", () => {
       if (actx.state !== "running") actx.resume();
       players.forEach((p, j) => { if (j !== i) p.pause(); });
-      if (active !== i) { active = i; emit(); }
+      if (active !== i) { active = i; emit(); applyFFT(); }
       mark(); loop();
     });
     el.addEventListener("seeked", draw);
     div.appendChild(el); box.appendChild(div); players.push(el);
   });
   applyAudio(); mark(); setHeight();
-  for (let i = 0; i < data.length; i++) {
-    const buf = await actx.decodeAudioData(data[i].slice(0));
-    if (token !== loading) return;
-    buffers[i] = buf.getChannelData(0); buffers.rate = buf.sampleRate;
-    vmax[i] = reference(buffers[i]);
-    draw();
-  }
+  await decode(shownTrack());
+  if (token !== loading) return;
   $("status").textContent = "";
   applyFFT();
+  prepareNext();
+}
+// Décodage et niveau de référence d'une piste, à la demande : au chargement, seulement la
+// piste affichée ; une autre quand on l'affiche, ou quand on la lance en mode FFT.
+const shownTrack = () => S.channel < D.audios.length ? S.channel : 0;
+function decode(i) {
+  if (!decoding[i] && raw[i]) {
+    const token = loading, p = given[D.audios[i].src];
+    decoding[i] = (p?.x ? Promise.resolve(p) : decodeTrack(raw[i])).then(r => {
+      if (token !== loading) return;
+      buffers[i] = r.x; buffers.rate = r.rate; vmax[i] = r.vmax;
+      draw();
+    });
+  }
+  return decoding[i];
+}
+async function decodeTrack(data) {
+  const buf = await actx.decodeAudioData(data.slice(0));
+  const x = buf.getChannelData(0), rate = buf.sampleRate;
+  return {x, rate, vmax: reference(x, rate)};
+}
+
+// --- Extrait suivant, préparé pendant qu'on annote celui-ci ---------------------------------
+// Python donne les fichiers du suivant (`D.next`) avant de les avoir écrits : on les guette,
+// puis on les charge, on décode la piste affichée, on calcule son niveau de référence et son
+// spectrogramme à la vue d'ouverture et, en mode FFT, le son filtré du premier lecteur.
+// `load`, `decode` et `renderSpectrogram` reprennent tout cela à l'ouverture.
+let ahead = {}, given = {}, prepToken = 0, prepTimer = null;
+const idle = () => new Promise(ok => (window.requestIdleCallback || setTimeout)(() => ok()));
+function prepSoon() { clearTimeout(prepTimer); prepTimer = setTimeout(prepareNext, 400); }
+async function waitFile(src, token) {
+  for (let k = 0; k < 300 && token === prepToken; k++) {  // 5 min au plus
+    const r = await fetch(src, {cache: "no-store"}).catch(() => null);
+    if (r?.ok) return r.arrayBuffer();
+    await new Promise(ok => setTimeout(ok, 1000));
+  }
+  return null;
+}
+async function prepareNext() {
+  const token = ++prepToken, next = D.next || [];
+  for (const [src, p] of Object.entries(ahead)) {
+    if (next.some(a => a.src === src)) continue;
+    if (p.fft) URL.revokeObjectURL(p.fft.url);
+    delete ahead[src];
+  }
+  if (!next.length || !actx) return;
+  const raws = await Promise.all(next.map(a => ahead[a.src]?.raw || waitFile(a.src, token)));
+  if (token !== prepToken || raws.some(r => !r)) return;
+  next.forEach((a, i) => { ahead[a.src] = ahead[a.src] || {raw: raws[i]}; });
+  const track = async i => {
+    const p = ahead[next[i].src];
+    if (!p.x) { await idle(); Object.assign(p, await decodeTrack(p.raw)); }
+    return p;
+  };
+  const ch = S.channel < next.length ? S.channel : 0, a = next[ch], p = await track(ch);
+  await idle();
+  if (token !== prepToken) return;
+  const v = {t0: a.start, t1: a.start + p.x.length / p.rate, f0: 0, f1: D.fview};
+  const cols = Math.max(1, Math.round(W())), rows = Math.max(1, Math.round(PH()));
+  const n = fftSize(v, p.rate), key = specKeyOf(a.src, v, cols, rows, n);
+  if (!specCache.has(key)) remember(key, paint(p.x, p.rate, a.start, p.vmax, v, cols, rows, n));
+  const fk = fftKey();
+  if (!fk) return;
+  const q = await track(0);
+  if (token !== prepToken || q.fft?.key === fk) return;
+  const y = await filtered(q.x, q.rate, Math.max(S.band[0], 1), S.band[1]);
+  if (token !== prepToken || !ahead[next[0].src]) return;
+  if (q.fft) URL.revokeObjectURL(q.fft.url);
+  q.fft = {key: fk, url: wavURL(y, q.rate)};
 }
 function mark() {
   [...$("players").children].forEach((d, j) => d.classList.toggle("playing", j === active));
@@ -573,8 +683,8 @@ function spectrum(x, center, n) {  // dB de la trame centrée sur l'échantillon
 // Haut de l'échelle de couleurs, fixe pour l'extrait et propre à chaque micro : le centile
 // 99,5 des niveaux entre 500 Hz et le haut de la vue par défaut, comme les figures de la
 // présentation (un claquement isolé n'assombrit plus tout le reste).
-function reference(x) {
-  const n = 1024, cols = 600, binHz = buffers.rate / n;
+function reference(x, rate) {
+  const n = 1024, cols = 600, binHz = rate / n;
   const k0 = Math.ceil(500 / binHz), k1 = Math.min(n / 2, Math.floor(D.fview / binHz));
   const levels = new Float32Array(cols * (k1 - k0 + 1));
   let m = 0;
@@ -585,43 +695,57 @@ function reference(x) {
   levels.sort();
   return levels[Math.floor(0.995 * (m - 1))];
 }
-function fftSize() {
-  const rate = buffers.rate, tspan = view.t1 - view.t0, fspan = view.f1 - view.f0;
+function fftSize(v, rate) {
+  const tspan = v.t1 - v.t0, fspan = v.f1 - v.f0;
   if (fspan <= 1200) return rate > 30000 ? 8192 : 4096;
   if (fspan <= 3000) return rate > 30000 ? 4096 : 2048;
   if (tspan <= 2) return rate > 30000 ? 1024 : 512;
   return rate > 30000 ? 2048 : 1024;
 }
+// Clé d'une image : la piste (son fichier), la vue (au centième, pour retrouver celle préparée
+// d'avance malgré les arrondis du décodage), la taille et les réglages.
+function specKeyOf(src, v, cols, rows, n) {
+  const t = [v.t0, v.t1, v.f0, v.f1].map(z => z.toFixed(2));
+  return [src, ...t, cols, rows, n, S.range, S.contrast].join();
+}
+function remember(key, canvas) {
+  specCache.delete(key); specCache.set(key, canvas);
+  while (specCache.size > 6) specCache.delete(specCache.keys().next().value);
+}
 function renderSpectrogram(cols, rows) {
-  const ch = buffers[S.channel] ? S.channel : 0, x = buffers[ch];  // micro 2 pas encore décodé
-  const n = fftSize(), rate = buffers.rate;
-  const start = D.audios[ch] ? D.audios[ch].start : D.t0;
-  const key = [view.t0, view.t1, view.f0, view.f1, cols, rows, n, S.range, S.contrast, ch].join();
+  const ch = shownTrack(), a = D.audios[ch], n = fftSize(view, buffers.rate);
+  const key = specKeyOf(a.src, view, cols, rows, n);
   if (key === specKey) return;
   specKey = key; specView = {...view};
-  spec.width = cols; spec.height = rows;
-  const sctx = spec.getContext("2d"), image = sctx.createImageData(cols, rows), px = image.data;
-  const binHz = rate / n, top = vmax[ch], range = S.range;
+  spec = specCache.get(key)
+    || paint(buffers[ch], buffers.rate, a.start, vmax[ch], view, cols, rows, n);
+  remember(key, spec);
+}
+function paint(x, rate, start, top, v, cols, rows, n) {
+  const out = document.createElement("canvas"); out.width = cols; out.height = rows;
+  const sctx = out.getContext("2d"), image = sctx.createImageData(cols, rows), px = image.data;
+  const binHz = rate / n, range = S.range;
   // Contraste : courbe en puissance sur l'échelle (0 = linéaire) ; le haut ne bouge pas, les
   // niveaux moyens (bruit de fond) s'assombrissent.
   const gamma = 1 + 0.35 * S.contrast, lut = new Uint8Array(256);
   for (let i = 0; i < 256; i++) lut[i] = Math.round(255 * Math.pow(i / 255, gamma));
   const binOf = new Float32Array(rows);
   for (let r = 0; r < rows; r++) {
-    binOf[r] = (view.f1 - (r + 0.5) / rows * (view.f1 - view.f0)) / binHz;
+    binOf[r] = (v.f1 - (r + 0.5) / rows * (v.f1 - v.f0)) / binHz;
   }
   for (let c = 0; c < cols; c++) {
-    const t = view.t0 + (c + 0.5) / cols * (view.t1 - view.t0);
+    const t = v.t0 + (c + 0.5) / cols * (v.t1 - v.t0);
     const db = spectrum(x, (t - start) * rate, n);
     for (let r = 0; r < rows; r++) {
       const b = binOf[r], k = Math.floor(b), f = b - k;
-      const v = k + 1 < db.length ? db[k] * (1 - f) + db[k + 1] * f : db[db.length - 1];
-      const i = Math.max(0, Math.min(255, Math.round((v - (top - range)) / range * 255)));
+      const l = k + 1 < db.length ? db[k] * (1 - f) + db[k + 1] * f : db[db.length - 1];
+      const i = Math.max(0, Math.min(255, Math.round((l - (top - range)) / range * 255)));
       const o = (r * cols + c) * 4, color = MAGMA[lut[i]];
       px[o] = color[0]; px[o + 1] = color[1]; px[o + 2] = color[2]; px[o + 3] = 255;
     }
   }
   sctx.putImageData(image, 0, 0);
+  return out;
 }
 
 // --- Vue ---------------------------------------------------------------------------------
@@ -673,13 +797,14 @@ function draw() {
   if (!D || !view) return;
   const w = canvas.clientWidth;
   ctx.fillStyle = BG; ctx.fillRect(0, 0, w, H());
-  if (buffers.length && vmax.length && settling && specView) {
+  const ready = buffers[shownTrack()] && vmax[shownTrack()] !== undefined;
+  if (ready && settling && specView) {
     ctx.save(); ctx.beginPath(); ctx.rect(M.l, M.t, W(), PH()); ctx.clip();
     ctx.imageSmoothingEnabled = true;
     const x0 = xOf(specView.t0), y0 = yOf(specView.f1);
     ctx.drawImage(spec, x0, y0, xOf(specView.t1) - x0, yOf(specView.f0) - y0);
     ctx.restore();
-  } else if (buffers.length && vmax.length) {
+  } else if (ready) {
     renderSpectrogram(Math.max(1, Math.round(W())), Math.max(1, Math.round(PH())));
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(spec, M.l, M.t, W(), PH());
@@ -988,15 +1113,27 @@ def _prepare() -> Path:
     return VIEWER_DIR
 
 
-def asset(data: bytes, suffix: str) -> str:
-    """Range `data` à côté de la page (nom = empreinte du contenu) ; chemin relatif à la page.
-    Seuls les `KEEP_ASSETS` fichiers les plus récents sont gardés."""
+def asset_src(name_key: str, suffix: str) -> str:
+    """Chemin, relatif à la page, du fichier que `asset(…, name_key=name_key)` écrira : connu
+    avant d'avoir le contenu (le navigateur peut attendre le fichier de l'extrait suivant)."""
+    return f"assets/{hashlib.sha1(name_key.encode()).hexdigest()[:20]}{suffix}"
+
+
+def asset(data: bytes, suffix: str, name_key: str | None = None) -> str:
+    """Range `data` à côté de la page (nom = empreinte du contenu, ou de `name_key`) ; chemin
+    relatif à la page. Écriture atomique : le navigateur ne voit jamais un fichier à moitié
+    écrit. Seuls les `KEEP_ASSETS` fichiers les plus récents sont gardés."""
     folder = VIEWER_DIR / "assets"
     folder.mkdir(parents=True, exist_ok=True)
-    name = hashlib.sha1(data).hexdigest()[:20] + suffix
+    if name_key is None:
+        name = hashlib.sha1(data).hexdigest()[:20] + suffix
+    else:
+        name = asset_src(name_key, suffix).removeprefix("assets/")
     path = folder / name
     if not path.exists():
-        path.write_bytes(data)
+        tmp = path.with_name(f".{name}.{threading.get_ident()}")
+        tmp.write_bytes(data)
+        tmp.replace(path)
         old = sorted(folder.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
         for stale in old[KEEP_ASSETS:]:
             stale.unlink(missing_ok=True)
@@ -1019,12 +1156,15 @@ def viewer_args(
     channel: int = 0,
     fview_hz: float = 10_000.0,
     height: int = 320,
+    next_audios: list[tuple[str, str, float]] | None = None,
 ) -> dict:
     """Arguments du composant. `audios` : (nom, chemin rendu par `asset`, début en s dans
     l'enregistrement), couvrant [t0, t1] ; `windows` : {t0, t1, label, current, candidate} ;
     `key` : identifie l'extrait (un autre extrait remet la vue et les intervalles à zéro) ;
     `labels` : (code, nom) des intervalles ; `intervals` : [début, fin, label, qualité] affichés à
-    l'ouverture de l'extrait ; `band_hz`, `channel` : réglages de départ, la première fois."""
+    l'ouverture de l'extrait ; `band_hz`, `channel` : réglages de départ, la première fois ;
+    `next_audios` : comme `audios`, pour l'extrait suivant, que le navigateur prépare pendant
+    qu'on annote celui-ci (fichiers attendus s'ils ne sont pas encore écrits)."""
     return {
         "t0": float(t0),
         "t1": float(t1),
@@ -1044,6 +1184,10 @@ def viewer_args(
         "interval_mode": bool(interval_mode),
         "channel": int(channel),
         "height": int(height),
+        "next": [
+            {"name": name, "src": src, "start": float(start)}
+            for name, src, start in next_audios or []
+        ],
     }
 
 

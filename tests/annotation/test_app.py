@@ -210,11 +210,19 @@ def test_window_mode_saves_a_label(app_config):
     assert ("bird", "léonard", "random", "Fourmilier tacheté") in [tuple(r) for r in rows]
 
 
-def test_sending_without_an_annotator_is_refused(app_config):
+def test_sending_without_an_annotator_is_impossible(app_config):
+    """Bouton grisé : un envoi refusé viderait le formulaire et ferait perdre le commentaire."""
     at = AppTest.from_file(APP, default_timeout=60).run()
-    _button(at, "Envoyer l'extrait ▶").click().run()
-    assert any("annotateur" in e.value for e in at.error)
+    assert _button(at, "Envoyer l'extrait ▶").disabled
     assert _spans(app_config) == ([], [])
+
+
+def test_the_annotator_is_remembered_on_this_machine(app_config):
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.sidebar.text_input[0].input("léonard").run()
+    again = AppTest.from_file(APP, default_timeout=60).run()  # nouvelle session
+    assert again.sidebar.text_input[0].value == "léonard"
+    assert not _button(again, "Envoyer l'extrait ▶").disabled
 
 
 def test_a_queue_is_drawn_in_the_app_and_opened(app_config):

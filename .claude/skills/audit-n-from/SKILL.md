@@ -1,12 +1,12 @@
 ---
 name: audit-n-from
-description: Audit du dépôt Grenouille en lecture seule sur une plage de commits choisie, avec un nombre de sous-agents choisi — /audit-n-from <N> <de> [<à>] [sur <chemin>], ex. « /audit-n-from 2 30 34 », « /audit-n-from 0 dernier-audit », « /audit-n-from 8 debut ». Chaque constat vérifié dans le code, corrections seulement sur accord, rapport documentation/audit-<date>.md. Lancé uniquement par Léonard.
+description: Audit du dépôt Grenouille en lecture seule sur une plage de commits choisie, avec un nombre de sous-agents choisi — /audit-n-from <N> <de> [<à>] [sur <chemin>], ex. « /audit-n-from 2 30 34 », « /audit-n-from 0 dernier-audit », « /audit-n-from 8 debut ». Chaque constat vérifié dans le code, corrections seulement sur accord, rapport documentation/audits/audit-<date>.md. Lancé uniquement par Léonard.
 disable-model-invocation: true
 ---
 
 # Audit sur une plage de commits
 
-Modèle du rapport : `documentation/audit-28-septembre.md` (même ton, mêmes sections).
+Modèle du rapport : `documentation/audits/audit-28-septembre.md` (même ton, mêmes sections).
 
 ## 0. Arguments : jamais de valeur par défaut
 
@@ -34,7 +34,7 @@ Résoudre les bornes :
 - `de` est inclus : la plage est `<parent du commit de>..<commit à>` ;
 - `à` absent = le dernier commit de `origin/main` ;
 - date `de` = premier commit de main de ce jour ou après ; date `à` = dernier de ce jour ou avant ;
-- `dernier-audit` = le commit noté en tête du dernier `documentation/audit-*.md` ;
+- `dernier-audit` = le commit noté en tête du dernier `documentation/audits/audit-*.md` (ligne « Plage : … ») ;
 - `debut` = tout le dépôt tel qu'il est à la borne `à` (pas de diff).
 
 Les fichiers se lisent dans leur état à la borne `à`, dans un arbre de travail à part
@@ -86,7 +86,7 @@ Les tests (`tests/`) vont avec l'axe du code qu'ils testent.
 
 ## 4. Rapport
 
-`documentation/audit-<jour>-<mois en lettres>.md` :
+`documentation/audits/audit-<jour>-<mois en lettres>.md` :
 
 ```
 # Audit du dépôt — JJ/MM/AAAA
@@ -98,6 +98,14 @@ Tests (réussis / échoués / sautés), ruff.
 ## 2. Erreurs trouvées, non corrigées    Point | Pourquoi
 ## 3. À savoir                           résultats publiés à relire, modèles à réapprendre…
 ```
+
+Le rapport note en tête (« Plage : … ») le hash du dernier commit de main audité, pour que
+`dernier-audit` se résolve sans fouille.
+
+Ne pas signaler comme code mort : `blanci/heads/finetune.py`, `blanci/heads/detectors/distilled.py`
+et `homemade.py`, les aides R61–R63 et `distillation_loss` de `regularization/torch_training.py`,
+`blanci/embedding/encoders/export.py` (ONNX) : emplacements gardés pour plus tard, marqués EN
+ATTENTE.
 
 Français, phrases courtes, virgule décimale. Pas de renvoi à `DECISIONS.md`. Dire en une
 ligne si un rapport de benchmark ou le tableau de bord (`/tableau-de-bord`) est à régénérer.

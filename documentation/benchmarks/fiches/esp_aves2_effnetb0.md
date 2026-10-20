@@ -19,7 +19,7 @@ audioset 0,92 : au-dessus de 0,85, tuyau sain.
 **Autres têtes** (moyenne des 5 espèces, minute, par site / poolée ; bio, all, audioset) :
 logistic+R37=glmm 0,59/0,50, 0,59/0,42, 0,50/0,23 ; lda_shrunk 0,51/0,53, 0,51/0,50, 0,50/0,34 ;
 simple_prototype 0,49/0,31, 0,42/0,26, 0,27/0,13. Niveau fenêtre et courbe d'amorçage :
-`resultats/global/esp_aves2_effnetb0_*` (branche `resultats-anuraset-07`). Pas de tête sur jetons.
+`resultats/global/esp_aves2_effnetb0_*` (historique : `git show 6f2ff13^:resultats/global/<fichier>`). Pas de tête sur jetons.
 
 **Lecture** : bio et all à égalité en AP par site (0,59), audioset en dessous (0,50), surtout en
 poolée (0,29). 2 à 3 sites par espèce, pas de test apparié (rapport global). CNN : « en retrait en

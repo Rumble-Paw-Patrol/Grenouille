@@ -37,6 +37,6 @@ comme le prévoit le n° 151 ; pas « en retrait ». Non libre : à comparer au 
 livré (licence à confirmer).
 
 ## Anomalies
-Sorties sur `resultats-anuraset-audioprotopnet` (ex-`resultats-anuraset-07`, supprimée au n° 164) ;
+Sorties `resultats/global/audioprotopnet_*` dans l'historique (`git show 443f889:resultats/global/<fichier>`) ;
 stock sur `donnees-anuraset-audioprotopnet`. Courbe d'amorçage des têtes sur jetons : non faite.
 Un seul site porte l'écart significatif (DENMIN) ; PITAZU reste bas (0,60) pour toutes les têtes.

@@ -44,7 +44,7 @@ chaine:
     groupe: modele
     module: blanci/heads
     tests: tests/heads
-    commandes: [train, heads, heads-curve, search]
+    commandes: [train, heads, heads-curve]
     etat: fait
     suite: [fusion]
   - id: fusion
@@ -72,7 +72,7 @@ chaine:
     groupe: annotation
     module: blanci/annotation/selection.py
     tests: tests/annotation
-    commandes: [queue, select, candidates]
+    commandes: [select, candidates]
     etat: fait
     suite: [annotation]
   - id: annotation

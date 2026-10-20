@@ -57,7 +57,10 @@ def is_excluded(qc: Any, keys: tuple[str, ...] = EXCLUDING_FLAGS) -> bool:
 
 
 def positive_recordings(con: sqlite3.Connection) -> set[str]:
-    """Enregistrements dont au moins une fenêtre a pour dernier label un positif A. blanci."""
+    """Enregistrements où A. blanci a été entendu : une fenêtre a pour dernier label un
+    positif, ou un intervalle positif est encore valable (annotation par intervalles, n° 182)."""
+    from blanci.inputs.dataset import _positive_intervals, load_spans
+
     marks = ", ".join("?" * len(POSITIVE_LABELS))
     rows = con.execute(
         f"""SELECT DISTINCT w.recording_id FROM labels l JOIN windows w USING (window_id)
@@ -65,7 +68,8 @@ def positive_recordings(con: sqlite3.Connection) -> set[str]:
               AND l.label IN ({marks})""",
         POSITIVE_LABELS,
     )
-    return {row[0] for row in rows}
+    heard = set(_positive_intervals(*load_spans(con))["recording_id"])
+    return {row[0] for row in rows} | heard
 
 
 def _welch(x: np.ndarray, sr: int, nperseg: int = 2048) -> tuple[np.ndarray, np.ndarray]:
@@ -265,7 +269,11 @@ def check_recordings(
             continue
         merged = merge_audio_flags(con, rec.recording_id, flags)
         report["checked"] += 1
-        report["excluded"] += is_excluded(merged) and rec.recording_id not in protected
+        # `in_bag` n'est ici qu'un candidat : seule la règle des suites (`apply_audio_flags`,
+        # n° 194) le confirme. Il n'est pas compté parmi les écartés.
+        report["excluded"] += (
+            is_excluded(merged | {"in_bag": False}) and rec.recording_id not in protected
+        )
         if n % commit_every == 0:
             con.commit()
         if n % progress_every == 0:
@@ -351,23 +359,48 @@ ANNOTATION_FLAGS = {"artefact_in_bag": "in_bag", "rain": "rain"}
 CONDITION_FLAGS = {"rain": "rain"}
 
 
+def _current_spans(con: sqlite3.Connection) -> list[tuple[str, list[str], str | None]]:
+    """(enregistrement, classes entendues avec le label hors intervalles, conditions) de chaque
+    extrait encore valable : un extrait réécouté plus tard, entièrement couvert par le nouvel
+    extrait, est remplacé (comme `dataset.current_intervals`)."""
+    rows = con.execute(
+        "SELECT span_id, recording_id, start_s, end_s, other_label, classes, conditions "
+        "FROM spans ORDER BY span_id"
+    ).fetchall()
+    by_recording: dict[str, list[tuple]] = defaultdict(list)
+    for row in rows:
+        by_recording[row[1]].append(tuple(row))
+    out = []
+    for span_id, rid, start, end, other, classes, conditions in (tuple(r) for r in rows):
+        if any(
+            later[0] > span_id and later[2] <= start + 1e-6 and later[3] >= end - 1e-6
+            for later in by_recording[rid]
+        ):
+            continue
+        heard = [other, *(json.loads(classes) if classes else [])]
+        out.append((rid, heard, conditions))
+    return out
+
+
 def annotation_flags(
     con: sqlite3.Connection, recording_ids: Iterable[str] | None = None
 ) -> dict[str, list[str]]:
-    """{enregistrement annoté : drapeaux posés à l'écoute} (liste vide : rien de signalé)."""
+    """{enregistrement annoté : drapeaux posés à l'écoute} (liste vide : rien de signalé).
+    Lit les derniers labels de fenêtres et les extraits encore valables (classes cochées,
+    label hors intervalles, étiquettes du commentaire, n° 182)."""
     wanted = None if recording_ids is None else set(recording_ids)
     found: dict[str, set[str]] = defaultdict(set)
     rows = con.execute(
         """SELECT w.recording_id, l.label, l.conditions
            FROM labels l JOIN windows w USING (window_id)
            WHERE l.label_id IN (SELECT MAX(label_id) FROM labels GROUP BY window_id)"""
-    )
-    for rid, label, conditions in rows:
+    ).fetchall()
+    heard = [(rid, [label], conditions) for rid, label, conditions in rows]
+    for rid, labels, conditions in heard + _current_spans(con):
         if wanted is not None and rid not in wanted:
             continue
         flags = found[rid]  # annoté, même sans drapeau
-        if label in ANNOTATION_FLAGS:
-            flags.add(ANNOTATION_FLAGS[label])
+        flags.update(ANNOTATION_FLAGS[label] for label in labels if label in ANNOTATION_FLAGS)
         tags = json.loads(conditions).get("tags", []) if conditions else []
         flags.update(CONDITION_FLAGS[t] for t in tags if t in CONDITION_FLAGS)
     return {rid: sorted(flags) for rid, flags in found.items()}
@@ -376,8 +409,9 @@ def annotation_flags(
 def apply_annotation_flags(
     con: sqlite3.Connection, recording_ids: Iterable[str] | None = None
 ) -> dict[str, int]:
-    """Réécrit la clé `annotated` d'après les derniers labels (tous les enregistrements, ou
-    ceux donnés). Un label corrigé retire le drapeau qu'il avait posé. Renvoie le nombre
+    """Réécrit la clé `annotated` d'après les derniers labels et les extraits écoutés (tous
+    les enregistrements, ou ceux donnés). Un label corrigé, ou un extrait réécouté, retire le
+    drapeau qu'il avait posé. Renvoie le nombre
     d'enregistrements annotés et, par drapeau, le nombre d'enregistrements signalés."""
     wanted = None if recording_ids is None else set(recording_ids)
     found = annotation_flags(con, wanted)
