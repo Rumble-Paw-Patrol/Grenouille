@@ -25,7 +25,7 @@ en_cours:
   - titre: Extraction des embeddings des modèles de fondation
     etat: en_cours
     detail: >-
-      Étape très longue : 61h pour Perch 2.0 sur CPU intel core i5, BirdNET 2.4 encore en cours (estimé à 25h)
+      Étape très longue : 61h pour Perch 2.0 sur CPU intel core i5, 52h cumulées pour BirdNET 2.4 (terminé le 11/10 : 95 214 enregistrements, environ 42 fenêtres/s) ; BirdNET 3.0 en cours (environ 10 fenêtres/s)
     suite: Une fois l'encodage et l'annotation terminée, entraînement des heads
   - titre: Benchmark des encodeurs et têtes sur mon jeu de données
     etat: a_venir

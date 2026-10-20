@@ -4,5 +4,20 @@
   "heures": 61,
   "source": "mesure de Léonard sur l'i5 (en_cours.yaml)",
   "nom": "Perch 2.0"
+ },
+ "birdnet": {
+  "statut": "fini",
+  "heures": 52,
+  "source": "somme des passes de rapports/embed_birdnet.log (7,5 M fenêtres à ~42 fenêtres/s, 18 passes dont des relances après plantage), terminé le 11/10/2026",
+  "nom": "BirdNET 2.4"
+ },
+ "birdnet_v3": {
+  "nom": "BirdNET 3.0",
+  "statut": "en_cours",
+  "enregistrements": 33774,
+  "encodables": 95214,
+  "heures": 71.9,
+  "s_par_enregistrement": 7.66,
+  "source": "base locale, 2026-10-19"
  }
 }

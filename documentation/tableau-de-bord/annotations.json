@@ -1,26 +1,224 @@
 {
  "compte": {
-  "entrainement": 1,
-  "positifs_entrainement": 0,
+  "entrainement": 40,
+  "positifs_entrainement": 7,
   "evaluation": 0,
   "positifs_evaluation": 0
  },
  "sites": [
   [
+   "CDR",
+   "entrainement",
+   7,
+   2
+  ],
+  [
    "Kaw",
    "entrainement",
+   4,
+   0
+  ],
+  [
+   "Mataroni",
+   "entrainement",
+   18,
+   3
+  ],
+  [
+   "Molokoi",
+   "entrainement",
+   4,
+   2
+  ],
+  [
+   "PatawaEst",
+   "entrainement",
+   2,
+   0
+  ],
+  [
+   "PatawaOuest",
+   "entrainement",
    1,
+   0
+  ],
+  [
+   "Tresor",
+   "entrainement",
+   4,
    0
   ]
  ],
  "micros": [
   [
+   "CDR",
+   "2LA03021",
+   1,
+   1
+  ],
+  [
+   "CDR",
+   "2LA04115",
+   2,
+   0
+  ],
+  [
+   "CDR",
+   "2LA04185",
+   1,
+   0
+  ],
+  [
+   "CDR",
+   "2LA05206",
+   1,
+   0
+  ],
+  [
+   "CDR",
+   "2LA05244",
+   1,
+   0
+  ],
+  [
+   "CDR",
+   "2MA10210",
+   1,
+   1
+  ],
+  [
    "Kaw",
    "SMA13599",
+   4,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA02921",
    1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA03410",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA03546",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA03563",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA03571",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA03680",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA04159",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA04186",
+   1,
+   1
+  ],
+  [
+   "Mataroni",
+   "2LA04219",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA04336",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA04445",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA04513",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA04530",
+   1,
+   1
+  ],
+  [
+   "Mataroni",
+   "2LA05189",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "2LA05247",
+   1,
+   0
+  ],
+  [
+   "Mataroni",
+   "SMA13417",
+   3,
+   1
+  ],
+  [
+   "Molokoi",
+   "SMA14163",
+   4,
+   2
+  ],
+  [
+   "PatawaEst",
+   "2MA08067",
+   1,
+   0
+  ],
+  [
+   "PatawaEst",
+   "2MA10210",
+   1,
+   0
+  ],
+  [
+   "PatawaOuest",
+   "2MA07942",
+   1,
+   0
+  ],
+  [
+   "Tresor",
+   "SMA13496",
+   4,
    0
   ]
  ],
- "compte_le": "2026-10-08",
+ "compte_le": "2026-10-19",
  "source": "base locale"
 }
