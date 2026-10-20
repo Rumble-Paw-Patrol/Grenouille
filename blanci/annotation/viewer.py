@@ -183,7 +183,7 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
     <span class="lbl">Qualité</span><span class="seg medailles" id="qbtns"></span></span>
   <span class="group">
     <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
-    <label><input type="checkbox" id="follow" checked> Suivre</label>
+    <label><input type="checkbox" id="follow"> Suivre</label>
   </span>
   <span id="status"></span>
 </div>
@@ -358,30 +358,42 @@ function swapSource(el, url, key) {
     el.currentTime = t; if (playing) el.play();
   }, {once: true});
 }
-const fftKey = () => S.bandOnly && S.slope === "fft" ? S.band.join("-") : "";
+// Bande filtrée d'avance (mode FFT), case « n'écouter qu'elle » cochée ou non : la cocher
+// bascule aussitôt sur un son déjà calculé. `fftKey` : le son à faire jouer.
+const fftWant = () => S.slope === "fft" ? S.band.join("-") : "";
+const fftKey = () => S.bandOnly ? fftWant() : "";
+const FILTERING = "filtrage FFT…";
+function filteringDone() {
+  if ($("status").textContent === FILTERING) $("status").textContent = "";
+}
 function applyFFT() {
-  const key = fftKey(), i = active, el = players[i];
-  if (!el || el._key === key || el._busy === key) return;
-  if (!key) { swapSource(el, el._orig, ""); return; }
-  if (el._fft?.key === key) { swapSource(el, el._fft.url, key); return; }
+  const key = fftKey(), want = fftWant(), i = active, el = players[i];
+  if (!el) return;
+  if (el._key !== key) {
+    if (!key) swapSource(el, el._orig, "");
+    else if (el._fft?.key === key) swapSource(el, el._fft.url, key);
+  }
+  if (!want || el._key === want || el._fft?.key === want) return;
+  if (key) $("status").textContent = FILTERING;  // on l'attend pour écouter
+  if (el._busy === want) return;
   if (!buffers[i]) { decode(i)?.then(applyFFT); return; }
-  $("status").textContent = "filtrage FFT…"; el._busy = key;
+  el._busy = want;
   const token = loading, rate = buffers.rate;
   filtered(buffers[i], rate, Math.max(S.band[0], 1), S.band[1]).then(out => {
-    if (el._busy === key) el._busy = null;
+    if (el._busy === want) el._busy = null;
     if (token !== loading) return;
-    // Réglages changés pendant le filtrage (case décochée, autre bande, autre lecteur) : le son
-    // filtré est gardé pour plus tard, mais le lecteur n'y bascule pas.
-    if (fftKey() !== key || active !== i) {
+    // Case décochée, autre bande, autre lecteur : le son filtré est gardé pour plus tard, mais
+    // le lecteur n'y bascule pas.
+    if (fftKey() !== want || active !== i) {
       if (!el._fft || el._fft.key !== el._key) {  // sans libérer le son en cours de lecture
         if (el._fft) URL.revokeObjectURL(el._fft.url);
-        el._fft = {key, url: wavURL(out, rate)};
+        el._fft = {key: want, url: wavURL(out, rate)};
       }
-      if (!el._busy) $("status").textContent = "";
+      if (!el._busy) filteringDone();
       return;
     }
-    swapSource(el, wavURL(out, rate), key);
-    $("status").textContent = "";
+    swapSource(el, wavURL(out, rate), want);
+    filteringDone();
   });
 }
 // La FFT tourne dans un fil à part (Web Worker) : l'interface ne gèle pas pendant le filtrage,
@@ -419,7 +431,7 @@ function setBand(lo, hi) {
 $("lo").onchange = () => setBand(+$("lo").value * 1000, S.band[1]);
 $("hi").onchange = () => setBand(S.band[0], +$("hi").value * 1000);
 $("bandonly").onchange = () => {
-  S.bandOnly = $("bandonly").checked; applyAudio(); saveSettings();
+  S.bandOnly = $("bandonly").checked; applyAudio(); applyFFT(); saveSettings();
 };
 $("slope").onchange = () => {
   const v = $("slope").value; S.slope = v === "fft" ? v : +v; applyAudio(); saveSettings();
@@ -636,7 +648,7 @@ async function prepareNext() {
   const cols = Math.max(1, Math.round(W())), rows = Math.max(1, Math.round(PH()));
   const n = fftSize(v, p.rate), key = specKeyOf(a.src, v, cols, rows, n);
   if (!specCache.has(key)) remember(key, paint(p.x, p.rate, a.start, p.vmax, v, cols, rows, n));
-  const fk = fftKey();
+  const fk = fftWant();
   if (!fk) return;
   const q = await track(0);
   if (token !== prepToken || q.fft?.key === fk) return;
