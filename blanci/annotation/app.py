@@ -364,9 +364,24 @@ def _follow(key: str, widget: str) -> None:
     st.session_state[key] = st.session_state[widget]
 
 
-def _candidate_strip(queue, done, chosen, key, offset_h) -> None:
+def _advance(con, queue, who, pos, skip_done, key, end) -> None:
+    """Après une réponse : candidat suivant, ou fin de file si tout est écouté."""
+    done = progress(con, queue, who)
+    st.session_state[key] = next_position(done, pos, skip_done)
+    st.session_state[end] = bool(done.notna().all())
+
+
+def _pick(key: str, widget: str, end: str) -> None:
+    """Candidat choisi dans la liste : on le rouvre, même dans une file terminée."""
+    if st.session_state[widget] is not None:
+        st.session_state[key] = st.session_state[widget]
+        st.session_state[end] = False
+
+
+def _candidate_strip(queue, done, chosen, key, end, offset_h) -> None:
     """Liste déroulante des candidats de la file ouverte, sous la liste des files : numéro dans
-    la file entière, site, micro, heure, et ✓ label s'il a déjà été écouté."""
+    la file entière, site, micro, heure, et ✓ label s'il a déjà été écouté. File terminée
+    (`end`) : aucun candidat n'est sélectionné, n'importe lequel se rouvre."""
     rows = [
         f"{i + 1}. {site} · {mic} · {local_time(start, offset_h)} · {offset:.0f} s"
         + (f" · ✓ {NAMES.get(heard, heard)}" if heard else "")
@@ -382,14 +397,15 @@ def _candidate_strip(queue, done, chosen, key, offset_h) -> None:
         )
     ]
     widget = f"strip::{chosen}"
-    st.session_state[widget] = st.session_state[key]
+    st.session_state[widget] = None if st.session_state.get(end) else st.session_state[key]
     st.selectbox(
         f"Candidats de la file ({int(done.notna().sum())} / {len(queue)} écoutés)",
         range(len(queue)),
         format_func=rows.__getitem__,
         key=widget,
-        on_change=_follow,
-        args=(key, widget),
+        on_change=_pick,
+        args=(key, widget, end),
+        placeholder="Choisir un candidat à réécouter",
     )
 
 
@@ -775,13 +791,24 @@ def main() -> None:
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
 
     key = f"pos::{chosen}"
+    end = f"end::{chosen}"  # file finie : plus aucun extrait affiché, jusqu'au choix d'un candidat
     if key not in st.session_state:  # ouverture de la file : premier candidat pas écouté
         st.session_state[key] = max(next_position(done, -1, True), 0)
+        st.session_state[end] = bool(done.notna().all())
     pos = min(max(int(st.session_state[key]), 0), n - 1)
     st.session_state[key] = pos
+    finished = bool(done.notna().all())
+    if not finished:
+        st.session_state[end] = False
     with candidate_slot:
-        _candidate_strip(queue, done, chosen, key, offset_h)
-    if done.notna().all():
+        _candidate_strip(queue, done, chosen, key, end, offset_h)
+    if finished and st.session_state.get(end):
+        st.success(
+            "File terminée : tous les candidats ont été écoutés. Pour en réécouter un, le "
+            "choisir dans la liste des candidats (panneau de gauche)."
+        )
+        return
+    if finished:
         st.success("File terminée : tous les candidats ont été écoutés.")
 
     candidate = queue.iloc[pos].to_dict()
@@ -904,7 +931,7 @@ def main() -> None:
             channel,
             multiclass,
         ):
-            st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
+            _advance(con, queue, who, pos, skip_done, key, end)
             st.rerun()
     else:
         offset, dur = windows[w]
@@ -940,7 +967,7 @@ def main() -> None:
             if w < len(windows) - 1:
                 st.session_state[wkey] = w + 1
             else:
-                st.session_state[key] = next_position(progress(con, queue, who), pos, skip_done)
+                _advance(con, queue, who, pos, skip_done, key, end)
             st.rerun()
 
     nav = st.columns(2)
