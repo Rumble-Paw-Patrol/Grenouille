@@ -93,7 +93,7 @@ chaine:
 # commande de la CLI absente d'ici et de la chaîne est signalée comme nouvelle.
 commandes_hors_chaine: [agreement, anuraset benchmark, anuraset campaign, anuraset heads,
   anuraset prepare, anuraset profile, baselines, benchmark-all, check-grid, cluster,
-  cluster-label, cluster-status, detector-bench, export-labels, pca, prevalence,
+  cluster-label, cluster-status, detector-bench, export-labels, import-labels, pca, prevalence,
   qc-calibrate, sources, throughput, upstream-bench]
 
 # Temps d'encodage du corpus ONF : les encodeurs suivis par le tableau de bord. La durée se lit
@@ -103,6 +103,7 @@ temps_encodage:
   encodeurs: [[perch_v2, Perch 2.0], [birdnet, BirdNET 2.4], [birdnet_v3, BirdNET 3.0], [audioprotopnet, AudioProtoPNet]]
   connus:
     perch_v2: {statut: fini, heures: 61, source: "mesure de Léonard sur l'i5 (en_cours.yaml)"}
+    birdnet: {statut: fini, heures: 52, source: "somme des passes de rapports/embed_birdnet.log (7,5 M fenêtres à ~42 fenêtres/s, 18 passes dont des relances après plantage), terminé le 11/10/2026"}
 
 # Cibles du plan d'annotation v1 ; l'avancement est compté dans data/db/blanci.sqlite.
 annotation_cibles:
