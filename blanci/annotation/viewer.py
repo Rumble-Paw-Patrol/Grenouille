@@ -368,8 +368,18 @@ function applyFFT() {
   $("status").textContent = "filtrage FFT…"; el._busy = key;
   const token = loading, rate = buffers.rate;
   filtered(buffers[i], rate, Math.max(S.band[0], 1), S.band[1]).then(out => {
-    el._busy = null;
+    if (el._busy === key) el._busy = null;
     if (token !== loading) return;
+    // Réglages changés pendant le filtrage (case décochée, autre bande, autre lecteur) : le son
+    // filtré est gardé pour plus tard, mais le lecteur n'y bascule pas.
+    if (fftKey() !== key || active !== i) {
+      if (!el._fft || el._fft.key !== el._key) {  // sans libérer le son en cours de lecture
+        if (el._fft) URL.revokeObjectURL(el._fft.url);
+        el._fft = {key, url: wavURL(out, rate)};
+      }
+      if (!el._busy) $("status").textContent = "";
+      return;
+    }
     swapSource(el, wavURL(out, rate), key);
     $("status").textContent = "";
   });
@@ -1134,10 +1144,21 @@ def asset(data: bytes, suffix: str, name_key: str | None = None) -> str:
         tmp = path.with_name(f".{name}.{threading.get_ident()}")
         tmp.write_bytes(data)
         tmp.replace(path)
-        old = sorted(folder.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+        old = sorted(  # sans les fichiers en cours d'écriture (« . ») d'un autre fil
+            (p for p in folder.iterdir() if not p.name.startswith(".")),
+            key=_mtime,
+            reverse=True,
+        )
         for stale in old[KEEP_ASSETS:]:
             stale.unlink(missing_ok=True)
     return f"assets/{name}"
+
+
+def _mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except FileNotFoundError:  # effacé entre-temps par un autre fil
+        return 0.0
 
 
 _component = None

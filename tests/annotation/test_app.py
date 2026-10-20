@@ -145,7 +145,11 @@ def test_intervals_are_drawn_on_the_whole_recording_and_saved(app_config):
     )
     assert json.loads(classes) == ["bird", "blanci", "blanci_uncertain"]
     assert intervals == [(span_id, 4.0, 5.5, "blanci"), (span_id, 8.0, 8.4, "blanci_uncertain")]
+    # File terminée : plus aucun extrait affiché, jusqu'à ce qu'on rouvre un candidat.
     assert any("File terminée" in s.value for s in at.success)
+    assert not at.subheader and not any(c.value.startswith("Candidat ") for c in at.caption)
+    next(s for s in at.sidebar.selectbox if s.label.startswith("Candidats")).select(0).run()
+    assert not at.exception
     assert "déjà écouté : A. blanci" in _caption(at)  # le candidat (3–6 s) touche 4–5,5 s
 
 
