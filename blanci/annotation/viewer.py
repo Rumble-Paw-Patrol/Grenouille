@@ -1134,10 +1134,21 @@ def asset(data: bytes, suffix: str, name_key: str | None = None) -> str:
         tmp = path.with_name(f".{name}.{threading.get_ident()}")
         tmp.write_bytes(data)
         tmp.replace(path)
-        old = sorted(folder.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+        old = sorted(  # sans les fichiers en cours d'écriture (« . ») d'un autre fil
+            (p for p in folder.iterdir() if not p.name.startswith(".")),
+            key=_mtime,
+            reverse=True,
+        )
         for stale in old[KEEP_ASSETS:]:
             stale.unlink(missing_ok=True)
     return f"assets/{name}"
+
+
+def _mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except FileNotFoundError:  # effacé entre-temps par un autre fil
+        return 0.0
 
 
 _component = None
