@@ -542,7 +542,9 @@ def select_candidates(
 
 
 def queue_dir(cfg: dict) -> Path:
-    """`paths.reports/files/` : une file par dossier."""
+    """`paths.queues` (une file par dossier), à défaut `paths.reports/files/`."""
+    if cfg["paths"].get("queues"):
+        return config_path(cfg, "queues")
     return config_path(cfg, "reports") / "files"
 
 

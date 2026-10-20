@@ -9,6 +9,7 @@ paths:
   models: data/models
   frozen_test: data/frozen_test        # jeu gelé, lecture seule
   reports: data/reports
+  queues:                           # files d'écoute ; vide = data/reports/files (config/local.yaml)
   exports: data/exports             # extraits audio pour un outil externe (Raven, Audacity…)
 
 audio:
@@ -18,6 +19,21 @@ audio:
   # Mesuré sur 91 enregistrements (DECISIONS n° 50) : deux micros distincts, même lisibilité
   # des notes d'A. blanci (écart médian +0,2 dB), mais le micro à 18 dB sature 3 fois plus.
   channel: 0
+  # Dossiers renommés à la copie sur les disques du stage (scripts/02 : BLANCI_2023-24,
+  # scripts/04 : BLANCI_2025-26). La base garde le chemin d'origine (disque Biophonia) ;
+  # l'annotation cherche aussi l'enregistrement sous le nouveau nom.
+  renamed:
+    "Projet Phénologie blanci/Premier relevé_décembre 2023": audio/R1_2023-12_decembre
+    "Projet Phénologie blanci/Second relevé_février 2024": audio/R2_2024-02_fevrier
+    "Projet Phénologie blanci/Troisième relevé_avril 2024": audio/R3_2024-04_avril
+    "Projet Phénologie blanci/Quatrième relevé_juin 2024": audio/R4_2024-06_juin
+    "Projet Phénologie blanci/Cinquième relevé_septembre 2024": audio/R5_2024-09_septembre
+    "Projet Phénologie blanci/Sixième relevé_novembre 2024": audio/R6_2024-11_novembre
+    "Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025": audio/R1_2025-12_CDR
+    "Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026": audio/R2_2025-12_Patawa
+    "Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026": audio/R3_2026-01_Mataroni
+    "Projet blanci 2025/RELEVE 5 RNRT - 9-16 fev 2026": audio/R5_2026-02_RNRT
+    "Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026": audio/R6_2026-02_PatawaEst
 
 recorder:
   # Utilisé seulement si l'en-tête GUANO du WAV est absent ou sans fuseau (toujours en FLAC).

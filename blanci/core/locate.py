@@ -84,14 +84,29 @@ def candidate_roots(raw: Path | None, extra: list[Path] = ()):
     yield from fresh(child for disk in disks for child in _children(disk))
 
 
-def locate(rel: str, raw: Path | None, extra: list[Path] = ()) -> Path | None:
-    """Chemin complet de l'enregistrement `rel` (relatif, séparateurs POSIX), ou None."""
+def variants(rel: str, renamed: dict[str, str] | None = None) -> list[str]:
+    """`rel`, puis le même chemin sous chaque nom de dossier qui a remplacé le sien à la copie
+    sur un disque du stage (`audio.renamed`)."""
     rel = str(rel).replace("\\", "/")
+    out = [rel]
+    for old, new in (renamed or {}).items():
+        old = old.strip("/")
+        if rel.startswith(old + "/"):
+            out.append(new.strip("/") + rel[len(old) :])
+    return out
+
+
+def locate(
+    rel: str, raw: Path | None, extra: list[Path] = (), renamed: dict[str, str] | None = None
+) -> Path | None:
+    """Chemin complet de l'enregistrement `rel` (relatif, séparateurs POSIX), ou None."""
+    names = variants(rel, renamed)
     for root in candidate_roots(raw, extra):
-        full = root / rel
-        if full.is_file():
-            if root in _FOUND:
-                _FOUND.remove(root)
-            _FOUND.insert(0, root)
-            return full
+        for name in names:
+            full = root / name
+            if full.is_file():
+                if root in _FOUND:
+                    _FOUND.remove(root)
+                _FOUND.insert(0, root)
+                return full
     return None

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import perf_counter
@@ -30,6 +31,7 @@ import pandas as pd
 from blanci.core.ahead import ahead as read_ahead
 from blanci.core.audio import cut_windows, load_audio, resample
 from blanci.core.db import utc_now, window_id_for
+from blanci.core.locate import mounted_disks, variants
 from blanci.embedding.encoders.base import Encoder, stock_id
 from blanci.embedding.grid import hop_for_overlap, overlap_of, window_grid
 from blanci.embedding.store import GATED, EmbeddingStore
@@ -183,6 +185,16 @@ def _store_logits(
     )
 
 
+def _local_disks() -> list[Path]:
+    """Disques branchés sans les lecteurs réseau : un fichier absent y coûte une seconde."""
+    disks = mounted_disks()
+    if sys.platform != "win32":
+        return disks
+    import ctypes
+
+    return [d for d in disks if ctypes.windll.kernel32.GetDriveTypeW(str(d)) != 4]  # 4 : réseau
+
+
 def embed_recordings(
     con: sqlite3.Connection,
     encoder: Encoder,
@@ -197,6 +209,7 @@ def embed_recordings(
     gates: Upstream | None = None,
     ahead: int = 2,
     resample: str = "recording",
+    renamed: dict[str, str] | None = None,
 ) -> EmbedReport:
     """Encode les enregistrements. Avec `qc_thresholds`, l'audio lu sert aussi au contrôle
     audio de chaque enregistrement qui ne l'a pas encore eu (`blanci qc` le fait d'avance) ;
@@ -217,7 +230,9 @@ def embed_recordings(
     ne se comparent pas aux siens (DECISIONS n° 143).
 
     `ahead` : enregistrements lus et contrôlés d'avance par le fil de lecture (0 : aucun).
-    `resample` : voir `resample_mode` ; rangé avec le stock, qui refuse d'en changer."""
+    `resample` : voir `resample_mode` ; rangé avec le stock, qui refuse d'en changer.
+    `renamed` (`audio.renamed`) : l'audio est cherché sous `raw_root` puis sur les disques branchés,
+    sous son chemin d'origine ou le nom que lui a donné la copie sur un disque du stage."""
     eid = stock_id(encoder, overlap)
     if gates is not None and gates.gates:
         eid = f"{eid}+{gates.gate_tag()}"
@@ -237,10 +252,23 @@ def embed_recordings(
     began = perf_counter()
     recordings = recordings.assign(month=recordings["start_utc"].map(month_of))
 
+    # Racines cherchées une fois pour toutes : `locate` reparcourt les disques à chaque fichier
+    # absent (disque non branché), ce qui arrête l'encodage.
+    roots = [Path(raw_root), *(d for d in _local_disks() if d != Path(raw_root))]
+
+    def find(path: str) -> Path:
+        names = variants(path, renamed)
+        for root in roots:
+            for name in names:
+                if (root / name).is_file():
+                    roots.insert(0, roots.pop(roots.index(root)))
+                    return root / name
+        return Path(raw_root) / path
+
     def prepare(rec: Any) -> _Audio:
         """Fil de lecture : ce qui se calcule sur le signal sans la base ni l'encodeur."""
         try:
-            wav, sr = load_audio(Path(raw_root) / rec.path, channel)
+            wav, sr = load_audio(find(rec.path), channel)
         except Exception:  # fichier illisible : déjà signalé à l'inventaire
             return _Audio(failed=True)
         audio = _Audio(wav, sr)

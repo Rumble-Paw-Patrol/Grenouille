@@ -35,6 +35,13 @@ def test_windows_separators_and_missing_file(tmp_path):
     assert loc.locate("rien/du/tout.wav", tmp_path) is None
 
 
+def test_found_under_the_renamed_folder(tmp_path):
+    renamed = {"Projet/Relevé avril": "audio/R3_avril"}
+    path = _put(tmp_path, "audio/R3_avril/SM E/Data/SMA_20240403_163000.wav")
+    assert loc.locate(REL, tmp_path, renamed=renamed) == path
+    assert loc.locate("Autre/Relevé avril/x.wav", tmp_path, renamed=renamed) is None
+
+
 def test_pasted_roots_are_remembered_next_to_the_db(tmp_path):
     db = tmp_path / "db" / "blanci.sqlite"
     loc.remember_root(db, tmp_path / "A")

@@ -99,6 +99,12 @@ def _split(value: str | None) -> list[str]:
     return [part.strip() for part in (value or "").split(",") if part.strip()]
 
 
+def _queue_dir(cfg: dict) -> Path:
+    from blanci.annotation.selection import queue_dir
+
+    return queue_dir(cfg)
+
+
 def _write_csv(frame: pd.DataFrame, path: Path, message: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(path, index=False)
@@ -255,9 +261,23 @@ def flag(ctx: typer.Context) -> None:
     _echo_annotated(apply_annotation_flags(con))
 
 
+# Noms sous lesquels Léonard a annoté ; « L » : faute de frappe du 08/10/2026 (un extrait).
+MY_NAMES = ("Léonard", "L")
+
+
 @app.command("export-labels")
-def export_labels(ctx: typer.Context) -> None:
-    """Annotations en CSV dans le dossier des rapports.
+def export_labels(
+    ctx: typer.Context,
+    annotateur: Annotated[
+        list[str] | None,
+        typer.Option(help="Annotateur(s) à exporter, le premier nom sert dans les fichiers."),
+    ] = None,
+    dossier: Annotated[
+        Path | None, typer.Option(help="Dossier de sortie (défaut : annotations/ du dépôt).")
+    ] = None,
+) -> None:
+    """Ses propres annotations en CSV, à pousser sur GitHub après chaque session. Rien
+    d'importé (vérifications et scores de Biophonia) ni d'un autre annotateur.
 
     - fenetres_annotees.csv : fenêtres annotées une à une (méthode par fenêtres), une
       ligne chacune : label, qualité, espèce, commentaire (tel qu'écrit par l'annotateur),
@@ -268,10 +288,15 @@ def export_labels(ctx: typer.Context) -> None:
       l'annotateur de son extrait.
     """
     cfg = _cfg(ctx)
+    names = annotateur or list(MY_NAMES)
+    mine = {n.casefold() for n in names}
+    out = dossier or project_path("annotations")
     con = connect(config_path(cfg, "db"))
     labels = current_labels(con)
-    annotators = pd.read_sql_query("SELECT label_id, annotator FROM labels", con)
-    labels = labels.merge(annotators, on="label_id", how="left")
+    who = pd.read_sql_query("SELECT label_id, annotator FROM labels", con)
+    labels = labels.merge(who, on="label_id", how="left")
+    labels = labels[labels["annotator"].fillna("").str.casefold().isin(mine)]
+    labels = labels[labels["source"] != "import"].assign(annotator=names[0])
     rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
     table = labels.merge(rec, on="recording_id", how="left")
     columns = [
@@ -280,14 +305,15 @@ def export_labels(ctx: typer.Context) -> None:
     ]  # fmt: skip
     _write_csv(
         table[columns].sort_values(["path", "offset_s"]),
-        config_path(cfg, "reports") / "fenetres_annotees.csv",
+        out / "fenetres_annotees.csv",
         f"{len(table)} fenêtres annotées",
     )
     extracts, intervals = annotated_spans(con)
-    intervals = intervals.merge(extracts[["span_id", "annotator"]], on="span_id", how="left")
-    reports = config_path(cfg, "reports")
-    _write_csv(extracts, reports / "extraits_annotes.csv", f"{len(extracts)} extraits écoutés")
-    _write_csv(intervals, reports / "intervalles_annotes.csv", f"{len(intervals)} intervalles")
+    extracts = extracts[extracts["annotator"].fillna("").str.casefold().isin(mine)]
+    extracts = extracts.assign(annotator=names[0])
+    intervals = intervals.merge(extracts[["span_id", "annotator"]], on="span_id", how="inner")
+    _write_csv(extracts, out / "extraits_annotes.csv", f"{len(extracts)} extraits écoutés")
+    _write_csv(intervals, out / "intervalles_annotes.csv", f"{len(intervals)} intervalles")
 
 
 @app.command("import-labels")
@@ -437,6 +463,7 @@ def embed(
         qc_thresholds=cfg["qc"] if check_qc else None,
         gates=chain,
         resample=cfg["encoders"].get("resample", "recording"),
+        renamed=cfg["audio"].get("renamed"),
     )
     if report.qc_checked:
         typer.echo(
@@ -1642,6 +1669,7 @@ def anuraset_campaign(
             overlap=overlap_from_cfg(cfg),
             channel=cfg["audio"]["channel"],
             resample=cfg["encoders"].get("resample", "recording"),
+            renamed=cfg["audio"].get("renamed"),
         )
         typer.echo(
             f"3. {done.encoder_id} : {done.recordings} encodés, {done.skipped} déjà faits "
@@ -1873,7 +1901,7 @@ def candidates(
         typer.echo(f"  {site:<14} {reason:<20} {n}")
     _write_csv(
         queue.reset_index(drop=True),
-        config_path(cfg, "reports") / f"candidats_{name}.csv",
+        _queue_dir(cfg) / f"candidats_{name}.csv",
         f"{len(queue)} candidats",
     )
 

@@ -304,7 +304,7 @@ def test_candidates_command_writes_a_listening_queue(workspace):
     assert result.exit_code != 0
     output = run(config, "candidates", "--random", "0", "--entiers", "2")
     assert "candidats" in output
-    assert (tmp_path / "reports" / "candidats_lot1.csv").exists()
+    assert (tmp_path / "reports" / "files" / "candidats_lot1.csv").exists()
 
 
 # --- Clustering (§5 bis) ---------------------------------------------------------------------

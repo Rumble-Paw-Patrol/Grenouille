@@ -3467,3 +3467,16 @@ de Léonard, 01/10/2026.
      - Le côté coupé se lit sur la fenêtre : elle commence avant l'intervalle → son début,
        sinon → sa fin. Une fenêtre qui contient l'intervalle, ou y est contenue, passe
        toujours.
+
+## 2026-10-09 — Base sur le PC, annotateur « Biophonia »
+
+202. **Exception unique à l'ajout seul des labels (§13.7)** (Léonard, 09/10). Les 495 labels
+     importés le 22/09 (source `import`, vérifications de Biophonia sur les détections
+     BlanciNet) portaient l'annotateur « expert » ; ils portent désormais « Biophonia », pour ne
+     pas les confondre avec les annotations du projet. Le verrou `labels_no_update` a été levé
+     le temps de cette seule mise à jour, dans la même transaction, puis remis à l'identique
+     (vérifié : une modification est de nouveau refusée). Aucun label, aucune valeur ni date
+     changés ; l'extrait signé « L » le 08/10 (faute de frappe pour « Léonard ») reste tel
+     quel en base, `blanci export-labels` l'écrit « Léonard ». La fiche du modèle `blancinet`
+     s'appelle « BlanciNet (Biophonia) » et dit d'où viennent ses 74 785 scores. Ancienne base,
+     avant ce changement : `F:/data/db/blanci_sauvegarde_20261009.sqlite` (BLANCI_2025-26).

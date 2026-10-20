@@ -192,7 +192,7 @@ def test_write_queue_is_read_by_the_workbench(scored, cfg):  # noqa: F811
 
     queue = select_candidates(scored, cfg, "audit", n=2)
     path = write_queue(cfg, queue, "audit_essai")
-    assert path == config_path(cfg, "reports") / "files" / "audit_essai" / "candidats.csv"
+    assert path == config_path(cfg, "queues") / "audit_essai" / "candidats.csv"
     assert "audit" in (path.parent / "LISEZMOI.md").read_text(encoding="utf-8")
     again = load_candidates(path, scored)
     assert len(again) == 2 and (again["source"] == "audit").all()

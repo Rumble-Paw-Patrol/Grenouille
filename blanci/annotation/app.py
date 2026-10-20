@@ -71,7 +71,7 @@ from blanci.annotation.workbench import (
 )
 from blanci.core.config import config_path, default_user_config, load_config
 from blanci.core.db import connect, window_id_for
-from blanci.core.locate import locate, remember_root, remembered_roots
+from blanci.core.locate import locate, remember_root, remembered_roots, variants
 from blanci.inputs.labels import QUALITIES
 
 CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
@@ -114,11 +114,21 @@ def _setup(config: Path | None):
     return cfg, connect(config_path(cfg, "db"))
 
 
-def _queues(reports: Path) -> list[Path]:
-    """Files de candidats : un dossier par file (`files/<nom>/candidats.csv`), et celles que
-    `blanci candidates` (hors `--plan`) pose à plat dans `paths.reports`."""
-    patterns = ("files/*/candidats.csv", "candidats_*.csv")
-    found = {p for pattern in patterns for p in reports.glob(pattern)}
+def _queues(cfg) -> list[Path]:
+    """Files de candidats : un dossier par file (`<paths.queues>/<nom>/candidats.csv`), et les
+    anciens CSV posés à plat, là ou dans `paths.reports` (sauf ceux déjà copiés dans la
+    première)."""
+    from blanci.annotation.selection import queue_dir
+
+    flat = ("candidats_*.csv", "queue_*.csv", "search_*.csv")
+    found = {p for pattern in ("*/candidats.csv", *flat) for p in queue_dir(cfg).glob(pattern)}
+    names = {p.name for p in found}
+    found |= {
+        p
+        for pattern in flat
+        for p in config_path(cfg, "reports").glob(pattern)
+        if p.name not in names
+    }
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
@@ -151,7 +161,7 @@ def _apply_pending_queue() -> None:
 # --- Panneau de gauche : sélection -------------------------------------------------------------
 
 
-def _selection_panel(cfg, con, reports: Path) -> tuple[str, Path | None, str | None]:
+def _selection_panel(cfg, con) -> tuple[str, Path | None, str | None]:
     """(mode, file choisie ou None, encodeur ou None)."""
     from blanci.annotation.selection import select_candidates, write_queue
 
@@ -165,9 +175,9 @@ def _selection_panel(cfg, con, reports: Path) -> tuple[str, Path | None, str | N
     if (mode in ENCODER_MODES or mode == "gaps") and encoders:
         encoder = st.selectbox("Encodeur", encoders, key="encoder")
     if mode == EXISTING:
-        queues = _queues(reports)
+        queues = _queues(cfg)
         if not queues:
-            st.warning(f"Aucune file dans {reports}. En tirer une avec un autre mode.")
+            st.warning("Aucune file d'écoute. En tirer une avec un autre mode.")
             return mode, None, encoder
         wanted = st.session_state.get("queue_path")
         index = next((i for i, q in enumerate(queues) if str(q) == wanted), 0)
@@ -672,7 +682,7 @@ def _missing_recording(cfg, path: str) -> None:
         .strip('"')
     )
     if folder:
-        if (Path(folder) / path).is_file():
+        if any((Path(folder) / v).is_file() for v in variants(path, cfg["audio"].get("renamed"))):
             remember_root(config_path(cfg, "db"), Path(folder))
             st.rerun()
         st.warning(f"Pas de {path} sous {folder}.")
@@ -689,7 +699,7 @@ def main() -> None:
     config = _config_file()
     cfg, con = _setup(config)
     _apply_pending_queue()
-    raw, reports = config_path(cfg, "raw"), config_path(cfg, "reports")
+    raw = config_path(cfg, "raw")
     extra = _recordings_root(cfg)
     band_hz = tuple(float(f) for f in cfg["signal"]["band_hz"])
     spectro_default = int(cfg["audio"]["channel"] == 1)
@@ -701,7 +711,7 @@ def main() -> None:
             st.markdown(HELP)
         st.header("Session")
         annotator = _annotator_input(config_path(cfg, "db"))
-        mode, chosen, encoder = _selection_panel(cfg, con, reports)
+        mode, chosen, encoder = _selection_panel(cfg, con)
         candidate_slot = st.container()
         st.header("Écoute")
         skip_done = st.checkbox(
@@ -791,7 +801,7 @@ def main() -> None:
     )
 
     media = None
-    full = locate(str(candidate["path"]), raw, extra)
+    full = locate(str(candidate["path"]), raw, extra, cfg["audio"].get("renamed"))
     if full is None:  # disque débranché, fichier déplacé
         _missing_recording(cfg, str(candidate["path"]))
     else:
@@ -809,7 +819,7 @@ def main() -> None:
     next_audios = None
     if media is not None and after != pos:
         upcoming = queue.iloc[after].to_dict()
-        next_full = locate(str(upcoming["path"]), raw, extra)
+        next_full = locate(str(upcoming["path"]), raw, extra, cfg["audio"].get("renamed"))
         if next_full is not None and str(next_full) != str(full):
             planned_next = upcoming.get("source") == "plan" and not window_mode
             span = (float(upcoming["offset_s"]), float(upcoming["dur_s"]))

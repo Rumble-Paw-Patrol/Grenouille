@@ -234,7 +234,7 @@ def test_a_queue_is_drawn_in_the_app_and_opened(app_config):
     at.sidebar.number_input(key="n::random").set_value(1).run()
     _button(at, "Générer la file").click().run()
     assert not at.exception
-    queues = list(Path(app_config["paths"]["reports"]).glob("files/random_*/candidats.csv"))
+    queues = list(Path(app_config["paths"]["queues"]).glob("random_*/candidats.csv"))
     assert len(queues) == 1
     assert "Fenêtres au hasard" in (queues[0].parent / "LISEZMOI.md").read_text(encoding="utf-8")
     assert at.sidebar.selectbox(key="mode").value == "existing"

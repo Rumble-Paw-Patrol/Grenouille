@@ -10,8 +10,9 @@ from blanci.core.db import connect, recording_id_for, window_id_for
 from blanci.service import append_label, append_span
 
 
-def test_export_labels_says_who_annotated(tmp_path):
-    """Fenêtres et intervalles exportés gardent l'annotateur."""
+def test_export_labels_keeps_only_my_annotations(tmp_path):
+    """Par défaut, seulement Léonard (et « L »), sous le nom « Léonard » ; `--annotateur`
+    pour un autre."""
     db = tmp_path / "blanci.sqlite"
     con = connect(db)
     rel = "2026/CDR/C1/C1_20260210_070000.wav"
@@ -31,15 +32,18 @@ def test_export_labels_says_who_annotated(tmp_path):
     append_span(con, rid, 30.0, 60.0, [(40.0, 42.0, "blanci")], "background", "audit",
                 annotator="tuteur")  # fmt: skip
     config = tmp_path / "blanci.yaml"
-    paths = {"db": str(db), "reports": str(tmp_path / "reports")}
-    config.write_text(yaml.safe_dump({"paths": paths}), encoding="utf-8")
-    result = CliRunner().invoke(app, ["--config", str(config), "export-labels"])
+    config.write_text(yaml.safe_dump({"paths": {"db": str(db)}}), encoding="utf-8")
+    out = tmp_path / "export"
+    args = ["--config", str(config), "export-labels", "--dossier", str(out)]
+    result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
-    reports = tmp_path / "reports"
-    windows = pd.read_csv(reports / "fenetres_annotees.csv")
-    intervals = pd.read_csv(reports / "intervalles_annotes.csv")
-    assert windows["annotator"].tolist() == ["léonard"]
-    assert intervals["annotator"].tolist() == ["tuteur"]
+    assert pd.read_csv(out / "fenetres_annotees.csv")["annotator"].tolist() == ["Léonard"]
+    assert pd.read_csv(out / "intervalles_annotes.csv").empty
+
+    result = CliRunner().invoke(app, [*args, "--annotateur", "tuteur"])
+    assert result.exit_code == 0, result.output
+    assert pd.read_csv(out / "fenetres_annotees.csv").empty
+    assert pd.read_csv(out / "intervalles_annotes.csv")["annotator"].tolist() == ["tuteur"]
 
 
 def _base(path, rel):
@@ -69,9 +73,10 @@ def test_import_labels_resumes_on_another_machine(tmp_path):
     append_span(con, rid, 30.0, 60.0, [(40.0, 42.0, "blanci", "A")], "background", "plan",
                 annotator="Léonard", conditions={"multiclass": False})  # fmt: skip
     config = tmp_path / "a.yaml"
-    paths = {"db": str(tmp_path / "a.sqlite"), "reports": str(tmp_path / "export")}
-    config.write_text(yaml.safe_dump({"paths": paths}), encoding="utf-8")
-    assert CliRunner().invoke(app, ["--config", str(config), "export-labels"]).exit_code == 0
+    config.write_text(yaml.safe_dump({"paths": {"db": str(tmp_path / "a.sqlite")}}),
+                      encoding="utf-8")  # fmt: skip
+    export = ["--config", str(config), "export-labels", "--dossier", str(tmp_path / "export")]
+    assert CliRunner().invoke(app, export).exit_code == 0
 
     other, _ = _base(tmp_path / "b.sqlite", "autre/disque/C1_20260210_070000.wav")
     other.close()
