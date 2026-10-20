@@ -59,6 +59,7 @@ from blanci.annotation.workbench import (
     latest_labels,
     load_candidates,
     local_time,
+    local_times,
     next_position,
     ordered_classes,
     progress,
@@ -69,7 +70,7 @@ from blanci.annotation.workbench import (
     split_windows,
     wav_bytes,
 )
-from blanci.core.config import config_path, default_user_config, load_config
+from blanci.core.config import DEFAULT_CONFIG, config_path, default_user_config, load_config
 from blanci.core.db import connect, window_id_for
 from blanci.core.locate import locate, remember_root, remembered_roots, variants
 from blanci.inputs.labels import QUALITIES
@@ -109,9 +110,19 @@ def _config_file() -> Path | None:
 
 def _setup(config: Path | None):
     """Config et connexion, rouvertes à chaque rafraîchissement : Streamlit change de fil
-    d'exécution entre deux clics, et une connexion SQLite ne se partage pas entre fils."""
-    cfg = load_config(config)
+    d'exécution entre deux clics, et une connexion SQLite ne se partage pas entre fils. La
+    config n'est relue que si un des deux YAML a changé (l'analyser coûtait 0,3 s par clic)."""
+    files = (DEFAULT_CONFIG, *([Path(config)] if config else []))
+    stamps = tuple(p.stat().st_mtime_ns if p.is_file() else 0 for p in files)
+    cfg = _cached_config(str(config) if config else None, stamps)
     return cfg, connect(config_path(cfg, "db"))
+
+
+@st.cache_data(show_spinner=False)
+def _cached_config(config: str | None, stamps: tuple) -> dict:
+    """`load_config`, gardé tant que les fichiers ne changent pas (`stamps` : leurs dates de
+    modification, dans la clé du cache ; copie à chaque appel)."""
+    return load_config(Path(config) if config else None)
 
 
 def _queues(cfg) -> list[Path]:
@@ -383,13 +394,13 @@ def _candidate_strip(queue, done, chosen, key, end, offset_h) -> None:
     la file entière, site, micro, heure, et ✓ label s'il a déjà été écouté. File terminée
     (`end`) : aucun candidat n'est sélectionné, n'importe lequel se rouvre."""
     rows = [
-        f"{i + 1}. {site} · {mic} · {local_time(start, offset_h)} · {offset:.0f} s"
+        f"{i + 1}. {site} · {mic} · {start} · {offset:.0f} s"
         + (f" · ✓ {NAMES.get(heard, heard)}" if heard else "")
         for i, (site, mic, start, offset, heard) in enumerate(
             zip(
                 queue["site"],
                 queue["mic_id"],
-                queue["start_utc"],
+                local_times(queue["start_utc"], offset_h),
                 queue["offset_s"],
                 done,
                 strict=True,

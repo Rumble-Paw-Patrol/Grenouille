@@ -313,6 +313,23 @@ def _finish(candidates: pd.DataFrame, seed: int) -> pd.DataFrame:
     return out.sample(frac=1.0, random_state=seed).reset_index(drop=True)
 
 
+def _queue_recordings(con: sqlite3.Connection, ids: pd.Series, chunk: int = 500) -> pd.DataFrame:
+    """Chemin, site, micro et heure des seuls enregistrements de la file : relire toute la table
+    `recordings` à chaque clic du poste coûtait une seconde (inventaire complet)."""
+    ids = [str(i) for i in pd.unique(ids)]
+    parts = [
+        pd.read_sql_query(
+            "SELECT recording_id, path, site, mic_id, start_utc FROM recordings "
+            f"WHERE recording_id IN ({','.join('?' * len(batch))})",
+            con,
+            params=batch,
+        )
+        for batch in (ids[i : i + chunk] for i in range(0, len(ids), chunk))
+    ]
+    columns = ["recording_id", "path", "site", "mic_id", "start_utc"]
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=columns)
+
+
 def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
     """Relit une file CSV (celles-ci, ou `blanci select`) et la complète depuis la
     base : chemin, site, micro. Une file sans `offset_s` (unité : l'enregistrement) démarre
@@ -321,12 +338,13 @@ def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
     if "recording_id" not in queue.columns:
         raise ValueError(f"{Path(path).name} : colonne recording_id absente")
     queue = queue.drop(columns=[c for c in ("path", "site", "mic_id", "start_utc") if c in queue])
-    recordings = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
+    recordings = _queue_recordings(con, queue["recording_id"])
     missing = ~queue["recording_id"].isin(recordings["recording_id"])
     if missing.any():
+        total = con.execute("SELECT COUNT(*) FROM recordings").fetchone()[0]
         raise ValueError(
             f"{Path(path).name} : {int(missing.sum())} enregistrement(s) sur {len(queue)} absents "
-            f"de la base ({len(recordings)} enregistrements) — mauvaise base, ou `blanci ingest` "
+            f"de la base ({total} enregistrements) — mauvaise base, ou `blanci ingest` "
             "pas encore lancé ?"
         )
     queue = queue.merge(recordings, on="recording_id", how="left")
@@ -638,6 +656,16 @@ def local_time(start_utc: str | None, utc_offset_h: float) -> str:
     minutes = local_minutes(pd.Series([start_utc]), utc_offset_h).iloc[0]
     day = (pd.to_datetime(start_utc, utc=True) + pd.Timedelta(hours=utc_offset_h)).date()
     return f"{day} {int(minutes) // 60:02d}:{int(minutes) % 60:02d}"
+
+
+def local_times(start_utc: pd.Series, utc_offset_h: float) -> list[str]:
+    """`local_time` sur toute une colonne en une conversion : appelé ligne à ligne sur une file
+    de quelques centaines de candidats, il prenait deux secondes à chaque clic du poste."""
+    t = pd.to_datetime(start_utc, utc=True, format="ISO8601", errors="coerce") + pd.Timedelta(
+        hours=utc_offset_h
+    )
+    shown = t.dt.strftime("%Y-%m-%d %H:%M")
+    return ["?" if not s or pd.isna(v) else v for s, v in zip(start_utc, shown, strict=True)]
 
 
 # --- Accord entre annotateurs ---------------------------------------------------------------------

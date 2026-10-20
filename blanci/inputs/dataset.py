@@ -182,16 +182,20 @@ def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFr
     l'enregistrement n'a aucun extrait dans `spans` (filtré : jeu gelé) n'est pas corrigé."""
     if intervals.empty:
         return intervals
-    keep = []
+    keep = np.ones(len(intervals), dtype=bool)
     by_recording = {rid: g for rid, g in spans.groupby("recording_id")}
-    for row in intervals.itertuples(index=False):
-        later = by_recording.get(row.recording_id)
+    span_id = intervals["span_id"].to_numpy()
+    i0, i1 = intervals["start_s"].to_numpy(dtype=float), intervals["end_s"].to_numpy(dtype=float)
+    for rid, at in intervals.groupby("recording_id", sort=False).indices.items():
+        later = by_recording.get(rid)
         if later is None:
-            keep.append(True)
             continue
-        later = later[later["span_id"] > row.span_id]
-        covered = (later["start_s"] <= row.start_s + 1e-6) & (later["end_s"] >= row.end_s - 1e-6)
-        keep.append(not covered.any())
+        covered = (
+            (later["span_id"].to_numpy()[None, :] > span_id[at, None])
+            & (later["start_s"].to_numpy(dtype=float)[None, :] <= i0[at, None] + 1e-6)
+            & (later["end_s"].to_numpy(dtype=float)[None, :] >= i1[at, None] - 1e-6)
+        )
+        keep[at] = ~covered.any(axis=1)
     return intervals[keep].reset_index(drop=True)
 
 
@@ -213,15 +217,24 @@ def interval_labels(
     columns = ["window_id", "recording_id", "offset_s", "label", "y", "quality", "comment"]
     if spans.empty or grid.empty:
         return pd.DataFrame(columns=columns)
+    # Seuls les enregistrements de la grille comptent (tout se joue enregistrement par
+    # enregistrement) : le poste n'en demande que quelques centaines à chaque clic.
+    wanted = set(grid["recording_id"])
+    spans = spans[spans["recording_id"].isin(wanted)]
+    intervals = intervals[intervals["recording_id"].isin(wanted)]
+    if spans.empty:
+        return pd.DataFrame(columns=columns)
     valid = current_intervals(spans, intervals)
     span_info = spans.set_index("span_id")
     rows = []
     grid = grid[grid["recording_id"].isin(set(spans["recording_id"]))]
+    spans_of = dict(tuple(spans.groupby("recording_id")))
+    valid_of = dict(tuple(valid.groupby("recording_id")))
     for rid, g in grid.groupby("recording_id"):
         w0 = g["offset_s"].to_numpy(dtype=float)
         w1 = w0 + g["dur_s"].to_numpy(dtype=float)
-        sp = spans[spans["recording_id"] == rid]
-        iv = valid[valid["recording_id"] == rid]
+        sp = spans_of[rid]
+        iv = valid_of.get(rid, valid.iloc[:0])
         inside = (w0[:, None] >= sp["start_s"].to_numpy()[None, :] - eps) & (
             w1[:, None] <= sp["end_s"].to_numpy()[None, :] + eps
         )
