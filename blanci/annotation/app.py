@@ -660,16 +660,10 @@ READONLY_MENUS = """<script>
 </script>"""
 
 
-def _annotator_input(db: Path) -> str:
-    """Champ « Annotateur », prérempli avec le dernier nom tapé sur ce poste (retenu à côté de
-    la base, hors git) : sans lui, l'envoi est impossible."""
-    remembered = db.parent / "annotateur.txt"
-    if "annotator" not in st.session_state and remembered.is_file():
-        st.session_state["annotator"] = remembered.read_text(encoding="utf-8").strip()
+def _annotator_input() -> str:
+    """Champ « Annotateur », vide à chaque ouverture du poste (plusieurs personnes annotent sur
+    la même base) : sans lui, l'envoi est impossible."""
     annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
-    if annotator.strip() and annotator != st.session_state.get("annotator"):
-        remembered.parent.mkdir(parents=True, exist_ok=True)
-        remembered.write_text(annotator.strip() + "\n", encoding="utf-8")
     st.session_state["annotator"] = annotator
     return annotator
 
@@ -726,7 +720,7 @@ def main() -> None:
         with st.popover("❓ Mode d'emploi : souris et clavier"):
             st.markdown(HELP)
         st.header("Session")
-        annotator = _annotator_input(config_path(cfg, "db"))
+        annotator = _annotator_input()
         mode, chosen, encoder = _selection_panel(cfg, con)
         candidate_slot = st.container()
         st.header("Écoute")
