@@ -16,6 +16,7 @@ from blanci.annotation.workbench import (
     latest_labels,
     load_candidates,
     local_time,
+    local_times,
     next_position,
     ordered_classes,
     progress,
@@ -162,6 +163,11 @@ def test_player_bytes_keep_only_the_band():
 def test_local_time_is_shown_in_guiana_time():
     assert local_time("2026-01-10T10:00:00Z", -3) == "2026-01-10 07:00"
     assert local_time(None, -3) == "?"
+
+
+def test_local_times_matches_local_time_on_a_whole_column():
+    starts = pd.Series(["2026-01-10T10:00:00Z", None, "2026-01-11T02:30:00Z"])
+    assert local_times(starts, -3) == [local_time(s, -3) for s in starts]
 
 
 # --- Enregistrements entiers, identifiants, accord ---------------------------------------------

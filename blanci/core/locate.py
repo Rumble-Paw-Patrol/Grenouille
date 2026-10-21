@@ -4,8 +4,9 @@ La base garde le chemin de chaque enregistrement relatif à la racine du disque 
 l'inventaire (`paths.raw`). Ce module essaie ce chemin sous chaque racine possible, dans
 l'ordre : racines qui ont déjà marché (la dernière d'abord), `paths.raw`, racines retenues
 (dossier collé à la main sur le poste d'annotation), puis les disques branchés (`/Volumes/*`
-sur Mac, `D:` à `Z:` sur Windows, `/media/<moi>/*` et `/mnt/*` sous Linux), et un niveau de
-dossier sous chacun d'eux (disque inventorié depuis un sous-dossier).
+sur Mac, les disques locaux `D:` à `Z:` sur Windows, sans les lecteurs réseau, `/media/<moi>/*`
+et `/mnt/*` sous Linux), et un niveau de dossier sous chacun d'eux (disque inventorié depuis
+un sous-dossier). Un partage réseau sert s'il est collé à la main (racine retenue).
 
 Coût : un test d'existence de fichier par racine essayée, quelques dizaines au plus pour le
 premier enregistrement ; ensuite la racine trouvée passe devant et un seul test suffit.
@@ -44,10 +45,29 @@ def remember_root(db: Path, root: Path) -> None:
     path.write_text("".join(f"{r}\n" for r in roots), encoding="utf-8")
 
 
+# Types de lecteur Windows (GetDriveTypeW) gardés : amovible, fixe, disque virtuel en mémoire.
+# Les lecteurs réseau (partages de l'ONF) et les CD sont écartés : tester un fichier sur un
+# partage coûte une demi-seconde, et sonder les lettres ainsi branchées prenait 15 s.
+_LOCAL_DRIVE_TYPES = {2, 3, 6}
+
+
+def _local_drive_letters() -> list[str]:
+    """Lettres D à Z attribuées à un disque local (USB compris), sans toucher aux autres."""
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    attached = kernel32.GetLogicalDrives()
+    return [
+        d
+        for i, d in enumerate(string.ascii_uppercase)
+        if i >= 3 and attached >> i & 1 and kernel32.GetDriveTypeW(f"{d}:\\") in _LOCAL_DRIVE_TYPES
+    ]
+
+
 def mounted_disks() -> list[Path]:
     """Disques branchés, selon le système."""
     if sys.platform == "win32":
-        return [Path(f"{d}:/") for d in string.ascii_uppercase[3:] if os.path.exists(f"{d}:/")]
+        return [Path(f"{d}:/") for d in _local_drive_letters()]
     bases = [Path("/Volumes")] if sys.platform == "darwin" else []
     user = os.environ.get("USER", "")
     bases += [Path("/media") / user, Path("/run/media") / user, Path("/mnt")]

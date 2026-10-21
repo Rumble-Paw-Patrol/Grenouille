@@ -21,3 +21,6 @@ documentation/*.xlsx
 # Tableau de bord : produit par documentation/tableau-de-bord/construire.py.
 documentation/tableau-de-bord/index.html
 documentation/tableau-de-bord/fichiers.json
+
+# Journaux de copie et d'encodage de cette machine (scripts/ les écrit dans rapports/).
+rapports/
