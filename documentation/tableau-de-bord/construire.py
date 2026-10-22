@@ -120,7 +120,10 @@ def historique(ref: str, n: int = 20) -> list[list]:
     out = []
     for ligne in sortie.splitlines():
         h, d, s = ligne.split("\t", 2)
-        if s.startswith("Merge "):
+        fusion = re.match(r"Fusion de \S+(?: dans \S+)?(?: : (.+))?$", s)
+        if fusion and fusion.group(1):  # « Fusion de claude/… : quoi » : on garde le « quoi »
+            s = fusion.group(1)[0].upper() + fusion.group(1)[1:]
+        elif s.startswith("Merge ") or fusion:
             # Une fusion ne dit que le nom d'une branche de travail (claude/…) : on montre à la
             # place le dernier commit qu'elle apporte, ou rien si elle n'apporte rien de neuf.
             apports = git("log", "--no-merges", "--format=%s", f"{h}^1..{h}^2").splitlines()
