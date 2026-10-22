@@ -335,7 +335,7 @@ plan_annotation:
   etapes:
     - [Répartir les points, "Avant toute écoute, chaque point d'écoute est attribué soit à l'entraînement, soit au test, jamais aux deux."]
     - [Jeu d'entraînement, "Environ 450 extraits de 30 s. 300 en 2026, 3 par point d'écoute : un au pic du matin, un au pic du soir, un dans une autre tranche horaire. 150 en 2023, 50 sur chacun des 3 micros d'entraînement, répartis sur l'année."]
-    - [Validation, "Validation croisée en 5 plis inter-micros et non intra-micros. Chaque pli rassemble environ un cinquième des micros d'entraînement, entiers : jamais quelques enregistrements d'un micro déjà vu. On mesure ainsi la généralisation à des paysages sonores jamais entendus. Elle sert à régler la tête sans jamais toucher au jeu de test."]
+    - [Validation, "Validation croisée en 5 folds inter-micros et non intra-micros. Chaque fold rassemble environ un cinquième des micros d'entraînement, entiers : jamais quelques enregistrements d'un micro déjà vu. On mesure ainsi la généralisation à des paysages sonores jamais entendus. Elle sert à régler la tête sans jamais toucher au jeu de test."]
     - [Jeu de test, "Environ 250 enregistrements de 2 min écoutés en entier, sur les points tenus à l'écart, avec au moins 60 positifs pour mesurer le rappel avec une précision suffisante."]
     - [Vérification, "Élodie et Benoît écoutent chacun 10 % de mes données annotées, à l'aveugle : mon label est caché et l'ordre mélangé."]
   principes:
