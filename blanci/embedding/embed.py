@@ -256,12 +256,15 @@ def embed_recordings(
     # absent (disque non branché), ce qui arrête l'encodage.
     roots = [Path(raw_root), *(d for d in _local_disks() if d != Path(raw_root))]
 
+    last_root: list[Path] = []  # dernier disque qui a donné un fichier
+
     def find(path: str) -> Path:
         names = variants(path, renamed)
         for root in roots:
             for name in names:
                 if (root / name).is_file():
                     roots.insert(0, roots.pop(roots.index(root)))
+                    last_root[:] = [root]
                     return root / name
         return Path(raw_root) / path
 
@@ -293,6 +296,8 @@ def embed_recordings(
 
         for rec, audio in read_ahead(todo, prepare, ahead):
             if audio.failed:
+                if last_root and not last_root[0].exists():  # disque débranché en route
+                    raise RuntimeError(f"{last_root[0]} n'est plus accessible ; relancer")
                 report.errors += 1
                 continue
             wav, sr = audio.wav, audio.sr
