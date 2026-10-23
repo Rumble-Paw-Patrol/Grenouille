@@ -84,6 +84,7 @@ plan:
     peak_weight: 2                 # strates surreprésentées deux fois (§5.5)
     high_weight: 2
     high_periods: [haute_fevmars, haute]
+    extract_s: 30                  # écoute en extraits consécutifs (120 s → 4) ; vide = entier
 
 # Grilles de fenêtres, indépendantes de l'encodeur (§4). Pas ≤ moitié de la fenêtre (§1).
 grids:

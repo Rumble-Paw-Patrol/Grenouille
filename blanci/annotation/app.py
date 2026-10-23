@@ -426,11 +426,13 @@ def _prefetcher() -> tuple[ThreadPoolExecutor, dict]:
     return ThreadPoolExecutor(max_workers=1, thread_name_prefix="prefetch"), {}
 
 
-def _prefetch(full: str, extract: tuple[float, float] | None = None) -> None:
+def _prefetch(full: str, extract: tuple[float, float] | None = None, whole: bool = True) -> None:
     """Lit à l'avance le candidat suivant pendant qu'on écoute celui-ci : quand on l'ouvre,
-    `_media` reprend le résultat au lieu de relire le disque. Une seule lecture d'avance."""
+    `_media` reprend le résultat au lieu de relire le disque. Une seule lecture d'avance.
+    `whole` : l'enregistrement entier aussi (inutile s'il est déjà en cache : extrait suivant
+    du même enregistrement)."""
     pool, pending = _prefetcher()
-    spans = [(0.0, math.inf)] + ([extract] if extract else [])
+    spans = ([(0.0, math.inf)] if whole else []) + ([extract] if extract else [])
     todo = [(full, o, d) for o, d in spans if (full, o, d) not in pending]
     for stale in [k for k in pending if k not in todo and k[0] != full]:
         pending.pop(stale, None)
@@ -852,10 +854,12 @@ def main() -> None:
     if media is not None and after != pos:
         upcoming = queue.iloc[after].to_dict()
         next_full = locate(str(upcoming["path"]), raw, extra, cfg["audio"].get("renamed"))
-        if next_full is not None and str(next_full) != str(full):
-            planned_next = upcoming.get("source") == "plan" and not window_mode
-            span = (float(upcoming["offset_s"]), float(upcoming["dur_s"]))
-            _prefetch(str(next_full), span if planned_next else None)
+        planned_next = upcoming.get("source") == "plan" and not window_mode
+        span = (float(upcoming["offset_s"]), float(upcoming["dur_s"]))
+        # Même enregistrement : seul l'extrait suivant (jeu de test en extraits de 30 s) est à lire.
+        same = next_full is not None and str(next_full) == str(full)
+        if next_full is not None and (not same or planned_next):
+            _prefetch(str(next_full), span if planned_next else None, whole=not same)
             next_audios = _next_audios(str(next_full), *(span if planned_next else (0.0, math.inf)))
 
     # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait (mode fenêtres).

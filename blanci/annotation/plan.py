@@ -17,6 +17,9 @@ graine fixée, tout avant écoute.
    chacun. La probabilité d'inclusion est donc exacte : n_h / M_h × 1 / R, avec M_h les
    couples (point, jour) de la strate et R les enregistrements du couple tiré. Le tirage est
    réparti entre strates en proportion de M_h × poids (pics × 2, période haute × 2).
+   Chaque enregistrement tiré est écouté en extraits consécutifs de `plan.test.extract_s`
+   (30 s : quatre par enregistrement), à la suite dans la file : l'unité tirée reste
+   l'enregistrement entier, le poste n'a que 30 s à afficher à la fois.
 
 Partout : au plus un enregistrement par point, jour et tranche ; enregistrements écartés par
 un drapeau et enregistrements labellisés avant le tirage (écoutes ciblées : leur sélection
@@ -245,7 +248,7 @@ def training_lot(rec: pd.DataFrame, partition: pd.DataFrame, cfg: dict) -> pd.Da
 
 def evaluation_set(rec: pd.DataFrame, partition: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Enregistrements entiers des points tenus à l'écart (§5.5), avec leur probabilité
-    d'inclusion (`prob_tirage`)."""
+    d'inclusion (`prob_tirage`), coupés en extraits si `plan.test.extract_s`."""
     plan, test = cfg["plan"], cfg["plan"]["test"]
     rng = np.random.default_rng(plan["seed"] + 2)
     level = partition.set_index("point")["niveau"]
@@ -291,7 +294,23 @@ def evaluation_set(rec: pd.DataFrame, partition: pd.DataFrame, cfg: dict) -> pd.
             picked.append(row.assign(prob_tirage=n / len(psus) / len(same)))
     out = pd.concat(picked, ignore_index=True)
     out = out.assign(reason="test_v1/" + out["strate"])
-    return _as_queue(out, 0.0, out["duration_s"].astype(float).round(2).to_numpy(), plan["seed"])
+    queue = _as_queue(out, 0.0, out["duration_s"].astype(float).round(2).to_numpy(), plan["seed"])
+    extract = test.get("extract_s")
+    return split_extracts(queue, float(extract)) if extract else queue
+
+
+def split_extracts(queue: pd.DataFrame, extract_s: float) -> pd.DataFrame:
+    """Chaque ligne (enregistrement entier) coupée en extraits consécutifs de `extract_s`, à la
+    suite dans la file et dans le même ordre d'enregistrements. Le nombre d'extraits est la
+    durée arrondie en multiples de `extract_s` (120 s → 4) ; le dernier va jusqu'au bout."""
+    rows = []
+    for row in queue.itertuples(index=False):
+        start, dur = float(row.offset_s), float(row.dur_s)
+        k = max(1, int(np.floor(dur / extract_s + 0.5)))
+        cuts = [start + i * extract_s for i in range(k)] + [start + dur]
+        for a, b in zip(cuts[:-1], cuts[1:], strict=True):
+            rows.append(row._replace(offset_s=round(a, 2), dur_s=round(b - a, 2)))
+    return pd.DataFrame(rows, columns=queue.columns)
 
 
 def draw_plan(con: sqlite3.Connection, cfg: dict, partition_path: Path) -> dict[str, Any]:

@@ -112,6 +112,7 @@ def test_test_set_draws_whole_held_out_recordings_with_their_probability(con):
     cfg = _cfg()
     rec = eligible_recordings(con, cfg)
     part = draw_partition(rec, cfg)
+    cfg["plan"]["test"]["extract_s"] = None
     test = evaluation_set(rec, part, cfg)
     assert len(test) == 60 and test.groupby("niveau").size().to_dict() == {
         "niveau1": 20,
@@ -137,6 +138,34 @@ def test_test_set_draws_whole_held_out_recordings_with_their_probability(con):
     # Pics surreprésentés : à stock égal, une strate de pic tire plus qu'une autre.
     tranche = drawn[drawn["niveau"] == "niveau2"]["tranche"].value_counts()
     assert tranche.get("pic_matin", 0) > tranche.get("aube", 0)
+
+
+def test_test_set_is_listened_in_four_consecutive_extracts_of_the_same_recordings(con):
+    """Extraits de 30 s : mêmes enregistrements, dans le même ordre, chacun couvert en entier
+    par quatre extraits à la suite dans la file."""
+    cfg = _cfg()
+    rec = eligible_recordings(con, cfg)
+    part = draw_partition(rec, cfg)
+    test = evaluation_set(rec, part, cfg)
+    cfg["plan"]["test"]["extract_s"] = None
+    whole = evaluation_set(rec, part, cfg)
+    assert len(test) == 4 * len(whole)
+    assert test["recording_id"].iloc[::4].tolist() == whole["recording_id"].tolist()
+    assert test["offset_s"].tolist() == [0.0, 30.0, 60.0, 90.0] * len(whole)
+    assert (test["dur_s"] == 30).all()
+    same = ["recording_id", "strate", "prob_tirage", "reason", "niveau"]
+    pd.testing.assert_frame_equal(
+        test[same].iloc[::4].reset_index(drop=True), whole[same], check_dtype=False
+    )
+
+
+def test_split_extracts_lets_the_last_extract_run_to_the_end():
+    from blanci.annotation.plan import split_extracts
+
+    queue = pd.DataFrame({"recording_id": ["a", "b"], "offset_s": [0.0, 0.0], "dur_s": [100.4, 20]})
+    out = split_extracts(queue, 30.0)
+    assert out["offset_s"].tolist() == [0.0, 30.0, 60.0, 0.0]
+    assert out["dur_s"].tolist() == [30.0, 30.0, 40.4, 20.0]
 
 
 def test_flagged_and_previously_labelled_recordings_are_never_drawn(con):
