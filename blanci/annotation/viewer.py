@@ -47,17 +47,6 @@ sur une étiquette en haut (aucun intervalle sélectionné) |
 | Modifier l'étiquette d'un intervalle | Une fois sélectionné, **clic** sur une étiquette en haut |
 | Supprimer un intervalle | Une fois sélectionné, touche **Suppr**, ou **clic** sur la petite \
 croix de sa pastille |
-
-**Intervalles des autres annotateurs** (ceux qui ne sont pas masqués, panneau de gauche) :
-bords en tirets et bande à leur nom en bas du spectrogramme, pastilles en tirets sous les
-vôtres. Ils ne se modifient pas : seuls les vôtres sont enregistrés à l'envoi.
-
-**Filtre dynamique** : seuls les sons à moins de N dB des plus forts de l'extrait gardent une
-couleur, les plus faibles sont noirs. 40 dB : il ne reste que les chants forts, le bruit de
-fond disparaît ; 80 dB : les chants faibles apparaissent, le fond aussi.
-
-**Contraste** : assombrit les sons moyens (souvent le bruit de fond) sans toucher aux plus
-forts, pour que les notes ressortent. 0 : aucun effet.
 """
 
 INDEX = r"""<!doctype html>
