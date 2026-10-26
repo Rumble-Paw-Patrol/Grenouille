@@ -536,6 +536,8 @@ function render(args) {
     intervals = (D.intervals || [])
       .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
     selected = -1; vmax = []; specKey = ""; specView = null; settling = false; buffers = [];
+    if (wide) clearTimeout(wide.timer);
+    wide = null;
     load();
     list();
   } else if (nextChanged) prepareNext();
@@ -743,23 +745,45 @@ function renderSpectrogram(cols, rows) {
     || paint(buffers[ch], buffers.rate, a.start, vmax[ch], view, cols, rows, n);
   remember(key, spec);
 }
-// Début d'un déplacement : l'image est recalculée sur une zone plus large (une demi-vue de
-// plus de chaque côté), pour que ce qui entre dans la vue soit déjà dessiné, pas noir.
-function widen() {
+// Zone élargie (une demi-vue de plus de chaque côté), calculée en tâche de fond, par petits
+// morceaux et du centre vers les bords, dès que la vue est au repos : un déplacement n'a plus
+// rien à calculer, il montre ce qui est prêt (noir au-delà si l'on va plus vite que le calcul).
+// Demi-résolution et FFT réduite : le rendu net revient au relâchement.
+let wide = null;
+function startWide() {
   const ch = shownTrack(), a = D.audios[ch];
-  if (!buffers[ch] || vmax[ch] === undefined) return;
-  const mt = (view.t1 - view.t0) / 2, mf = (view.f1 - view.f0) / 2;
-  const v = {t0: Math.max(D.t0, view.t0 - mt), t1: Math.min(D.t1, view.t1 + mt),
-             f0: Math.max(0, view.f0 - mf), f1: Math.min(fmax(), view.f1 + mf)};
-  const cols = Math.max(1, Math.round(W() * (v.t1 - v.t0) / (view.t1 - view.t0)));
-  const rows = Math.max(1, Math.round(PH() * (v.f1 - v.f0) / (view.f1 - view.f0)));
-  spec = paint(buffers[ch], buffers.rate, a.start, vmax[ch], v, cols, rows,
-               fftSize(view, buffers.rate));
-  specView = v; specKey = "large";
+  const v = {t0: Math.max(D.t0, view.t0 - (view.t1 - view.t0) / 2),
+             t1: Math.min(D.t1, view.t1 + (view.t1 - view.t0) / 2),
+             f0: Math.max(0, view.f0 - (view.f1 - view.f0) / 2),
+             f1: Math.min(fmax(), view.f1 + (view.f1 - view.f0) / 2)};
+  const cols = Math.max(1, Math.round(W() * (v.t1 - v.t0) / (view.t1 - view.t0) / 2));
+  const rows = Math.max(1, Math.round(PH() * (v.f1 - v.f0) / (view.f1 - view.f0) / 2));
+  const n = Math.min(fftSize(view, buffers.rate), 4096);
+  const key = specKeyOf(a.src, v, cols, rows, n);
+  if (wide && wide.key === key) return;
+  if (wide) clearTimeout(wide.timer);
+  const out = document.createElement("canvas"); out.width = cols; out.height = rows;
+  const step = 16, order = [];
+  for (let c = 0; c < cols; c += step) order.push(c);
+  order.sort((p, q) => Math.abs(p + step / 2 - cols / 2) - Math.abs(q + step / 2 - cols / 2));
+  const job = wide = {key, src: a.src, canvas: out, view: v, order, timer: null};
+  const x = buffers[ch], rate = buffers.rate, top = vmax[ch];
+  (function work() {
+    const t = performance.now();
+    while (job.order.length && performance.now() - t < 12) {
+      const c0 = job.order.shift();
+      paintCols(out, x, rate, a.start, top, v, cols, rows, n, c0, Math.min(cols, c0 + step));
+    }
+    if (drag) draw();
+    if (job.order.length) job.timer = setTimeout(work, 0);
+  })();
 }
 function paint(x, rate, start, top, v, cols, rows, n) {
   const out = document.createElement("canvas"); out.width = cols; out.height = rows;
-  const sctx = out.getContext("2d"), image = sctx.createImageData(cols, rows), px = image.data;
+  return paintCols(out, x, rate, start, top, v, cols, rows, n, 0, cols);
+}
+function paintCols(out, x, rate, start, top, v, cols, rows, n, c0, c1) {
+  const sctx = out.getContext("2d"), image = sctx.createImageData(c1 - c0, rows), px = image.data;
   const binHz = rate / n, range = S.range;
   // Contraste : courbe en puissance sur l'échelle (0 = linéaire) ; le haut ne bouge pas, les
   // niveaux moyens (bruit de fond) s'assombrissent.
@@ -769,18 +793,18 @@ function paint(x, rate, start, top, v, cols, rows, n) {
   for (let r = 0; r < rows; r++) {
     binOf[r] = (v.f1 - (r + 0.5) / rows * (v.f1 - v.f0)) / binHz;
   }
-  for (let c = 0; c < cols; c++) {
+  for (let c = c0; c < c1; c++) {
     const t = v.t0 + (c + 0.5) / cols * (v.t1 - v.t0);
     const db = spectrum(x, (t - start) * rate, n);
     for (let r = 0; r < rows; r++) {
       const b = binOf[r], k = Math.floor(b), f = b - k;
       const l = k + 1 < db.length ? db[k] * (1 - f) + db[k + 1] * f : db[db.length - 1];
       const i = Math.max(0, Math.min(255, Math.round((l - (top - range)) / range * 255)));
-      const o = (r * cols + c) * 4, color = MAGMA[lut[i]];
+      const o = (r * (c1 - c0) + c - c0) * 4, color = MAGMA[lut[i]];
       px[o] = color[0]; px[o + 1] = color[1]; px[o + 2] = color[2]; px[o + 3] = 255;
     }
   }
-  sctx.putImageData(image, 0, 0);
+  sctx.putImageData(image, c0, 0);
   return out;
 }
 
@@ -844,6 +868,7 @@ function draw() {
     renderSpectrogram(Math.max(1, Math.round(W())), Math.max(1, Math.round(PH())));
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(spec, M.l, M.t, W(), PH());
+    if (!drag) setTimeout(startWide, 0);
   } else {
     ctx.fillStyle = AXIS; ctx.font = MONO;
     ctx.fillText("calcul du spectrogramme…", M.l + 10, M.t + 20);
@@ -1027,7 +1052,12 @@ window.addEventListener("mousemove", e => {
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
   if (!drag.moved) return;
-  if (drag.mode === "pan" && !drag.wide) { drag.wide = true; widen(); }
+  if (drag.mode === "pan" && !drag.wide) {
+    drag.wide = true;
+    if (wide && wide.src === D.audios[shownTrack()].src) {
+      spec = wide.canvas; specView = wide.view; specKey = "large";
+    }
+  }
   const t = Math.min(Math.max(tOf(localX(e)), D.t0), D.t1);
   if (drag.mode === "pan") {
     canvas.style.cursor = "grabbing";
