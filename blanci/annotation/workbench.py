@@ -628,6 +628,8 @@ def save_answer(
 
 
 INTERVAL_ANSWERS = tuple((label, name) for label, name in ANSWERS if label in INTERVAL_LABELS)
+# Les deux micros d'un enregistreur, sous ces noms dans le poste et dans le paquet d'écoute.
+CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
 
 
 def save_span(

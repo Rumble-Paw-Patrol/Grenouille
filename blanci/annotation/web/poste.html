@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poste d'annotation</title>
+<!--
+  Poste d'annotation en page web autonome, pour un paquet d'écoute envoyé à un encadrant
+  (`blanci paquet`, `annotation/paquet.py`) : rien à installer, s'ouvre d'un double-clic.
+
+  Le visualiseur est celui du poste Streamlit (`viewer.py`, copié dans donnees/visualiseur.html)
+  : cette page lui parle comme Streamlit (messages « streamlit:render », « setComponentValue »).
+  Données : donnees/paquet.js (la file, nos intervalles), donnees/audio/NNN.js (l'audio de
+  chaque extrait en FLAC, en data: URL — une page ouverte depuis le disque ne peut pas lire
+  un fichier par fetch, mais charge un script).
+
+  Les réponses sont gardées dans le navigateur (localStorage) et écrites, après chaque envoi,
+  dans un dossier choisi une fois (Chrome, Edge : showDirectoryPicker) ; ailleurs, « Télécharger
+  mes réponses ». Mêmes CSV que `service.export_annotations`, relus par `blanci import-labels`.
+-->
+<style>
+  :root {
+    --bg: #0E1411; --panel: #141C18; --panel-2: #1B2520; --line: rgba(255, 210, 120, .14);
+    --ink: #EDE6D6; --muted: #93A89D; --accent: #F5A53A; --accent-2: #E5673B; --ok: #5FD394;
+    --warn: #F07A63; color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #F6F1E6; --panel: #FFFBF2; --panel-2: #EFE7D6; --line: rgba(120, 80, 20, .18);
+      --ink: #1F1A12; --muted: #6B6252; color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+         display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); padding: 18px 16px;
+          display: flex; flex-direction: column; gap: 14px; position: sticky; top: 0;
+          height: 100vh; overflow-y: auto; }
+  main { padding: 20px 26px 40px; min-width: 0; }
+  h1 { font-size: 19px; margin: 0; }
+  h2 { font-size: 22px; margin: 0 0 2px; }
+  h3 { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+       margin: 0 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 12px; }
+  select, input[type=text] { width: 100%; padding: 7px 9px; border-radius: 9px;
+         border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+         font: inherit; }
+  input[type=color] { width: 42px; height: 32px; border: 0; background: none; padding: 0; }
+  label.check { display: flex; gap: 7px; align-items: center; margin: 3px 0; cursor: pointer; }
+  button { font: inherit; color: var(--ink); background: var(--panel-2); cursor: pointer;
+           border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2));
+                   color: #1A1206; font-weight: 600; border: 0; padding: 9px 18px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; }
+  iframe { width: 100%; height: 640px; border: 0; display: block; margin: 10px 0 6px; }
+  .note { border-left: 3px solid var(--ok); background: var(--panel); padding: 10px 14px;
+          border-radius: 6px; margin: 10px 0; }
+  .note.warn { border-color: var(--warn); }
+  .form { display: grid; gap: 8px; margin-top: 10px; max-width: 900px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px;
+          border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; }
+  .chip button { padding: 0 7px; border: 0; background: none; color: var(--muted); }
+  details summary { cursor: pointer; color: var(--muted); }
+  table.help td { padding: 2px 6px; vertical-align: top; font-size: 12.5px; }
+</style>
+<script src="donnees/paquet.js"></script>
+</head>
+<body>
+<aside>
+  <div>
+    <h1>🐸 Poste d'annotation</h1>
+    <div class="muted" id="about"></div>
+  </div>
+  <section>
+    <h3>Annotateur</h3>
+    <select id="who"></select>
+  </section>
+  <section>
+    <h3>Extraits</h3>
+    <div class="muted" id="progress"></div>
+    <select id="list"></select>
+    <label class="check"><input type="checkbox" id="skip" checked> Sauter les extraits déjà
+      envoyés</label>
+  </section>
+  <section>
+    <h3>Masquer les annotations de</h3>
+    <div id="masks"></div>
+  </section>
+  <section>
+    <h3>Étiquettes ajoutées</h3>
+    <div id="labels" class="row"></div>
+    <div class="row" style="margin-top:6px">
+      <input type="text" id="newlabel" class="grow" placeholder="Nouvelle étiquette">
+      <input type="color" id="newcolor" value="#B08CF2">
+      <button id="addlabel">Ajouter</button>
+    </div>
+  </section>
+  <section>
+    <h3>Vos réponses</h3>
+    <div class="muted" id="savestate"></div>
+    <div class="row" style="margin-top:6px">
+      <button id="pickdir">📁 Choisir le dossier</button>
+      <button id="download">⬇ Télécharger mes réponses</button>
+    </div>
+  </section>
+  <details>
+    <summary>Mode d'emploi : souris et clavier</summary>
+    <table class="help">
+      <tr><td>Écouter, mettre en pause</td><td><b>Espace</b>, ou les lecteurs sous le
+        spectrogramme</td></tr>
+      <tr><td>Tracer un intervalle</td><td><b>Clic gauche + glisser</b></td></tr>
+      <tr><td>Ajuster un intervalle</td><td><b>Tirer son bord</b></td></tr>
+      <tr><td>Choisir l'étiquette</td><td>Touches <b>1</b> à <b>4</b>, ou clic sur une
+        étiquette en haut</td></tr>
+      <tr><td>Supprimer un intervalle</td><td>Le sélectionner, puis <b>Suppr</b></td></tr>
+      <tr><td>Zoomer</td><td><b>Molette</b> ; double-clic : vue de base</td></tr>
+      <tr><td>Se déplacer</td><td><b>Clic droit + glisser</b>, ou flèches ← →</td></tr>
+    </table>
+    <p class="muted">Les touches agissent quand le spectrogramme a la main : cliquer dessus
+      d'abord.</p>
+  </details>
+</aside>
+<main>
+  <div id="intro"></div>
+  <div id="work">
+    <h2 id="title"></h2>
+    <div class="muted mono" id="caption"></div>
+    <iframe id="viewer" src="donnees/visualiseur.html" title="Spectrogramme"></iframe>
+    <div class="row" id="take"></div>
+    <div class="form">
+      <input type="text" id="species" placeholder="Espèce du faux ami (si connue)">
+      <input type="text" id="comment"
+             placeholder="Commentaire (votre avis, doute, conditions, chant lointain…)">
+      <div class="row">
+        <button class="primary" id="send">Envoyer l'extrait ▶</button>
+        <span class="muted" id="sendhint"></span>
+        <span class="grow"></span>
+        <button id="prev">◀ Précédent</button>
+        <button id="next">Suivant ▶</button>
+      </div>
+    </div>
+  </div>
+  <div id="end"></div>
+</main>
+<script>
+"use strict";
+const P = window.PAQUET, $ = id => document.getElementById(id);
+const ADD = "__ajouter__";
+
+// --- Mémoire du navigateur, propre au paquet ---------------------------------------------
+const LS = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+const K = k => `blanci-paquet:${P.nom}:${k}`;
+function get(k, fallback) {
+  try { const v = LS && LS.getItem(K(k)); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return fallback; }
+}
+function put(k, v) { try { if (LS) LS.setItem(K(k), JSON.stringify(v)); } catch (e) { /* plein */ } }
+
+let me = get("annotateur", "");
+let answers = me ? get(`reponses:${me}`, {}) : {};
+let custom = get("etiquettes", P.custom || {});
+let hidden = new Set(get("masques", [])), everyone = get("tout-masquer", false);
+let pos = 0, version = 0, current = [], ready = false, dir = null, unsaved = false;
+const fold = s => String(s || "").toLocaleLowerCase("fr");
+const sameName = (a, b) => fold(a) === fold(b);
+
+function names() {
+  const out = [...P.annotateurs];
+  for (const n of get("ajoutes", [])) if (!out.some(o => sameName(o, n))) out.push(n);
+  return out;
+}
+const others = () => [...new Set(P.items.flatMap(it => Object.keys(it.others)))];
+const item = () => P.items[pos];
+const heard = it => Object.prototype.hasOwnProperty.call(answers, it.key);
+const doneCount = () => P.items.filter(heard).length;
+
+// --- Panneau de gauche -------------------------------------------------------------------
+function sidebar() {
+  $("about").innerHTML = `Paquet « ${esc(P.nom)} » envoyé par ${esc(P.de)}.` +
+    (P.message ? `<br>${esc(P.message)}` : "");
+  const who = $("who");
+  who.innerHTML = `<option value="">Qui annote ?</option>` +
+    names().map(n => `<option${sameName(n, me) ? " selected" : ""}>${esc(n)}</option>`).join("") +
+    `<option value="${ADD}">➕ Ajouter quelqu'un…</option>`;
+  $("progress").textContent = `${doneCount()} / ${P.items.length} envoyés`;
+  $("list").innerHTML = P.items.map((it, i) =>
+    `<option value="${i}"${i === pos ? " selected" : ""}>${i + 1}. ${esc(it.site)} · ` +
+    `${esc(it.mic_id)} · ${esc(it.local_time)}${heard(it) ? " · ✓" : ""}</option>`).join("");
+  $("masks").innerHTML =
+    `<label class="check"><input type="checkbox" data-all${everyone ? " checked" : ""}>` +
+    ` Tout le monde</label>` +
+    others().map(n => `<label class="check"><input type="checkbox" data-who="${esc(n)}"` +
+      `${hidden.has(n) ? " checked" : ""}${everyone ? " disabled" : ""}> ${esc(n)}</label>`)
+      .join("");
+  $("labels").innerHTML = Object.entries(custom).map(([code, v]) =>
+    `<span class="chip"><span style="color:${v.color}">●</span>${esc(v.name)}` +
+    `<button data-rm="${code}" title="Retirer de la liste">✕</button></span>`).join("") ||
+    `<span class="muted">Aucune (A. blanci, plusieurs, ?, faux ami sont toujours là).</span>`;
+  saveState();
+}
+function saveState() {
+  const picker = "showDirectoryPicker" in window;
+  $("pickdir").hidden = !picker;
+  $("savestate").innerHTML = dir
+    ? `Enregistrées après chaque envoi dans le dossier « ${esc(dir.name)} » : ` +
+      `${esc(files()[0])} et ${esc(files()[1])}.`
+    : picker
+      ? "Gardées dans ce navigateur. Choisissez le dossier où les écrire (il vous sera " +
+        "demandé au premier envoi)."
+      : "Gardées dans ce navigateur. Pensez à « Télécharger mes réponses » à la fin, et de " +
+        "temps en temps.";
+}
+
+$("who").addEventListener("change", e => {
+  let name = e.target.value;
+  if (name === ADD) {
+    name = (prompt("Votre nom (tel qu'il apparaîtra dans les réponses) :") || "")
+      .trim().replace(/\s+/g, " ");
+    if (name && !names().some(n => sameName(n, name))) put("ajoutes", [...get("ajoutes", []), name]);
+    name = names().find(n => sameName(n, name)) || "";
+  }
+  me = name; put("annotateur", me);
+  answers = me ? get(`reponses:${me}`, {}) : {};
+  pos = firstUnheard(-1); open();
+});
+$("list").addEventListener("change", e => { pos = +e.target.value; open(); });
+$("masks").addEventListener("change", e => {
+  if (e.target.dataset.all !== undefined) everyone = e.target.checked;
+  else if (e.target.checked) hidden.add(e.target.dataset.who);
+  else hidden.delete(e.target.dataset.who);
+  put("masques", [...hidden]); put("tout-masquer", everyone);
+  sidebar(); render();
+});
+$("addlabel").addEventListener("click", () => {
+  const name = $("newlabel").value.trim();
+  const code = "custom_" + name.normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!name || code === "custom_") return;
+  custom[code] = {name, color: $("newcolor").value.toUpperCase()};
+  put("etiquettes", custom); $("newlabel").value = "";
+  sidebar(); render(true);
+});
+$("labels").addEventListener("click", e => {
+  const code = e.target.dataset.rm;
+  if (!code) return;
+  delete custom[code]; put("etiquettes", custom); sidebar(); render(true);
+});
+
+// --- Extrait ouvert ----------------------------------------------------------------------
+function firstUnheard(from) {
+  for (let i = from + 1; i < P.items.length; i++) if (!heard(P.items[i])) return i;
+  for (let i = 0; i <= from && i < P.items.length; i++) if (!heard(P.items[i])) return i;
+  return Math.max(0, Math.min(from, P.items.length - 1));
+}
+function neighbour(step) {
+  if (!$("skip").checked) return Math.min(Math.max(pos + step, 0), P.items.length - 1);
+  for (let i = pos + step; i >= 0 && i < P.items.length; i += step) {
+    if (!heard(P.items[i])) return i;
+  }
+  return pos;
+}
+function shownOthers(it) {  // {nom : intervalles} des autres, sauf soi et les masqués
+  if (everyone) return {};
+  return Object.fromEntries(Object.entries(it.others)
+    .filter(([n]) => !sameName(n, me) && !hidden.has(n)));
+}
+function open() {
+  const it = item();
+  const mine = answers[it.key];
+  const ownSaved = Object.entries(it.others).find(([n]) => sameName(n, me));
+  current = (mine ? mine.intervals : ownSaved ? ownSaved[1] : []).map(i => [...i]);
+  version++;
+  $("species").value = mine?.species || "";
+  $("comment").value = mine?.comment || "";
+  $("title").textContent = `${it.site} · ${it.mic_id} · ${it.local_time} (heure locale)`;
+  $("caption").textContent = `Extrait ${pos + 1} / ${P.items.length} · ${it.path} · ` +
+    `${it.offset_s.toFixed(1)}–${(it.offset_s + it.dur_s).toFixed(1)} s` +
+    (it.reason ? ` · ${it.reason}` : "") + (mine ? " · déjà envoyé" : "");
+  $("end").innerHTML = ""; $("work").hidden = false;
+  takeButtons(); sidebar(); controls(); render();
+  window.scrollTo({top: 0});
+}
+function controls() {
+  $("send").disabled = !me;
+  $("sendhint").textContent = me ? "" : "Choisir d'abord son nom (Annotateur, à gauche).";
+  $("prev").disabled = neighbour(-1) === pos;
+  $("next").disabled = neighbour(1) === pos;
+}
+function takeButtons() {
+  $("take").innerHTML = "";
+  for (const [who, ivs] of Object.entries(shownOthers(item()))) {
+    if (!ivs.length) continue;
+    const b = document.createElement("button");
+    b.textContent = `Reprendre les intervalles de ${who}`;
+    b.title = "D'accord avec lui : ses intervalles deviennent les vôtres (à retoucher si " +
+      "besoin), puis « Envoyer l'extrait ». Remplace ce que vous avez tracé.";
+    b.onclick = () => { current = ivs.map(i => [...i]); version++; render(); };
+    $("take").appendChild(b);
+  }
+}
+$("prev").addEventListener("click", () => { pos = neighbour(-1); open(); });
+$("next").addEventListener("click", () => { pos = neighbour(1); open(); });
+
+// --- Visualiseur : on lui parle comme Streamlit ------------------------------------------
+window.AUDIO = window.AUDIO || {};
+const loading = {};
+function audio(i) {
+  const it = P.items[i];
+  if (AUDIO[it.key]) return Promise.resolve(AUDIO[it.key]);
+  return loading[it.key] = loading[it.key] || new Promise((ok, ko) => {
+    const s = document.createElement("script");
+    s.src = `donnees/audio/${it.audio}`;
+    s.onload = () => ok(AUDIO[it.key]);
+    s.onerror = () => ko(new Error(`audio introuvable : donnees/audio/${it.audio}`));
+    document.head.appendChild(s);
+  });
+}
+const tracks = (it, srcs) => srcs.map((src, c) =>
+  ({name: P.channels[c] || `micro ${c + 1}`, src, start: it.offset_s, type: "audio/flac"}));
+const ivkey = () => `${me}|${pos}|${version}`;
+const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+
+async function render() {
+  if (!ready) return;
+  const i = pos, it = item();
+  let srcs;
+  try { srcs = await audio(i); }
+  catch (e) { $("caption").textContent = String(e.message); return; }
+  if (i !== pos) return;
+  const after = neighbour(1), next = after !== pos ? P.items[after] : null;
+  const nextSrcs = next ? await audio(after).catch(() => null) : null;
+  for (const k of Object.keys(AUDIO)) {  // en mémoire : l'extrait ouvert et le suivant
+    if (k !== it.key && (!next || k !== next.key)) { delete AUDIO[k]; delete loading[k]; }
+  }
+  if (i !== pos) return;
+  const args = {
+    t0: it.offset_s, t1: it.offset_s + it.dur_s, fview: P.fview,
+    audios: tracks(it, srcs),
+    windows: [{t0: it.offset_s, t1: it.offset_s + it.dur_s, label: null, current: false,
+               candidate: true}],
+    band: P.band, extract: it.key,
+    labels: [...P.labels, ...Object.entries(custom).map(([c, v]) => [c, v.name])],
+    colors: Object.fromEntries(Object.entries(custom).map(([c, v]) => [c, rgb(v.color)])),
+    intervals: current, ivkey: ivkey(),
+    others: Object.entries(shownOthers(it)).map(([who, intervals]) => ({who, intervals})),
+    qualities: P.qualities, interval_mode: true, channel: P.channel, height: 320,
+    next: next && nextSrcs ? tracks(next, nextSrcs) : [],
+  };
+  const dark = !matchMedia("(prefers-color-scheme: light)").matches;
+  $("viewer").contentWindow.postMessage(
+    {type: "streamlit:render", args, theme: {base: dark ? "dark" : "light"}}, "*");
+}
+window.addEventListener("message", e => {
+  const d = e.data;
+  if (!d || !d.isStreamlitMessage) return;
+  if (d.type === "streamlit:componentReady") { ready = true; render(); }
+  else if (d.type === "streamlit:setFrameHeight") $("viewer").style.height = `${d.height}px`;
+  else if (d.type === "streamlit:setComponentValue") {
+    const v = d.value;
+    if (v && v.key === item().key && v.ivkey === ivkey()) current = v.intervals;
+  }
+});
+
+// --- Envoi et écriture des réponses ------------------------------------------------------
+$("send").addEventListener("click", async () => {
+  if (!me) return;
+  if (!dir && "showDirectoryPicker" in window && !get("sans-dossier", false)) {
+    await pickDir();  // une fois : le geste de l'utilisateur est ce clic
+  }
+  const it = item(), t0 = it.offset_s, t1 = it.offset_s + it.dur_s;
+  const r2 = t => Math.round(t * 100) / 100;
+  answers[it.key] = {
+    intervals: current
+      .map(([a, b, l, q]) => [r2(Math.max(a, t0)), r2(Math.min(b, t1)), l, q || null])
+      .filter(([a, b]) => b > a),
+    species: $("species").value.trim() || null,
+    comment: $("comment").value.trim() || null,
+    created_at: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+  };
+  put(`reponses:${me}`, answers);
+  unsaved = true;
+  await write();
+  if (P.items.every(heard)) { finished(); return; }
+  pos = $("skip").checked ? firstUnheard(pos) : Math.min(pos + 1, P.items.length - 1);
+  open();
+});
+
+const prefix = () => me.replace(/[^\p{L}\p{N}_-]+/gu, "_").replace(/^_+|_+$/g, "") + "_";
+const files = () => [`${prefix()}extraits_annotes.csv`, `${prefix()}intervalles_annotes.csv`];
+const cell = v => {
+  const s = v === null || v === undefined ? "" : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const line = row => row.map(cell).join(",") + "\n";
+function csvs() {  // comme `service.export_annotations`
+  const head1 = ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s",
+    "n_blanci", "intervalles", "other_label", "classes", "multiclass", "quality", "species",
+    "comment", "annotator", "source", "created_at", "recording_id"];
+  const head2 = ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "label",
+    "quality", "valable", "annotator"];
+  let a = line(head1), b = line(head2);
+  P.items.map((it, i) => [it, i + 1, answers[it.key]]).filter(([, , s]) => s)
+    .sort((x, y) => x[2].created_at.localeCompare(y[2].created_at))
+    .forEach(([it, id, s]) => {
+      const t0 = it.offset_s, t1 = it.offset_s + it.dur_s;
+      const labels = [...new Set(s.intervals.map(iv => iv[2]))];
+      a += line([id, it.path, it.site, it.mic_id, it.start_utc, t0, t1,
+        s.intervals.filter(iv => iv[2] !== "false_friend").length,
+        s.intervals.map(([x, y, l, q]) => `${x.toFixed(2)}-${y.toFixed(2)} ${l}` +
+          (q ? ` (${q})` : "")).join("; "),
+        "background", labels.length ? labels.join(", ") : "background", "False", "",
+        s.species, s.comment, me, it.source, s.created_at, it.recording_id]);
+      for (const [x, y, l, q] of s.intervals) {
+        b += line([id, it.path, it.site, it.mic_id, it.start_utc, x, y, l, q, "True", me]);
+      }
+    });
+  return [a, b];
+}
+
+// Dossier choisi gardé d'une séance à l'autre (IndexedDB) ; le navigateur redemande la
+// permission d'y écrire à la première écriture de chaque séance.
+function idb(mode, fn) {
+  return new Promise((ok, ko) => {
+    const req = indexedDB.open("blanci-paquet", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("h");
+    req.onerror = () => ko(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction("h", mode), r = fn(tx.objectStore("h"));
+      tx.oncomplete = () => ok(r && r.result); tx.onerror = () => ko(tx.error);
+    };
+  });
+}
+async function pickDir() {
+  try {
+    dir = await window.showDirectoryPicker({id: "blanci-paquet", mode: "readwrite"});
+    await idb("readwrite", s => s.put(dir, P.nom)).catch(() => null);
+    put("sans-dossier", false);
+  } catch (e) {  // annulé : on n'insiste pas, il reste le téléchargement
+    put("sans-dossier", true);
+  }
+  saveState();
+}
+$("pickdir").addEventListener("click", async () => { await pickDir(); if (dir) await write(); });
+async function write() {
+  if (!dir || !me) { saveState(); return; }
+  try {
+    if ((await dir.queryPermission({mode: "readwrite"})) !== "granted" &&
+        (await dir.requestPermission({mode: "readwrite"})) !== "granted") return;
+    const [a, b] = csvs();
+    for (const [name, text] of [[files()[0], a], [files()[1], b]]) {
+      const w = await (await dir.getFileHandle(name, {create: true})).createWritable();
+      await w.write(new Blob(["﻿" + text], {type: "text/csv"})); await w.close();
+    }
+    unsaved = false;
+    saveState();
+  } catch (e) {
+    $("savestate").innerHTML = `<span style="color:var(--warn)">Écriture impossible (` +
+      `${esc(e.message)}). Vos réponses restent dans ce navigateur : « Télécharger mes ` +
+      `réponses ».</span>`;
+  }
+}
+function download() {
+  if (!me) return;
+  csvs().forEach((text, k) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["﻿" + text], {type: "text/csv"}));
+    a.download = files()[k];
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+  if (!dir) unsaved = false;
+}
+$("download").addEventListener("click", download);
+window.addEventListener("beforeunload", e => {
+  if (unsaved && !dir) { e.preventDefault(); e.returnValue = ""; }
+});
+
+function finished() {
+  $("work").hidden = true;
+  const where = dir
+    ? `Vos réponses sont enregistrées dans le dossier « ${esc(dir.name)} » : ` +
+      `<b>${esc(files()[0])}</b> et <b>${esc(files()[1])}</b>.`
+    : `Cliquez « Télécharger mes réponses » : deux fichiers, <b>${esc(files()[0])}</b> et ` +
+      `<b>${esc(files()[1])}</b>, arrivent dans vos téléchargements.`;
+  $("end").innerHTML = `<div class="note"><b>Terminé, merci !</b> ${where} Envoyez-les par ` +
+    `mail à ${esc(P.de)}.<br>Pour revoir un extrait, le choisir dans la liste à gauche.</div>` +
+    (dir ? "" : `<button class="primary" id="enddl">⬇ Télécharger mes réponses</button>`);
+  if (!dir) $("enddl").addEventListener("click", download);
+  sidebar();
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c =>
+    ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+}
+
+// --- Ouverture -----------------------------------------------------------------------------
+(async () => {
+  if (!P) {
+    document.body.innerHTML = "<p style='padding:2em'>Données du paquet introuvables : ouvrir " +
+      "« Ouvrir le poste.html » depuis le dossier du paquet dézippé.</p>";
+    return;
+  }
+  if (window.indexedDB && "showDirectoryPicker" in window) {
+    dir = await idb("readonly", s => s.get(P.nom)).catch(() => null) || null;
+  }
+  $("intro").innerHTML = P.message
+    ? `<div class="note">${esc(P.message)}</div>` : "";
+  pos = firstUnheard(-1);
+  open();
+  if (me && P.items.every(heard)) finished();
+})();
+</script>
+</body>
+</html>

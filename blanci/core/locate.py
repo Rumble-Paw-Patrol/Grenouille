@@ -119,11 +119,8 @@ def variants(rel: str, renamed: dict[str, str] | None = None) -> list[str]:
 def locate(
     rel: str, raw: Path | None, extra: list[Path] = (), renamed: dict[str, str] | None = None
 ) -> Path | None:
-    """Chemin complet de l'enregistrement `rel` (relatif, séparateurs POSIX), ou None. Un .wav
-    se cherche aussi en .flac : l'audio d'un paquet d'écoute envoyé à un encadrant
-    (`annotation/paquet.py`) est compressé, son chemin gardé."""
+    """Chemin complet de l'enregistrement `rel` (relatif, séparateurs POSIX), ou None."""
     names = variants(rel, renamed)
-    names += [n[:-4] + ".flac" for n in names if n.lower().endswith(".wav")]
     for root in candidate_roots(raw, extra):
         for name in names:
             full = root / name

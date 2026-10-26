@@ -20,20 +20,21 @@ sur une autre machine (y pointer `paths.queues` dans `config/local.yaml`). Des r
 seulement (enregistrement, début, durée), pas d'audio.
 
 **Annotations des encadrants (sans GitHub ni disques)** : Léonard leur envoie un paquet
-d'écoute, un .zip qui contient le poste, une file d'écoute, l'audio de ses extraits et ses
-intervalles :
+d'écoute, un .zip qui contient une page web (le poste), la file d'écoute, l'audio de ses
+extraits et ses intervalles :
 
     uv run blanci --config config/local.yaml paquet doutes_lots1-2 --file lot1 --file lot2 \
         --intervalle blanci_uncertain --message "Votre avis sur mes « A. blanci ? »"
 
-(paquet écrit sous `paths.exports/paquets/`). L'encadrant le dézippe et double-clique sur
-« Ouvrir le poste d'annotation » (.bat sous Windows, .command sur Mac ; la première fois, uv
-installe Python et le poste, quelques minutes, internet nécessaire). La file du paquet est
-déjà ouverte, les intervalles de Léonard sont affichés à son nom ; « Reprendre les
-intervalles de Léonard » quand il est d'accord. Son poste réécrit après chaque envoi ses
-annotations dans le dossier `A_RENVOYER` du paquet (`Nom_extraits_annotes.csv`,
-`Nom_intervalles_annotes.csv`) et le lui rappelle à la fin de la file. Il les envoie par mail
-à Léonard, qui les dépose dans ce dossier (`annotations/`), lance `blanci import-labels` et
+(paquet écrit sous `paths.exports/paquets/`, à déposer sur un drive : ~50 Mo pour 18
+extraits de 30 s). L'encadrant le dézippe et double-clique sur « Ouvrir le poste.html » :
+rien à installer, le poste s'ouvre dans le navigateur (Chrome ou Edge de préférence). Les
+intervalles de Léonard sont affichés à son nom ; « Reprendre les intervalles de Léonard »
+quand il est d'accord. Ses réponses sont gardées dans le navigateur et, avec Chrome ou Edge,
+réécrites après chaque envoi dans un dossier qu'il choisit au premier envoi ; ailleurs,
+« Télécharger mes réponses ». À la fin, la page lui dit quoi envoyer
+(`Nom_extraits_annotes.csv`, `Nom_intervalles_annotes.csv`). Il les envoie par mail à
+Léonard, qui les dépose dans ce dossier (`annotations/`), lance `blanci import-labels` et
 pousse sur GitHub.
 L'import est sans doublon (on peut redéposer un fichier plus récent par-dessus l'ancien) et
 ajoute à `annotateurs.txt` un nom qui n'y est pas encore. Dans le poste, leurs intervalles

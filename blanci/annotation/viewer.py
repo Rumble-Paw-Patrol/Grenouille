@@ -601,7 +601,8 @@ async function load() {
     div.innerHTML = `<span>${a.name}</span>`;
     const el = document.createElement("audio");
     el.controls = true; el.preload = "auto";
-    el.src = el._orig = URL.createObjectURL(new Blob([data[i]], {type: "audio/wav"}));
+    // `a.type` : FLAC dans le paquet d'écoute en page web (`annotation/web/poste.html`).
+    el.src = el._orig = URL.createObjectURL(new Blob([data[i]], {type: a.type || "audio/wav"}));
     el._key = ""; el._fft = given[a.src]?.fft;
     const source = actx.createMediaElementSource(el);
     const g = {source, hp: [], lp: [], gain: new GainNode(actx)};
