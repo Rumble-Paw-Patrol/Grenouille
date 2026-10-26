@@ -104,9 +104,9 @@ le temps réel ; convnext_birdset, 35 fois ; naturebeats, 30 fois.*
 ![Courbe d'amorçage](figures/4_courbe_amorcage.png)
 
 *Figure 4 — Site neuf, k enregistrements positifs annotés (logistique seule : les têtes sur
-jetons ne sont pas dans la courbe). audioprotopnet, ajouté après la figure, n'y figure pas : sa
-courbe est dans `donnees/courbe.csv` et suit de près celle de convnext_birdset, la meilleure
-du graphique. perch_v2 devance naturebeats jusqu'à k = 10.*
+jetons ne sont pas dans la courbe). audioprotopnet (violet) est la courbe la plus haute, juste
+devant convnext_birdset ; l'écart entre les deux est faible. perch_v2 devance naturebeats
+jusqu'à k = 10.*
 
 Contre le meilleur libre (perch_v2 + sonde à prototypes), écart d'AP moyenne par site
 (minute) ; seul audioprotopnet sur DENMIN survit à Holm (+0,16) :

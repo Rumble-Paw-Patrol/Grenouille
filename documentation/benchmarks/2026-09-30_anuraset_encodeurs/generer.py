@@ -26,8 +26,8 @@ import generer as tableaux  # noqa: E402
 
 SURFACE, ENCRE, ENCRE_2, FILET, GRIS = "#fcfcfb", "#0b0b0b", "#52514e", "#e1e0d9", "#b9b8b1"
 BLEU, ORANGE = "#2a78d6", "#eb6834"
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]
-MARQUES = ["o", "s", "D", "^", "v", "P"]
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#7a4fd1"]
+MARQUES = ["o", "s", "D", "^", "v", "P", "X"]
 ESPECES = ["DENMIN", "PITAZU", "PHYCUV", "LEPLAT", "BOAFAB"]
 REFERENCE = ("perch_v2", "logistic")
 COURBE = [  # encodeurs de la figure 4 (ordre fixe des couleurs)
@@ -37,6 +37,7 @@ COURBE = [  # encodeurs de la figure 4 (ordre fixe des couleurs)
     "perch_bird",
     "birdnet_v3",
     "convnext_birdset",
+    "audioprotopnet",
 ]
 K_ORDRE, K_NOMS = [0, 1, 2, 5, 10, 20, -1], ["0", "1", "2", "5", "10", "20", "tout"]
 LIBRE = {"oui": "libre", "sous réserve": "libre ?", "non": "non libre", "non relevée": "?"}
