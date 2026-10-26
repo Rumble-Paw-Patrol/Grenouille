@@ -34,7 +34,6 @@ avec un bouton « Commenter » sur chaque carte.
 ```
 Grenouille/
 ├── blanci/               le code : un dossier par étape de la chaîne (voir ci-dessous)
-├── tests/                tests automatiques, rangés comme blanci/
 ├── config/               réglages (default.yaml) et modèle de réglages locaux
 ├── annotations/          annotations exportées (CSV) et files d'écoute
 ├── anuraset/             pré-benchmark AnuraSet, terminé : réglages et scripts
@@ -84,7 +83,7 @@ Réentraînement <─ Poste d'annotation <─ File de vérification
 | Réentraînement | apprend une nouvelle tête sur tous les labels, l'adopte seulement si elle n'est pas moins bonne sur le jeu gelé | `service.py` | `retrain` |
 
 Hors de la chaîne : `core/` (réglages, base de données, lecture de l'audio) et `exploration/`
-(fonctions et figures des notebooks). Les tests (`tests/`) sont rangés comme `blanci/`.
+(fonctions et graphiques d'exploration).
 
 La commande `blanci` (`cli.py`) donne accès à toutes les étapes. Quelques emplacements sont
 réservés pour plus tard : réglage fin des encodeurs, distillation, modèle maison, export ONNX.
@@ -110,7 +109,6 @@ Python 3.11 et [uv](https://docs.astral.sh/uv/).
 
 ```sh
 uv sync --inexact             # installe tout
-uv run pytest                 # ≈ 860 tests, ~2 min
 uv run blanci --help
 ```
 
