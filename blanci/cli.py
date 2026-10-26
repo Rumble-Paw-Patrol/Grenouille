@@ -319,6 +319,19 @@ def import_labels(
     for name in report["annotators"]:
         if name.casefold() not in known and name not in MY_NAMES:
             typer.echo(f"Nouvel annotateur ajouté à la liste : {add_annotator(name)}")
+    # Étiquettes ajoutées par un autre annotateur : seul leur code voyage (custom_crapaud), le
+    # nom s'en déduit et la couleur est celle par défaut (à changer dans le poste).
+    from blanci.annotation.etiquettes import DEFAULT_COLOR, add_custom, is_custom, read_custom
+
+    codes = {
+        str(code)
+        for path in folder.glob("*intervalles_annotes.csv")
+        for code in pd.read_csv(path, usecols=["label"])["label"].dropna()
+    }
+    for code in sorted(c for c in codes if is_custom(c) and c not in read_custom()):
+        name = code.removeprefix("custom_").replace("_", " ").capitalize()
+        code = add_custom(name, DEFAULT_COLOR)
+        typer.echo(f"Nouvelle étiquette ajoutée à la liste : {name} ({code})")
     typer.echo(
         f"{report['spans']} extraits ({report['intervals']} intervalles) et "
         f"{report['labels']} fenêtres importés ; {report['already']} déjà dans la base"
@@ -328,6 +341,49 @@ def import_labels(
             f"  {report['unknown']} lignes sautées : enregistrement absent de cette base "
             "(blanci ingest d'abord)"
         )
+
+
+@app.command("paquet")
+def package(
+    ctx: typer.Context,
+    nom: Annotated[str, typer.Argument(help="Nom du paquet (dossier, .zip et file d'écoute).")],
+    file: Annotated[
+        list[str],
+        typer.Option(help="File(s) d'écoute de paths.queues (nom du dossier) ou CSV de candidats."),
+    ],
+    intervalle: Annotated[
+        str | None,
+        typer.Option(
+            help="Seulement les extraits dont notre dernier envoi a un intervalle de "
+            "ce label (blanci_uncertain pour « A. blanci ? »)."
+        ),
+    ] = None,
+    de: Annotated[str, typer.Option(help="Qui envoie (nom affiché dans le poste).")] = "Léonard",
+    message: Annotated[str, typer.Option(help="Mot pour l'encadrant, en tête du LISEZ-MOI.")] = "",
+    dossier: Annotated[
+        Path | None, typer.Option(help="Dossier de sortie (défaut : paths.exports/paquets).")
+    ] = None,
+) -> None:
+    """Paquet d'écoute à envoyer à un encadrant sans GitHub ni disques : le poste, une file
+    d'écoute, l'audio de ses extraits et nos intervalles, ouvert d'un double-clic
+    (`annotation/paquet.py`). Ses réponses reviennent par mail (`blanci import-labels`)."""
+    from blanci.annotation.paquet import build_package, extracts_with_label
+    from blanci.annotation.selection import queue_dir
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    paths = [Path(f) if f.endswith(".csv") else queue_dir(cfg) / f / "candidats.csv" for f in file]
+    queue = pd.concat([pd.read_csv(p) for p in paths], ignore_index=True)
+    queue = queue.drop_duplicates(["recording_id", "offset_s", "dur_s"]).reset_index(drop=True)
+    if intervalle:
+        authors = list(MY_NAMES) if de in MY_NAMES else [de]
+        queue = extracts_with_label(con, queue, intervalle, authors)
+    if queue.empty:
+        raise typer.BadParameter("aucun extrait à envoyer")
+    out = dossier or config_path(cfg, "exports") / "paquets"
+    archive = build_package(con, cfg, queue, nom, de, out, message)
+    size = archive.stat().st_size / 1e6
+    typer.echo(f"{len(queue)} extraits ; paquet : {archive} ({size:.0f} Mo)")
 
 
 @app.command("check-grid")

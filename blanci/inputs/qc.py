@@ -289,9 +289,7 @@ def check_recordings(
     que lui a donné la copie sur un disque du stage.
     """
     from pathlib import Path
-    from time import perf_counter
 
-    from blanci.core.ahead import ahead
     from blanci.core.locate import variants
 
     protected = positive_recordings(con)
@@ -320,6 +318,74 @@ def check_recordings(
         except Exception:  # fichier illisible : déjà signalé à l'inventaire
             return None
 
+    by_id = {rec.recording_id: rec for rec in recordings.itertuples()}
+    todo_ids: set[str] = set()
+    todo = todo or [by_id[rid] for rid in _unread_neighbours(con, by_id, thresholds)]
+    while todo:
+        todo_ids |= {rec.recording_id for rec in todo}
+        _read_tracks(
+            con, todo, prepare, workers, report, protected, raw_root, commit_every, progress_every
+        )
+        # La suite d'une piste 1 peut déborder la suite de la piste 0 : les voisins d'un
+        # candidat dont la piste 1 n'a pas été lue le sont aussi, de proche en proche.
+        todo = [
+            by_id[rid] for rid in _unread_neighbours(con, by_id, thresholds) if rid not in todo_ids
+        ]
+    con.commit()
+    return report
+
+
+def _unread_neighbours(
+    con: sqlite3.Connection, known: dict[str, Any], thresholds: dict[str, Any]
+) -> list[str]:
+    """Enregistrements stéréo de `known` dont la piste 1 n'est pas lue et qui suivent ou
+    précèdent (sans trou de plus de `muffled_max_gap_min`) un candidat piste 1 du même micro."""
+    gap = pd.Timedelta(minutes=float(thresholds.get("muffled_max_gap_min", 60.0)))
+    rows = [
+        (rid, dataset, site, mic, start, channels, parse_flags(qc))
+        for rid, dataset, site, mic, start, channels, qc in con.execute(
+            "SELECT recording_id, dataset, site, mic_id, start_utc, channels, qc_flags "
+            "FROM recordings"
+        )
+        if rid in known
+    ]
+    frame = pd.DataFrame(
+        {
+            "id": [r[0] for r in rows],
+            "mic": [(r[1], r[2], r[3]) for r in rows],
+            "t": pd.to_datetime([r[4] for r in rows], utc=True, errors="coerce"),
+            "unread": ["indices" in r[6] and "indices_1" not in r[6] and r[5] != 1 for r in rows],
+            "cand": [
+                "indices_1" in r[6] and muffled_candidate(r[6]["indices_1"], thresholds)
+                for r in rows
+            ],
+        }
+    ).dropna(subset=["t"])
+    wanted: set[str] = set()
+    for _, mic in frame.sort_values("t").groupby("mic", sort=False):
+        t, unread, cand, ids = mic["t"], mic["unread"], mic["cand"], mic["id"]
+        near_before = (t.diff() <= gap) & cand.shift(fill_value=False)
+        near_after = (t.diff(-1).abs() <= gap) & cand.shift(-1, fill_value=False)
+        wanted.update(ids[unread & (near_before | near_after)])
+    return sorted(wanted)
+
+
+def _read_tracks(
+    con: sqlite3.Connection,
+    todo: list[Any],
+    prepare: Any,
+    workers: int,
+    report: dict[str, int],
+    protected: set[str],
+    raw_root: Any,
+    commit_every: int,
+    progress_every: int,
+) -> None:
+    from pathlib import Path
+    from time import perf_counter
+
+    from blanci.core.ahead import ahead
+
     start = perf_counter()
     for n, (rec, flags) in enumerate(ahead(todo, prepare, 2 * workers, workers), start=1):
         if flags is None:
@@ -346,7 +412,6 @@ def check_recordings(
                 flush=True,
             )
     con.commit()
-    return report
 
 
 def muffled_runs(series: pd.DataFrame, min_run: int = 4, max_gap_min: float = 60.0) -> set[str]:
