@@ -882,7 +882,9 @@ def _import_set(
         intervals = pd.read_csv(intervals_csv) if intervals_csv is not None else pd.DataFrame()
         by_span = dict(tuple(intervals.groupby("span_id"))) if len(intervals) else {}
         for row in extracts.itertuples(index=False):
-            rid = recording_id_for(row.path)
+            # L'identifiant s'il est écrit (un paquet d'écoute range l'audio à plat, sans le
+            # chemin d'origine), sinon celui qui se déduit du chemin (exports d'avant).
+            rid = _text(getattr(row, "recording_id", None)) or recording_id_for(row.path)
             if rid not in known:
                 report["unknown"] += 1
                 continue

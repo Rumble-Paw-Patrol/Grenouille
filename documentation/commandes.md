@@ -72,7 +72,8 @@ $B ingest --dataset 2026 --site CDR --no-qc --no-hash "D:/Projet blanci 2025/REL
 $B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "D:/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026"
 
 $B export-labels     # mes annotations seules (pas Biophonia) → annotations/, à pousser après chaque session
-$B import-labels     # les recharge dans la base d'une autre machine (sans doublon)
+$B import-labels     # les recharge dans la base d'une autre machine (sans doublon), et les CSV renvoyés par un encadrant
+$B paquet doutes --file lot1 --file lot2 --intervalle blanci_uncertain   # paquet d'écoute (.zip) pour un encadrant sans GitHub ni disques
 
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid

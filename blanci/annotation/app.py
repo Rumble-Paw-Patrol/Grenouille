@@ -192,6 +192,13 @@ def _selection_panel(cfg, con) -> tuple[str, Path | None, str | None]:
     from blanci.annotation.selection import select_candidates, write_queue
 
     st.header("Sélection")
+    package = cfg.get("paquet") or {}
+    if package:  # paquet d'écoute reçu : sa file seule, déjà ouverte
+        queues = _queues(cfg)
+        st.caption(
+            f"Paquet « {package.get('nom', '')} » envoyé par {package.get('de', 'Léonard')}."
+        )
+        return EXISTING, (queues[0] if queues else None), None
     mode = st.selectbox("Mode de sélection", list(MODES), format_func=MODES.get, key="mode")
     encoder = None
     encoders = _encoders(con)
@@ -745,27 +752,62 @@ def _send_prefix(annotator: str) -> str:
     return re.sub(r"[^\w-]+", "_", annotator).strip("_") + "_"
 
 
+def _send_folder(cfg) -> Path:
+    """Dossier de la copie à envoyer : celui du paquet d'écoute reçu (`paquet.renvoi`, à côté
+    du programme), sinon `SEND_FOLDER`."""
+    package = cfg.get("paquet") or {}
+    return project_path(package["renvoi"]).resolve() if package.get("renvoi") else SEND_FOLDER
+
+
 def _send_copy(con, annotator: str) -> None:
-    """Réécrit les CSV d'`annotator` dans `SEND_FOLDER` (`export_annotations`). Un fichier
-    ouvert dans Excel ne s'écrit pas : l'annotation est enregistrée quand même, la copie
-    attend l'envoi suivant."""
+    """Réécrit les CSV d'`annotator` dans le dossier à envoyer (`_send_folder`, retenu par
+    `main`). Un fichier ouvert dans Excel ne s'écrit pas : l'annotation est enregistrée quand
+    même, la copie attend l'envoi suivant."""
+    folder = st.session_state.get("send_folder", SEND_FOLDER)
     try:
-        export_annotations(con, [annotator], SEND_FOLDER, _send_prefix(annotator))
+        export_annotations(con, [annotator], Path(folder), _send_prefix(annotator))
     except OSError as exc:
         st.toast(f"Copie à envoyer non mise à jour ({exc}) : fermer le CSV ouvert.")
 
 
-def _send_panel(annotator: str) -> None:
+def _send_files(annotator: str) -> str:
+    return f"« {_send_prefix(annotator)}extraits_annotes.csv » et « …intervalles_annotes.csv »"
+
+
+def _send_panel(annotator: str, folder: Path, author: str) -> None:
     """Où trouver ses fichiers à envoyer, et un bouton qui ouvre le dossier (Windows)."""
     if not annotator:
         return
     st.caption(
-        f"Après chaque envoi, vos annotations sont copiées dans `{SEND_FOLDER}` : fichiers "
-        f"« {_send_prefix(annotator)}… .csv », à joindre au mail pour Léonard."
+        f"Après chaque envoi, vos annotations sont copiées dans `{folder}` : "
+        f"{_send_files(annotator)}, à joindre au mail pour {author}."
     )
     if hasattr(os, "startfile") and st.button("📂 Ouvrir le dossier des fichiers à envoyer"):
-        SEND_FOLDER.mkdir(parents=True, exist_ok=True)
-        os.startfile(SEND_FOLDER)
+        folder.mkdir(parents=True, exist_ok=True)
+        os.startfile(folder)
+
+
+def _take(ikey_base: str, take_key: str, intervals: list) -> None:
+    """Rappel de « Reprendre les intervalles de… » : une copie devient ses intervalles, sous une
+    nouvelle clé que le visualiseur recharge (`intervals_key`)."""
+    version = st.session_state.get(take_key, 0) + 1
+    st.session_state[take_key] = version
+    st.session_state[f"{ikey_base}::{version}"] = [list(i) for i in intervals]
+
+
+def _take_buttons(others: dict[str, list], ikey_base: str, take_key: str) -> None:
+    """Un bouton par autre annotateur qui a tracé des intervalles : on les reprend à son compte
+    (d'accord avec lui), quitte à les retoucher avant l'envoi. Remplace ses propres tracés."""
+    shown = [(who, ivs) for who, ivs in others.items() if ivs]
+    for column, (who, ivs) in zip(st.columns(max(len(shown), 1)), shown, strict=False):
+        column.button(
+            f"Reprendre les intervalles de {who}",
+            key=f"take::{ikey_base}::{who}",
+            on_click=_take,
+            args=(ikey_base, take_key, ivs),
+            help="D'accord avec lui : ses intervalles deviennent les vôtres (à retoucher si "
+            "besoin), puis « Envoyer l'extrait ». Remplace ce que vous avez tracé.",
+        )
 
 
 def _masking_panel(names: list[str]) -> tuple[list[str], bool]:
@@ -841,6 +883,12 @@ def main() -> None:
 
     custom = read_custom()
     NAMES.update({c: v["name"] for c, v in custom.items()})
+    # Paquet d'écoute reçu par un encadrant (`annotation/paquet.py`) : une seule file, ses
+    # réponses copiées dans le dossier du paquet à renvoyer.
+    package = cfg.get("paquet") or {}
+    author = package.get("de") or "Léonard"
+    send_folder = _send_folder(cfg)
+    st.session_state["send_folder"] = str(send_folder)
 
     with st.sidebar:
         st.markdown(BRAND, unsafe_allow_html=True)
@@ -850,7 +898,7 @@ def main() -> None:
         st.header("Session")
         names = read_annotators()
         annotator = _annotator_input(names)
-        _send_panel(annotator)
+        _send_panel(annotator, send_folder, author)
         mode, chosen, encoder = _selection_panel(cfg, con)
         candidate_slot = st.container()
         st.header("Écoute")
@@ -868,16 +916,18 @@ def main() -> None:
             "Étiquette et qualité des intervalles, bande d'écoute, volume, filtre dynamique, "
             "contraste et micro du spectrogramme : dans la barre au-dessus du spectrogramme."
         )
-        st.header("Méthode")
-        window_mode = st.checkbox(
-            "Annoter par fenêtres (suspendu)",
-            value=False,
-            help="Ancienne méthode : un label par fenêtre de longueur fixe, sur la même page. "
-            "Par défaut, on trace les intervalles où A. blanci chante (§5.6).",
-        )
-        split_s = st.number_input(
-            "Longueur des fenêtres (s)", 0.5, 60.0, 3.0, 0.5, disabled=not window_mode
-        )
+        window_mode, split_s = False, 3.0
+        if not package:
+            st.header("Méthode")
+            window_mode = st.checkbox(
+                "Annoter par fenêtres (suspendu)",
+                value=False,
+                help="Ancienne méthode : un label par fenêtre de longueur fixe, sur la même "
+                "page. Par défaut, on trace les intervalles où A. blanci chante (§5.6).",
+            )
+            split_s = st.number_input(
+                "Longueur des fenêtres (s)", 0.5, 60.0, 3.0, 0.5, disabled=not window_mode
+            )
 
     if mode == MAP:
         _map_page(cfg, con, encoder, config)
@@ -898,9 +948,10 @@ def main() -> None:
         _cluster_panel(cfg, con, queue)
     # Annotateurs affichés (`shown`), et ceux dont les réponses font « déjà écouté » (`who`) :
     # les mêmes, plus soi-même, même masqué (on ne refait pas ce qu'on a déjà écouté).
+    # Paquet : seules ses propres réponses comptent, la file est faite des extraits de l'auteur.
     me = annotator.strip()
     shown = visible_annotators(con, hidden, everyone)
-    who = visible_annotators(con, hidden, everyone, keep=(me,) if me else ())
+    who = visible_annotators(con, hidden, everyone or bool(package), keep=(me,) if me else ())
     done = progress(con, queue, who)
     n = len(queue)
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
@@ -917,14 +968,20 @@ def main() -> None:
         st.session_state[end] = False
     with candidate_slot:
         _candidate_strip(queue, done, chosen, key, end, offset_h)
+    done_text = "File terminée : tous les candidats ont été écoutés."
+    if package and me:
+        done_text = (
+            f"File terminée, merci ! Vos réponses sont dans le dossier `{send_folder}` : "
+            f"envoyer {_send_files(me)} par mail à {author}."
+        )
     if finished and st.session_state.get(end):
         st.success(
-            "File terminée : tous les candidats ont été écoutés. Pour en réécouter un, le "
-            "choisir dans la liste des candidats (panneau de gauche)."
+            f"{done_text} Pour réécouter un extrait, le choisir dans la liste des candidats "
+            "(panneau de gauche)."
         )
         return
     if finished:
-        st.success("File terminée : tous les candidats ont été écoutés.")
+        st.success(done_text)
 
     candidate = queue.iloc[pos].to_dict()
     st.subheader(  # « en-ecoute » : la feuille de style met le point rouge devant
@@ -1003,7 +1060,9 @@ def main() -> None:
         own = saved.pop(mine, []) if me else []
         others = {k or "(sans nom)": v for k, v in saved.items()}
         masked = "all" if everyone else ",".join(sorted(h.casefold() for h in hidden))
-        ikey = f"iv::{extract}::{me.casefold()}::{masked}"
+        ikey_base = f"iv::{extract}::{me.casefold()}::{masked}"
+        take_key = f"take::{ikey_base}"  # change à chaque « Reprendre les intervalles de… »
+        ikey = f"{ikey_base}::{st.session_state.get(take_key, 0)}"
         if ikey not in st.session_state:
             st.session_state[ikey] = [list(i) for i in own]
         shown = [
@@ -1040,6 +1099,8 @@ def main() -> None:
             ckey,
             not window_mode,
         )
+        if not window_mode:
+            _take_buttons(others, ikey_base, take_key)
         intervals = st.session_state[ikey]
         channel = st.session_state[ckey]
 

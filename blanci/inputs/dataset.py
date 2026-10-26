@@ -186,7 +186,7 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     extracts = extracts[
         ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "n_blanci",
          "intervalles", "other_label", "classes", "multiclass", "quality", "species",
-         "comment", "annotator", "source", "created_at"]
+         "comment", "annotator", "source", "created_at", "recording_id"]
     ]  # fmt: skip
     intervals = intervals.merge(rec, on="recording_id", how="left")[
         ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "label",

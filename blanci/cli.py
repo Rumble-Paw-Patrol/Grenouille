@@ -2016,7 +2016,10 @@ def annotate(ctx: typer.Context) -> None:
     config = ctx.parent.params.get("config") if ctx.parent else None
     if config:
         command += ["--config", str(Path(config).resolve())]
-    raise typer.Exit(subprocess.call(command, env={**theme_env(), **os.environ}))
+    # Pas de question sur l'adresse mail au premier lancement de Streamlit : elle bloquait la
+    # fenêtre du poste chez un encadrant (paquet d'écoute) tant qu'on n'appuyait pas sur Entrée.
+    quiet = {"STREAMLIT_SERVER_SHOW_EMAIL_PROMPT": "false"}
+    raise typer.Exit(subprocess.call(command, env={**theme_env(), **quiet, **os.environ}))
 
 
 @app.command("label")
