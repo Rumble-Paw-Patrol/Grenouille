@@ -36,13 +36,13 @@ Grenouille/
 ├── blanci/               le code : un dossier par étape de la chaîne (voir ci-dessous)
 ├── tests/                tests automatiques, rangés comme blanci/
 ├── config/               réglages (default.yaml) et modèle de réglages locaux
-├── notebooks/            4 notebooks pour voir la chaîne fonctionner sur un enregistrement
 ├── annotations/          annotations exportées (CSV) et files d'écoute
 ├── anuraset/             pré-benchmark AnuraSet, terminé : réglages et scripts
 └── documentation/
     ├── benchmarks/       les 8 rapports de benchmark AnuraSet, avec données, figures et scripts
     ├── regularizations/  catalogue des régularisations des têtes (R1 à R85)
     ├── biblio/           bibliographie commentée, offre de stage
+    ├── prez/             présentations de suivi (.pptx)
     └── commandes.md, glossaire-bioacoustique.md, encodeurs-bacpipe.md
 ```
 
