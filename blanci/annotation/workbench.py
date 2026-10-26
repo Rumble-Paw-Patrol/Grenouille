@@ -58,6 +58,7 @@ ANSWERS = (
     ("bird", "oiseau"),
     ("orthoptera", "insecte"),
     ("rain", "pluie"),
+    ("artefact_muffled", "son étouffé"),
     ("background", "rien"),
     ("other", "autre"),
 )

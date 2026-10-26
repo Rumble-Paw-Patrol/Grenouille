@@ -16,7 +16,8 @@ CLASS_OF_LABEL = {
     "orthoptera": "orthoptère",
     "rain": "pluie",
     "background": "fond",
-    "artefact_in_bag": "artefact",
+    "artefact_muffled": "artefact",
+    "artefact_in_bag": "artefact",  # ancien nom (avant le n° 203)
     "other": "autre",
 }
 POSITIVE_CLASS = "blanci"

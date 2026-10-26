@@ -22,7 +22,7 @@ MIGRATIONS = [
         sample_rate  INTEGER,
         channels     INTEGER,
         sha256       TEXT,
-        qc_flags     TEXT                    -- JSON : rain, saturation, in_bag, silent, indices
+        qc_flags     TEXT                    -- JSON : rain, saturation, muffled, silent, indices
     );
     CREATE INDEX recordings_site_mic ON recordings(dataset, site, mic_id);
 

@@ -2,7 +2,7 @@
 
 - C0 (exploration) : échantillon global ; les groupes suivent-ils les micros (AMI groupe/micro
   élevé = l'embedding encode surtout le paysage sonore du point) ? Groupes dominés par un
-  enregistrement signalé (saturation, micro dans sac) = anomalies à écouter.
+  enregistrement signalé (saturation, son étouffé) = anomalies à écouter.
 - C1 (le clustering peut-il détecter ?) : positifs connus + fenêtres des mêmes micros aux mêmes
   heures. Réussi si le meilleur groupe rassemble ≥ 50 % des positifs, avec un enrichissement
   ≥ 20 (part de positifs du groupe / part globale), et si l'AMI groupe/micro reste faible.

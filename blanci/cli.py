@@ -198,7 +198,7 @@ def _echo_flags(flagged: dict[str, int]) -> None:
 def _echo_annotated(counts: dict[str, int]) -> None:
     typer.echo(
         f"posés à l'écoute, sur {counts['annotated']} enregistrements annotés : "
-        f"{counts['in_bag']} micro dans sac (jamais encodés), {counts['rain']} pluie (remarque)"
+        f"{counts['muffled']} son étouffé (jamais encodés), {counts['rain']} pluie (remarque)"
     )
 
 
@@ -211,8 +211,9 @@ def qc_command(
 ) -> None:
     """Contrôle audio de tous les enregistrements, avant tout encodage. Lit l'audio, n'encode rien.
 
-    Sort du corpus les fichiers cassés ou sans rapport avec le projet : silencieux, micro dans
-    sac (jamais encodés). Fait une fois pour toutes : `blanci embed` ne contrôle que ce qui ne
+    Sort du corpus les fichiers cassés ou sans rapport avec le projet : silencieux, son étouffé
+    sur les deux pistes (jamais encodés). Lit les deux pistes de chaque enregistrement. Fait
+    une fois pour toutes : `blanci embed` ne contrôle que ce qui ne
     l'a pas été. Reprenable : ce qui est fait est sauté.
     """
     cfg = _cfg(ctx)
@@ -228,7 +229,6 @@ def qc_command(
         recordings,
         raw,
         cfg["qc"],
-        channel=cfg["audio"]["channel"],
         workers=workers,
     )
     typer.echo(
@@ -244,7 +244,7 @@ def flag(ctx: typer.Context) -> None:
     """Recalcule tous les drapeaux, sans lire l'audio : inventaire (durée anormale, hors
     relevé), audio depuis les indices déjà calculés (seuils actuels de `qc`), écoute.
 
-    Écartent du corpus : silencieux, micro dans sac, durée anormale, hors relevé. Un
+    Écartent du corpus : silencieux, son étouffé (les deux pistes), durée anormale, hors relevé. Un
     enregistrement signalé reste dans la base et sur le
     disque ; s'il est écarté, il n'est jamais encodé, donc jamais tiré comme négatif ni
     proposé à la vérification. Un enregistrement où A. blanci a été entendu n'est jamais
@@ -418,7 +418,7 @@ def embed(
     """Extraction des embeddings → stock Parquet. Reprenable : ce qui est fait est sauté.
 
     Avec le contrôle audio (défaut), un enregistrement jamais contrôlé l'est sur l'audio déjà
-    lu ; silencieux ou micro dans sac, il n'est pas encodé (sauf s'il contient un positif).
+    lu ; silencieux ou au son étouffé, il n'est pas encodé (sauf s'il contient un positif).
     """
     cfg = _cfg(ctx)
     if batch:  # l'option l'emporte sur le lot de la config, global ou propre au modèle
@@ -468,7 +468,7 @@ def embed(
     if report.qc_checked:
         typer.echo(
             f"contrôle audio : {report.qc_checked} enregistrements, {report.qc_excluded} écartés "
-            "(silencieux ; micro dans sac : règle des suites en fin de passage)"
+            "(silencieux ; son étouffé : règle des suites en fin de passage)"
         )
     if report.gated:
         typer.echo(f"portes : {report.gated} fenêtres arrêtées (non encodées, score minimal)")

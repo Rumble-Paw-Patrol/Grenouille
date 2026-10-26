@@ -5,11 +5,15 @@ fichier n'est jamais touché). Trois origines :
 - inventaire, sans lire l'audio : durée anormale (`duration_off`), hors relevé
   (`off_campaign`), horloge douteuse (`clock_off`, une remarque : n'écarte plus rien,
   DECISIONS n° 191) ;
-- audio, calculé sur le son (`blanci qc`, avant tout encodage) : silencieux, micro dans sac ;
-  indices simples (numpy/scipy), seuils de config/default.yaml calibrés par
-  `blanci qc-calibrate` ;
+- audio, calculé sur le son (`blanci qc`, avant tout encodage) : silencieux, son étouffé
+  (`muffled`) ; indices simples (numpy/scipy) des deux pistes, seuils de config/default.yaml
+  calibrés par `blanci qc-calibrate` ;
 - écoute : clé `annotated`, présente sur tout enregistrement annoté à la main, avec la liste
-  des drapeaux que l'annotateur y a posés (label `artefact_in_bag`, label ou mention de pluie).
+  des drapeaux que l'annotateur y a posés (label `artefact_muffled`, label ou mention de pluie).
+
+Son étouffé (micro dans un sac, bonnette contre le sol…) : un enregistrement n'est écarté que si
+**les deux pistes** le sont (`muffled_0` et `muffled_1`, chacune par la règle des suites) ; si
+une piste est valable il reste dans le corpus avec son drapeau (DECISIONS n° 203).
 
 Le contrôle audio ne sert qu'à sortir du projet les fichiers cassés ou sans rapport avec lui
 (DECISIONS n° 174) : il ne signale ni la pluie ni la saturation, qui font partie du milieu
@@ -28,6 +32,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import soundfile as sf
 from scipy import fft
 from scipy.signal import get_window, welch
 
@@ -35,15 +40,29 @@ from blanci.inputs.labels import POSITIVE_LABELS
 
 # Drapeaux qui écartent un enregistrement du corpus : jamais encodé, donc ni négatif apparié,
 # ni candidat à écouter, ni score. La pluie notée à l'écoute est une remarque.
-EXCLUDING_FLAGS = ("in_bag", "silent", "duration_off", "off_campaign")
-AUDIO_FLAGS = ("silent", "in_bag")
+EXCLUDING_FLAGS = ("muffled", "silent", "duration_off", "off_campaign")
+AUDIO_FLAGS = ("silent", "muffled")
+# Ancien nom du drapeau (« micro dans sac », piste 0 seule, avant le n° 203) : lu comme `muffled`
+# tant que `blanci qc` n'a pas recalculé la base, donc l'enregistrement reste écarté.
+LEGACY_FLAGS = {"in_bag": "muffled"}
 
 
 def parse_flags(qc: Any) -> dict[str, Any]:
-    """Contenu de `recordings.qc_flags` (JSON, dict déjà lu, ou vide)."""
+    """Contenu de `recordings.qc_flags` (JSON, dict déjà lu, ou vide). Les anciens noms de
+    drapeaux (`LEGACY_FLAGS`) sont lus sous le nouveau, dans les clés et dans `annotated`."""
     if isinstance(qc, dict):
-        return qc
-    return json.loads(qc) if isinstance(qc, str) and qc else {}
+        flags = qc
+    else:
+        flags = json.loads(qc) if isinstance(qc, str) and qc else {}
+    if any(k in LEGACY_FLAGS for k in flags) or any(
+        k in LEGACY_FLAGS for k in flags.get("annotated", ())
+    ):
+        flags = {LEGACY_FLAGS.get(k, k): v for k, v in flags.items()} | {
+            k: v for k, v in flags.items() if k not in LEGACY_FLAGS
+        }
+        if "annotated" in flags:
+            flags["annotated"] = [LEGACY_FLAGS.get(k, k) for k in flags["annotated"]]
+    return flags
 
 
 def flag_raised(flags: dict[str, Any], key: str) -> bool:
@@ -111,19 +130,44 @@ def qc_indices(wav: np.ndarray, sr: int) -> dict[str, float]:
     }
 
 
-def qc_flags(indices: dict[str, float], thresholds: dict[str, float]) -> dict[str, Any]:
-    """Drapeaux audio d'après les indices. Les indices sont gardés avec eux : un seuil changé
-    se réapplique sans relire l'audio (`apply_audio_flags`). Tous les indices mesurés sont
-    rangés, y compris ceux qu'aucun drapeau ne lit (saturation, platitude du spectre).
+def muffled_candidate(indices: dict[str, float], thresholds: dict[str, float]) -> bool:
+    """Une piste d'un enregistrement ressemble à un son étouffé : pas silencieuse, et peu
+    d'énergie au-dessus de 2 kHz. Un candidat, pas un drapeau (règle des suites)."""
+    return (
+        indices["rms_dbfs"] >= thresholds["silent_dbfs"]
+        and indices["hf_ratio"] < thresholds["muffled_hf_ratio"]
+    )
 
-    `in_bag` n'est ici qu'un candidat, jugé sur un seul enregistrement : `apply_audio_flags`
-    ne le garde que dans une suite d'enregistrements consécutifs du même micro (n° 194)."""
-    silent = indices["rms_dbfs"] < thresholds["silent_dbfs"]
-    return {
-        "silent": silent,
-        "in_bag": not silent and indices["hf_ratio"] < thresholds["in_bag_hf_ratio"],
+
+def qc_flags(
+    indices: dict[str, float],
+    thresholds: dict[str, float],
+    indices_1: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Drapeaux audio d'après les indices de la piste 0 (micro 1) et, pour un fichier stéréo,
+    de la piste 1 (micro 2). Les indices sont gardés avec eux : un seuil changé se réapplique
+    sans relire l'audio (`apply_audio_flags`). Tous les indices mesurés sont rangés, y compris
+    ceux qu'aucun drapeau ne lit (saturation, platitude du spectre).
+
+    `muffled_0` et `muffled_1` ne sont ici que des candidats, jugés sur un seul enregistrement :
+    `apply_audio_flags` ne les garde que dans une suite d'enregistrements consécutifs du même
+    micro (n° 194), et ne lève `muffled` que si les deux pistes le sont (n° 203)."""
+    out: dict[str, Any] = {
+        "silent": bool(indices["rms_dbfs"] < thresholds["silent_dbfs"]),
+        "muffled_0": muffled_candidate(indices, thresholds),
         "indices": {k: round(v, 6) for k, v in indices.items()},
     }
+    if indices_1 is not None:
+        out["muffled_1"] = muffled_candidate(indices_1, thresholds)
+        out["indices_1"] = {k: round(v, 6) for k, v in indices_1.items()}
+    return out
+
+
+def audio_qc(source: Any, thresholds: dict[str, float]) -> dict[str, Any]:
+    """`qc_flags` d'un fichier audio (chemin ou tampon), les deux pistes lues en une fois."""
+    wav, sr = sf.read(source, dtype="float32", always_2d=True)
+    second = qc_indices(wav[:, 1], sr) if wav.shape[1] > 1 else None
+    return qc_flags(qc_indices(wav[:, 0], sr), thresholds, second)
 
 
 # --- Drapeaux d'inventaire : calculés sur les métadonnées, sans lire l'audio -----------------
@@ -230,7 +274,6 @@ def check_recordings(
     recordings: pd.DataFrame,
     raw_root: Any,
     thresholds: dict[str, Any],
-    channel: int | str = 0,
     workers: int = 4,
     commit_every: int = 100,
     progress_every: int = 1000,
@@ -245,19 +288,30 @@ def check_recordings(
     from time import perf_counter
 
     from blanci.core.ahead import ahead
-    from blanci.core.audio import load_audio
 
     protected = positive_recordings(con)
     report = {"checked": 0, "excluded": 0, "skipped": 0, "errors": 0}
-    todo = [rec for rec in recordings.itertuples() if "indices" not in parse_flags(rec.qc_flags)]
+
+    def measured(rec: Any) -> bool:
+        """Indices rangés. La piste 1 n'est lue que si la piste 0 est candidate : sans elle,
+        l'enregistrement ne peut pas être `muffled` (les deux pistes le sont ou aucune)."""
+        flags = parse_flags(rec.qc_flags)
+        if "indices" not in flags:
+            return False
+        return (
+            "indices_1" in flags
+            or getattr(rec, "channels", 2) == 1
+            or not muffled_candidate(flags["indices"], thresholds)
+        )
+
+    todo = [rec for rec in recordings.itertuples() if not measured(rec)]
     report["skipped"] = len(recordings) - len(todo)
 
     def prepare(rec: Any) -> dict[str, Any] | None:
         try:
-            wav, sr = load_audio(Path(raw_root) / rec.path, channel)
+            return audio_qc(Path(raw_root) / rec.path, thresholds)
         except Exception:  # fichier illisible : déjà signalé à l'inventaire
             return None
-        return qc_flags(qc_indices(wav, sr), thresholds)
 
     start = perf_counter()
     for n, (rec, flags) in enumerate(ahead(todo, prepare, 2 * workers, workers), start=1):
@@ -269,10 +323,10 @@ def check_recordings(
             continue
         merged = merge_audio_flags(con, rec.recording_id, flags)
         report["checked"] += 1
-        # `in_bag` n'est ici qu'un candidat : seule la règle des suites (`apply_audio_flags`,
-        # n° 194) le confirme. Il n'est pas compté parmi les écartés.
+        # `muffled_*` ne sont ici que des candidats : seule la règle des suites
+        # (`apply_audio_flags`, n° 194 et 203) les confirme. Pas comptés parmi les écartés.
         report["excluded"] += (
-            is_excluded(merged | {"in_bag": False}) and rec.recording_id not in protected
+            is_excluded(merged | {"muffled": False}) and rec.recording_id not in protected
         )
         if n % commit_every == 0:
             con.commit()
@@ -288,10 +342,8 @@ def check_recordings(
     return report
 
 
-def in_bag_runs(
-    series: pd.DataFrame, min_run: int = 4, max_gap_min: float = 60.0
-) -> set[str]:
-    """Enregistrements `in_bag` retenus : candidats d'une suite d'au moins `min_run`
+def muffled_runs(series: pd.DataFrame, min_run: int = 4, max_gap_min: float = 60.0) -> set[str]:
+    """Enregistrements `muffled` retenus : candidats d'une suite d'au moins `min_run`
     enregistrements consécutifs du même micro (jeu, site, micro), sans trou de plus de
     `max_gap_min` minutes entre deux voisins. Un micro dans un sac donne une série continue ;
     un enregistrement grave isolé (singes hurleurs, chœur, orage) n'en est pas une.
@@ -317,45 +369,64 @@ def apply_audio_flags(con: sqlite3.Connection, thresholds: dict[str, Any]) -> di
     """Recalcule les drapeaux audio depuis les indices déjà rangés, aux seuils actuels.
 
     Sans relire l'audio : sert après un changement de seuil. Les enregistrements sans indices
-    (contrôle audio jamais fait) ne changent pas. `in_bag` : ratio sous le seuil **et** suite
-    d'au moins `in_bag_min_run` enregistrements consécutifs du même micro (`in_bag_runs`).
+    (contrôle audio jamais fait) ne changent pas. `muffled_0` et `muffled_1` : ratio de la piste
+    sous le seuil **et** suite d'au moins `muffled_min_run` enregistrements consécutifs du même
+    micro (`muffled_runs`). `muffled` : les deux pistes à la fois (un fichier mono n'a que la
+    piste 0). Un fichier stéréo dont la piste 1 n'a pas été lue et dont la piste 0 est
+    candidate garde son `muffled` d'avant (relancer `blanci qc` pour lire la piste 1).
     """
     rows = con.execute(
-        "SELECT recording_id, dataset, site, mic_id, start_utc, qc_flags FROM recordings"
+        "SELECT recording_id, dataset, site, mic_id, start_utc, channels, qc_flags FROM recordings"
     ).fetchall()
-    audio_by_id, candidates = {}, []
-    for rid, dataset, site, mic, start, qc in rows:
+    audio_by_id, series = {}, {0: [], 1: []}
+    for rid, dataset, site, mic, start, channels, qc in rows:
         flags = parse_flags(qc)
         if "indices" not in flags:
             continue
-        audio_by_id[rid] = qc_flags(flags["indices"], thresholds)
-        candidates.append((rid, dataset, site, mic, start, audio_by_id[rid]["in_bag"]))
-    series = pd.DataFrame(
-        candidates, columns=["recording_id", "dataset", "site", "mic_id", "start_utc", "candidate"]
-    )
-    bagged = in_bag_runs(
-        series,
-        int(thresholds.get("in_bag_min_run", 4)),
-        float(thresholds.get("in_bag_max_gap_min", 60.0)),
-    )
+        audio = qc_flags(flags["indices"], thresholds, flags.get("indices_1"))
+        if channels == 1:  # une seule piste : la piste 1 est la piste 0
+            audio["muffled_1"] = audio["muffled_0"]
+        audio_by_id[rid] = audio
+        for track in (0, 1):
+            series[track].append(
+                (rid, dataset, site, mic, start, bool(audio.get(f"muffled_{track}")))
+            )
+    columns = ["recording_id", "dataset", "site", "mic_id", "start_utc", "candidate"]
+    min_run = int(thresholds.get("muffled_min_run", 4))
+    max_gap = float(thresholds.get("muffled_max_gap_min", 60.0))
+    kept = {}
+    for track, items in series.items():
+        kept[track] = muffled_runs(pd.DataFrame(items, columns=columns), min_run, max_gap)
     updates, counts = [], Counter()
-    for rid, qc in ((r[0], r[5]) for r in rows):
+    for rid, qc in ((r[0], r[6]) for r in rows):
         if rid not in audio_by_id:
             continue
         flags = parse_flags(qc)
-        audio = audio_by_id[rid] | {"in_bag": rid in bagged}
-        counts.update(k for k in AUDIO_FLAGS if audio[k])
-        if any(flags.get(k) != audio[k] for k in AUDIO_FLAGS):
-            updates.append((json.dumps(flags | audio), rid))
+        audio = audio_by_id[rid]
+        unread = "muffled_1" not in audio and audio["muffled_0"]  # piste 1 à lire
+        new = {
+            "silent": audio["silent"],
+            "muffled_0": rid in kept[0],
+            "muffled_1": rid in kept[1] if "muffled_1" in audio else False,
+        }
+        new["muffled"] = (
+            bool(flags.get("muffled")) if unread else new["muffled_0"] and new["muffled_1"]
+        )
+        if unread:
+            new.pop("muffled_1")
+        counts.update(k for k in AUDIO_FLAGS if new[k])
+        counts.update(k for k in ("muffled_0", "muffled_1") if new.get(k))
+        if any(flags.get(k) != new.get(k) for k in (*AUDIO_FLAGS, "muffled_0", "muffled_1")):
+            updates.append((json.dumps(flags | new), rid))
     _write_flags(con, updates)
-    return {k: counts[k] for k in AUDIO_FLAGS}
+    return {k: counts[k] for k in (*AUDIO_FLAGS, "muffled_0", "muffled_1")}
 
 
 # --- Drapeaux posés à l'écoute --------------------------------------------------------------
 
 # Dernier label d'une fenêtre écoutée → drapeau de son enregistrement. Une mention de pluie
 # dans le commentaire (étiquette de condition « rain ») le pose aussi, même sur un positif.
-ANNOTATION_FLAGS = {"artefact_in_bag": "in_bag", "rain": "rain"}
+ANNOTATION_FLAGS = {"artefact_muffled": "muffled", "artefact_in_bag": "muffled", "rain": "rain"}
 CONDITION_FLAGS = {"rain": "rain"}
 
 
@@ -428,4 +499,4 @@ def apply_annotation_flags(
             updates.append((json.dumps(new), rid))
     _write_flags(con, updates)
     counts = Counter(flag for flags in found.values() for flag in flags)
-    return {"annotated": len(found), **{k: counts[k] for k in ("in_bag", "rain")}}
+    return {"annotated": len(found), **{k: counts[k] for k in ("muffled", "rain")}}

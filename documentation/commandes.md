@@ -49,8 +49,8 @@ enregistrements de 120 s :
 | 6 s | 3 s | 39 | 3 748 641 |
 
 Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 895 micros
-dans le sac ou étouffés (calculés, suites d'au moins 2 h, DECISIONS n° 194) et 8 notés à
-l'écoute ; 95 214 enregistrements restent encodables. Les 1 521 à l'horloge
+dans le sac ou étouffés (piste 0 seule, calculés avant le n° 203 ; suites d'au moins 2 h,
+n° 194) et 8 notés à l'écoute ; 95 214 enregistrements restent encodables. Les 1 521 à l'horloge
 douteuse (Molokoi SMA14636, avril 2024) sont réintégrés : `clock_off` n'est plus qu'une
 remarque. Détail et anomalies : DECISIONS n° 153, 154 et 191.
 
@@ -77,7 +77,8 @@ $B import-labels     # les recharge dans la base d'une autre machine (sans doubl
 # Les notes annotées tiennent-elles entières dans les fenêtres des grilles 3 s et 5 s ?
 $B check-grid
 # Drapeaux (remarques sur un enregistrement, DECISIONS n° 79) : écartent du corpus
-# silencieux, micro dans sac, durée anormale, hors relevé (horloge douteuse : remarque, n° 191).
+# silencieux, son étouffé sur les deux pistes, durée anormale, hors relevé (horloge douteuse :
+# remarque, n° 191).
 # Recalcule inventaire, audio (seuils actuels, sans relire l'audio) et drapeaux d'écoute.
 $B flag
 $B status
@@ -107,8 +108,8 @@ $B throughput --encoders birdnet,beats,perch_v2,birdmae_base   # → debit.md
 
 # --- Embeddings et choix d'encodeur (§2) : uv sync --group research -------
 # Contrôle audio de tout le corpus, une fois pour toutes, avant le premier encodage (n° 173) :
-# silencieux et micro dans sac écartés (fichiers cassés ou sans rapport avec le projet).
-# Reprenable ; --dataset, --site.
+# silencieux et son étouffé (deux pistes lues, n° 203) écartés (fichiers cassés ou sans rapport
+# avec le projet). Reprenable ; --dataset, --site.
 uv run blanci qc
 uv run blanci embed --encoder birdmae --subset benchmark   # annotés + négatifs appariés
 # (un enregistrement que `qc` n'a pas vu est contrôlé au passage ; --no-qc pour s'en passer)

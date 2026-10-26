@@ -645,7 +645,7 @@ def append_label(
         ),
     )
     con.commit()
-    apply_annotation_flags(con, [row[0]])  # micro dans sac, pluie : drapeaux posés à l'écoute
+    apply_annotation_flags(con, [row[0]])  # son étouffé, pluie : drapeaux posés à l'écoute
     return int(cursor.lastrowid)
 
 
@@ -1038,7 +1038,7 @@ def evaluate_holdout(
 # --- Clustering (§5 bis) ----------------------------------------------------------------------
 
 
-def _qc_flagged(qc: Any, keys: tuple[str, ...] = ("saturation", "rain", "in_bag")) -> bool:
+def _qc_flagged(qc: Any, keys: tuple[str, ...] = ("saturation", "rain", "muffled")) -> bool:
     return is_excluded(qc, keys)
 
 

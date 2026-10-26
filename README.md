@@ -71,7 +71,7 @@ Réentraînement <─ Poste d'annotation <─ File de vérification
 | Étape | Ce qu'elle fait | Code | Commandes |
 |---|---|---|---|
 | Inventaire | range chaque enregistrement en base avec sa campagne, son site, son micro et son heure | `inputs/ingest.py` | `ingest`, `flag`, `status` |
-| Contrôle qualité | une passe sur tout le corpus avant l'encodage : écarte les fichiers cassés, silencieux, hors relevé, micro resté allumé dans le sac | `inputs/qc.py` | `qc` |
+| Contrôle qualité | une passe sur tout le corpus avant l'encodage : écarte les fichiers cassés, silencieux, hors relevé, au son étouffé sur les deux pistes (micro dans un sac) | `inputs/qc.py` | `qc` |
 | Traitement du signal* | filtre la bande 4,4–5,5 kHz, repère les fenêtres candidates et mesure le rythme du chant (une note de 0,09 s toutes les 1,2 à 1,9 s), sans apprentissage | `heads/signal_processing.py` | `onsets` |
 | Encodage | un encodeur pré-entraîné et gelé (Perch, BirdNET…) résume chaque fenêtre en un vecteur (embedding), et en jetons pour les têtes qui les lisent | `embedding/` | `embed`, `tokens` |
 | Têtes | une petite couche posée sur les embeddings donne un score par fenêtre : prototypes, régression logistique, sondes sur les jetons | `heads/` | `train`, `heads`, `heads-curve` |

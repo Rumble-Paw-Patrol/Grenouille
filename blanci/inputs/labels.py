@@ -20,7 +20,8 @@ LABELS = POSITIVE_LABELS + (
     "amphibian_contact_call",
     "false_friend",
     "rain",
-    "artefact_in_bag",
+    "artefact_muffled",
+    "artefact_in_bag",  # ancien nom de artefact_muffled (n° 203), encore lu
     "background",
     "other",
     "uncertain",

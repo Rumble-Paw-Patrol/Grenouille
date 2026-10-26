@@ -4,7 +4,7 @@ Reprenable : un enregistrement déjà présent dans sa partition est sauté ; le
 tous les `flush_every` enregistrements, la base après chaque enregistrement (le verrou
 d'écriture n'est pas gardé, le poste d'annotation écrit pendant un encodage). L'audio lu sert
 aussi au contrôle qualité (drapeaux audio) des enregistrements qui ne l'ont pas encore eu :
-un enregistrement silencieux ou micro dans sac est alors écarté avant d'être encodé. Le débit
+un enregistrement silencieux ou au son étouffé est alors écarté avant d'être encodé. Le débit
 mesuré (fenêtres/s, facteur temps réel) est enregistré dans la table models : c'est la colonne
 « vitesse » du benchmark (§2).
 
@@ -63,7 +63,7 @@ class EmbedReport:
     encode_s: float = 0.0
     errors: int = 0
     qc_checked: int = 0  # contrôle audio fait pendant ce passage
-    qc_excluded: int = 0  # écartés par ce contrôle (silencieux ; micro dans sac : voir plus bas)
+    qc_excluded: int = 0  # écartés par ce contrôle (silencieux ; son étouffé : voir plus bas)
     gated: int = 0  # fenêtres arrêtées par les portes du seuillage en amont (non encodées)
     wall_s: float = 0.0  # durée réelle du passage, lecture et écriture comprises
 
@@ -214,9 +214,9 @@ def embed_recordings(
     """Encode les enregistrements. Avec `qc_thresholds`, l'audio lu sert aussi au contrôle
     audio de chaque enregistrement qui ne l'a pas encore eu (`blanci qc` le fait d'avance) ;
     s'il lève un drapeau d'exclusion (silencieux), l'enregistrement n'est pas encodé, sauf si
-    A. blanci y a été entendu. Micro dans sac : un enregistrement seul n'est qu'un candidat,
-    il est encodé ; la règle des suites (`qc.apply_audio_flags`, n° 194) est appliquée en fin
-    de passage. Pour ne pas encoder les suites de micro dans sac, lancer `blanci qc` d'abord.
+    A. blanci y a été entendu. Son étouffé : jugé sur les deux pistes et par suites
+    (`qc.apply_audio_flags`, n° 194 et 203), donc pas pendant l'encodage. Pour ne pas encoder
+    les suites de sons étouffés, lancer `blanci qc` d'abord.
 
     `overlap` : chevauchement des fenêtres (0 à 0,99) ; hors 50 %, le stock porte le
     chevauchement dans son nom (`stock_id`).
@@ -270,16 +270,17 @@ def embed_recordings(
 
     def prepare(rec: Any) -> _Audio:
         """Fil de lecture : ce qui se calcule sur le signal sans la base ni l'encodeur."""
+        known = parse_flags(rec.qc_flags)
         try:
-            wav, sr = load_audio(find(rec.path), channel)
+            wav, sr = load_audio(find(rec.path), recording_channel(known, channel))
         except Exception:  # fichier illisible : déjà signalé à l'inventaire
             return _Audio(failed=True)
         audio = _Audio(wav, sr)
-        known = parse_flags(rec.qc_flags)
         if qc_thresholds is not None and "indices" not in known:
-            # `in_bag` n'est qu'un candidat ici : jugé en fin de passage (règle des suites).
+            # `muffled_0` n'est qu'un candidat ici, sur la seule piste encodée : le son étouffé
+            # est jugé par `blanci qc` (deux pistes, règle des suites), pas pendant l'encodage.
             fresh = qc_flags(qc_indices(wav, sr), qc_thresholds)
-            audio.flags = {k: v for k, v in fresh.items() if k != "in_bag"}
+            audio.flags = {k: v for k, v in fresh.items() if k != "muffled_0"}
             if is_excluded(known | audio.flags) and rec.recording_id not in protected:
                 return audio  # sera écarté : rien à découper
         audio.windows = window_grid(len(wav) / sr, window_s, hop_s)
@@ -371,7 +372,7 @@ def embed_recordings(
         _flush(store, con, metas, embs, dataset, site, month)
         store.consolidate(dataset, site, month)
 
-    if report.qc_checked:  # micro dans sac : candidats rangés, jugés par suites (n° 194)
+    if report.qc_checked:  # son étouffé : candidats rangés, jugés par suites (n° 194, 203)
         apply_audio_flags(con, qc_thresholds)
     report.wall_s = perf_counter() - began
     register_encoder(con, encoder, hop_s, report, channel, gates, mode)
@@ -382,6 +383,19 @@ def embed_recordings(
 LEGACY_IDENTITY = {"resample": "window", "openvino_precision": "f32"}
 
 
+# Piste 0 étouffée et piste 1 valable (`muffled_0` sans `muffled_1`, DECISIONS n° 203) :
+# l'enregistrement est encodé sur la piste 1, quel que soit le canal du stock.
+MUFFLED_0_CHANNEL = 1
+
+
+def recording_channel(flags: dict[str, Any], channel: int | str) -> int | str:
+    """Canal lu pour un enregistrement : la piste 1 si la piste 0 est étouffée et pas la 1,
+    sinon `channel`. Un fichier mono est lu tel quel quel que soit le canal (`load_audio`)."""
+    if flags.get("muffled_0") and not flags.get("muffled_1"):
+        return MUFFLED_0_CHANNEL
+    return channel
+
+
 def stock_identity(
     encoder: Encoder,
     channel: int | str,
@@ -389,7 +403,8 @@ def stock_identity(
     gates: Upstream | None = None,
 ) -> dict[str, Any]:
     """Réglages qui font qu'un embedding se compare aux autres de son stock sans être dans son
-    nom : le canal lu, la durée de fenêtre (`window_s`, réglable pour avex), le checkpoint
+    nom : le canal lu (et la piste de repli des enregistrements à la piste 0 étouffée, n° 203),
+    la durée de fenêtre (`window_s`, réglable pour avex), le checkpoint
     (bacpipe `birdmae_base`), la précision OpenVINO, les transformations en amont avec tous
     leurs réglages, le rééchantillonnage (`resample_mode`), les réglages `signal` des portes
     actives (ils décident des fenêtres encodées). Rangés avec l'encodeur (`register_encoder`).
@@ -397,6 +412,7 @@ def stock_identity(
     lue que si l'encodeur garde ses réglages `openvino`."""
     identity: dict[str, Any] = {
         "channel": channel,
+        "muffled_0_channel": MUFFLED_0_CHANNEL,
         "resample": resample,
         "window_s": encoder.window_s,
     }
