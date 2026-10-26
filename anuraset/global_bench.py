@@ -70,7 +70,7 @@ out.mkdir(parents=True, exist_ok=True)
 if (out / f"{name}_{sp}.delegue").exists():  # confiée à une autre machine
     sys.exit(f"délégué : {name} {sp}")
 cfg = load_config(Path("anuraset/anuraset.yaml"))
-encoder_id = stock_of(name, config_path(cfg, "embeddings"))  # bacpipe ou avex
+encoder_id = stock_of(name, config_path(cfg, "embeddings"))
 cfg["regularization"]["R37"]["glmm_grid"] = [0.3, 1.0, 3.0]  # comme les benchmarks 01 à 06
 acfg, head_cfg = cfg["anuraset"], cfg["head"]
 seed, C_grid = head_cfg["seed"], head_cfg["C_grid"]

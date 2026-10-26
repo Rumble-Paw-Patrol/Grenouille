@@ -167,18 +167,6 @@ encoders:
     insect66: {backend: bacpipe, model: insect66}
     insect459: {backend: bacpipe, model: insect459}
     rcl_fs_bsed: {backend: bacpipe, model: rcl_fs_bsed}         # trames de 0,2 s
-    # esp-aves2 (bibliothèque AVEX, `pip install avex`) : 16 kHz, fenêtres de 5 s ;
-    # CC-BY-NC-SA-4.0, références de benchmark seulement (n° 151).
-    esp_aves2_effnetb0_bio: {backend: avex, model: esp_aves2_effnetb0_bio}
-    esp_aves2_effnetb0_all: {backend: avex, model: esp_aves2_effnetb0_all}
-    esp_aves2_effnetb0_audioset: {backend: avex, model: esp_aves2_effnetb0_audioset}
-    esp_aves2_eat_bio: {backend: avex, model: esp_aves2_eat_bio}
-    esp_aves2_eat_all: {backend: avex, model: esp_aves2_eat_all}
-    esp_aves2_sl_eat_bio_ssl_all: {backend: avex, model: esp_aves2_sl_eat_bio_ssl_all}
-    esp_aves2_sl_eat_all_ssl_all: {backend: avex, model: esp_aves2_sl_eat_all_ssl_all}
-    esp_aves2_sl_beats_bio: {backend: avex, model: esp_aves2_sl_beats_bio}
-    esp_aves2_sl_beats_all: {backend: avex, model: esp_aves2_sl_beats_all}
-    esp_aves2_naturelm_audio_v1_beats: {backend: avex, model: esp_aves2_naturelm_audio_v1_beats}
 
 head:
   C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]

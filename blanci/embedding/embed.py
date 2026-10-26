@@ -389,7 +389,7 @@ def stock_identity(
     gates: Upstream | None = None,
 ) -> dict[str, Any]:
     """Réglages qui font qu'un embedding se compare aux autres de son stock sans être dans son
-    nom : le canal lu, la durée de fenêtre (`window_s`, réglable pour avex), le checkpoint
+    nom : le canal lu, la durée de fenêtre (`window_s`), le checkpoint
     (bacpipe `birdmae_base`), la précision OpenVINO, les transformations en amont avec tous
     leurs réglages, le rééchantillonnage (`resample_mode`), les réglages `signal` des portes
     actives (ils décident des fenêtres encodées). Rangés avec l'encodeur (`register_encoder`).

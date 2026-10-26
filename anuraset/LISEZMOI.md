@@ -30,4 +30,4 @@ Vague d'encodage 2 (n° 151, 152 ; plan des sessions : `VAGUE_ENCODAGE_2.md`) :
 - `importer_stock.py <encodeur>` : stock et modèle d'une branche `donnees-anuraset-*` ajoutés
   à la base locale, sans l'écraser.
 - `global_bench.py` : `--tokens` (attentive, logistic:max, proto_probe), `--native`
-  (classifieur de l'encodeur, sans entraînement) ; stock trouvé sur le disque (bacpipe, avex).
+  (classifieur de l'encodeur, sans entraînement) ; stock trouvé sur le disque.
