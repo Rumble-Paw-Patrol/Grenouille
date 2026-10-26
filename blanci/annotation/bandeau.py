@@ -150,8 +150,7 @@ INDEX = r"""<!doctype html>
   <div class="texte">
     <h1>Poste d'annotation d'<i>Anomaloglossus blanci</i></h1>
     <div class="accroche">
-      <p>Écouter chaque extrait, tracer les chants sur le spectrogramme, nommer les faux amis :
-        chaque réponse s'ajoute aux labels, aucune n'en efface.</p>
+      <p>Écouter chaque extrait, tracer les chants sur le spectrogramme, nommer les faux amis.</p>
       <button type="button" class="ecouter" id="ecouter" aria-pressed="false" hidden>
         <span class="disque" aria-hidden="true"><svg class="lire" viewBox="0 0 16 16">
           <path d="M4.5 2.6v10.8L13.4 8z"/></svg><span class="egaliseur"><i></i><i></i><i></i>

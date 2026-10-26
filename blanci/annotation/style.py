@@ -444,18 +444,20 @@ html[data-gr-theme="light"] {
 .stApp button:disabled { opacity: .4; }
 /* Mode d'emploi : bouton sur toute la largeur du panneau. Sa fenêtre s'ouvre comme une
    fenêtre surgissante, en haut de la page et non sous le bouton (elle sortait par le bas de
-   l'écran) : par-dessus le panneau, elle déborde sur la page, assez large pour le tableau des
-   gestes, et défile toute seule si l'écran est trop bas. Un clic à côté ou Échap la ferme.
+   l'écran) : à droite du panneau, qu'elle ne recouvre pas (le bouton reste cliquable pour la
+   fermer), assez large pour le tableau des gestes, et défile toute seule si l'écran est trop
+   bas. Un clic à côté ou Échap la ferme.
    Streamlit la place par des styles en ligne (position, décalage), d'où les !important. */
 [data-testid="stSidebar"] [data-testid="stPopover"],
 [data-testid="stSidebar"] [data-testid="stPopover"] > div,
 [data-testid="stSidebar"] [data-testid="stPopover"] button { width: 100% !important; }
 [data-testid="stSidebar"] [data-testid="stPopover"] button { justify-content: flex-start; }
 [data-testid="stPopoverBody"] {
-  position: fixed !important; top: 12px !important; left: 12px !important;
+  position: fixed !important; top: 12px !important;
+  left: calc(var(--panneau, 22rem) + 12px) !important;
   right: auto !important; bottom: auto !important; transform: none !important;
   margin: 0 !important; z-index: 1000001 !important;
-  width: min(800px, calc(100vw - 24px)) !important;
+  width: min(800px, calc(100vw - var(--panneau, 22rem) - 24px)) !important;
   max-width: none !important; max-height: calc(100dvh - 24px) !important;
   overflow-y: auto !important; padding: 18px 22px !important;
   background: var(--fond-fenetre) !important; border: 1px solid var(--line-fort) !important;

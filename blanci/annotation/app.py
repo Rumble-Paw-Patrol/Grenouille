@@ -97,7 +97,7 @@ NAMES = dict(ANSWERS) | {"edge": "bord d'un intervalle (écarté)"}
 SHOW_METHOD = False  # rubrique « Méthode » du bandeau latéral (annotation par fenêtres)
 EXISTING, MAP = "existing", "map"
 MODES = {
-    EXISTING: "File déjà écrite",
+    EXISTING: "File d'écoute déjà prête",
     "active": "File 60-20-20 (incertains, meilleurs, hasard)",
     "similarity": "Récolte par similarité",
     "coverage": "Couverture (YAPAT maison, automatique)",
@@ -211,7 +211,7 @@ def _selection_panel(cfg, con) -> tuple[str, Path | None, str | None]:
         chosen = st.selectbox("File de candidats", queues, index=index, format_func=_queue_name)
         readme = chosen.parent / "LISEZMOI.md"
         if chosen.name == "candidats.csv" and readme.is_file():
-            with st.expander("D'où vient cette file ?"):
+            with st.expander("Informations sur cette file d'écoute"):
                 st.markdown(readme.read_text(encoding="utf-8"))
         return mode, chosen, encoder
     if mode == MAP:
@@ -555,7 +555,7 @@ def _details(with_quality: bool = True) -> tuple[str | None, str | None, str | N
         else "—"
     )
     species = st.text_input("Espèce du faux ami (si connue)")
-    comment = st.text_input("Commentaire (conditions, chant lointain, pluie…)")
+    comment = st.text_input("Commentaire")
     return (
         None if quality == "—" else quality,
         species.strip() or None,
@@ -656,11 +656,7 @@ def _labels_panel(custom: dict[str, dict[str, str]]) -> None:
 
 def _interval_caption(intervals) -> str:
     if not intervals:
-        return (
-            "Aucun intervalle tracé : tout l'extrait sera négatif. Clic gauche + glisser sur le "
-            "spectrogramme là où A. blanci chante (un faux ami : étiquette « faux ami » ou "
-            "touche 4, avant de tracer)."
-        )
+        return "Aucun intervalle tracé : tout l'extrait sera négatif."
     return f"{len(intervals)} intervalle(s) : " + " · ".join(
         f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)}{f', qualité {q}' if q else ''})"
         for a, b, c, q in sorted(((*i, None)[:4] for i in intervals), key=lambda t: t[:3])
@@ -800,8 +796,6 @@ def _masking_panel(names: list[str]) -> tuple[list[str], bool]:
     everyone = st.checkbox(
         "Tout le monde",
         key="hide_everyone",
-        help="Personne n'est affiché : on écoute sans rien voir de ce qui a déjà été répondu. "
-        "Vos propres réponses comptent toujours comme « déjà écouté ».",
     )
     columns = st.columns(2)
     return [
@@ -811,9 +805,6 @@ def _masking_panel(names: list[str]) -> tuple[list[str], bool]:
             name,
             key=f"hide::{name}",
             disabled=everyone,
-            help=f"Les intervalles de {name} ne s'affichent pas sur le spectrogramme et ses "
-            "réponses ne comptent pas comme « déjà écouté » (calibration, §5). Se masquer "
-            "soi-même : on repart d'un spectrogramme vide sur ses propres extraits.",
         )
     ], everyone
 
@@ -884,15 +875,10 @@ def main() -> None:
             value=True,
             key="skip_done",
             help="◀ ▶ et l'envoi d'une réponse vont au précédent ou au prochain candidat jamais "
-            "écouté ; décoché, au voisin dans la file. La liste des candidats donne toujours "
-            "accès à tous.",
+            "écouté ; décoché, au voisin dans la file.",
         )
         hidden, everyone = _masking_panel(names)
         _labels_panel(custom)
-        st.caption(
-            "Étiquette et qualité des intervalles, bande d'écoute, volume, filtre dynamique, "
-            "contraste et micro du spectrogramme : dans la barre au-dessus du spectrogramme."
-        )
         # Rubrique « Méthode » masquée (annotation par fenêtres suspendue) : mettre
         # SHOW_METHOD à True pour la réafficher.
         window_mode, split_s = False, 3.0

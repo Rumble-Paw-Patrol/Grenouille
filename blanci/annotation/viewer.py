@@ -48,11 +48,6 @@ sur une étiquette en haut (aucun intervalle sélectionné) |
 | Supprimer un intervalle | Une fois sélectionné, touche **Suppr**, ou **clic** sur la petite \
 croix de sa pastille |
 
-La bande d'écoute, « n'écouter qu'elle », le volume, le filtre dynamique, le contraste et le
-micro du spectrogramme se règlent dans la barre au-dessus du spectrogramme et s'appliquent
-aussitôt ; ils sont gardés d'une séance à l'autre. Les touches agissent quand le
-spectrogramme a la main (liseré ambré) : cliquer dessus d'abord.
-
 **Intervalles des autres annotateurs** (ceux qui ne sont pas masqués, panneau de gauche) :
 bords en tirets et bande à leur nom en bas du spectrogramme, pastilles en tirets sous les
 vôtres. Ils ne se modifient pas : seuls les vôtres sont enregistrés à l'envoi.
