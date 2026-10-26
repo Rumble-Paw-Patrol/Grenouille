@@ -13,16 +13,21 @@
   réécouter, une nouvelle réponse s'ajoute à l'ancienne (correction, jamais écrasée).
   « Sauter les candidats déjà écoutés » : ◀ ▶ et l'envoi d'une réponse vont au précédent ou
   au prochain jamais écouté, sinon au voisin dans la file.
+- **Annotateurs** : on se choisit dans le menu « Annotateur » (liste du projet,
+  `annotations/annotateurs.txt`, où « Ajouter quelqu'un… » inscrit un nouveau venu). En
+  rouvrant un extrait, on retrouve ses propres intervalles, modifiables, et ceux du dernier
+  envoi de chaque autre annotateur, en lecture seule. « Masquer les annotations de » cache
+  ceux de certains (ou de tout le monde) : ni affichés, ni comptés comme déjà écoutés.
 - **Écoute** : l'enregistrement entier sur un spectrogramme zoomable (`viewer.py` : molette,
   glisser, barre de lecture qui suit l'un ou l'autre micro), volume et bande d'écoute
   réglable (position et largeur) ; rien de cela ne touche l'audio d'origine.
-- **Multi-classe** (décoché par défaut) : on ne note qu'A. blanci et ses faux amis (en
-  intervalles, comme elle) ; coché, on dit aussi les autres classes entendues.
+- **Étiquettes** : A. blanci, plusieurs, ?, faux ami, plus celles qu'on ajoute (panneau
+  « Étiquettes », nom et couleur, `annotations/etiquettes.json`).
 - **Découpage** : l'extrait se découpe en fenêtres de longueur choisie, calées sur le
   candidat ; on les annote une à une sans quitter l'enregistrement.
 - **Qualité** : en intervalles, chaque intervalle a la sienne (A, B, C : barre au-dessus du
   spectrogramme) ; en fenêtres, une qualité pour la fenêtre.
-- **Réponse** : une ou plusieurs classes, qualité, espèce, commentaire, puis « Envoyer ▶ »
+- **Réponse** : espèce, commentaire (et en fenêtres, classes et qualité), puis « Envoyer ▶ »
   (ou Entrée dans un champ) : le label est ajouté (jamais écrasé) et la fenêtre suivante
   s'affiche (fenêtre suivante du découpage, sinon candidat suivant).
 - **Groupes** : une file tirée par groupes montre, groupe par groupe, ce qui a été entendu ; un
@@ -41,6 +46,7 @@ import argparse
 import itertools
 import math
 import os
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -50,12 +56,15 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from blanci.annotation.bandeau import bandeau
+from blanci.annotation.etiquettes import add_custom, read_custom, remove_custom
 from blanci.annotation.selection import NEEDS_ENCODER
 from blanci.annotation.style import BRAND, CHART_COLORS, CSS, LABEL_COLORS, UNHEARD_COLOR
 from blanci.annotation.viewer import HELP, asset, asset_src, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
     INTERVAL_ANSWERS,
+    add_annotator,
+    extract_intervals,
     latest_labels,
     load_candidates,
     local_time,
@@ -63,22 +72,28 @@ from blanci.annotation.workbench import (
     next_position,
     ordered_classes,
     progress,
+    read_annotators,
     read_channels,
     save_answer,
     save_span,
-    span_intervals,
     split_windows,
+    visible_annotators,
     wav_bytes,
 )
-from blanci.core.config import DEFAULT_CONFIG, config_path, default_user_config, load_config
+from blanci.core.config import (
+    DEFAULT_CONFIG,
+    config_path,
+    default_user_config,
+    load_config,
+    project_path,
+)
 from blanci.core.db import connect, window_id_for
 from blanci.core.locate import locate, remember_root, remembered_roots, variants
 from blanci.inputs.labels import QUALITIES
+from blanci.service import export_annotations
 
 CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
 NAMES = dict(ANSWERS) | {"edge": "bord d'un intervalle (écarté)"}
-# Classes de l'extrait hors A. blanci, dont la présence se dit par les intervalles.
-OTHER_ANSWERS = tuple(a for a in ANSWERS if a not in INTERVAL_ANSWERS)
 EXISTING, MAP = "existing", "map"
 MODES = {
     EXISTING: "File déjà écrite",
@@ -497,9 +512,10 @@ _fragment = getattr(st, "fragment", lambda f: f)
 @_fragment
 def _viewer_fragment(args: dict, extract: str, ikey: str, ckey: str, interval_mode: bool):
     """Visualiseur et liste des intervalles : tracer, ajuster ou effacer un intervalle ne
-    réaffiche que ce fragment, pas toute la page."""
+    réaffiche que ce fragment, pas toute la page. `ikey` : intervalles de qui annote, avec
+    ceux qu'il masque (une valeur renvoyée pour un autre réglage est ignorée)."""
     value = viewer(args)
-    if value and value.get("key") == extract:
+    if value and value.get("key") == extract and value.get("ivkey") == ikey:
         st.session_state[ikey] = value["intervals"]
         st.session_state[ckey] = int(value.get("channel", 0))
     if interval_mode:
@@ -517,12 +533,10 @@ def _classes(form_key: str, answers) -> list[str]:
 
 # Le bouton d'envoi reste grisé sans annotateur : un formulaire envoyé se vide
 # (`clear_on_submit`), et un envoi refusé faisait perdre le commentaire tapé.
-_NO_ANNOTATOR = "Indiquer l'annotateur dans le panneau de gauche."
+_NO_ANNOTATOR = "Choisir l'annotateur dans le panneau de gauche."
 
 
-def _details(
-    multiclass: bool, with_quality: bool = True
-) -> tuple[str | None, str | None, str | None]:
+def _details(with_quality: bool = True) -> tuple[str | None, str | None, str | None]:
     """Qualité (sauf `with_quality` faux : en intervalles, chacun a la sienne, au-dessus du
     spectrogramme), espèce, commentaire."""
     quality = (
@@ -530,9 +544,7 @@ def _details(
         if with_quality
         else "—"
     )
-    species = st.text_input(
-        "Espèce entendue (faux ami, congénère…)" if multiclass else "Espèce du faux ami (si connue)"
-    )
+    species = st.text_input("Espèce du faux ami (si connue)")
     comment = st.text_input("Commentaire (conditions, chant lointain, pluie…)")
     return (
         None if quality == "—" else quality,
@@ -541,19 +553,11 @@ def _details(
     )
 
 
-def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel, multiclass) -> bool:
+def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel) -> bool:
     """Annotation par intervalles : les intervalles viennent du spectrogramme, le formulaire
-    dit le reste de l'extrait (les autres classes seulement en multi-classe). Vrai si
-    l'extrait a été enregistré."""
+    ne demande que l'espèce et le commentaire. Vrai si l'extrait a été enregistré."""
     with st.form(key=form_key, clear_on_submit=True):
-        ticked = []
-        if multiclass:
-            st.markdown(
-                "**Autres classes entendues dans l'extrait** (A. blanci : par les "
-                "intervalles ; aucune cochée : rien)"
-            )
-            ticked = _classes(form_key, OTHER_ANSWERS)
-        quality, species, comment = _details(multiclass, with_quality=False)
+        quality, species, comment = _details(with_quality=False)
         sent = st.form_submit_button(
             "Envoyer l'extrait ▶",
             type="primary",
@@ -573,27 +577,27 @@ def _span_form(con, candidate, t0, t1, intervals, form_key, annotator, channel, 
             t0,
             t1,
             [tuple(i) for i in intervals],
-            ticked,
+            [],
             annotator.strip(),
             quality=quality,
             comment=comment,
             channel=channel,
             species=species,
-            multiclass=multiclass,
         )
     except ValueError as exc:
         st.error(str(exc))
         return False
+    _send_copy(con, annotator.strip())
     return True
 
 
-def _answer_form(con, target, form_key, annotator, channel, multiclass) -> bool:
-    """Annotation par fenêtres (suspendue) : classes (plusieurs possibles ; A. blanci seul
-    hors multi-classe), qualité, espèce, commentaire ; vrai si un label a été enregistré."""
+def _answer_form(con, target, form_key, annotator, channel) -> bool:
+    """Annotation par fenêtres (suspendue) : classes (plusieurs possibles), qualité, espèce,
+    commentaire ; vrai si un label a été enregistré."""
     with st.form(key=form_key, clear_on_submit=True):
         st.markdown("**Classes entendues** (plusieurs possibles ; aucune cochée : rien)")
-        ticked = _classes(form_key, ANSWERS if multiclass else INTERVAL_ANSWERS)
-        quality, species, comment = _details(multiclass)
+        ticked = _classes(form_key, INTERVAL_ANSWERS)
+        quality, species, comment = _details()
         sent = st.form_submit_button(
             "Envoyer ▶",
             type="primary",
@@ -618,7 +622,34 @@ def _answer_form(con, target, form_key, annotator, channel, multiclass) -> bool:
         species=species,
         extra_labels=extra,
     )
+    _send_copy(con, annotator.strip())
     return True
+
+
+def _labels_panel(custom: dict[str, dict[str, str]]) -> None:
+    """Étiquettes ajoutées aux quatre du schéma : nom et couleur, ou retrait de la liste (les
+    intervalles déjà posés gardent leur étiquette)."""
+    with st.expander("Étiquettes", expanded=False):
+        for code, item in custom.items():
+            cols = st.columns([1, 6, 2])
+            cols[0].markdown(
+                f"<span style='color:{item['color']};font-size:1.4em'>●</span>",
+                unsafe_allow_html=True,
+            )
+            cols[1].write(item["name"])
+            if cols[2].button("✕", key=f"rm::{code}", help="Retirer de la liste"):
+                remove_custom(code)
+                st.rerun()
+        with st.form("new_label", clear_on_submit=True):
+            name = st.text_input("Nouvelle étiquette")
+            color = st.color_picker("Couleur", "#B08CF2")
+            if st.form_submit_button("Ajouter", use_container_width=True):
+                try:
+                    add_custom(name, color)
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.rerun()
 
 
 def _interval_caption(intervals) -> str:
@@ -673,12 +704,93 @@ READONLY_MENUS = """<script>
 </script>"""
 
 
-def _annotator_input() -> str:
-    """Champ « Annotateur », vide à chaque ouverture du poste (plusieurs personnes annotent sur
-    la même base) : sans lui, l'envoi est impossible."""
-    annotator = st.text_input("Annotateur", value=st.session_state.get("annotator", ""))
+_ADD_ANNOTATOR = "➕ Ajouter quelqu'un…"
+
+
+def _annotator_input(names: list[str]) -> str:
+    """Menu « Annotateur » parmi `names` (`annotations/annotateurs.txt`), vide à chaque
+    ouverture du poste (plusieurs personnes annotent sur la même base) : sans lui, l'envoi est
+    impossible. « Ajouter quelqu'un… » inscrit un nouveau nom dans la liste du projet."""
+    if "annotator_added" in st.session_state:  # un menu ne se change qu'avant d'être affiché
+        st.session_state["annotator_pick"] = st.session_state.pop("annotator_added")
+    picked = st.selectbox(
+        "Annotateur",
+        [*names, _ADD_ANNOTATOR],
+        index=None,
+        key="annotator_pick",
+        placeholder="Qui annote ?",
+    )
+    if picked == _ADD_ANNOTATOR:
+        with st.form("new_annotator", border=False):
+            name = st.text_input("Nom à ajouter à la liste des annotateurs")
+            if st.form_submit_button("Ajouter"):
+                try:
+                    st.session_state["annotator_added"] = add_annotator(name)
+                except ValueError:
+                    st.error("Écrire un nom.")
+                else:
+                    st.rerun()
+        picked = None
+    annotator = picked or ""
     st.session_state["annotator"] = annotator
     return annotator
+
+
+# Copie des annotations de chacun, réécrite après chaque envoi : les encadrants, sans GitHub,
+# envoient par mail leurs fichiers « Nom_*.csv » ; `blanci import-labels` les relit.
+SEND_FOLDER = project_path("annotations/a_envoyer")
+
+
+def _send_prefix(annotator: str) -> str:
+    return re.sub(r"[^\w-]+", "_", annotator).strip("_") + "_"
+
+
+def _send_copy(con, annotator: str) -> None:
+    """Réécrit les CSV d'`annotator` dans `SEND_FOLDER` (`export_annotations`). Un fichier
+    ouvert dans Excel ne s'écrit pas : l'annotation est enregistrée quand même, la copie
+    attend l'envoi suivant."""
+    try:
+        export_annotations(con, [annotator], SEND_FOLDER, _send_prefix(annotator))
+    except OSError as exc:
+        st.toast(f"Copie à envoyer non mise à jour ({exc}) : fermer le CSV ouvert.")
+
+
+def _send_panel(annotator: str) -> None:
+    """Où trouver ses fichiers à envoyer, et un bouton qui ouvre le dossier (Windows)."""
+    if not annotator:
+        return
+    st.caption(
+        f"Après chaque envoi, vos annotations sont copiées dans `{SEND_FOLDER}` : fichiers "
+        f"« {_send_prefix(annotator)}… .csv », à joindre au mail pour Léonard."
+    )
+    if hasattr(os, "startfile") and st.button("📂 Ouvrir le dossier des fichiers à envoyer"):
+        SEND_FOLDER.mkdir(parents=True, exist_ok=True)
+        os.startfile(SEND_FOLDER)
+
+
+def _masking_panel(names: list[str]) -> tuple[list[str], bool]:
+    """Cases « Masquer les annotations de » : une par annotateur de la liste, et « tout le
+    monde ». Renvoie (noms masqués, tout le monde)."""
+    st.markdown("**Masquer les annotations de**")
+    everyone = st.checkbox(
+        "Tout le monde",
+        key="hide_everyone",
+        help="Personne n'est affiché : on écoute sans rien voir de ce qui a déjà été répondu. "
+        "Vos propres réponses comptent toujours comme « déjà écouté ».",
+    )
+    columns = st.columns(2)
+    return [
+        name
+        for i, name in enumerate(names)
+        if columns[i % 2].checkbox(
+            name,
+            key=f"hide::{name}",
+            disabled=everyone,
+            help=f"Les intervalles de {name} ne s'affichent pas sur le spectrogramme et ses "
+            "réponses ne comptent pas comme « déjà écouté » (calibration, §5). Se masquer "
+            "soi-même : on repart d'un spectrogramme vide sur ses propres extraits.",
+        )
+    ], everyone
 
 
 def _recordings_root(cfg) -> list[Path]:
@@ -727,13 +839,18 @@ def main() -> None:
     band_hz = tuple(float(f) for f in cfg["signal"]["band_hz"])
     spectro_default = int(cfg["audio"]["channel"] == 1)
 
+    custom = read_custom()
+    NAMES.update({c: v["name"] for c, v in custom.items()})
+
     with st.sidebar:
         st.markdown(BRAND, unsafe_allow_html=True)
         # Fenêtre flottante, plus large que le panneau : le tableau des gestes y tient.
         with st.popover("❓ Mode d'emploi : souris et clavier"):
             st.markdown(HELP)
         st.header("Session")
-        annotator = _annotator_input()
+        names = read_annotators()
+        annotator = _annotator_input(names)
+        _send_panel(annotator)
         mode, chosen, encoder = _selection_panel(cfg, con)
         candidate_slot = st.container()
         st.header("Écoute")
@@ -745,21 +862,8 @@ def main() -> None:
             "écouté ; décoché, au voisin dans la file. La liste des candidats donne toujours "
             "accès à tous.",
         )
-        calibration = st.checkbox(
-            "Masquer les annotations d'autres personnes",
-            value=False,
-            key="calibration",
-            help="Seules vos réponses comptent comme « déjà écouté » : deux annotateurs "
-            "écoutent la même file sans voir les réponses de l'autre (calibration, §5).",
-        )
-        multiclass = st.checkbox(
-            "Multi-classe : noter aussi les autres espèces",
-            value=False,
-            key="multiclass",
-            help="Décoché : on ne note qu'A. blanci (intervalles, qualité, commentaire). "
-            "Coché : on dit aussi les autres classes entendues (oiseau, insecte, pluie…) et "
-            "l'espèce.",
-        )
+        hidden, everyone = _masking_panel(names)
+        _labels_panel(custom)
         st.caption(
             "Étiquette et qualité des intervalles, bande d'écoute, volume, filtre dynamique, "
             "contraste et micro du spectrogramme : dans la barre au-dessus du spectrogramme."
@@ -792,7 +896,11 @@ def main() -> None:
         return
     if "cluster" in queue.columns and "encoder_id" in queue.columns:
         _cluster_panel(cfg, con, queue)
-    who = (annotator.strip() or None) if calibration else None
+    # Annotateurs affichés (`shown`), et ceux dont les réponses font « déjà écouté » (`who`) :
+    # les mêmes, plus soi-même, même masqué (on ne refait pas ce qu'on a déjà écouté).
+    me = annotator.strip()
+    shown = visible_annotators(con, hidden, everyone)
+    who = visible_annotators(con, hidden, everyone, keep=(me,) if me else ())
     done = progress(con, queue, who)
     n = len(queue)
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
@@ -875,7 +983,7 @@ def main() -> None:
         )
     w = min(int(st.session_state[wkey]), len(windows) - 1)
     ids = [window_id_for(candidate["recording_id"], o, d) for o, d in windows]
-    window_labels = latest_labels(con, ids, who) if window_mode else {}
+    window_labels = latest_labels(con, ids, shown) if window_mode else {}
 
     intervals: list = []
     channel = spectro_default
@@ -889,10 +997,15 @@ def main() -> None:
         t0, t1 = media["t0"], media["t1"]
     if media is not None:
         extract = f"{candidate['path']}:{t0:.2f}:{t1:.2f}"
-        ikey = f"iv::{extract}"
+        # Ses intervalles (son dernier envoi, sauf s'il se masque) et ceux des autres affichés.
+        saved = extract_intervals(con, candidate["recording_id"], t0, t1, shown)
+        mine = next((k for k in saved if k is not None and k.casefold() == me.casefold()), None)
+        own = saved.pop(mine, []) if me else []
+        others = {k or "(sans nom)": v for k, v in saved.items()}
+        masked = "all" if everyone else ",".join(sorted(h.casefold() for h in hidden))
+        ikey = f"iv::{extract}::{me.casefold()}::{masked}"
         if ikey not in st.session_state:
-            saved = span_intervals(con, candidate["recording_id"], t0, t1, who)
-            st.session_state[ikey] = [list(i) for i in saved or []]
+            st.session_state[ikey] = [list(i) for i in own]
         shown = [
             {
                 "t0": o,
@@ -913,11 +1026,14 @@ def main() -> None:
                 shown,
                 band_hz,
                 key=extract,
-                labels=list(INTERVAL_ANSWERS),
+                labels=[*INTERVAL_ANSWERS, *((c, v["name"]) for c, v in custom.items())],
+                colors={c: v["color"] for c, v in custom.items()},
                 intervals=st.session_state[ikey],
                 interval_mode=not window_mode,
                 channel=spectro_default,
                 next_audios=next_audios,
+                others=others,
+                intervals_key=ikey,
             ),
             extract,
             ikey,
@@ -938,7 +1054,6 @@ def main() -> None:
             form_key,
             annotator,
             channel,
-            multiclass,
         ):
             _advance(con, queue, who, pos, skip_done, key, end)
             st.rerun()
@@ -972,7 +1087,7 @@ def main() -> None:
         target = dict(candidate, offset_s=offset, dur_s=dur)
         if (offset, dur) != (cand_offset, cand_dur):
             target["score"] = None  # le score précédent est celui de la fenêtre du candidat
-        if _answer_form(con, target, f"form::{chosen}::{pos}::{w}", annotator, channel, multiclass):
+        if _answer_form(con, target, f"form::{chosen}::{pos}::{w}", annotator, channel):
             if w < len(windows) - 1:
                 st.session_state[wkey] = w + 1
             else:

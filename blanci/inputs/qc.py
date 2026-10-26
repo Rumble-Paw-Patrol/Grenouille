@@ -277,17 +277,22 @@ def check_recordings(
     workers: int = 4,
     commit_every: int = 100,
     progress_every: int = 1000,
+    renamed: dict[str, str] | None = None,
 ) -> dict[str, int]:
     """Contrôle audio des enregistrements qui ne l'ont pas encore eu, sans encodeur : une
     lecture de chaque fichier, dans `workers` fils.
 
     À lancer avant le premier encodage (`blanci qc`) : `embed` ne le refait pas, et n'encode
     aucun enregistrement écarté. Reprenable : ce qui est fait est sauté.
+
+    `renamed` (`audio.renamed`) : l'audio est cherché sous son chemin d'origine, puis sous le nom
+    que lui a donné la copie sur un disque du stage.
     """
     from pathlib import Path
     from time import perf_counter
 
     from blanci.core.ahead import ahead
+    from blanci.core.locate import variants
 
     protected = positive_recordings(con)
     report = {"checked": 0, "excluded": 0, "skipped": 0, "errors": 0}
@@ -309,7 +314,9 @@ def check_recordings(
 
     def prepare(rec: Any) -> dict[str, Any] | None:
         try:
-            return audio_qc(Path(raw_root) / rec.path, thresholds)
+            names = variants(rec.path, renamed)
+            found = next((n for n in names if (Path(raw_root) / n).is_file()), rec.path)
+            return audio_qc(Path(raw_root) / found, thresholds)
         except Exception:  # fichier illisible : déjà signalé à l'inventaire
             return None
 

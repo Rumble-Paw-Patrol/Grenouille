@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
@@ -101,13 +102,31 @@ def current_labels(con: sqlite3.Connection) -> pd.DataFrame:
     return df.drop(columns="conditions")
 
 
+def annotator_filter(
+    annotator: str | Sequence[str | None] | None, column: str = "annotator"
+) -> tuple[str, tuple]:
+    """(condition SQL, paramètres) qui ne garde que ces annotateurs : un nom, ou une liste de
+    noms tels qu'écrits dans la base (None dans la liste : les lignes sans annotateur, comme
+    l'import de Biophonia). `annotator` None : pas de condition ("")."""
+    if annotator is None:
+        return "", ()
+    names = [annotator] if isinstance(annotator, str) else list(annotator)
+    given = tuple(n for n in names if n is not None)
+    parts = [f"{column} IN ({', '.join('?' * len(given))})"] if given else []
+    if len(given) < len(names):
+        parts.append(f"{column} IS NULL")
+    return f"({' OR '.join(parts)})" if parts else "0", given
+
+
 def load_spans(
-    con: sqlite3.Connection, annotator: str | None = None
+    con: sqlite3.Connection, annotator: str | Sequence[str | None] | None = None
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(extraits écoutés, intervalles) de l'annotation par intervalles. Les intervalles
-    portent recording_id ; `annotator` : seulement ses extraits (calibration, §5)."""
-    where, params = ("WHERE annotator = ?", (annotator,)) if annotator is not None else ("", ())
-    where_joined = where.replace("annotator", "s.annotator")
+    portent recording_id ; `annotator` : seulement les extraits de cet annotateur, ou de ces
+    annotateurs (`annotator_filter` ; masquage des autres dans le poste, §5)."""
+    condition, params = annotator_filter(annotator)
+    where = f"WHERE {condition}" if condition else ""
+    where_joined = f"WHERE {annotator_filter(annotator, 's.annotator')[0]}" if condition else ""
     spans = pd.read_sql_query(
         "SELECT span_id, recording_id, start_s, end_s, other_label, quality, conditions "
         f"FROM spans {where} ORDER BY span_id",

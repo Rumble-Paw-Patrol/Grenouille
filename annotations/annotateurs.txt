@@ -1,0 +1,7 @@
+# Annotateurs du projet, une personne par ligne. Le poste d'annotation les propose dans son
+# menu « Annotateur ». Un nouveau venu s'ajoute lui-même dans son poste (« Ajouter
+# quelqu'un… ») ; son nom arrive ici quand Léonard importe les CSV qu'il envoie par mail
+# (`blanci import-labels`).
+Léonard
+Elodie
+Benoît

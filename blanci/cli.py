@@ -15,12 +15,14 @@ from typing import Annotated, Any
 import pandas as pd
 import typer
 
-from blanci.annotation.workbench import agreement as annotator_agreement
 from blanci.annotation.workbench import (
+    add_annotator,
     flagged_candidates,
     random_candidates,
+    read_annotators,
     recording_candidates,
 )
+from blanci.annotation.workbench import agreement as annotator_agreement
 from blanci.core.config import config_path, default_user_config, load_config, project_path
 from blanci.core.db import connect
 from blanci.embedding.embed import embed_recordings, select_recordings
@@ -42,16 +44,14 @@ from blanci.evaluation.throughput import (
 from blanci.heads.baselines import run_baselines, write_baseline_report
 from blanci.heads.signal_processing import Upstream, compute_onsets, upstream_from_cfg
 from blanci.inputs.dataset import (
-    annotated_spans,
     benchmark_subset,
-    current_labels,
-    recordings_table,
 )
 from blanci.inputs.frozen import freeze as freeze_recordings
 from blanci.inputs.ingest import ingest as run_ingest
 from blanci.inputs.labels import POSITIVE_LABELS
 from blanci.inputs.qc import (
     AUDIO_FLAGS,
+    EXCLUDING_FLAGS,
     apply_annotation_flags,
     apply_audio_flags,
     apply_metadata_flags,
@@ -65,6 +65,7 @@ from blanci.service import (
     compute_tokens,
     evaluate_frozen,
     evaluate_holdout,
+    export_annotations,
     import_annotations,
     ranked_points,
     run_clustering,
@@ -222,7 +223,13 @@ def qc_command(
     if not raw.exists():
         typer.echo(f"{raw} est inaccessible (paths.raw) : disque branché ?")
         raise typer.Exit(1)
-    recordings = select_recordings(con, dataset=dataset, site=site)
+    # Un enregistrement déjà `muffled` (ou ancien `in_bag`) est relu : sa piste 1 décide s'il reste.
+    recordings = select_recordings(
+        con,
+        dataset=dataset,
+        site=site,
+        exclude_flags=tuple(f for f in EXCLUDING_FLAGS if f != "muffled"),
+    )
     typer.echo(f"{len(recordings)} enregistrements retenus (ceux déjà écartés ne sont pas lus)")
     report = check_recordings(
         con,
@@ -230,6 +237,7 @@ def qc_command(
         raw,
         cfg["qc"],
         workers=workers,
+        renamed=cfg["audio"].get("renamed"),
     )
     typer.echo(
         f"{report['checked']} contrôlés, dont {report['excluded']} écartés (silencieux) ;"
@@ -277,43 +285,18 @@ def export_labels(
     ] = None,
 ) -> None:
     """Ses propres annotations en CSV, à pousser sur GitHub après chaque session. Rien
-    d'importé (vérifications et scores de Biophonia) ni d'un autre annotateur.
-
-    - fenetres_annotees.csv : fenêtres annotées une à une (méthode par fenêtres), une
-      ligne chacune : label, qualité, espèce, commentaire (tel qu'écrit par l'annotateur),
-      source, annotateur ;
-    - extraits_annotes.csv : extraits écoutés dans le poste (méthode par intervalles), une
-      ligne chacun, ses intervalles résumés dans la colonne `intervalles` ;
-    - intervalles_annotes.csv : un intervalle (A. blanci, faux ami) par ligne, avec
-      l'annotateur de son extrait.
-    """
+    d'importé (vérifications et scores de Biophonia) ni d'un autre annotateur. Les trois
+    fichiers sont décrits dans `service.export_annotations` ; le poste d'annotation écrit les
+    mêmes, au nom de qui annote, après chaque envoi (`annotations/a_envoyer/`)."""
     cfg = _cfg(ctx)
     names = annotateur or list(MY_NAMES)
-    mine = {n.casefold() for n in names}
     out = dossier or project_path("annotations")
-    con = connect(config_path(cfg, "db"))
-    labels = current_labels(con)
-    who = pd.read_sql_query("SELECT label_id, annotator FROM labels", con)
-    labels = labels.merge(who, on="label_id", how="left")
-    labels = labels[labels["annotator"].fillna("").str.casefold().isin(mine)]
-    labels = labels[labels["source"] != "import"].assign(annotator=names[0])
-    rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
-    table = labels.merge(rec, on="recording_id", how="left")
-    columns = [
-        "window_id", "path", "site", "mic_id", "start_utc", "offset_s", "dur_s", "label",
-        "quality", "species", "comment", "source", "annotator",
-    ]  # fmt: skip
-    _write_csv(
-        table[columns].sort_values(["path", "offset_s"]),
-        out / "fenetres_annotees.csv",
-        f"{len(table)} fenêtres annotées",
+    counts = export_annotations(connect(config_path(cfg, "db")), names, out)
+    typer.echo(
+        f"{counts['extraits_annotes.csv']} extraits écoutés, "
+        f"{counts['intervalles_annotes.csv']} intervalles, "
+        f"{counts['fenetres_annotees.csv']} fenêtres annotées : {out}"
     )
-    extracts, intervals = annotated_spans(con)
-    extracts = extracts[extracts["annotator"].fillna("").str.casefold().isin(mine)]
-    extracts = extracts.assign(annotator=names[0])
-    intervals = intervals.merge(extracts[["span_id", "annotator"]], on="span_id", how="inner")
-    _write_csv(extracts, out / "extraits_annotes.csv", f"{len(extracts)} extraits écoutés")
-    _write_csv(intervals, out / "intervalles_annotes.csv", f"{len(intervals)} intervalles")
 
 
 @app.command("import-labels")
@@ -323,12 +306,19 @@ def import_labels(
         Path | None, typer.Option(help="Dossier des CSV (défaut : annotations/ du dépôt).")
     ] = None,
 ) -> None:
-    """Recharge dans la base de cette machine les annotations exportées ailleurs
-    (`export-labels`, poussées dans annotations/) : le poste d'annotation reprend alors là où
-    l'écoute s'était arrêtée. Sans doublon : on peut relancer après chaque `git pull`."""
+    """Recharge dans la base de cette machine les annotations exportées ailleurs : celles
+    d'`export-labels` (poussées dans annotations/), et les CSV qu'un autre annotateur envoie
+    par mail (« Benoît_extraits_annotes.csv »…, écrits par son poste ; les déposer dans
+    annotations/). Le poste d'annotation reprend alors là où l'écoute s'était arrêtée et
+    montre les intervalles de chacun. Un nom encore inconnu rejoint la liste des annotateurs
+    (`annotations/annotateurs.txt`). Sans doublon : on peut relancer après chaque `git pull`."""
     cfg = _cfg(ctx)
     folder = dossier or project_path("annotations")
     report = import_annotations(connect(config_path(cfg, "db")), folder)
+    known = {n.casefold() for n in read_annotators()}
+    for name in report["annotators"]:
+        if name.casefold() not in known and name not in MY_NAMES:
+            typer.echo(f"Nouvel annotateur ajouté à la liste : {add_annotator(name)}")
     typer.echo(
         f"{report['spans']} extraits ({report['intervals']} intervalles) et "
         f"{report['labels']} fenêtres importés ; {report['already']} déjà dans la base"

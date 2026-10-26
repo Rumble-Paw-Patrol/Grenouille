@@ -53,6 +53,10 @@ micro du spectrogramme se règlent dans la barre au-dessus du spectrogramme et s
 aussitôt ; ils sont gardés d'une séance à l'autre. Les touches agissent quand le
 spectrogramme a la main (liseré ambré) : cliquer dessus d'abord.
 
+**Intervalles des autres annotateurs** (ceux qui ne sont pas masqués, panneau de gauche) :
+bords en tirets et bande à leur nom en bas du spectrogramme, pastilles en tirets sous les
+vôtres. Ils ne se modifient pas : seuls les vôtres sont enregistrés à l'envoi.
+
 **Filtre dynamique** : seuls les sons à moins de N dB des plus forts de l'extrait gardent une
 couleur, les plus faibles sont noirs. 40 dB : il ne reste que les chants forts, le bruit de
 fond disparaît ; 80 dB : les chants faibles apparaissent, le fond aussi.
@@ -139,6 +143,12 @@ INDEX = r"""<!doctype html>
                  border-radius: 999px; }
   .chip button:hover:not(:disabled) { color: #F07A63; box-shadow: none; }
   .chip .q { font-weight: 700; }
+  /* Intervalles des autres annotateurs : en lecture seule, cerclés de tirets. */
+  #others { display: grid; gap: 5px; margin-top: 6px; }
+  #others div { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  #others .who { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
+                 color: var(--muted); text-transform: uppercase; }
+  .chip.ro { border-style: dashed; padding-right: 10px; }
   .pills { display: flex; gap: 5px; flex-wrap: wrap; }
   /* Étiquettes : pleine = celle des prochains intervalles, cerclée (de blanc en sombre, de
      noir en clair) = celle de l'intervalle sélectionné. */
@@ -219,6 +229,7 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
 </div>
 <canvas id="c" tabindex="0"></canvas>
 <div id="list"></div>
+<div id="others"></div>
 <div id="players"></div>
 <script>
 const MAGMA = __MAGMA__;
@@ -493,7 +504,7 @@ function setHeight() { send("streamlit:setFrameHeight", {height: document.body.s
 const round = t => Math.round(t * 100) / 100;
 function emit() {
   send("streamlit:setComponentValue", {dataType: "json", value: {
-    key: D.extract, channel: active,
+    key: D.extract, ivkey: D.ivkey, channel: active,
     intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]),
   }});
 }
@@ -501,6 +512,9 @@ function emit() {
 function render(args) {
   const fresh = !D || args.extract !== D.extract;
   const nextChanged = !D || JSON.stringify(args.next) !== JSON.stringify(D.next);
+  // Autre annotateur, ou autres masqués : mêmes son et vue, autres intervalles.
+  const ivChanged = !D || args.ivkey !== D.ivkey;
+  const othersChanged = !D || JSON.stringify(args.others) !== JSON.stringify(D.others);
   D = args;
   if (S.band === undefined) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
@@ -517,18 +531,27 @@ function render(args) {
       $("qbtns").appendChild(b);
     });
     newLabel = D.labels[0][0];
-    D.labels.forEach(([code, name], k) => {
-      const b = document.createElement("button");
-      b.value = code; b.textContent = name; b.title = `Touche ${k + 1}`;
-      b.style.borderColor = `rgb(${rgb(code)})`;
-      b.onclick = () => setType(code);
-      $("ivbtns").appendChild(b);
-    });
     D.audios.forEach((a, i) => {
       const b = document.createElement("button");
       b.value = String(i); b.textContent = a.name; b.onclick = () => setChannel(i);
       $("chan").appendChild(b);
     });
+  }
+  // Étiquettes : reconstruites quand la liste ou les couleurs changent (étiquette ajoutée).
+  Object.assign(COLORS, D.colors || {});
+  const labelSig = JSON.stringify([D.labels, D.colors]);
+  if (labelSig !== $("ivbtns").dataset.sig) {
+    $("ivbtns").dataset.sig = labelSig;
+    $("ivbtns").innerHTML = "";
+    D.labels.forEach(([code, name], k) => {
+      const b = document.createElement("button");
+      b.value = code; b.textContent = name; b.title = k < 9 ? `Touche ${k + 1}` : name;
+      b.style.borderColor = `rgb(${rgb(code)})`;
+      b.onclick = () => setType(code);
+      $("ivbtns").appendChild(b);
+    });
+    if (!D.labels.some(([c]) => c === newLabel)) newLabel = D.labels[0][0];
+    showTypes();
   }
   showSettings();
   if (fresh) {
@@ -540,7 +563,15 @@ function render(args) {
     wide = null;
     load();
     list();
-  } else if (nextChanged) prepareNext();
+  } else {
+    if (ivChanged) {
+      intervals = (D.intervals || [])
+        .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
+      selected = -1;
+    }
+    if (ivChanged || othersChanged) list();
+    if (nextChanged) prepareNext();
+  }
   resize(); setHeight();
 }
 
@@ -895,6 +926,19 @@ function draw() {
       ctx.fillStyle = "#FFE08A"; ctx.fillRect(x0, M.t + PH() - 3, x1 - x0, 3);
     }
   });
+  // Les autres annotateurs, sous les siens : bords en tirets, une bande nommée chacun en bas.
+  (D.others || []).forEach((o, k) => {
+    const y = M.t + PH() - 3 - 13 * (k + 1);
+    o.intervals.forEach(([t0, t1, l]) => {
+      const x0 = xOf(t0), x1 = xOf(t1), c = rgb(l);
+      ctx.setLineDash([4, 3]); ctx.strokeStyle = `rgba(${c}, 0.8)`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(x0, M.t); ctx.lineTo(x0, M.t + PH());
+      ctx.moveTo(x1, M.t); ctx.lineTo(x1, M.t + PH()); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = `rgba(${c}, 0.8)`; ctx.fillRect(x0, y, x1 - x0, 11);
+      ctx.fillStyle = "#0B0B0B"; ctx.font = '600 9.5px "Hanken Grotesk", system-ui, sans-serif';
+      ctx.fillText(o.who, x0 + 3, y + 9, Math.max(x1 - x0 - 6, 1));
+    });
+  });
   const shown = drag && drag.mode === "draw" && drag.moved
     ? [...intervals, {t0: Math.min(drag.t, drag.t2), t1: Math.max(drag.t, drag.t2),
                       label: newLabel}]
@@ -998,7 +1042,40 @@ function list() {
     };
     chip.append(x); box.appendChild(chip);
   });
+  others();
   showTypes(); showQualities(); setHeight();
+}
+// Intervalles des autres annotateurs, une ligne chacun : un clic y amène la vue, rien ne
+// s'y modifie.
+function others() {
+  const box = $("others");
+  box.innerHTML = "";
+  (D.others || []).forEach(o => {
+    const row = document.createElement("div"), who = document.createElement("span");
+    who.className = "who";
+    who.textContent = o.intervals.length ? o.who : `${o.who} : aucun intervalle`;
+    row.appendChild(who);
+    o.intervals.forEach(([t0, t1, l, q]) => {
+      const chip = document.createElement("span");
+      chip.className = "chip ro";
+      chip.style.background = `rgba(${rgb(l)}, 0.10)`; chip.style.borderColor = `rgb(${rgb(l)})`;
+      chip.title = `Tracé par ${o.who} (lecture seule)`;
+      chip.append(`${t0.toFixed(1)}–${t1.toFixed(1)} s · ${labelName(l)}`);
+      if (q) {
+        const b = document.createElement("b");
+        b.className = "q"; b.dataset.q = q; b.textContent = q; chip.append(" · ", b);
+      }
+      chip.onclick = () => {
+        const span = view.t1 - view.t0;
+        if (t1 < view.t0 || t0 > view.t1) {
+          view.t0 = (t0 + t1) / 2 - span / 2; view.t1 = view.t0 + span; clampView();
+        }
+        draw();
+      };
+      row.appendChild(chip);
+    });
+    box.appendChild(row);
+  });
 }
 function changed() { list(); draw(); emit(); }
 function remove(i) { intervals.splice(i, 1); selected = -1; changed(); }
@@ -1221,6 +1298,13 @@ def _mtime(path: Path) -> float:
 _component = None
 
 
+def _intervals(intervals: list | None) -> list[list]:
+    """[début, fin, label, qualité] de chaque intervalle (qualité None si absente)."""
+    return [
+        [float(i[0]), float(i[1]), str(i[2]), i[3] if len(i) > 3 else None] for i in intervals or []
+    ]
+
+
 def viewer_args(
     t0: float,
     t1: float,
@@ -1232,6 +1316,9 @@ def viewer_args(
     intervals: list | None = None,
     interval_mode: bool = False,
     channel: int = 0,
+    others: dict[str, list] | None = None,
+    intervals_key: str = "",
+    colors: dict[str, str] | None = None,
     fview_hz: float = 10_000.0,
     height: int = 320,
     next_audios: list[tuple[str, str, float]] | None = None,
@@ -1239,8 +1326,11 @@ def viewer_args(
     """Arguments du composant. `audios` : (nom, chemin rendu par `asset`, début en s dans
     l'enregistrement), couvrant [t0, t1] ; `windows` : {t0, t1, label, current, candidate} ;
     `key` : identifie l'extrait (un autre extrait remet la vue et les intervalles à zéro) ;
-    `labels` : (code, nom) des intervalles ; `intervals` : [début, fin, label, qualité] affichés à
-    l'ouverture de l'extrait ; `band_hz`, `channel` : réglages de départ, la première fois ;
+    `labels` : (code, nom) des intervalles, `colors` : {code : #RRGGBB} de celles qui n'ont pas
+    de couleur dans `style.LABEL_COLORS` ; `intervals` : [début, fin, label, qualité] affichés à
+    l'ouverture de l'extrait, ou quand `intervals_key` change (autre annotateur) ; `others` :
+    {annotateur : intervalles}, ceux des autres, affichés sans pouvoir être modifiés ;
+    `band_hz`, `channel` : réglages de départ, la première fois ;
     `next_audios` : comme `audios`, pour l'extrait suivant, que le navigateur prépare pendant
     qu'on annote celui-ci (fichiers attendus s'ils ne sont pas encore écrits)."""
     return {
@@ -1254,9 +1344,13 @@ def viewer_args(
         "band": [float(f) for f in band_hz],
         "extract": key,
         "labels": [list(label) for label in labels],
-        "intervals": [
-            [float(i[0]), float(i[1]), str(i[2]), i[3] if len(i) > 3 else None]
-            for i in intervals or []
+        "colors": {
+            k: [int(v[i : i + 2], 16) for i in (1, 3, 5)] for k, v in (colors or {}).items()
+        },
+        "intervals": _intervals(intervals),
+        "ivkey": str(intervals_key),
+        "others": [
+            {"who": str(who), "intervals": _intervals(ivs)} for who, ivs in (others or {}).items()
         ],
         "qualities": list(QUALITIES),
         "interval_mode": bool(interval_mode),
@@ -1270,7 +1364,8 @@ def viewer_args(
 
 
 def viewer(args: dict, component_key: str = "viewer") -> dict | None:
-    """Affiche le visualiseur ; renvoie sa dernière valeur ({key, channel, intervals}) ou None."""
+    """Affiche le visualiseur ; renvoie sa dernière valeur ({key, ivkey, channel, intervals}) ou
+    None."""
     global _component
     if _component is None:
         import streamlit.components.v1 as components

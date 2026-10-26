@@ -24,3 +24,7 @@ documentation/tableau-de-bord/fichiers.json
 
 # Journaux de copie et d'encodage de cette machine (scripts/ les écrit dans rapports/).
 rapports/
+
+# Copie des annotations de qui annote, réécrite par le poste après chaque envoi, à envoyer
+# par mail (les CSV reçus se déposent, eux, dans annotations/ : voir LISEZMOI).
+annotations/a_envoyer/

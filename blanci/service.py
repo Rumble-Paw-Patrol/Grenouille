@@ -58,6 +58,7 @@ from blanci.heads.signal_processing import (
 )
 from blanci.inputs.dataset import (
     EXCLUDED_LABELS,
+    annotated_spans,
     current_labels,
     embedded_training_set,
     folds_for,
@@ -660,6 +661,9 @@ def _in_chunks(con: sqlite3.Connection, sql: str, ids: list[str], size: int = 50
 
 # « false_friend » : un son qui ressemble à A. blanci (négatif dur localisé, DECISIONS n° 186).
 INTERVAL_LABELS = ("blanci", "blanci_chorus", "blanci_uncertain", "false_friend")
+# Étiquettes d'intervalle ajoutées à la main (`annotation/etiquettes.py`) : stockées telles
+# quelles dans `intervals.label`, hors du schéma des labels de fenêtres.
+CUSTOM_PREFIX = "custom_"
 
 
 def append_span(
@@ -685,7 +689,7 @@ def append_span(
     if other_label not in LABELS or other_label in POSITIVE_LABELS:
         raise ValueError(f"label hors intervalles impossible : {other_label!r}")
     for label in classes or ():
-        if label not in LABELS:
+        if label not in LABELS and not label.startswith(CUSTOM_PREFIX):
             raise ValueError(f"classe inconnue : {label!r}")
     if quality is not None and quality not in QUALITIES:
         raise ValueError(f"qualité inconnue : {quality!r} (attendues : {', '.join(QUALITIES)})")
@@ -694,7 +698,7 @@ def append_span(
     cleaned = []
     for i0, i1, label, *rest in intervals:
         interval_quality = rest[0] if rest else None
-        if label not in INTERVAL_LABELS:
+        if label not in INTERVAL_LABELS and not label.startswith(CUSTOM_PREFIX):
             raise ValueError(f"label d'intervalle inconnu : {label!r}")
         if interval_quality is not None and interval_quality not in QUALITIES:
             raise ValueError(
@@ -778,23 +782,104 @@ def _text(value: Any) -> str | None:
     return str(value).strip() or None
 
 
-def import_annotations(con: sqlite3.Connection, folder: Path) -> dict[str, int]:
-    """Recharge les annotations d'`export-labels` (extraits_annotes.csv, intervalles_annotes.csv,
-    fenetres_annotees.csv dans `folder`) dans une autre base, pour reprendre l'écoute sur une
-    autre machine. Les identifiants d'enregistrement viennent du nom de fichier
-    (`recording_id_for`) : ils sont les mêmes partout. Ajout seul et sans doublon : un extrait
-    déjà présent (même enregistrement, bornes, annotateur, date) ou un label de fenêtre déjà
-    présent (même fenêtre, label, annotateur, source) est sauté, on peut relancer sans risque.
-    Un enregistrement absent de la base (pas encore inventorié ici) est compté, pas importé."""
+EXPORT_FILES = ("extraits_annotes.csv", "intervalles_annotes.csv", "fenetres_annotees.csv")
+
+
+def export_annotations(
+    con: sqlite3.Connection, names: list[str], folder: Path, prefix: str = ""
+) -> dict[str, int]:
+    """Annotations de `names` (sans tenir compte de la casse ; le premier nom sert dans les
+    fichiers) en CSV dans `folder`, rien d'importé (vérifications et scores de Biophonia) ni
+    d'un autre annotateur. `prefix` devant chaque nom de fichier (« Benoît_ » : les fichiers
+    de plusieurs personnes tiennent dans un même dossier). Renvoie le nombre de lignes de
+    chaque fichier ; `fenetres_annotees.csv` n'est écrit que s'il a des lignes ou existe déjà.
+
+    - extraits_annotes.csv : extraits écoutés dans le poste (méthode par intervalles), une
+      ligne chacun, ses intervalles résumés dans la colonne `intervalles` ;
+    - intervalles_annotes.csv : un intervalle (A. blanci, faux ami) par ligne, avec
+      l'annotateur de son extrait ;
+    - fenetres_annotees.csv : fenêtres annotées une à une (méthode par fenêtres) : label,
+      qualité, espèce, commentaire (tel qu'écrit par l'annotateur), source, annotateur.
+    """
+    mine = {n.casefold() for n in names}
+    labels = current_labels(con)
+    who = pd.read_sql_query("SELECT label_id, annotator FROM labels", con)
+    labels = labels.merge(who, on="label_id", how="left")
+    labels = labels[labels["annotator"].fillna("").str.casefold().isin(mine)]
+    labels = labels[labels["source"] != "import"].assign(annotator=names[0])
+    rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
+    windows = labels.merge(rec, on="recording_id", how="left")
+    columns = [
+        "window_id", "path", "site", "mic_id", "start_utc", "offset_s", "dur_s", "label",
+        "quality", "species", "comment", "source", "annotator",
+    ]  # fmt: skip
+    windows = windows[columns].sort_values(["path", "offset_s"])
+    extracts, intervals = annotated_spans(con)
+    extracts = extracts[extracts["annotator"].fillna("").str.casefold().isin(mine)]
+    extracts = extracts.assign(annotator=names[0])
+    intervals = intervals.merge(extracts[["span_id", "annotator"]], on="span_id", how="inner")
+    folder.mkdir(parents=True, exist_ok=True)
+    counts = {}
+    for name, frame in zip(EXPORT_FILES, (extracts, intervals, windows), strict=True):
+        path = folder / f"{prefix}{name}"
+        if len(frame) or name != EXPORT_FILES[2] or path.exists():
+            frame.to_csv(path, index=False)
+        counts[name] = len(frame)
+    return counts
+
+
+def _export_sets(folder: Path) -> list[tuple[Path | None, Path | None, Path | None]]:
+    """Jeux de fichiers d'`export_annotations` dans `folder`, un par préfixe (« » pour
+    `export-labels`, « Benoît_ » pour l'envoi d'un poste) : (extraits, intervalles, fenêtres),
+    None pour un fichier absent."""
+    prefixes = sorted(
+        {p.name[: -len(n)] for n in EXPORT_FILES for p in folder.glob(f"*{n}") if p.is_file()}
+    )
+    return [
+        tuple(p if (p := folder / f"{prefix}{n}").is_file() else None for n in EXPORT_FILES)
+        for prefix in prefixes
+    ]
+
+
+def import_annotations(con: sqlite3.Connection, folder: Path) -> dict[str, Any]:
+    """Recharge les annotations d'`export_annotations` (extraits_annotes.csv,
+    intervalles_annotes.csv, fenetres_annotees.csv dans `folder`, éventuellement précédés du
+    nom de l'annotateur : « Benoît_extraits_annotes.csv », reçu par mail) dans une autre base,
+    pour reprendre l'écoute sur une autre machine ou voir les réponses d'un autre annotateur.
+    Les identifiants d'enregistrement viennent du nom de fichier (`recording_id_for`) : ils
+    sont les mêmes partout. Ajout seul et sans doublon : un extrait déjà présent (même
+    enregistrement, bornes, annotateur, date) ou un label de fenêtre déjà présent (même
+    fenêtre, label, annotateur, source) est sauté, on peut relancer sans risque. Un
+    enregistrement absent de la base (pas encore inventorié ici) est compté, pas importé.
+    `annotators` : les noms trouvés dans les fichiers."""
+    report: dict[str, Any] = {
+        "spans": 0, "intervals": 0, "labels": 0, "already": 0, "unknown": 0, "annotators": [],
+    }  # fmt: skip
+    for extracts_csv, intervals_csv, windows_csv in _export_sets(folder):
+        part = _import_set(con, extracts_csv, intervals_csv, windows_csv)
+        for key, value in part.items():
+            report[key] += value
+    report["annotators"] = list(dict.fromkeys(report["annotators"]))
+    return report
+
+
+def _import_set(
+    con: sqlite3.Connection,
+    extracts_csv: Path | None,
+    intervals_csv: Path | None,
+    windows_csv: Path | None,
+) -> dict[str, Any]:
+    """Un jeu de fichiers d'`import_annotations`."""
     known = {r for (r,) in con.execute("SELECT recording_id FROM recordings")}
-    report = {"spans": 0, "intervals": 0, "labels": 0, "already": 0, "unknown": 0}
+    report: dict[str, Any] = {
+        "spans": 0, "intervals": 0, "labels": 0, "already": 0, "unknown": 0, "annotators": [],
+    }  # fmt: skip
     touched: set[str] = set()
 
-    extracts_csv = folder / "extraits_annotes.csv"
-    if extracts_csv.exists():
+    if extracts_csv is not None:
         extracts = pd.read_csv(extracts_csv).sort_values(["created_at", "span_id"])
-        intervals_csv = folder / "intervalles_annotes.csv"
-        intervals = pd.read_csv(intervals_csv) if intervals_csv.exists() else pd.DataFrame()
+        report["annotators"] += [a for a in map(_text, extracts["annotator"]) if a]
+        intervals = pd.read_csv(intervals_csv) if intervals_csv is not None else pd.DataFrame()
         by_span = dict(tuple(intervals.groupby("span_id"))) if len(intervals) else {}
         for row in extracts.itertuples(index=False):
             rid = recording_id_for(row.path)
@@ -848,10 +933,11 @@ def import_annotations(con: sqlite3.Connection, folder: Path) -> dict[str, int]:
             report["intervals"] += len(span)
             touched.add(rid)
 
-    windows_csv = folder / "fenetres_annotees.csv"
-    if windows_csv.exists():
+    if windows_csv is not None:
         now = utc_now()
-        for row in pd.read_csv(windows_csv).itertuples(index=False):
+        windows = pd.read_csv(windows_csv)
+        report["annotators"] += [a for a in map(_text, windows["annotator"]) if a]
+        for row in windows.itertuples(index=False):
             rid = recording_id_for(row.path)
             if rid not in known:
                 report["unknown"] += 1

@@ -19,6 +19,18 @@ sur les disques BLANCI_2023-24 et BLANCI_2025-26.
 sur une autre machine (y pointer `paths.queues` dans `config/local.yaml`). Des références
 seulement (enregistrement, début, durée), pas d'audio.
 
+**Annotations des encadrants (sans GitHub)** : leur poste d'annotation réécrit après chaque
+envoi leurs annotations dans `annotations/a_envoyer/` de leur copie du projet
+(`Nom_extraits_annotes.csv`, `Nom_intervalles_annotes.csv` ; bouton « 📂 Ouvrir le dossier des
+fichiers à envoyer » dans le panneau de gauche). Ils les envoient par mail à Léonard, qui les
+dépose dans ce dossier (`annotations/`), lance `blanci import-labels` et pousse sur GitHub.
+L'import est sans doublon (on peut redéposer un fichier plus récent par-dessus l'ancien) et
+ajoute à `annotateurs.txt` un nom qui n'y est pas encore. Dans le poste, leurs intervalles
+apparaissent en lecture seule à côté des siens ; un commentaire sur un extrait de Léonard
+arrive de la même façon (leur propre envoi sur cet extrait, avec son commentaire).
+
+`annotateurs.txt` : la liste du menu « Annotateur » du poste.
+
 **Reprendre l'écoute sur une autre machine** : `git pull`, puis `blanci import-labels` (relit
 les trois CSV de ce dossier dans la base de la machine, sans doublon ; à relancer après chaque
 `git pull`). Le poste d'annotation coche alors les candidats déjà écoutés.

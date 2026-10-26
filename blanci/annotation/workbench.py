@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 import soundfile as sf
 
+from blanci.core.config import project_path
 from blanci.core.db import window_id_for
 from blanci.embedding.embed import select_recordings
 from blanci.embedding.grid import window_grid
@@ -359,31 +360,92 @@ def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
     return queue
 
 
+# --- Annotateurs ---------------------------------------------------------------------------------
+
+# Liste des annotateurs du projet, une personne par ligne, versionnée avec les annotations :
+# le poste la propose dans son menu et y ajoute les nouveaux venus.
+ANNOTATORS_FILE = project_path("annotations/annotateurs.txt")
+
+
+def read_annotators(path: Path | None = None) -> list[str]:
+    """Annotateurs de la liste (`ANNOTATORS_FILE` par défaut), dans l'ordre du fichier
+    (lignes vides et « # » ignorées)."""
+    path = path or ANNOTATORS_FILE
+    if not path.is_file():
+        return []
+    names = (line.strip() for line in path.read_text(encoding="utf-8").splitlines())
+    return list(dict.fromkeys(n for n in names if n and not n.startswith("#")))
+
+
+def add_annotator(name: str, path: Path | None = None) -> str:
+    """Ajoute `name` à la liste (sauf s'il y est déjà, à la casse près) ; renvoie le nom tel
+    qu'il est dans la liste."""
+    path = path or ANNOTATORS_FILE
+    name = " ".join(name.split())
+    if not name or name.startswith("#"):
+        raise ValueError("nom d'annotateur vide")
+    known = {n.casefold(): n for n in read_annotators(path)}
+    if name.casefold() in known:
+        return known[name.casefold()]
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + name + "\n", "utf-8")
+    return name
+
+
+def visible_annotators(
+    con: sqlite3.Connection,
+    hidden: list[str],
+    everyone: bool = False,
+    keep: tuple[str, ...] = (),
+) -> list[str | None] | None:
+    """Annotateurs dont le poste montre les réponses, tels qu'écrits dans la base : tous sauf
+    `hidden` (sans tenir compte de la casse), aucun si `everyone`, et `keep` dans tous les cas.
+    None : personne de masqué, tout compte, y compris les lignes sans annotateur (import).
+    Pour `annotator_filter` (`latest_labels`, `progress`, `extract_intervals`)."""
+    if not everyone and not hidden:
+        return None
+    masked = {h.casefold() for h in hidden}
+    kept = {k.casefold() for k in keep}
+
+    def shown(name: str | None) -> bool:
+        if name is not None and name.casefold() in kept:
+            return True
+        return not everyone and (name is None or name.casefold() not in masked)
+
+    stored = con.execute(
+        "SELECT DISTINCT annotator FROM labels UNION SELECT DISTINCT annotator FROM spans"
+    )
+    return [a for (a,) in stored if shown(a)] + list(keep)  # `keep` : même s'il n'a rien écrit
+
+
 def latest_labels(
-    con: sqlite3.Connection, window_ids: list[str], annotator: str | None = None
+    con: sqlite3.Connection,
+    window_ids: list[str],
+    annotator: str | list[str | None] | None = None,
 ) -> dict[str, str]:
     """Dernier label de chacune de ces fenêtres déjà écoutées (les autres sont absentes).
 
-    Avec `annotator` (calibration entre annotateurs, §5), seules ses propres réponses
-    comptent : chacun écoute la même file sans voir ce que l'autre a répondu.
+    Avec `annotator` (un nom ou une liste, `visible_annotators`), seules leurs réponses
+    comptent : on écoute la même file sans voir ce que les annotateurs masqués ont répondu (§5).
     """
-    if annotator is None:
-        rows = con.execute(
-            "SELECT window_id, label FROM labels WHERE label_id IN "
-            "(SELECT MAX(label_id) FROM labels GROUP BY window_id)"
-        )
-    else:
-        rows = con.execute(
-            "SELECT window_id, label FROM labels WHERE label_id IN "
-            "(SELECT MAX(label_id) FROM labels WHERE annotator = ? GROUP BY window_id)",
-            (annotator,),
-        )
+    from blanci.inputs.dataset import annotator_filter
+
+    condition, params = annotator_filter(annotator)
+    rows = con.execute(
+        "SELECT window_id, label FROM labels WHERE label_id IN "
+        f"(SELECT MAX(label_id) FROM labels {'WHERE ' + condition if condition else ''} "
+        "GROUP BY window_id)",
+        params,
+    )
     wanted = set(window_ids)
     return {wid: label for wid, label in rows if wid in wanted}
 
 
 def progress(
-    con: sqlite3.Connection, queue: pd.DataFrame, annotator: str | None = None
+    con: sqlite3.Connection,
+    queue: pd.DataFrame,
+    annotator: str | list[str | None] | None = None,
 ) -> pd.Series:
     """Pour chaque candidat : son label s'il a déjà été écouté, sinon None (`annotator` : voir
     `latest_labels`). Un candidat entièrement dans un extrait annoté par intervalles prend le
@@ -580,16 +642,16 @@ def save_span(
     comment: str | None = None,
     channel: int | None = None,
     species: str | None = None,
-    multiclass: bool = True,
+    multiclass: bool = False,
 ) -> int:
     """Enregistre un extrait écouté et ses intervalles d'A. blanci ; renvoie span_id.
 
-    `classes` : classes entendues dans l'extrait (cases cochées) ; celles des intervalles
-    (A. blanci, faux ami) s'ajoutent d'elles-mêmes. A. blanci coché sans aucun intervalle
+    `classes` : classes entendues dans l'extrait ; celles des intervalles (A. blanci, faux ami,
+    étiquettes ajoutées) s'ajoutent d'elles-mêmes. A. blanci coché sans aucun intervalle
     est refusé : toutes les fenêtres de l'extrait deviendraient négatives. Les fenêtres hors
     intervalles prennent la première des autres classes (`ordered_classes`), « rien » sinon.
-    `multiclass` faux : seule A. blanci a été notée, les autres classes n'ont pas été
-    cherchées (`conditions.multiclass` = false) ; « rien » veut alors dire « pas d'A. blanci ».
+    `multiclass` faux (par défaut) : seule A. blanci a été notée, les autres classes n'ont pas
+    été cherchées (`conditions.multiclass` = false) ; « rien » veut alors dire « pas d'A. blanci ».
     """
     blanci = {"blanci", "blanci_chorus", "blanci_uncertain"}
     if blanci & set(classes) and not intervals:
@@ -621,33 +683,38 @@ def save_span(
     )
 
 
-def span_intervals(
+def extract_intervals(
     con: sqlite3.Connection,
     recording_id: str,
     start_s: float,
     end_s: float,
-    annotator: str | None = None,
-) -> list[tuple[float, float, str, str | None]] | None:
-    """Intervalles (début, fin, label, qualité) du dernier extrait [start_s, end_s] déjà annoté
-    (à réafficher quand on y revient), None s'il ne l'a jamais été."""
-    sql = (
-        "SELECT span_id FROM spans WHERE recording_id = ? AND ABS(start_s - ?) < 0.006 "
-        "AND ABS(end_s - ?) < 0.006"
-    )
-    params: tuple = (recording_id, start_s, end_s)
-    if annotator is not None:
-        sql, params = sql + " AND annotator = ?", (*params, annotator)
-    row = con.execute(sql + " ORDER BY span_id DESC LIMIT 1", params).fetchone()
-    if row is None:
-        return None
-    return [
-        (float(a), float(b), str(c), q)
-        for a, b, c, q in con.execute(
-            "SELECT start_s, end_s, label, quality FROM intervals WHERE span_id = ? "
-            "ORDER BY start_s",
-            (row[0],),
-        )
-    ]
+    annotator: str | list[str | None] | None = None,
+) -> dict[str | None, list[tuple[float, float, str, str | None]]]:
+    """Intervalles (début, fin, label, qualité) du dernier envoi de chaque annotateur sur
+    l'extrait [start_s, end_s], à réafficher quand on y revient : {annotateur : intervalles},
+    dans l'ordre des envois (liste vide : extrait envoyé sans intervalle). `annotator` : ces
+    annotateurs seulement (`visible_annotators`)."""
+    from blanci.inputs.dataset import annotator_filter
+
+    condition, params = annotator_filter(annotator)
+    latest = con.execute(
+        "SELECT annotator, MAX(span_id) FROM spans WHERE recording_id = ? "
+        "AND ABS(start_s - ?) < 0.006 AND ABS(end_s - ?) < 0.006"
+        + (f" AND {condition}" if condition else "")
+        + " GROUP BY annotator ORDER BY MAX(span_id)",
+        (recording_id, start_s, end_s, *params),
+    ).fetchall()
+    return {
+        who: [
+            (float(a), float(b), str(c), q)
+            for a, b, c, q in con.execute(
+                "SELECT start_s, end_s, label, quality FROM intervals WHERE span_id = ? "
+                "ORDER BY start_s",
+                (span_id,),
+            )
+        ]
+        for who, span_id in latest
+    }
 
 
 def local_time(start_utc: str | None, utc_offset_h: float) -> str:
