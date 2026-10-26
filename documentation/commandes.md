@@ -2,8 +2,8 @@
 
 Référence détaillée de la ligne de commande `blanci` (une cinquantaine de commandes) et du
 format des données. Le [README](../README.md) donne la vue d'ensemble et le démarrage rapide.
-Les renvois « n° » désignent les décisions numérotées de [`DECISIONS.md`](../DECISIONS.md),
-les « § » les sections de son cadre. Les chemins `data/` et `config/local.yaml` sont locaux,
+Les renvois « n° » désignent les décisions numérotées du journal de décisions du projet (dépôt
+interne), les « § » les sections de son cadre. Les chemins `data/` et `config/local.yaml` sont locaux,
 ignorés par git.
 
 ## Données

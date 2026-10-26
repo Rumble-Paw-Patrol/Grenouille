@@ -27,7 +27,7 @@ enregistrements entiers) ; finir l'encodage BirdNET 3.0 ; essai d'empaquetage `.
 
 **[Tableau de bord](https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8)** (page claude.ai, accès sur
 invitation) : chaîne de traitement, données, benchmarks à explorer, rapports et travail en cours,
-avec un bouton « Commenter » sur chaque carte. Sources : `documentation/tableau-de-bord/`.
+avec un bouton « Commenter » sur chaque carte.
 
 ## Structure du dépôt
 
@@ -41,20 +41,13 @@ Grenouille/
 ├── anuraset/             pré-benchmark AnuraSet, terminé : réglages et scripts
 └── documentation/
     ├── benchmarks/       les 8 rapports de benchmark AnuraSet, avec données, figures et scripts
-    ├── tableaux/         un tableau récapitulatif (PNG) par benchmark
-    ├── tableau-de-bord/  sources du tableau de bord
     ├── regularizations/  catalogue des régularisations des têtes (R1 à R85)
     ├── biblio/           bibliographie commentée, offre de stage
-    ├── prez/             présentations de suivi (.pptx)
-    ├── audits/           relectures complètes du dépôt
-    ├── sprites/          la grenouille en 8-bit du tableau de bord
-    ├── old/              anciennes feuilles de route
     └── commandes.md, glossaire-bioacoustique.md, encodeurs-bacpipe.md
 ```
 
 Documents utiles pour entrer dans le projet : les
-[rapports de benchmark](documentation/benchmarks/LISEZMOI.md), leurs
-[tableaux](documentation/tableaux/LISEZMOI.md), la
+[rapports de benchmark](documentation/benchmarks/LISEZMOI.md), la
 [bibliographie](documentation/biblio/biblio.md) et le
 [glossaire](documentation/glossaire-bioacoustique.md).
 
