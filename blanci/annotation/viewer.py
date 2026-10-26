@@ -743,6 +743,20 @@ function renderSpectrogram(cols, rows) {
     || paint(buffers[ch], buffers.rate, a.start, vmax[ch], view, cols, rows, n);
   remember(key, spec);
 }
+// Début d'un déplacement : l'image est recalculée sur une zone plus large (une demi-vue de
+// plus de chaque côté), pour que ce qui entre dans la vue soit déjà dessiné, pas noir.
+function widen() {
+  const ch = shownTrack(), a = D.audios[ch];
+  if (!buffers[ch] || vmax[ch] === undefined) return;
+  const mt = (view.t1 - view.t0) / 2, mf = (view.f1 - view.f0) / 2;
+  const v = {t0: Math.max(D.t0, view.t0 - mt), t1: Math.min(D.t1, view.t1 + mt),
+             f0: Math.max(0, view.f0 - mf), f1: Math.min(fmax(), view.f1 + mf)};
+  const cols = Math.max(1, Math.round(W() * (v.t1 - v.t0) / (view.t1 - view.t0)));
+  const rows = Math.max(1, Math.round(PH() * (v.f1 - v.f0) / (view.f1 - view.f0)));
+  spec = paint(buffers[ch], buffers.rate, a.start, vmax[ch], v, cols, rows,
+               fftSize(view, buffers.rate));
+  specView = v; specKey = "large";
+}
 function paint(x, rate, start, top, v, cols, rows, n) {
   const out = document.createElement("canvas"); out.width = cols; out.height = rows;
   const sctx = out.getContext("2d"), image = sctx.createImageData(cols, rows), px = image.data;
@@ -1013,6 +1027,7 @@ window.addEventListener("mousemove", e => {
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
   if (!drag.moved) return;
+  if (drag.mode === "pan" && !drag.wide) { drag.wide = true; widen(); }
   const t = Math.min(Math.max(tOf(localX(e)), D.t0), D.t1);
   if (drag.mode === "pan") {
     canvas.style.cursor = "grabbing";
