@@ -155,7 +155,8 @@ sur LEPLAT à INCT4.*
 uv run blanci --config anuraset/anuraset.yaml anuraset heads \
     --encoder birdmae_huge-bacpipe1.3.5@o0 --species DENMIN \
     --methods "$(python -c 'from blanci.evaluation.anuraset import CAMPAIGN_HEADS as H; print(",".join(H))')"
-uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_birdmae_huge/generer.py
+# generer.py est dans le dépôt privé Grenouille-interne (clone voisin de ce dépôt)
+uv run --group notebook python ../Grenouille-interne/documentation/benchmarks/2026-09-29_anuraset_birdmae_huge/generer.py
 ```
 
 Une espèce par processus, `reports` séparé par espèce, `regularization.R37.glmm_grid:

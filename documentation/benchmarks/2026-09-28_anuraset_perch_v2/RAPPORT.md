@@ -170,7 +170,8 @@ Jamais meilleure : les plis internes sont d'autres sites, la calibration ne s'y 
 ```
 uv run blanci --config anuraset/anuraset.yaml anuraset campaign --encoders perch_v2 \
     --species DENMIN,PITAZU,PHYCUV,LEPLAT,BOAFAB
-uv run --group notebook python documentation/benchmarks/2026-09-28_anuraset_perch_v2/generer.py
+# generer.py est dans le dépôt privé Grenouille-interne (clone voisin de ce dépôt)
+uv run --group notebook python ../Grenouille-interne/documentation/benchmarks/2026-09-28_anuraset_perch_v2/generer.py
 ```
 
 Réglages non par défaut : `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` ; annexe B :

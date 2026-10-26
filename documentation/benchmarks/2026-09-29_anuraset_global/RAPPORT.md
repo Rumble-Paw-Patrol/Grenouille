@@ -161,7 +161,8 @@ modèles (table `models`) et leurs fenêtres (table `windows`) sont réunis dans
 ```
 uv run python anuraset/global_bench.py <encodeur> <ESPECE> <sorties> --curve
 uv run python anuraset/rassembler_global.py <sorties> documentation/benchmarks/2026-09-29_anuraset_global
-uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_global/generer.py
+# generer.py est dans le dépôt privé Grenouille-interne (clone voisin de ce dépôt)
+uv run --group notebook python ../Grenouille-interne/documentation/benchmarks/2026-09-29_anuraset_global/generer.py
 ```
 
 Durées (CPU, un cœur par tâche) : 1 à 30 min par encodeur et par espèce, 3 h 50 au total.

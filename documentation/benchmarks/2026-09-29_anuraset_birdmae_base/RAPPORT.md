@@ -168,7 +168,8 @@ OMP_NUM_THREADS=1 uv run blanci --config <config par espèce> anuraset campaign 
     --encoders birdmae_base --species DENMIN      # puis PITAZU, PHYCUV, LEPLAT, BOAFAB
 OMP_NUM_THREADS=1 uv run python documentation/benchmarks/2026-09-29_anuraset_birdmae_base/amorcage.py birdmae_base
 OMP_NUM_THREADS=1 uv run python documentation/benchmarks/2026-09-29_anuraset_birdmae_base/amorcage.py perch_v2
-uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_birdmae_base/generer.py
+# generer.py est dans le dépôt privé Grenouille-interne (clone voisin de ce dépôt)
+uv run --group notebook python ../Grenouille-interne/documentation/benchmarks/2026-09-29_anuraset_birdmae_base/generer.py
 ```
 
 Config par espèce : `anuraset/anuraset.yaml` avec `paths.reports` propre à l'espèce et

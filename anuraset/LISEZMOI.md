@@ -11,7 +11,8 @@ rapports `documentation/benchmarks/*_anuraset_*` (DECISIONS n° 166). Le module 
   une espèce (un processus par espèce, 1 thread BLAS) ; garde aussi les scores hors-pli.
 - `rassembler.py <sorties> <dossier du rapport>` : `donnees/` (Holm sur toutes les espèces,
   `amorcage.csv` : seuil de précision 0,5 choisi sur les autres sites, appliqué au site).
-- Le modèle du `generer.py` d'un rapport est dans `documentation/benchmarks/generer_modele.py`
+- Le modèle du `generer.py` d'un rapport est dans le dépôt privé Grenouille-interne
+  (`documentation/benchmarks/generer_modele.py`)
   (remplacer `__DOSSIER__`, `__ENCODEUR__`, `__FENETRE__`).
 
 Benchmark global (07), sur les stocks des six encodeurs réunis dans une même base :

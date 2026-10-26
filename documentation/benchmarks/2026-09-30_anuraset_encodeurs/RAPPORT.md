@@ -197,7 +197,8 @@ convnext_birdset sont dans `443f889` (perch_v2 avec jetons : refait ici,
 
 ```
 uv run python anuraset/rassembler_08.py <sorties> documentation/benchmarks/2026-09-30_anuraset_encodeurs
-uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
+# generer.py est dans le dépôt privé Grenouille-interne (clone voisin de ce dépôt)
+uv run --group notebook python ../Grenouille-interne/documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
 ```
 
 `donnees/encodeurs.csv` : fenêtre, dimension, débit et licence de chaque encodeur, relevés
@@ -212,7 +213,8 @@ mkdir -p /tmp/g08 && git archive 6f2ff13^ resultats/global | tar -x -C /tmp/g08
 git archive 443f889 resultats/global | tar -x -C /tmp/g08
 cp <nouvelles sorties> /tmp/g08/resultats/global/
 uv run python anuraset/rassembler_08.py /tmp/g08/resultats/global documentation/benchmarks/2026-09-30_anuraset_encodeurs
-uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
+# generer.py est dans le dépôt privé Grenouille-interne (clone voisin de ce dépôt)
+uv run --group notebook python ../Grenouille-interne/documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
 ```
 
 (`git checkout 6f2ff13^ -- resultats/` marche aussi, mais remet les fichiers dans l'arbre de

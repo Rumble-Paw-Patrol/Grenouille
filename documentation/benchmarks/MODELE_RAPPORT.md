@@ -1,10 +1,10 @@
 # Modèle de rapport de benchmark
 
 Un dossier par benchmark : `documentation/benchmarks/AAAA-MM-JJ_<jeu>_<objet>/`, avec
-`RAPPORT.md`, `figures/`, `donnees/` (les CSV dont tout est tiré) et `generer.py` (figures et
-tableaux recalculés depuis `donnees/`, sans rien relancer d'autre). Exemple :
+`RAPPORT.md`, `figures/`, `donnees/` (les CSV dont tout est tiré) et, dans le dépôt privé Grenouille-interne,
+`generer.py` (figures et tableaux recalculés depuis `donnees/`, sans rien relancer d'autre). Exemple :
 `2026-09-28_anuraset_perch_v2/`.
-Modèle du `generer.py` : `documentation/benchmarks/generer_modele.py` (remplacer `__DOSSIER__`,
+Modèle du `generer.py` : `generer_modele.py` du même dépôt privé (remplacer `__DOSSIER__`,
 `__ENCODEUR__`, `__FENETRE__`).
 
 ## Règles

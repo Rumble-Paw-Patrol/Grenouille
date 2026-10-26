@@ -134,7 +134,8 @@ for sp in DENMIN PITAZU PHYCUV LEPLAT BOAFAB; do OMP_NUM_THREADS=1 OPENBLAS_NUM_
   python anuraset/bench.py protoclr-bacpipe1.3.5@o0 $sp sorties/ & done
 python anuraset/rassembler.py sorties/ \
   documentation/benchmarks/2026-09-29_anuraset_protoclr
-uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_protoclr/generer.py
+# generer.py est dans le dépôt privé Grenouille-interne (clone voisin de ce dépôt)
+uv run --group notebook python ../Grenouille-interne/documentation/benchmarks/2026-09-29_anuraset_protoclr/generer.py
 ```
 
 Réglages non par défaut : `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` (comme le 01).
