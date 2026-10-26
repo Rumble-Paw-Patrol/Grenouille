@@ -94,6 +94,7 @@ from blanci.inputs.labels import QUALITIES
 from blanci.service import export_annotations
 
 NAMES = dict(ANSWERS) | {"edge": "bord d'un intervalle (écarté)"}
+SHOW_METHOD = False  # rubrique « Méthode » du bandeau latéral (annotation par fenêtres)
 EXISTING, MAP = "existing", "map"
 MODES = {
     EXISTING: "File déjà écrite",
@@ -518,6 +519,15 @@ def _viewer_fragment(args: dict, extract: str, ikey: str, ckey: str, interval_mo
     if value and value.get("key") == extract and value.get("ivkey") == ikey:
         st.session_state[ikey] = value["intervals"]
         st.session_state[ckey] = int(value.get("channel", 0))
+        new = value.get("add_label")
+        if new and st.session_state.get("last_label_nonce") != new["nonce"]:
+            st.session_state["last_label_nonce"] = new["nonce"]
+            try:
+                add_custom(new["name"], new["color"])
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                st.rerun(scope="app")  # la liste des étiquettes est relue par `main`
     if interval_mode:
         st.caption(_interval_caption(st.session_state[ikey]))
 
@@ -627,9 +637,11 @@ def _answer_form(con, target, form_key, annotator, channel) -> bool:
 
 
 def _labels_panel(custom: dict[str, dict[str, str]]) -> None:
-    """Étiquettes ajoutées aux quatre du schéma : nom et couleur, ou retrait de la liste (les
-    intervalles déjà posés gardent leur étiquette)."""
-    with st.expander("Étiquettes", expanded=False):
+    """Retrait des étiquettes ajoutées aux quatre du schéma (les intervalles déjà posés gardent
+    leur étiquette). L'ajout se fait par le « + » de la barre du visualiseur."""
+    if not custom:
+        return
+    with st.expander("Étiquettes ajoutées", expanded=False):
         for code, item in custom.items():
             cols = st.columns([1, 6, 2])
             cols[0].markdown(
@@ -640,16 +652,6 @@ def _labels_panel(custom: dict[str, dict[str, str]]) -> None:
             if cols[2].button("✕", key=f"rm::{code}", help="Retirer de la liste"):
                 remove_custom(code)
                 st.rerun()
-        with st.form("new_label", clear_on_submit=True):
-            name = st.text_input("Nouvelle étiquette")
-            color = st.color_picker("Couleur", "#B08CF2")
-            if st.form_submit_button("Ajouter", use_container_width=True):
-                try:
-                    add_custom(name, color)
-                except ValueError as exc:
-                    st.error(str(exc))
-                else:
-                    st.rerun()
 
 
 def _interval_caption(intervals) -> str:
@@ -891,16 +893,20 @@ def main() -> None:
             "Étiquette et qualité des intervalles, bande d'écoute, volume, filtre dynamique, "
             "contraste et micro du spectrogramme : dans la barre au-dessus du spectrogramme."
         )
-        st.header("Méthode")
-        window_mode = st.checkbox(
-            "Annoter par fenêtres (suspendu)",
-            value=False,
-            help="Ancienne méthode : un label par fenêtre de longueur fixe, sur la même page. "
-            "Par défaut, on trace les intervalles où A. blanci chante (§5.6).",
-        )
-        split_s = st.number_input(
-            "Longueur des fenêtres (s)", 0.5, 60.0, 3.0, 0.5, disabled=not window_mode
-        )
+        # Rubrique « Méthode » masquée (annotation par fenêtres suspendue) : mettre
+        # SHOW_METHOD à True pour la réafficher.
+        window_mode, split_s = False, 3.0
+        if SHOW_METHOD:
+            st.header("Méthode")
+            window_mode = st.checkbox(
+                "Annoter par fenêtres (suspendu)",
+                value=False,
+                help="Ancienne méthode : un label par fenêtre de longueur fixe, sur la même "
+                "page. Par défaut, on trace les intervalles où A. blanci chante (§5.6).",
+            )
+            split_s = st.number_input(
+                "Longueur des fenêtres (s)", 0.5, 60.0, 3.0, 0.5, disabled=not window_mode
+            )
 
     if mode == MAP:
         _map_page(cfg, con, encoder, config)

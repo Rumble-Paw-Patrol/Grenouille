@@ -187,7 +187,13 @@ INDEX = r"""<!doctype html>
   <span class="group types" id="ivbar"
         title="Pleine : étiquette des prochains intervalles (touches 1 à 4).
 Cerclée : celle de l'intervalle sélectionné (un clic la change).">
-    <span class="lbl">Étiquette</span><span class="pills" id="ivbtns"></span></span>
+    <span class="lbl">Étiquette</span><span class="pills" id="ivbtns"></span>
+    <button id="addlbl" title="Ajouter une étiquette (nom et couleur)">+</button>
+    <span id="newlbl" hidden>
+      <input id="newname" type="text" placeholder="Nouvelle étiquette" size="14">
+      <input id="newcolor" type="color" value="#B08CF2">
+      <button id="newok">Ajouter</button><button id="newno" title="Annuler">✕</button>
+    </span></span>
   <span class="group" id="qbar"
         title="Qualité du chant : de l'intervalle sélectionné, et des prochains">
     <span class="lbl">Qualité</span><span class="seg medailles" id="qbtns"></span></span>
@@ -470,7 +476,7 @@ const rgb = label => COLORS[label] || [200, 200, 200];
 const labelName = code => (D.labels.find(([c]) => c === code) || [code, code])[1];
 function showTypes() {
   const current = selected >= 0 ? intervals[selected].label : null;
-  [...$("ivbar").querySelectorAll("button")].forEach(b => {
+  [...$("ivbtns").querySelectorAll("button")].forEach(b => {
     const on = b.value === newLabel;
     b.classList.toggle("on", on);
     b.classList.toggle("sel", b.value === current);
@@ -502,12 +508,32 @@ function send(type, data) {
 }
 function setHeight() { send("streamlit:setFrameHeight", {height: document.body.scrollHeight}); }
 const round = t => Math.round(t * 100) / 100;
-function emit() {
+function emit(addLabel) {
   send("streamlit:setComponentValue", {dataType: "json", value: {
     key: D.extract, ivkey: D.ivkey, channel: active,
     intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]),
+    add_label: addLabel || null,
   }});
 }
+// Nouvelle étiquette : nom et couleur saisis ici, ajoutées à la liste par le poste (`nonce`
+// évite de la rajouter à chaque réaffichage).
+function showNewLabel(on) {
+  $("newlbl").hidden = !on; $("addlbl").hidden = on;
+  if (on) $("newname").focus(); else $("newname").value = "";
+  setHeight();
+}
+$("addlbl").onclick = () => showNewLabel(true);
+$("newno").onclick = () => showNewLabel(false);
+$("newok").onclick = () => {
+  const name = $("newname").value.trim();
+  if (!name) { $("newname").focus(); return; }
+  emit({name, color: $("newcolor").value, nonce: Date.now()});
+  showNewLabel(false);
+};
+$("newname").addEventListener("keydown", e => {
+  if (e.key === "Enter") $("newok").click();
+  else if (e.key === "Escape") $("newno").click();
+});
 
 function render(args) {
   const fresh = !D || args.extract !== D.extract;
