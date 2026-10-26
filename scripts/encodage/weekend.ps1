@@ -2,7 +2,7 @@
 # Empêche la mise en veille tant que ce script tourne (sans toucher aux réglages de Windows).
 Add-Type -Namespace Win -Name Power -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint f);'
 [void][Win.Power]::SetThreadExecutionState(0x80000001)
-$repo = Split-Path $PSScriptRoot -Parent
+$repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $log = Join-Path $repo 'rapports\weekend.log'
 function Note($m) { "{0:yyyy-MM-dd HH:mm} {1}" -f (Get-Date), $m | Add-Content $log -Encoding utf8 }
 

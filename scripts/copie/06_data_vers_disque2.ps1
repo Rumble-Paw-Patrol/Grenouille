@@ -1,6 +1,6 @@
 ﻿# Déplace tout data\ du PC vers F:\data (BLANCI_2025-26) et laisse à la place une jonction data -> F:\data :
 # les chemins relatifs « data/... » du code et de la configuration restent valables. Relance ensuite BirdNET.
-$repo = Split-Path $PSScriptRoot -Parent
+$repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $log = Join-Path $repo 'rapports\weekend.log'
 function Note($m) { "{0:yyyy-MM-dd HH:mm} {1}" -f (Get-Date), $m | Add-Content $log -Encoding utf8 }
 $fs = Get-Volume -DriveLetter F -ErrorAction Stop
@@ -24,4 +24,4 @@ if (Test-Path 'F:\data\embeddings') { Remove-Item 'F:\data\embeddings' -Recurse 
 Move-Item 'F:\embeddings' 'F:\data\embeddings'
 Note "data : embeddings rangés dans F:\data\embeddings"
 
-& (Join-Path $PSScriptRoot 'weekend.ps1')
+& (Join-Path $PSScriptRoot '..\encodage\weekend.ps1')

@@ -3,7 +3,7 @@
 $fs = Get-Volume -DriveLetter F -ErrorAction Stop
 if ($fs.FileSystem -ne 'NTFS' -or $fs.FileSystemLabel -ne 'BLANCI_2025-26') { throw "F: n'est pas le disque BLANCI_2025-26 en NTFS. Arrêt." }
 $Root = 'D:\Projet blanci 2025'
-$Rapports = Join-Path $PSScriptRoot '..\rapports'
+$Rapports = Join-Path $PSScriptRoot '..\..\rapports'
 $log = Join-Path $Rapports ("copie2_{0:yyyyMMdd_HHmm}.log" -f (Get-Date))
 $Releves = [ordered]@{
   'RELEVE 1 CDR - 21-27 décembre 2025'         = 'R1_2025-12_CDR'

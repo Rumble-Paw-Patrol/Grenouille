@@ -1,6 +1,6 @@
 ﻿# Déplace data\embeddings du PC vers F:\embeddings (BLANCI_2025-26), pointe paths.embeddings dessus,
 # puis relance l'encodage BirdNET (weekend.ps1). Les encodages en cours doivent être arrêtés avant.
-$repo = Split-Path $PSScriptRoot -Parent
+$repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $log = Join-Path $repo 'rapports\weekend.log'
 function Note($m) { "{0:yyyy-MM-dd HH:mm} {1}" -f (Get-Date), $m | Add-Content $log -Encoding utf8 }
 $fs = Get-Volume -DriveLetter F -ErrorAction Stop

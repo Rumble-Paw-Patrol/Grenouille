@@ -2,7 +2,7 @@
 $Dest   = 'F:\'
 $DRoot  = 'D:\Projet Phénologie blanci'
 $EMolo  = 'E:\Pheno_blanci_Molokoi'
-$Rapports = Join-Path $PSScriptRoot '..\rapports'
+$Rapports = Join-Path $PSScriptRoot '..\..\rapports'
 
 # Dossier source D: -> dossier de destination normalisé sur F:\audio
 $Releves = [ordered]@{
