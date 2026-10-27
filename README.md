@@ -25,7 +25,7 @@ Grenouille/
     ├── biblio/           -> bibliographie commentée, offre de stage
     ├── prez/             -> présentations de suivi (.pptx)
     ├── encodeurs/        -> les encodeurs de bacpipe et leurs spécificités
-    └── commandes/        -> liste des commandes `blanci`, une ligne chacune
+    └── commandes/        -> le glossaire des commandes blanci
 ```
 
 ### Le code : le paquet `blanci/`
