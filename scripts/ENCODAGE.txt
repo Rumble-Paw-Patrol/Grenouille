@@ -1,4 +1,4 @@
-pour lancer l'encodage :
+pour lancer l'encodage dans powershell :
 
 Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','C:\Users\ll34272\Grenouille\scripts\encode_v3.ps1'
 
