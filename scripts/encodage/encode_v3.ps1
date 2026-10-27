@@ -1,7 +1,7 @@
 # Boucle d'encodage BirdNET 3.0 qui saute les enregistrements déjà encodés. Le script empêche la mise en veille automatique. Ne pas fermer le clapet, ni VS Code, ni le terminal
 Add-Type -Namespace Win -Name Power -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint f);'
 [void][Win.Power]::SetThreadExecutionState([uint32]2147483651)  # 0x80000003 : système + écran, contre la veille moderne
-$repo = Split-Path $PSScriptRoot -Parent
+$repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $log = Join-Path $repo 'rapports\weekend.log'
 function Note($m) { "{0:yyyy-MM-dd HH:mm} {1}" -f (Get-Date), $m | Add-Content $log -Encoding utf8 }
 

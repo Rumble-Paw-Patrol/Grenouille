@@ -8,9 +8,9 @@ valable. Lecture seule : la base est ouverte en `mode=ro`, rien n'est écrit dan
 `recordings.qc_flags` ni sur les disques d'audio. Sorties : `paths.reports/son_etouffe/`
 (mesures, enregistrements, suites, épisodes, micros) et la file `paths.queues/son_etouffe/`.
 
-    uv run python scripts/qc_deux_pistes.py                 # lit l'audio (reprenable), puis tout
-    uv run python scripts/qc_deux_pistes.py --sans-audio    # refait tableaux et file seulement
-    uv run python scripts/qc_deux_pistes.py --micros Kaw/SMA10283 --limite 20 --sortie <dossier>
+    uv run python scripts/son_etouffe/qc_deux_pistes.py                 # lit l'audio (reprenable), puis tout
+    uv run python scripts/son_etouffe/qc_deux_pistes.py --sans-audio    # refait tableaux et file seulement
+    uv run python scripts/son_etouffe/qc_deux_pistes.py --micros Kaw/SMA10283 --limite 20 --sortie <dossier>
 
 Chaque fichier est lu une fois : `qc_indices` sur chaque colonne de `sf.read(always_2d=True)`
 donne exactement `qc_indices(*load_audio(path, 0))` et `qc_indices(*load_audio(path, 1))`.
@@ -426,7 +426,7 @@ def main() -> None:
     else:
         target = cfg if not args.sortie else cfg | {"paths": cfg["paths"] | {"queues": str(folder)}}
         about = {
-            "méthode": "suites `muffled` recalculées piste par piste (scripts/qc_deux_pistes.py), "
+            "méthode": "suites `muffled` recalculées piste par piste (scripts/son_etouffe/qc_deux_pistes.py), "
             "un extrait de 30 s par épisode, cas à une seule piste étouffée d'abord",
             "mesures": str(folder),
         }
@@ -442,7 +442,7 @@ HOW_TO_LISTEN = """## Comment écouter
 
 Chaque extrait représente un épisode : une suite d'enregistrements consécutifs du même micro
 où une piste au moins a `hf_ratio` < 0,05 (énergie au-dessus de 2 kHz / énergie totale),
-règle des suites appliquée piste par piste (`scripts/qc_deux_pistes.py`). Colonnes
+règle des suites appliquée piste par piste (`scripts/son_etouffe/qc_deux_pistes.py`). Colonnes
 `hf_ratio_0` et `hf_ratio_1` : valeur de l'enregistrement choisi, piste 0 = micro 1 (6 dB),
 piste 1 = micro 2 (18 dB) dans le poste.
 
