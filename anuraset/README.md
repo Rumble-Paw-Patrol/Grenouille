@@ -1,6 +1,6 @@
 # Outils des benchmarks AnuraSet par encodeur (02 et suivants)
 
-**Pré-benchmark terminé** : plus utilisé pour la suite du projet, gardé pour reproduire les rapports `anuraset/benchmarks/*_anuraset_*` (DECISIONS n° 166). Le module est `blanci/evaluation/anuraset.py`, les commandes `blanci anuraset …`.
+Le module est `blanci/evaluation/anuraset.py`, les commandes `blanci anuraset …`.
 
 À lancer depuis la racine du dépôt, `anuraset/anuraset.yaml` et bacpipe installés.
 
