@@ -6,7 +6,7 @@
 
 ## Réglages
 
-- origine : scripts/files_son_etouffe.py, d'après F:/data/reports/son_etouffe/
+- origine : scripts/son_etouffe/files_son_etouffe.py, d'après F:/data/reports/son_etouffe/
 - contenu : une piste étouffée et l'autre limite (hf 0,05-0,10) ou non retenue par la règle des suites, ou noté étouffé à l'écoute sans suite ; extrait de 5 s ; la colonne `cause` dit pourquoi
 
 ## Motifs

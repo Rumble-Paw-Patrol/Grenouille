@@ -1,0 +1,11 @@
+pour lancer l'encodage dans powershell :
+
+Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','C:\Users\ll34272\Grenouille\scripts\encodage\encode_v3.ps1'
+
+voir où ça en est :
+
+Get-Content C:\Users\ll34272\Grenouille\rapports\embed_birdnet_v3.log -Tail 3
+
+arrêter l'encodage :
+
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*encode_v3.ps1*' -or $_.Name -eq 'blanci.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }

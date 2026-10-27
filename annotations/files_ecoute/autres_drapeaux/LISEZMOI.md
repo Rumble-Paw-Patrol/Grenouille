@@ -6,7 +6,7 @@
 
 ## Réglages
 
-- origine : scripts/files_son_etouffe.py, d'après F:/data/reports/son_etouffe/
+- origine : scripts/son_etouffe/files_son_etouffe.py, d'après F:/data/reports/son_etouffe/
 - contenu : durée anormale et/ou hors relevé (ex-motifs 3 à 5 de `ecartes`) ; enregistrements entiers, durée inchangée
 
 ## Motifs
