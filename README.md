@@ -65,11 +65,11 @@ La commande `blanci` (`cli.py`) donne accès à toutes les étapes. Quelques emp
 
 ## Données
 
+Inventaire : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an, 66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé d'une semaine chacun, 29 513 enregistrements.
+
 **Le dépôt ne contient aucun enregistrement de l'ONF.** L'audio, la base de données, les embeddings et les modèles restent en local, sous `data/`. Seuls quelques extraits courts sont versionnés, pour les présentations et le tableau de bord.
 
-Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), qui servent aux benchmarks. Elles sont rangées dans les branches `donnees-anuraset-*`, hors de `main`.
-
-Inventaire (base au 29/09/2026) : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an, 66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé d'une semaine chacun, 29 513 enregistrements.
+Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), qui servent aux benchmarks. Elles sont rangées dans les branches `donnees-anuraset-*`, hors de `main`. C'est pour ça qu'il y a pleins de branches qui traînent.
 
 ## Installation et utilisation
 
@@ -82,27 +82,7 @@ uv run blanci --help
 
 Sous Windows, lancer une fois `setx UV_NO_SYNC 1` : sinon chaque `uv run` peut réinstaller torch au milieu d'un encodage.
 
-Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`) : racine du disque externe, qui n'est jamais modifié. Pour écouter, ce n'est pas nécessaire : `blanci annotate` cherche lui-même les enregistrements sur les disques branchés.
-
-Toutes les commandes sont listées dans **[documentation/commandes/commandes.md](documentation/commandes/commandes.md)**. Les principales :
-
-```sh
-B="uv run blanci --config config/local.yaml"
-$B ingest --dataset 2026 --site Mataroni --no-qc --no-hash "<dossier du relevé>"   # inventaire
-$B status                                                  # ce que contient la base
-$B embed --encoder birdmae --subset benchmark              # embeddings des fenêtres annotées
-$B heads --encoder perch_v2-bacpipe1.3.5                   # toutes les têtes, mêmes plis
-$B annotate                                                # poste d'annotation (navigateur)
-$B export-labels                                           # annotations en CSV
-$B import-labels                                           # reprendre l'écoute sur une autre machine
-```
-
-Les benchmarks AnuraSet ont leurs propres réglages et leur propre base, séparés des données de l'ONF :
-
-```sh
-A="uv run blanci --config anuraset/anuraset.yaml"
-$A anuraset prepare && $A anuraset profile
-```
+Toutes les commandes sont listées dans **[documentation/commandes/commandes.md](documentation/commandes/commandes.md)**.
 
 ## Garanties méthodologiques
 
