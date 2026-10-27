@@ -24,7 +24,8 @@ Grenouille/
     ├── regularizations/  -> catalogue des régularisations des têtes (R1 à R85)
     ├── biblio/           -> bibliographie commentée, offre de stage
     ├── prez/             -> présentations de suivi (.pptx)
-    └── commandes.md, glossaire-bioacoustique.md, encodeurs-bacpipe.md
+    ├── encodeurs/        -> les encodeurs de bacpipe et leurs spécificités
+    └── commandes/        -> liste des commandes `blanci`, une ligne chacune
 ```
 
 ### Le code : le paquet `blanci/`
@@ -68,7 +69,7 @@ La commande `blanci` (`cli.py`) donne accès à toutes les étapes. Quelques emp
 
 Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), qui servent aux benchmarks. Elles sont rangées dans les branches `donnees-anuraset-*`, hors de `main`.
 
-Inventaire (base au 29/09/2026) : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an, 66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé d'une semaine chacun, 29 513 enregistrements. Détail dans [documentation/commandes.md](documentation/commandes.md#inventaire-base-au-29092026).
+Inventaire (base au 29/09/2026) : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an, 66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé d'une semaine chacun, 29 513 enregistrements.
 
 ## Installation et utilisation
 
@@ -83,7 +84,7 @@ Sous Windows, lancer une fois `setx UV_NO_SYNC 1` : sinon chaque `uv run` peut r
 
 Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`) : racine du disque externe, qui n'est jamais modifié. Pour écouter, ce n'est pas nécessaire : `blanci annotate` cherche lui-même les enregistrements sur les disques branchés.
 
-Toutes les commandes sont décrites dans **[documentation/commandes.md](documentation/commandes.md)**. Les principales :
+Toutes les commandes sont listées dans **[documentation/commandes/commandes.md](documentation/commandes/commandes.md)**. Les principales :
 
 ```sh
 B="uv run blanci --config config/local.yaml"
