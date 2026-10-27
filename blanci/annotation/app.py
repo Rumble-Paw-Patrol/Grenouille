@@ -142,25 +142,15 @@ def _cached_config(config: str | None, stamps: tuple) -> dict:
 
 
 def _queues(cfg) -> list[Path]:
-    """Files de candidats : un dossier par file (`<paths.queues>/<nom>/candidats.csv`), et les
-    anciens CSV posés à plat, là ou dans `paths.reports` (sauf ceux déjà copiés dans la
-    première)."""
+    """Files de candidats : un dossier par file (`<paths.queues>/<nom>/candidats.csv`)."""
     from blanci.annotation.selection import queue_dir
 
-    flat = ("candidats_*.csv", "queue_*.csv", "search_*.csv")
-    found = {p for pattern in ("*/candidats.csv", *flat) for p in queue_dir(cfg).glob(pattern)}
-    names = {p.name for p in found}
-    found |= {
-        p
-        for pattern in flat
-        for p in config_path(cfg, "reports").glob(pattern)
-        if p.name not in names
-    }
+    found = queue_dir(cfg).glob("*/candidats.csv")
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
 def _queue_name(path: Path) -> str:
-    return path.parent.name if path.name == "candidats.csv" else path.name
+    return path.parent.name
 
 
 def _encoders(con) -> list[str]:
@@ -210,7 +200,7 @@ def _selection_panel(cfg, con) -> tuple[str, Path | None, str | None]:
         index = next((i for i, q in enumerate(queues) if str(q) == wanted), 0)
         chosen = st.selectbox("File de candidats", queues, index=index, format_func=_queue_name)
         readme = chosen.parent / "LISEZMOI.md"
-        if chosen.name == "candidats.csv" and readme.is_file():
+        if readme.is_file():
             with st.expander("Informations sur cette file d'écoute"):
                 st.markdown(readme.read_text(encoding="utf-8"))
         return mode, chosen, encoder

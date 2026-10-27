@@ -1903,7 +1903,7 @@ def candidates(
         ),
     ] = None,
     sites: Annotated[str | None, typer.Option(help="Sites, ex. « CDR,PatawaOuest ».")] = None,
-    name: Annotated[str, typer.Option(help="Nom de la file : candidats_<nom>.csv.")] = "lot1",
+    name: Annotated[str, typer.Option(help="Nom de la file : files/<nom>/candidats.csv.")] = "lot1",
     seed: Annotated[int, typer.Option(help="Graine du tirage.")] = 0,
     plan: Annotated[
         bool,
