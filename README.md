@@ -1,10 +1,8 @@
-# Grenouille — détecter *Anomaloglossus blanci* dans les enregistrements acoustiques de Guyane
+# Grenouille — Outil de détection automatique d'*Anomaloglossus blanci* dans un paysage sonore Guyanais
 
-Stage à l'ONF Guyane (15/09/2026 → 14/03/2027). *Anomaloglossus blanci* est une petite grenouille
-endémique et menacée, qui chante une note de 0,09 s toutes les 1,4 s dans une bande de fréquences
-saturée par d'autres espèces. L'ONF et ses partenaires posent des enregistreurs en forêt (96 292
-enregistrements de 2 min, 3 204 h, huit sites) ; le projet cherche un **détecteur qui fonctionne
-sur de nouveaux points d'écoute**, qu'un naturaliste utilise **sans écrire de code** et que l'ONF
+Stage à l'Office National des Forêts de Guyane (15/09/2026 → 14/03/2027). *Anomaloglossus blanci* est une minuscule grenouille
+micro-endémique du quart Nord-Est de la Guyane et en danger d'extinction. Elle chante une note de 0,09 s environ, en moyenne toutes les 1,4 secondes dans une bande de fréquences saturée par d'autres espèces (4.4 - 5.5 kHz). L'ONF et ses partenaires ont posé des enregistreurs en forêt (96 292 enregistrements de 2 min, 3 204 h, multi-sites) ; le projet cherche un **détecteur qui fonctionne
+sur de nouveaux points d'écoute** encore jamais écoutés, qu'un naturaliste utilise **sans écrire de code** et que l'ONF
 peut réentraîner seul.
 
 Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
@@ -26,15 +24,14 @@ enregistrements entiers) ; finir l'encodage BirdNET 3.0 ; essai d'empaquetage `.
 ## Pour les encadrants : par où commencer
 
 **[Tableau de bord](https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8)** (page claude.ai, accès sur
-invitation) : chaîne de traitement, données, benchmarks à explorer, rapports et travail en cours,
-avec un bouton « Commenter » sur chaque carte.
+invitation) : c'est le plus utile pour avoir une vision globale du projet et pour suivre mon avancement en temps réel, je mets à jour la page tous les jours avec mes travaux récents.
 
 ## Structure du dépôt
 
 ```
 Grenouille/
 ├── blanci/               le code : un dossier par étape de la chaîne (voir ci-dessous)
-├── config/               réglages (default.yaml) et modèle de réglages locaux
+├── config/               réglages et chemins d’accès aux données (default.yaml)
 ├── annotations/          annotations exportées (CSV) et files d'écoute
 ├── anuraset/             pré-benchmark AnuraSet, terminé : réglages et scripts
 └── documentation/
