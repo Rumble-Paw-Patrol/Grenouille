@@ -6,7 +6,7 @@
 
 ## Réglages
 
-- origine : scripts/files_son_etouffe.py, d'après F:/data/reports/son_etouffe/
+- origine : scripts/son_etouffe/files_son_etouffe.py, d'après F:/data/reports/son_etouffe/
 - contenu : deux pistes étouffées (règle des suites sur chaque piste) ; extrait de 5 s au centre de chaque enregistrement ; à confirmer en basculant micro 1 / micro 2
 
 ## Motifs
