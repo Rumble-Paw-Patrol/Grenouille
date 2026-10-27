@@ -43,7 +43,7 @@ from blanci.heads.head import choose_C, fit_and_score
 from blanci.heads.regularization import Context, needs_domain, regularizer_for
 from blanci.heads.regularization.windows import _Accumulator
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "encodage"))
 from jetons import charger, stock_of  # noqa: E402
 
 TRANSFER = ["logistic", "logistic+R37=glmm", "lda_shrunk", "simple_prototype"]

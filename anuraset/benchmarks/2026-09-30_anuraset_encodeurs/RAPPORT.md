@@ -115,8 +115,8 @@ Robustesse : sans les sites à moins de 10 minutes positives (DENMIN à INCT4, 2
 Sorties brutes : retirées de `main` (règle : pas de sorties brutes sur main), dossier `resultats/global/` dans l'historique. Les branches `resultats-anuraset-*` n'existent plus. Les encodeurs de la vague 1 et la vague 2 sont dans `6f2ff13^` ; audioprotopnet et convnext_birdset sont dans `443f889` (perch_v2 avec jetons : refait ici, `global_bench.py perch_v2 <ESPECE> sorties --tokens`, jetons par `jetons.py perch_v2`, 45 min).
 
 ```
-uv run python anuraset/rassembler_08.py <sorties> documentation/benchmarks/2026-09-30_anuraset_encodeurs
-uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
+uv run python anuraset/calcul/rassembler_08.py <sorties> anuraset/benchmarks/2026-09-30_anuraset_encodeurs
+uv run --group notebook python anuraset/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
 ```
 
 `donnees/encodeurs.csv` : fenêtre, dimension, débit et licence de chaque encodeur, relevés dans les fiches et les n° 141 à 156.
@@ -127,8 +127,8 @@ uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_enco
 mkdir -p /tmp/g08 && git archive 6f2ff13^ resultats/global | tar -x -C /tmp/g08
 git archive 443f889 resultats/global | tar -x -C /tmp/g08
 cp <nouvelles sorties> /tmp/g08/resultats/global/
-uv run python anuraset/rassembler_08.py /tmp/g08/resultats/global documentation/benchmarks/2026-09-30_anuraset_encodeurs
-uv run --group notebook python documentation/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
+uv run python anuraset/calcul/rassembler_08.py /tmp/g08/resultats/global anuraset/benchmarks/2026-09-30_anuraset_encodeurs
+uv run --group notebook python anuraset/benchmarks/2026-09-30_anuraset_encodeurs/generer.py
 ```
 
 (`git checkout 6f2ff13^ -- resultats/` marche aussi, mais remet les fichiers dans l'arbre de travail : à éviter sur `main`.) Le rassemblement trouve seul les nouveaux encodeurs ; les chiffres du texte et le n° 161 sont à revoir ensuite.

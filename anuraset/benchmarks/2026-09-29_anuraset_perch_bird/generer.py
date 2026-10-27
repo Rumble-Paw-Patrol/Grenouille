@@ -1,7 +1,7 @@
 """Figures et tableaux du rapport, recalculés depuis `donnees/*.csv` (rien d'autre à lancer).
 
     uv run --group notebook python \
-        documentation/benchmarks/2026-09-29_anuraset_birdnet/generer.py
+        anuraset/benchmarks/2026-09-29_anuraset_perch_bird/generer.py
 
 Couleurs : palette de référence du skill dataviz (catégorielle pour les sites, rampe bleue pour
 les AP, bleu/orange pour AP poolée / AP par site, formes différentes en plus de la couleur).
@@ -23,7 +23,7 @@ from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 ICI = Path(__file__).resolve().parent
 DONNEES = ICI / "donnees"
 FIGURES = ICI / "figures"
-sys.path.insert(0, str(ICI.parents[1] / "tableaux"))
+sys.path.insert(0, str(ICI.parents[2] / "documentation" / "tableaux"))
 import generer as tableaux  # noqa: E402
 
 SURFACE, ENCRE, ENCRE_2, FILET = "#fcfcfb", "#0b0b0b", "#52514e", "#e1e0d9"
@@ -32,8 +32,8 @@ POOLEE, PAR_SITE = "#2a78d6", "#eb6834"
 BLEUS = ["#f0efec", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 ESPECES = ["DENMIN", "PITAZU", "PHYCUV", "LEPLAT", "BOAFAB"]  # de la plus dure à la plus facile
 REFERENCE = "logistic"
-ENCODEUR = "birdnet"
-FENETRE_S = "3"  # durée des fenêtres de l'encodeur
+ENCODEUR = "perch_bird"
+FENETRE_S = "5"  # durée des fenêtres de l'encodeur
 CAS_AMORCAGE = [("PITAZU", "INCT41"), ("LEPLAT", "INCT4")]  # sites presque vides
 
 plt.rcParams.update(

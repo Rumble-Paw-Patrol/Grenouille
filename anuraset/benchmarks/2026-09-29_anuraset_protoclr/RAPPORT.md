@@ -92,12 +92,12 @@ Scripts dans `anuraset/` (encodage, une espèce par processus, rassemblement) :
 
 ```
 uv pip install --no-deps bacpipe==1.3.5   # puis les modules manquants, torch CPU
-python anuraset/encoder.py protoclr
+python anuraset/encodage/encoder.py protoclr
 for sp in DENMIN PITAZU PHYCUV LEPLAT BOAFAB; do OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
-  python anuraset/bench.py protoclr-bacpipe1.3.5@o0 $sp sorties/ & done
-python anuraset/rassembler.py sorties/ \
-  documentation/benchmarks/2026-09-29_anuraset_protoclr
-uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_protoclr/generer.py
+  python anuraset/calcul/bench.py protoclr-bacpipe1.3.5@o0 $sp sorties/ & done
+python anuraset/calcul/rassembler.py sorties/ \
+  anuraset/benchmarks/2026-09-29_anuraset_protoclr
+uv run --group notebook python anuraset/benchmarks/2026-09-29_anuraset_protoclr/generer.py
 ```
 
 Réglages non par défaut : `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` (comme le 01). Holm recalculé sur les 5 espèces ensemble au rassemblement. Stock sur la branche `donnees-anuraset-protoclr`. Durées (CPU, 4 cœurs) : encodage 25 min (dont 9 de calcul, le reste en lecture et rééchantillonnage), têtes 7 à 11 min par espèce (`donnees/durees_s.csv`).

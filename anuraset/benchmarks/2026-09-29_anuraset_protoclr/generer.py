@@ -1,7 +1,7 @@
 """Figures et tableaux du rapport, recalculés depuis `donnees/*.csv` (rien d'autre à lancer).
 
     uv run --group notebook python \
-        documentation/benchmarks/2026-09-29_anuraset_protoclr/generer.py
+        anuraset/benchmarks/2026-09-29_anuraset_protoclr/generer.py
 
 Couleurs : palette de référence du skill dataviz (catégorielle pour les sites, rampe bleue pour
 les AP, bleu/orange pour AP poolée / AP par site, formes différentes en plus de la couleur).
@@ -23,7 +23,7 @@ from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 ICI = Path(__file__).resolve().parent
 DONNEES = ICI / "donnees"
 FIGURES = ICI / "figures"
-sys.path.insert(0, str(ICI.parents[1] / "tableaux"))
+sys.path.insert(0, str(ICI.parents[2] / "documentation" / "tableaux"))
 import generer as tableaux  # noqa: E402
 
 SURFACE, ENCRE, ENCRE_2, FILET = "#fcfcfb", "#0b0b0b", "#52514e", "#e1e0d9"

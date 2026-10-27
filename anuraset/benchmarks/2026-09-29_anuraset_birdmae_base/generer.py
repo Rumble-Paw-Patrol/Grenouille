@@ -1,6 +1,10 @@
 """Figures et tableaux du rapport, recalculés depuis `donnees/*.csv` (rien d'autre à lancer).
 
-    uv run --group notebook python documentation/benchmarks/2026-09-28_anuraset_perch_v2/generer.py
+    uv run --group notebook python \
+        anuraset/benchmarks/2026-09-29_anuraset_birdmae_base/generer.py
+
+`amorcage.csv` vient de `amorcage.py` (têtes réapprises) ; `perch_v2_*.csv` : copies des
+données du benchmark 01, pour la comparaison des deux encodeurs.
 
 Couleurs : palette de référence du skill dataviz (catégorielle pour les sites, rampe bleue pour
 les AP, bleu/orange pour AP poolée / AP par site, formes différentes en plus de la couleur).
@@ -22,12 +26,13 @@ from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 ICI = Path(__file__).resolve().parent
 DONNEES = ICI / "donnees"
 FIGURES = ICI / "figures"
-sys.path.insert(0, str(ICI.parents[1] / "tableaux"))
+sys.path.insert(0, str(ICI.parents[2] / "documentation" / "tableaux"))
 import generer as tableaux  # noqa: E402
 
 SURFACE, ENCRE, ENCRE_2, FILET = "#fcfcfb", "#0b0b0b", "#52514e", "#e1e0d9"
 SITES = {"INCT4": "#2a78d6", "INCT17": "#eb6834", "INCT20955": "#1baf7a", "INCT41": "#eda100"}
 POOLEE, PAR_SITE = "#2a78d6", "#eb6834"
+ENCODEURS = {"perch_v2": "#2a78d6", "birdmae_base": "#eb6834"}
 BLEUS = ["#f0efec", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 ESPECES = ["DENMIN", "PITAZU", "PHYCUV", "LEPLAT", "BOAFAB"]  # de la plus dure à la plus facile
 REFERENCE = "logistic"
@@ -53,7 +58,7 @@ def site_key(site: str) -> str:
 
 def load() -> dict[str, pd.DataFrame]:
     out = {p.stem: pd.read_csv(p) for p in DONNEES.glob("*.csv")}
-    for key in ("sites",):
+    for key in ("sites", "perch_v2_sites"):
         out[key]["held_out_site"] = out[key]["held_out_site"].map(site_key)
     return out
 
@@ -232,7 +237,8 @@ def tableau_tetes(tetes: pd.DataFrame, comparaisons: pd.DataFrame, order: list[s
     table = tableaux.Tableau(
         "tetes",
         "Têtes jugées un site à la fois : AP poolée · AP moyenne par site",
-        "perch_v2, fenêtres de 5 s, 20 négatifs par positif et par site. Couleur : écart apparié"
+        "birdmae_base, fenêtres de 5 s, 20 négatifs par positif et par site. Couleur : écart"
+        " apparié"
         " à la logistique (AP poolée) significatif après Holm et d'au moins 0,02 ; bootstrap par"
         " enregistrement, donc optimiste (les sites ne sont pas tirés).",
         [
@@ -250,6 +256,58 @@ def tableau_tetes(tetes: pd.DataFrame, comparaisons: pd.DataFrame, order: list[s
     image.save(FIGURES / "4_tableau_tetes.png", optimize=True)
 
 
+def figure_encodeurs(d: dict[str, pd.DataFrame]) -> None:
+    """Même tête, même protocole : AP poolée et AP moyenne par site de perch_v2 et birdmae_base,
+    pour la logistique (référence) et la meilleure tête de birdmae_base (lda_shrunk)."""
+    tetes = ["logistic", "lda_shrunk"]
+    rows = []
+    for enc, key in (("perch_v2", "perch_v2_tetes"), ("birdmae_base", "tetes")):
+        t = d[key]
+        t = t[(t["level"] == "window") & t["head"].isin(tetes)]
+        rows.append(t.assign(encoder=enc))
+    both = pd.concat(rows)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 3.6), sharey=True)
+    y = np.arange(len(ESPECES))[::-1]
+    offsets = {"logistic": 0.14, "lda_shrunk": -0.14}
+    markers = {"logistic": "o", "lda_shrunk": "s"}
+    for ax, column, title in zip(
+        axes, ["ap", "ap_fold_mean"], ["AP poolée", "AP moyenne par site"], strict=True
+    ):
+        for head in tetes:
+            for enc, color in ENCODEURS.items():
+                part = both[(both["encoder"] == enc) & (both["head"] == head)]
+                part = part.set_index("species").reindex(ESPECES)
+                ax.scatter(
+                    part[column],
+                    y + offsets[head],
+                    s=42,
+                    color=color,
+                    marker=markers[head],
+                    edgecolor=SURFACE,
+                    linewidth=1,
+                    zorder=2,
+                    label=f"{enc} · {head}",
+                )
+            a = both[(both["encoder"] == "perch_v2") & (both["head"] == head)]
+            b = both[(both["encoder"] == "birdmae_base") & (both["head"] == head)]
+            a = a.set_index("species").reindex(ESPECES)[column].to_numpy()
+            b = b.set_index("species").reindex(ESPECES)[column].to_numpy()
+            for yi, (u, v) in enumerate(zip(a, b, strict=True)):
+                ax.plot([u, v], [y[yi] + offsets[head]] * 2, color=FILET, linewidth=2, zorder=1)
+        ax.set_title(title, fontsize=10, color=ENCRE)
+        ax.set_xlim(0, 1)
+        ax.grid(axis="x", color=FILET, linewidth=0.6)
+        ax.set_axisbelow(True)
+        ax.spines[["top", "right", "left"]].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+    axes[0].set_yticks(y, ESPECES, fontsize=9)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, ncol=4, frameon=False, loc="upper center", fontsize=8.5)
+    fig.tight_layout(rect=(0, 0, 1, 0.9))
+    fig.savefig(FIGURES / "5_perch_contre_birdmae.png", dpi=150)
+    plt.close(fig)
+
+
 def main() -> None:
     FIGURES.mkdir(exist_ok=True)
     d = load()
@@ -258,6 +316,7 @@ def main() -> None:
     figure_ap_par_site(d["sites"], order)
     figure_poolee_site(d["tetes"], order)
     tableau_tetes(d["tetes"], d["comparaisons"], order)
+    figure_encodeurs(d)
     print(sorted(p.name for p in FIGURES.iterdir()))
 
 

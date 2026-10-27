@@ -95,9 +95,9 @@ Seuil choisi sur les autres sites (perch_v2, logistique, fenêtre, précision vi
 Outils : `anuraset/` (`global_bench.py`, `rassembler_global.py`). Stocks sur les branches `donnees-anuraset` (perch_v2) et `donnees-anuraset-<encodeur>`. Leurs modèles (table `models`) et leurs fenêtres (table `windows`) sont réunis dans une même `data/db/anuraset.sqlite`. Sorties brutes (scores hors-pli, courbes) : retirées de main, dans l'historique (`git show 6f2ff13^:resultats/global/<fichier>`).
 
 ```
-uv run python anuraset/global_bench.py <encodeur> <ESPECE> <sorties> --curve
-uv run python anuraset/rassembler_global.py <sorties> documentation/benchmarks/2026-09-29_anuraset_global
-uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_global/generer.py
+uv run python anuraset/calcul/global_bench.py <encodeur> <ESPECE> <sorties> --curve
+uv run python anuraset/calcul/rassembler_global.py <sorties> anuraset/benchmarks/2026-09-29_anuraset_global
+uv run --group notebook python anuraset/benchmarks/2026-09-29_anuraset_global/generer.py
 ```
 
 Durées (CPU, un cœur par tâche) : 1 à 30 min par encodeur et par espèce, 3 h 50 au total. Sur deux machines de 4 cœurs, l'une ayant pris birdmae_base, le calcul a pris 55 min, et le rassemblement 2 min (bootstrap pondéré : l'AP d'un tirage se calcule sur les scores triés une seule fois, valeur identique à `average_precision`).

@@ -102,7 +102,7 @@ Identiques au benchmark 01 : 1 599 enregistrements AnuraSet (1 206 aux chants da
 uv run blanci --config anuraset/anuraset.yaml anuraset heads \
     --encoder birdmae_huge-bacpipe1.3.5@o0 --species DENMIN \
     --methods "$(python -c 'from blanci.evaluation.anuraset import CAMPAIGN_HEADS as H; print(",".join(H))')"
-uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_birdmae_huge/generer.py
+uv run --group notebook python anuraset/benchmarks/2026-09-29_anuraset_birdmae_huge/generer.py
 ```
 
 Une espèce par processus, `reports` séparé par espèce, `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]`. Holm est recalculé sur les 5 espèces ensemble (`comparaisons.csv`), comme au benchmark 01. bacpipe installé sans dépendances : torch et torchaudio (CPU), librosa, panel, matplotlib, seaborn et plotly, que bacpipe demande à l'import, et **transformers < 5** (avec la 5.x, le code distant de Bird-MAE échoue : `all_tied_weights_keys`).

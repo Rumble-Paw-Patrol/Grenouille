@@ -1,6 +1,6 @@
 """Figures et tableaux du rapport 07, recalculés depuis `donnees/*.csv` (rien d'autre à lancer).
 
-    uv run --group notebook python documentation/benchmarks/2026-09-29_anuraset_global/generer.py
+    uv run --group notebook python anuraset/benchmarks/2026-09-29_anuraset_global/generer.py
 
 Couleurs : palette catégorielle de référence du skill dataviz (6 encodeurs, ordre fixe, validée :
 séparation CVD ≥ 9), avec des marqueurs différents et des étiquettes directes en plus.
@@ -21,7 +21,7 @@ import pandas as pd  # noqa: E402
 ICI = Path(__file__).resolve().parent
 DONNEES = ICI / "donnees"
 FIGURES = ICI / "figures"
-sys.path.insert(0, str(ICI.parents[1] / "tableaux"))
+sys.path.insert(0, str(ICI.parents[2] / "documentation" / "tableaux"))
 import generer as tableaux  # noqa: E402
 
 SURFACE, ENCRE, ENCRE_2, FILET = "#fcfcfb", "#0b0b0b", "#52514e", "#e1e0d9"

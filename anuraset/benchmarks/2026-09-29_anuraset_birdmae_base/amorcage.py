@@ -6,7 +6,7 @@ retomber sur `donnees/sites.csv`). Écrit `donnees/amorcage.csv`. Lent (têtes r
 `generer.py` n'en a pas besoin.
 
     OMP_NUM_THREADS=1 uv run python \
-        documentation/benchmarks/2026-09-29_anuraset_birdmae_base/amorcage.py birdmae_base PITAZU
+        anuraset/benchmarks/2026-09-29_anuraset_birdmae_base/amorcage.py birdmae_base PITAZU
 
 Un processus à la fois (le CSV est relu puis réécrit).
 """

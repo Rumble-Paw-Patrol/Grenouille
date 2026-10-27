@@ -1,7 +1,6 @@
 """Figures et tableaux du rapport, recalculés depuis `donnees/*.csv` (rien d'autre à lancer).
 
-    uv run --group notebook python \
-        documentation/benchmarks/__DOSSIER__/generer.py
+    uv run --group notebook python anuraset/benchmarks/2026-09-28_anuraset_perch_v2/generer.py
 
 Couleurs : palette de référence du skill dataviz (catégorielle pour les sites, rampe bleue pour
 les AP, bleu/orange pour AP poolée / AP par site, formes différentes en plus de la couleur).
@@ -23,7 +22,7 @@ from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 ICI = Path(__file__).resolve().parent
 DONNEES = ICI / "donnees"
 FIGURES = ICI / "figures"
-sys.path.insert(0, str(ICI.parents[1] / "tableaux"))
+sys.path.insert(0, str(ICI.parents[2] / "documentation" / "tableaux"))
 import generer as tableaux  # noqa: E402
 
 SURFACE, ENCRE, ENCRE_2, FILET = "#fcfcfb", "#0b0b0b", "#52514e", "#e1e0d9"
@@ -32,9 +31,6 @@ POOLEE, PAR_SITE = "#2a78d6", "#eb6834"
 BLEUS = ["#f0efec", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 ESPECES = ["DENMIN", "PITAZU", "PHYCUV", "LEPLAT", "BOAFAB"]  # de la plus dure à la plus facile
 REFERENCE = "logistic"
-ENCODEUR = "__ENCODEUR__"
-FENETRE_S = "__FENETRE__"  # durée des fenêtres de l'encodeur
-CAS_AMORCAGE = [("PITAZU", "INCT41"), ("LEPLAT", "INCT4")]  # sites presque vides
 
 plt.rcParams.update(
     {
@@ -57,8 +53,8 @@ def site_key(site: str) -> str:
 
 def load() -> dict[str, pd.DataFrame]:
     out = {p.stem: pd.read_csv(p) for p in DONNEES.glob("*.csv")}
-    for key, col in (("sites", "held_out_site"), ("amorcage", "site")):
-        out[key][col] = out[key][col].map(site_key)
+    for key in ("sites",):
+        out[key]["held_out_site"] = out[key]["held_out_site"].map(site_key)
     return out
 
 
@@ -105,7 +101,7 @@ def figure_positifs(sites: pd.DataFrame) -> None:
         left += values
     for i, total in enumerate(left):
         ax.text(total + 25, i, f"{int(total)}", va="center", fontsize=9, color=ENCRE_2)
-    ax.set_xlabel(f"fenêtres positives ({FENETRE_S} s)")
+    ax.set_xlabel("fenêtres positives (5 s)")
     ax.set_xlim(0, left.max() * 1.1)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(ncol=4, frameon=False, loc="lower center", bbox_to_anchor=(0.5, 1.0), fontsize=9)
@@ -236,8 +232,7 @@ def tableau_tetes(tetes: pd.DataFrame, comparaisons: pd.DataFrame, order: list[s
     table = tableaux.Tableau(
         "tetes",
         "Têtes jugées un site à la fois : AP poolée · AP moyenne par site",
-        f"{ENCODEUR}, fenêtres de {FENETRE_S} s, 20 négatifs par positif et par site."
-        " Couleur : écart apparié"
+        "perch_v2, fenêtres de 5 s, 20 négatifs par positif et par site. Couleur : écart apparié"
         " à la logistique (AP poolée) significatif après Holm et d'au moins 0,02 ; bootstrap par"
         " enregistrement, donc optimiste (les sites ne sont pas tirés).",
         [
@@ -255,53 +250,6 @@ def tableau_tetes(tetes: pd.DataFrame, comparaisons: pd.DataFrame, order: list[s
     image.save(FIGURES / "4_tableau_tetes.png", optimize=True)
 
 
-def tableau_amorcage(amorcage: pd.DataFrame, order: list[str]) -> None:
-    """Tableau PNG : amorcer un site presque vide. AP du site · rappel à précision 0,5 au seuil
-    choisi sur les autres sites (entre parenthèses : seuil choisi sur place, optimiste)."""
-    rows = []
-    for h in order:
-        row: list = [tableaux.C(h, "ref") if h == REFERENCE else h]
-        for sp, site in CAS_AMORCAGE:
-            r = amorcage[(amorcage["species"] == sp) & (amorcage["site"] == site)]
-            r = r[r["head"] == h].iloc[0]
-            prec = r["precision_seuil_ailleurs"]
-            prec = "–" if pd.isna(prec) else f"{prec:.2f}"
-            text = (
-                f"{r['ap_site']:.2f} · {r['recall_seuil_ailleurs']:.2f} / {prec} "
-                f"({r['recall_seuil_sur_place']:.2f})"
-            ).replace(".", ",")
-            row.append(tableaux.C(text, "ref") if h == REFERENCE else text)
-        rows.append(row)
-    n_pos = {
-        (sp, site): int(
-            amorcage[(amorcage["species"] == sp) & (amorcage["site"] == site)]["n_pos"].iloc[0]
-        )
-        for sp, site in CAS_AMORCAGE
-    }
-    table = tableaux.Tableau(
-        "amorcage",
-        "Amorcer un site presque vide",
-        f"{ENCODEUR}. AP du site · rappel / précision obtenus sur le site au seuil de précision"
-        " 0,5 choisi sur les autres sites (– : aucune alerte). Entre parenthèses : rappel au"
-        " seuil choisi sur place (oracle).",
-        [
-            tableaux.Section(
-                [tableaux.Colonne("Tête", 1.3, code=True)]
-                + [
-                    tableaux.Colonne(f"{sp} · {site} ({n_pos[(sp, site)]} pos.)", 1.4)
-                    for sp, site in CAS_AMORCAGE
-                ],
-                rows,
-            )
-        ],
-        ["Têtes par rang moyen de l'AP poolée (figure 2)."],
-        largeur=1100,
-    )
-    tableaux.verifier(table)
-    image = tableaux.rendre(table).quantize(colors=48)
-    image.save(FIGURES / "5_amorcage.png", optimize=True)
-
-
 def main() -> None:
     FIGURES.mkdir(exist_ok=True)
     d = load()
@@ -310,7 +258,6 @@ def main() -> None:
     figure_ap_par_site(d["sites"], order)
     figure_poolee_site(d["tetes"], order)
     tableau_tetes(d["tetes"], d["comparaisons"], order)
-    tableau_amorcage(d["amorcage"], order)
     print(sorted(p.name for p in FIGURES.iterdir()))
 
 

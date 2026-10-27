@@ -19,9 +19,8 @@ Grenouille/
 ├── blanci/               -> le code : un dossier par étape de la chaîne (voir ci-dessous)
 ├── config/               -> réglages et chemins d’accès aux données (default.yaml)
 ├── annotations/          -> annotations exportées (CSV) et files d'écoute
-├── anuraset/             -> pré-benchmark AnuraSet, terminé : réglages et scripts
+├── anuraset/             -> tout AnuraSet : réglages, scripts, les 8 rapports de benchmark (benchmarks/)
 └── documentation/
-    ├── benchmarks/       -> les 8 rapports de benchmark AnuraSet, avec données, figures et scripts
     ├── regularizations/  -> catalogue des régularisations des têtes (R1 à R85)
     ├── biblio/           -> bibliographie commentée, offre de stage
     ├── prez/             -> présentations de suivi (.pptx)
