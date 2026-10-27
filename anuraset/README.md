@@ -1,4 +1,4 @@
-# Outils des benchmarks AnuraSet par encodeur (02 et suivants)
+# README AnuraSet
 
 Le module est `blanci/evaluation/anuraset.py`, les commandes `blanci anuraset …`.
 
