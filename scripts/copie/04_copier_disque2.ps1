@@ -30,4 +30,4 @@ foreach ($src in $Releves.Keys) {
   }
 }
 robocopy 'E:\Enregistrements blanci Mataroni mai 2026' 'F:\audio\R7_2026-05_Mataroni' @opts /UNILOG+:$log
-"{0:yyyy-MM-dd HH:mm} copie disque 2 : fin" -f (Get-Date) | Add-Content (Join-Path $Rapports 'weekend.log') -Encoding utf8
+"{0:yyyy-MM-dd HH:mm} copie disque 2 : fin" -f (Get-Date) | Add-Content (Join-Path $Rapports 'encodage.log') -Encoding utf8

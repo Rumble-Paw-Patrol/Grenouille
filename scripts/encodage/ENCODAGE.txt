@@ -1,11 +1,13 @@
+Remplacer <depot> par le dossier du dépôt et <encodeur> par le nom de l'encodeur (ex. birdnet_v3).
+
 pour lancer l'encodage dans powershell :
 
-Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','C:\Users\ll34272\Grenouille\scripts\encodage\encode_v3.ps1'
+Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','<depot>\scripts\encodage\encode_modele.ps1','-Encoder','<encodeur>'
 
 voir où ça en est :
 
-Get-Content C:\Users\ll34272\Grenouille\rapports\embed_birdnet_v3.log -Tail 3
+Get-Content <depot>\rapports\embed_<encodeur>.log -Tail 3
 
 arrêter l'encodage :
 
-Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*encode_v3.ps1*' -or $_.Name -eq 'blanci.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*encode_modele.ps1*' -or $_.Name -eq 'blanci.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
