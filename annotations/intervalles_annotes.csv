@@ -1,37 +1,396 @@
-span_id,path,site,mic_id,start_utc,start_s,end_s,label,quality,valable
-2,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240229_193000.wav,Kaw,SMA13599,2024-02-29T22:30:00Z,37.7,67.7,blanci_uncertain,C,True
-4,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA03021/Data/2LA03021_20251222_153000.wav,CDR,2LA03021,2025-12-22T18:30:00Z,78.2,108.2,blanci_chorus,C,True
-5,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA10210/Data/2MA10210_20251225_063000.wav,CDR,2MA10210,2025-12-25T09:30:00Z,27.2,57.2,blanci_chorus,C,True
-6,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04186_GI09/Data/2LA04186_20260109_160000.wav,Mataroni,2LA04186,2026-01-09T19:00:00Z,38.9,68.9,blanci_chorus,C,True
-8,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA02921_RB01/Data/2LA02921_20260111_180000.wav,Mataroni,2LA02921,2026-01-11T21:00:00Z,44.2,74.2,false_friend,C,True
-9,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04336_SYL06/Data/2LA04336_20260110_173000.wav,Mataroni,2LA04336,2026-01-10T20:30:00Z,44.3,74.3,false_friend,C,True
-14,Projet Phénologie blanci/Premier relevé_décembre 2023/Molokoi 28122023/SM4 F/SMA14163_20231215_070000.wav,Molokoi,SMA14163,2023-12-15T10:00:00Z,41.8,71.8,blanci_chorus,C,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,25.14,25.39,blanci,A,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,28.92,29.13,blanci,A,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,31.96,32.22,blanci,A,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,34.54,34.73,blanci,A,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,39.57,39.75,blanci,A,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,43.63,43.82,blanci,A,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,46.77,46.97,blanci,A,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,29.41,29.58,blanci,C,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,50.48,50.73,blanci,A,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,35.13,35.41,blanci,C,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,38.94,39.12,blanci,C,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,42.53,42.72,blanci,C,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,44.65,44.88,blanci,C,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,49.26,49.46,blanci,C,True
-15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,50.9,51.12,blanci,C,True
-16,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240309_193000.wav,Tresor,SMA13496,2024-03-09T22:30:00Z,57.21,57.46,false_friend,A,True
-16,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240309_193000.wav,Tresor,SMA13496,2024-03-09T22:30:00Z,63.22,63.41,false_friend,A,True
-16,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240309_193000.wav,Tresor,SMA13496,2024-03-09T22:30:00Z,72.43,72.64,false_friend,A,True
-17,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04513_GI10/Data/2LA04513_20260110_153000.wav,Mataroni,2LA04513,2026-01-10T18:30:00Z,5.9,35.9,false_friend,A,True
-19,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260112_163000.wav,Mataroni,SMA13417,2026-01-12T19:30:00Z,60.66,73.53,false_friend,A,True
-19,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260112_163000.wav,Mataroni,SMA13417,2026-01-12T19:30:00Z,51.8,53.28,false_friend,A,True
-19,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260112_163000.wav,Mataroni,SMA13417,2026-01-12T19:30:00Z,53.49,60.42,false_friend,C,True
-23,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05247_SYL01/Data/2LA05247_20260110_173000.wav,Mataroni,2LA05247,2026-01-10T20:30:00Z,79.6,109.6,false_friend,A,True
-24,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04530_MGM06/Data/2LA04530_20260113_093000.wav,Mataroni,2LA04530,2026-01-13T12:30:00Z,54.8,76.9,blanci,A,True
-28,Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026/2MA07942/2MA07942_20251230_163000.wav,PatawaOuest,2MA07942,2025-12-30T19:30:00Z,22.4,52.4,false_friend,A,True
-36,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03571_SYL15/Data/2LA03571_20260109_170000.wav,Mataroni,2LA03571,2026-01-09T20:00:00Z,61.57,70.8,false_friend,A,True
-36,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03571_SYL15/Data/2LA03571_20260109_170000.wav,Mataroni,2LA03571,2026-01-09T20:00:00Z,42.22,48.32,false_friend,A,True
-37,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03546_SYL07/Data/2LA03546_20260107_173000.wav,Mataroni,2LA03546,2026-01-07T20:30:00Z,58.1,88.1,false_friend,A,True
-38,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260107_070000.wav,Mataroni,SMA13417,2026-01-07T10:00:00Z,30.1,60.1,blanci_chorus,B,True
+span_id,path,site,mic_id,start_utc,start_s,end_s,label,quality,valable,annotator
+2,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240229_193000.wav,Kaw,SMA13599,2024-02-29T22:30:00Z,37.7,67.7,blanci_uncertain,C,True,Léonard
+4,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA03021/Data/2LA03021_20251222_153000.wav,CDR,2LA03021,2025-12-22T18:30:00Z,78.2,108.2,blanci_chorus,C,True,Léonard
+5,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA10210/Data/2MA10210_20251225_063000.wav,CDR,2MA10210,2025-12-25T09:30:00Z,27.2,57.2,blanci_chorus,C,True,Léonard
+6,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04186_GI09/Data/2LA04186_20260109_160000.wav,Mataroni,2LA04186,2026-01-09T19:00:00Z,38.9,68.9,blanci_chorus,C,True,Léonard
+8,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA02921_RB01/Data/2LA02921_20260111_180000.wav,Mataroni,2LA02921,2026-01-11T21:00:00Z,44.2,74.2,false_friend,C,True,Léonard
+9,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04336_SYL06/Data/2LA04336_20260110_173000.wav,Mataroni,2LA04336,2026-01-10T20:30:00Z,44.3,74.3,false_friend,C,True,Léonard
+14,Projet Phénologie blanci/Premier relevé_décembre 2023/Molokoi 28122023/SM4 F/SMA14163_20231215_070000.wav,Molokoi,SMA14163,2023-12-15T10:00:00Z,41.8,71.8,blanci_chorus,C,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,25.14,25.39,blanci,A,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,28.92,29.13,blanci,A,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,31.96,32.22,blanci,A,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,34.54,34.73,blanci,A,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,39.57,39.75,blanci,A,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,43.63,43.82,blanci,A,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,46.77,46.97,blanci,A,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,29.41,29.58,blanci,C,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,50.48,50.73,blanci,A,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,35.13,35.41,blanci,C,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,38.94,39.12,blanci,C,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,42.53,42.72,blanci,C,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,44.65,44.88,blanci,C,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,49.26,49.46,blanci,C,True,Léonard
+15,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240226_163000.wav,Molokoi,SMA14163,2024-02-26T19:30:00Z,50.9,51.12,blanci,C,True,Léonard
+16,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240309_193000.wav,Tresor,SMA13496,2024-03-09T22:30:00Z,57.21,57.46,false_friend,A,True,Léonard
+16,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240309_193000.wav,Tresor,SMA13496,2024-03-09T22:30:00Z,63.22,63.41,false_friend,A,True,Léonard
+16,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240309_193000.wav,Tresor,SMA13496,2024-03-09T22:30:00Z,72.43,72.64,false_friend,A,True,Léonard
+17,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04513_GI10/Data/2LA04513_20260110_153000.wav,Mataroni,2LA04513,2026-01-10T18:30:00Z,5.9,35.9,false_friend,A,True,Léonard
+19,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260112_163000.wav,Mataroni,SMA13417,2026-01-12T19:30:00Z,60.66,73.53,false_friend,A,True,Léonard
+19,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260112_163000.wav,Mataroni,SMA13417,2026-01-12T19:30:00Z,51.8,53.28,false_friend,A,True,Léonard
+19,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260112_163000.wav,Mataroni,SMA13417,2026-01-12T19:30:00Z,53.49,60.42,false_friend,C,True,Léonard
+23,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05247_SYL01/Data/2LA05247_20260110_173000.wav,Mataroni,2LA05247,2026-01-10T20:30:00Z,79.6,109.6,false_friend,A,True,Léonard
+24,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04530_MGM06/Data/2LA04530_20260113_093000.wav,Mataroni,2LA04530,2026-01-13T12:30:00Z,54.8,76.9,blanci,A,True,Léonard
+28,Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026/2MA07942/2MA07942_20251230_163000.wav,PatawaOuest,2MA07942,2025-12-30T19:30:00Z,22.4,52.4,false_friend,A,True,Léonard
+36,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03571_SYL15/Data/2LA03571_20260109_170000.wav,Mataroni,2LA03571,2026-01-09T20:00:00Z,61.57,70.8,false_friend,A,True,Léonard
+36,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03571_SYL15/Data/2LA03571_20260109_170000.wav,Mataroni,2LA03571,2026-01-09T20:00:00Z,42.22,48.32,false_friend,A,True,Léonard
+37,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03546_SYL07/Data/2LA03546_20260107_173000.wav,Mataroni,2LA03546,2026-01-07T20:30:00Z,58.1,88.1,false_friend,A,True,Léonard
+38,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/SMA13417_RNRT3/Data/SMA13417_20260107_070000.wav,Mataroni,SMA13417,2026-01-07T10:00:00Z,30.1,60.1,blanci_chorus,B,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,53.16,53.5,blanci,A,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,44.3,44.66,blanci,C,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,48.48,48.74,blanci,B,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,54.21,54.53,blanci,C,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,55.75,56.06,blanci,C,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,57.13,57.43,blanci,B,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,65.98,66.3,blanci,A,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,67.68,67.98,blanci,C,True,Léonard
+42,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240306_060000.wav,Tresor,SMA13496,2024-03-06T09:00:00Z,70.33,70.62,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,41.21,41.44,blanci,A,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,44.25,44.4,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,45.45,45.69,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,47.6,47.92,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,49.79,50.03,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,51.94,52.2,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,54.54,54.73,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,56.73,56.95,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,58.97,59.29,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,61.45,61.62,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,63.72,63.99,blanci,B,True,Léonard
+48,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240221_073000.wav,Molokoi,SMA14163,2024-02-21T10:30:00Z,66.98,67.21,blanci,B,True,Léonard
+51,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240114_053000.wav,Tresor,SMA13496,2024-01-14T08:30:00Z,74.97,75.28,blanci,B,True,Léonard
+55,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 B/SMA13496_20231109_073000.wav,Tresor,SMA13496,2023-11-09T10:30:00Z,98.33,98.68,blanci_uncertain,B,True,Léonard
+55,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 B/SMA13496_20231109_073000.wav,Tresor,SMA13496,2023-11-09T10:30:00Z,103.55,103.87,blanci_uncertain,B,True,Léonard
+58,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 B/SMA13496_20231211_063000.wav,Tresor,SMA13496,2023-12-11T09:30:00Z,47.1,77.1,blanci_chorus,B,True,Léonard
+59,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241115_070000.wav,Molokoi,SMA14163,2024-11-15T10:00:00Z,40.19,48.2,blanci,A,True,Léonard
+59,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241115_070000.wav,Molokoi,SMA14163,2024-11-15T10:00:00Z,63.64,63.76,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,77.54,77.67,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,81.63,81.73,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,83.56,83.66,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,85.99,86.1,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,88.75,88.85,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,91.54,91.64,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,94.32,94.42,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,97.35,97.45,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,100.54,100.62,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,103.37,103.47,blanci,B,True,Léonard
+62,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240202_180000.wav,Molokoi,SMA14163,2024-02-02T21:00:00Z,105.79,105.89,blanci,B,True,Léonard
+63,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 B/SMA13496_20231218_103000.wav,Tresor,SMA13496,2023-12-18T13:30:00Z,53.13,82.7,blanci_uncertain,B,True,Léonard
+65,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13496 B/SMA13496_20240502_053000.wav,Tresor,SMA13496,2024-05-02T08:30:00Z,43.41,43.81,blanci,A,True,Léonard
+65,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13496 B/SMA13496_20240502_053000.wav,Tresor,SMA13496,2024-05-02T08:30:00Z,53.4,53.67,blanci,C,True,Léonard
+65,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13496 B/SMA13496_20240502_053000.wav,Tresor,SMA13496,2024-05-02T08:30:00Z,60.39,60.69,blanci,A,True,Léonard
+66,Projet Phénologie blanci/Premier relevé_décembre 2023/Molokoi 28122023/SM4 F/SMA14163_20231225_100000.wav,Molokoi,SMA14163,2023-12-25T13:00:00Z,3.6,33.6,false_friend,A,True,Léonard
+72,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_080000.wav,Molokoi,SMA14163,2024-02-17T11:00:00Z,42.69,49.44,blanci,A,True,Léonard
+72,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_080000.wav,Molokoi,SMA14163,2024-02-17T11:00:00Z,54.41,60.81,blanci,A,True,Léonard
+72,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_080000.wav,Molokoi,SMA14163,2024-02-17T11:00:00Z,63.9,70.06,blanci,A,True,Léonard
+72,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_080000.wav,Molokoi,SMA14163,2024-02-17T11:00:00Z,51.4,51.69,blanci,C,True,Léonard
+72,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_080000.wav,Molokoi,SMA14163,2024-02-17T11:00:00Z,53.07,53.4,blanci,C,True,Léonard
+72,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_080000.wav,Molokoi,SMA14163,2024-02-17T11:00:00Z,62.75,63.02,blanci,C,True,Léonard
+74,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240908_070000.wav,Kaw,SMA13599,2024-09-08T10:00:00Z,96.79,96.98,blanci,B,True,Léonard
+77,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240309_083000.wav,Molokoi,SMA14163,2024-03-09T11:30:00Z,71.92,73.59,blanci,A,True,Léonard
+77,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240309_083000.wav,Molokoi,SMA14163,2024-03-09T11:30:00Z,75.83,80.6,blanci,A,True,Léonard
+77,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240309_083000.wav,Molokoi,SMA14163,2024-03-09T11:30:00Z,82.27,90.15,blanci,A,True,Léonard
+77,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240309_083000.wav,Molokoi,SMA14163,2024-03-09T11:30:00Z,92.08,92.26,blanci,A,True,Léonard
+77,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240309_083000.wav,Molokoi,SMA14163,2024-03-09T11:30:00Z,95.33,101.21,blanci,A,True,Léonard
+78,Projet Phénologie blanci/Sixième relevé_novembre 2024/Trésor 27112024/SMA13496/SMA13496_20241025_080000.wav,Tresor,SMA13496,2024-10-25T11:00:00Z,73.82,74.22,blanci,A,True,Léonard
+80,Projet Phénologie blanci/Second relevé_février 2024/Kaw 19022024/SM4 C/SMA13599/SMA13599_20240207_183000.wav,Kaw,SMA13599,2024-02-07T21:30:00Z,82.3,82.67,false_friend,C,True,Léonard
+80,Projet Phénologie blanci/Second relevé_février 2024/Kaw 19022024/SM4 C/SMA13599/SMA13599_20240207_183000.wav,Kaw,SMA13599,2024-02-07T21:30:00Z,64.0,64.49,false_friend,C,True,Léonard
+81,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240208_190000.wav,Molokoi,SMA14163,2024-02-08T22:00:00Z,80.15,80.27,blanci,C,True,Léonard
+81,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240208_190000.wav,Molokoi,SMA14163,2024-02-08T22:00:00Z,72.37,72.53,blanci,C,True,Léonard
+81,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240208_190000.wav,Molokoi,SMA14163,2024-02-08T22:00:00Z,65.59,65.82,blanci,C,True,Léonard
+81,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240208_190000.wav,Molokoi,SMA14163,2024-02-08T22:00:00Z,61.05,61.37,blanci,C,True,Léonard
+82,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240312_190000.wav,Molokoi,SMA14163,2024-03-12T22:00:00Z,77.58,77.94,blanci,B,True,Léonard
+82,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240312_190000.wav,Molokoi,SMA14163,2024-03-12T22:00:00Z,82.2,82.52,blanci,B,True,Léonard
+82,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240312_190000.wav,Molokoi,SMA14163,2024-03-12T22:00:00Z,92.01,92.31,blanci,B,True,Léonard
+82,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240312_190000.wav,Molokoi,SMA14163,2024-03-12T22:00:00Z,96.74,97.01,blanci,B,True,Léonard
+86,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240314_070000.wav,Molokoi,SMA14163,2024-03-14T10:00:00Z,79.0,108.41,blanci_chorus,A,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,80.46,80.83,blanci,A,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,84.86,85.24,blanci,A,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,89.63,90.01,blanci,A,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,78.0,78.62,false_friend,B,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,81.12,84.59,false_friend,B,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,85.43,86.02,false_friend,B,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,87.24,88.36,false_friend,B,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,90.8,91.22,false_friend,B,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,93.41,94.72,false_friend,B,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,100.5,102.47,false_friend,B,True,Léonard
+88,Projet Phénologie blanci/Sixième relevé_novembre 2024/Kaw 27112024/SMA13599/SMA13599_20240919_050000.wav,Kaw,SMA13599,2024-09-19T08:00:00Z,104.35,105.27,false_friend,B,True,Léonard
+90,Projet Phénologie blanci/Second relevé_février 2024/Kaw 19022024/SM4 C/SMA13599/SMA13599_20240206_173000.wav,Kaw,SMA13599,2024-02-06T20:30:00Z,51.68,51.79,blanci,B,True,Léonard
+90,Projet Phénologie blanci/Second relevé_février 2024/Kaw 19022024/SM4 C/SMA13599/SMA13599_20240206_173000.wav,Kaw,SMA13599,2024-02-06T20:30:00Z,53.14,53.28,blanci,B,True,Léonard
+90,Projet Phénologie blanci/Second relevé_février 2024/Kaw 19022024/SM4 C/SMA13599/SMA13599_20240206_173000.wav,Kaw,SMA13599,2024-02-06T20:30:00Z,57.35,57.46,blanci,B,True,Léonard
+90,Projet Phénologie blanci/Second relevé_février 2024/Kaw 19022024/SM4 C/SMA13599/SMA13599_20240206_173000.wav,Kaw,SMA13599,2024-02-06T20:30:00Z,58.9,59.0,blanci,B,True,Léonard
+90,Projet Phénologie blanci/Second relevé_février 2024/Kaw 19022024/SM4 C/SMA13599/SMA13599_20240206_173000.wav,Kaw,SMA13599,2024-02-06T20:30:00Z,66.9,67.24,false_friend,B,True,Léonard
+91,Projet Phénologie blanci/Premier relevé_décembre 2023/Molokoi 28122023/SM4 F/SMA14163_20231125_080000.wav,Molokoi,SMA14163,2023-11-25T11:00:00Z,50.15,79.71,blanci_chorus,A,True,Léonard
+94,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241106_053000.wav,Molokoi,SMA14163,2024-11-06T08:30:00Z,28.61,28.92,blanci,B,True,Léonard
+94,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241106_053000.wav,Molokoi,SMA14163,2024-11-06T08:30:00Z,23.53,23.75,blanci,B,True,Léonard
+94,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241106_053000.wav,Molokoi,SMA14163,2024-11-06T08:30:00Z,48.73,49.08,false_friend,B,True,Léonard
+94,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241106_053000.wav,Molokoi,SMA14163,2024-11-06T08:30:00Z,49.76,50.17,false_friend,B,True,Léonard
+94,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241106_053000.wav,Molokoi,SMA14163,2024-11-06T08:30:00Z,35.71,36.07,false_friend,B,True,Léonard
+94,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241106_053000.wav,Molokoi,SMA14163,2024-11-06T08:30:00Z,36.77,37.06,false_friend,B,True,Léonard
+97,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240302_150000.wav,Tresor,SMA13496,2024-03-02T18:00:00Z,29.56,43.48,blanci,B,True,Léonard
+97,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240302_150000.wav,Tresor,SMA13496,2024-03-02T18:00:00Z,45.88,49.19,blanci,B,True,Léonard
+97,Projet Phénologie blanci/Troisième relevé_avril 2024/Trésor 09042024/SM B_SMA13496/Data/SMA13496_20240302_150000.wav,Tresor,SMA13496,2024-03-02T18:00:00Z,55.79,59.0,blanci,B,True,Léonard
+100,Projet Phénologie blanci/Second relevé_février 2024/Kaw 19022024/SM4 C/SMA13599/SMA13599_20240123_150000.wav,Kaw,SMA13599,2024-01-23T18:00:00Z,16.43,43.53,blanci,A,True,Léonard
+101,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241118_083000.wav,Molokoi,SMA14163,2024-11-18T11:30:00Z,17.46,17.73,blanci,A,True,Léonard
+101,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241118_083000.wav,Molokoi,SMA14163,2024-11-18T11:30:00Z,20.87,21.2,blanci,A,True,Léonard
+101,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241118_083000.wav,Molokoi,SMA14163,2024-11-18T11:30:00Z,25.83,26.12,blanci,A,True,Léonard
+101,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241118_083000.wav,Molokoi,SMA14163,2024-11-18T11:30:00Z,33.26,33.51,blanci,A,True,Léonard
+101,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241118_083000.wav,Molokoi,SMA14163,2024-11-18T11:30:00Z,36.39,36.67,blanci,A,True,Léonard
+101,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241118_083000.wav,Molokoi,SMA14163,2024-11-18T11:30:00Z,39.32,39.63,blanci,A,True,Léonard
+101,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241118_083000.wav,Molokoi,SMA14163,2024-11-18T11:30:00Z,43.7,43.98,blanci,A,True,Léonard
+103,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240106_060000.wav,Molokoi,SMA14163,2024-01-06T09:00:00Z,66.14,94.6,blanci_uncertain,A,True,Léonard
+106,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240205_090000.wav,Molokoi,SMA14163,2024-02-05T12:00:00Z,85.32,85.62,blanci_uncertain,C,True,Léonard
+106,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240205_090000.wav,Molokoi,SMA14163,2024-02-05T12:00:00Z,92.09,92.5,blanci_uncertain,C,True,Léonard
+107,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240223_150000.wav,Molokoi,SMA14163,2024-02-23T18:00:00Z,85.52,113.57,blanci_chorus,A,True,Léonard
+108,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20231230_050000.wav,Molokoi,SMA14163,2023-12-30T08:00:00Z,18.8,19.13,blanci,A,True,Léonard
+108,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20231230_050000.wav,Molokoi,SMA14163,2023-12-30T08:00:00Z,25.47,25.75,blanci,A,True,Léonard
+108,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20231230_050000.wav,Molokoi,SMA14163,2023-12-30T08:00:00Z,19.44,19.71,blanci,A,True,Léonard
+108,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20231230_050000.wav,Molokoi,SMA14163,2023-12-30T08:00:00Z,32.9,33.21,blanci,A,True,Léonard
+108,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20231230_050000.wav,Molokoi,SMA14163,2023-12-30T08:00:00Z,38.1,38.35,blanci,A,True,Léonard
+111,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240311_083000.wav,Kaw,SMA13599,2024-03-11T11:30:00Z,67.2,95.42,blanci,A,True,Léonard
+112,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240127_163000.wav,Molokoi,SMA14163,2024-01-27T19:30:00Z,48.9,78.9,false_friend,A,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,10.33,10.52,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,12.62,12.72,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,14.87,15.0,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,17.48,17.64,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,22.91,23.06,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,25.12,25.24,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,27.9,28.04,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,29.78,29.93,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,32.8,32.96,blanci,B,True,Léonard
+114,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240208_160000.wav,Tresor,SMA13496,2024-02-08T19:00:00Z,36.6,36.73,blanci,B,True,Léonard
+116,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13496 B/SMA13496_20240617_083000.wav,Tresor,SMA13496,2024-06-17T11:30:00Z,43.34,60.96,blanci_chorus,A,True,Léonard
+116,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13496 B/SMA13496_20240617_083000.wav,Tresor,SMA13496,2024-06-17T11:30:00Z,64.03,64.44,blanci_chorus,A,True,Léonard
+116,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13496 B/SMA13496_20240617_083000.wav,Tresor,SMA13496,2024-06-17T11:30:00Z,66.87,66.99,blanci,A,True,Léonard
+116,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13496 B/SMA13496_20240617_083000.wav,Tresor,SMA13496,2024-06-17T11:30:00Z,68.66,68.82,blanci,A,True,Léonard
+116,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13496 B/SMA13496_20240617_083000.wav,Tresor,SMA13496,2024-06-17T11:30:00Z,70.98,71.12,blanci,A,True,Léonard
+117,Projet Phénologie blanci/Quatrième relevé_juin 2024/Kaw 25062024/SMA13599 C/SMA13599_20240421_173000.wav,Kaw,SMA13599,2024-04-21T20:30:00Z,47.53,58.63,blanci,A,True,Léonard
+117,Projet Phénologie blanci/Quatrième relevé_juin 2024/Kaw 25062024/SMA13599 C/SMA13599_20240421_173000.wav,Kaw,SMA13599,2024-04-21T20:30:00Z,61.43,63.48,blanci,A,True,Léonard
+117,Projet Phénologie blanci/Quatrième relevé_juin 2024/Kaw 25062024/SMA13599 C/SMA13599_20240421_173000.wav,Kaw,SMA13599,2024-04-21T20:30:00Z,66.67,66.8,blanci,A,True,Léonard
+117,Projet Phénologie blanci/Quatrième relevé_juin 2024/Kaw 25062024/SMA13599 C/SMA13599_20240421_173000.wav,Kaw,SMA13599,2024-04-21T20:30:00Z,68.78,68.87,blanci,A,True,Léonard
+117,Projet Phénologie blanci/Quatrième relevé_juin 2024/Kaw 25062024/SMA13599 C/SMA13599_20240421_173000.wav,Kaw,SMA13599,2024-04-21T20:30:00Z,71.01,71.1,blanci,A,True,Léonard
+119,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM F_SMA14163/SMA14163_20241015_173000.wav,Molokoi,SMA14163,2024-10-15T20:30:00Z,86.18,114.54,blanci_uncertain,C,True,Léonard
+123,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 B/SMA13496_20231207_083000.wav,Tresor,SMA13496,2023-12-07T11:30:00Z,62.19,90.89,false_friend,A,True,Léonard
+130,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM F_SMA14163/SMA14163_20240816_050000.wav,Molokoi,SMA14163,2024-08-16T08:00:00Z,29.0,29.3,false_friend,A,True,Léonard
+130,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM F_SMA14163/SMA14163_20240816_050000.wav,Molokoi,SMA14163,2024-08-16T08:00:00Z,41.23,41.62,blanci,C,True,Léonard
+130,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM F_SMA14163/SMA14163_20240816_050000.wav,Molokoi,SMA14163,2024-08-16T08:00:00Z,47.18,47.46,blanci,C,True,Léonard
+130,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM F_SMA14163/SMA14163_20240816_050000.wav,Molokoi,SMA14163,2024-08-16T08:00:00Z,52.36,52.72,blanci,C,True,Léonard
+130,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM F_SMA14163/SMA14163_20240816_050000.wav,Molokoi,SMA14163,2024-08-16T08:00:00Z,35.42,35.59,blanci,C,True,Léonard
+137,Projet Phénologie blanci/Quatrième relevé_juin 2024/Kaw 25062024/SMA13599 C/SMA13599_20240421_080000.wav,Kaw,SMA13599,2024-04-21T11:00:00Z,59.97,89.36,blanci,A,True,Léonard
+138,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240312_153000.wav,Kaw,SMA13599,2024-03-12T18:30:00Z,10.31,10.6,blanci,A,True,Léonard
+138,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240312_153000.wav,Kaw,SMA13599,2024-03-12T18:30:00Z,12.56,12.85,blanci,A,True,Léonard
+138,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240312_153000.wav,Kaw,SMA13599,2024-03-12T18:30:00Z,15.69,17.79,blanci,A,True,Léonard
+138,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240312_153000.wav,Kaw,SMA13599,2024-03-12T18:30:00Z,20.61,23.0,blanci,A,True,Léonard
+138,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240312_153000.wav,Kaw,SMA13599,2024-03-12T18:30:00Z,27.38,27.54,blanci,A,True,Léonard
+138,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240312_153000.wav,Kaw,SMA13599,2024-03-12T18:30:00Z,29.58,31.68,blanci,A,True,Léonard
+138,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240312_153000.wav,Kaw,SMA13599,2024-03-12T18:30:00Z,35.26,35.51,blanci,A,True,Léonard
+140,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240103_150000.wav,Molokoi,SMA14163,2024-01-03T18:00:00Z,74.29,83.41,blanci,A,True,Léonard
+140,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240103_150000.wav,Molokoi,SMA14163,2024-01-03T18:00:00Z,86.36,93.89,blanci,A,True,Léonard
+140,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240103_150000.wav,Molokoi,SMA14163,2024-01-03T18:00:00Z,95.45,95.59,blanci,A,True,Léonard
+140,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240103_150000.wav,Molokoi,SMA14163,2024-01-03T18:00:00Z,98.91,101.52,blanci,A,True,Léonard
+141,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 B/SMA13496_20231217_083000.wav,Tresor,SMA13496,2023-12-17T11:30:00Z,44.3,74.3,blanci_uncertain,A,True,Léonard
+143,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240127_073000.wav,Tresor,SMA13496,2024-01-27T10:30:00Z,19.41,33.98,blanci,A,True,Léonard
+144,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240222_083000.wav,Molokoi,SMA14163,2024-02-22T11:30:00Z,41.96,70.82,blanci_uncertain,A,True,Léonard
+145,Projet Phénologie blanci/Quatrième relevé_juin 2024/Molokoi 25062024/SMA14163 F/SMA14163_20240428_070000.wav,Molokoi,SMA14163,2024-04-28T10:00:00Z,44.6,74.6,blanci_uncertain,A,True,Léonard
+147,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240321_083000.wav,Kaw,SMA13599,2024-03-21T11:30:00Z,45.7,45.81,blanci,A,True,Léonard
+147,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240321_083000.wav,Kaw,SMA13599,2024-03-21T11:30:00Z,51.16,51.37,blanci,A,True,Léonard
+150,Projet Phénologie blanci/Sixième relevé_novembre 2024/Trésor 27112024/SMA13496/SMA13496_20241124_093000.wav,Tresor,SMA13496,2024-11-24T12:30:00Z,48.67,76.41,blanci_chorus,A,True,Léonard
+152,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240313_160000.wav,Molokoi,SMA14163,2024-03-13T19:00:00Z,49.3,79.25,blanci_chorus,A,True,Léonard
+156,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240331_070000.wav,Kaw,SMA13599,2024-03-31T10:00:00Z,32.57,60.99,blanci_chorus,A,True,Léonard
+157,Projet Phénologie blanci/Second relevé_février 2024/Trésor 20022024/SM4 B/SMA13496/SMA13496_20240201_060000.wav,Tresor,SMA13496,2024-02-01T09:00:00Z,1.92,31.0,false_friend,C,True,Léonard
+160,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 B/SMA13496_20231129_160000.wav,Tresor,SMA13496,2023-11-29T19:00:00Z,73.8,103.1,blanci,C,True,Léonard
+162,Projet Phénologie blanci/Quatrième relevé_juin 2024/Kaw 25062024/SMA13599 C/SMA13599_20240423_063000.wav,Kaw,SMA13599,2024-04-23T09:30:00Z,45.23,45.34,blanci,B,True,Léonard
+163,Projet Phénologie blanci/Premier relevé_décembre 2023/Kaw 26122023/SM4 C/SMA13599_20231210_063000.wav,Kaw,SMA13599,2023-12-10T09:30:00Z,71.11,75.47,blanci_chorus,A,True,Léonard
+163,Projet Phénologie blanci/Premier relevé_décembre 2023/Kaw 26122023/SM4 C/SMA13599_20231210_063000.wav,Kaw,SMA13599,2023-12-10T09:30:00Z,78.07,83.35,blanci_chorus,A,True,Léonard
+163,Projet Phénologie blanci/Premier relevé_décembre 2023/Kaw 26122023/SM4 C/SMA13599_20231210_063000.wav,Kaw,SMA13599,2023-12-10T09:30:00Z,85.93,95.84,blanci_chorus,A,True,Léonard
+163,Projet Phénologie blanci/Premier relevé_décembre 2023/Kaw 26122023/SM4 C/SMA13599_20231210_063000.wav,Kaw,SMA13599,2023-12-10T09:30:00Z,99.56,100.95,blanci_chorus,A,True,Léonard
+166,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240310_143000.wav,Molokoi,SMA14163,2024-03-10T17:30:00Z,40.19,69.47,blanci,A,True,Léonard
+171,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_060000.wav,Molokoi,SMA14163,2024-02-17T09:00:00Z,16.0,19.39,blanci,A,True,Léonard
+171,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_060000.wav,Molokoi,SMA14163,2024-02-17T09:00:00Z,25.56,25.84,blanci,B,True,Léonard
+171,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_060000.wav,Molokoi,SMA14163,2024-02-17T09:00:00Z,31.51,31.88,blanci,B,True,Léonard
+171,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_060000.wav,Molokoi,SMA14163,2024-02-17T09:00:00Z,32.37,32.76,blanci,A,True,Léonard
+171,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 crique/SMA14163_20240217_060000.wav,Molokoi,SMA14163,2024-02-17T09:00:00Z,37.56,37.86,blanci,B,True,Léonard
+174,Projet Phénologie blanci/Sixième relevé_novembre 2024/Trésor 27112024/SMA13496/SMA13496_20241108_073000.wav,Tresor,SMA13496,2024-11-08T10:30:00Z,12.6,13.15,false_friend,B,True,Léonard
+174,Projet Phénologie blanci/Sixième relevé_novembre 2024/Trésor 27112024/SMA13496/SMA13496_20241108_073000.wav,Tresor,SMA13496,2024-11-08T10:30:00Z,18.52,19.09,false_friend,B,True,Léonard
+176,Projet Phénologie blanci/Troisième relevé_avril 2024/Molokoi 11042024/SM F_SMA14163/Data/SMA14163_20240319_153000.wav,Molokoi,SMA14163,2024-03-19T18:30:00Z,36.27,64.99,blanci_chorus,A,True,Léonard
+177,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240315_150000.wav,Kaw,SMA13599,2024-03-15T18:00:00Z,59.09,68.62,blanci,B,True,Léonard
+177,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240315_150000.wav,Kaw,SMA13599,2024-03-15T18:00:00Z,71.51,71.74,blanci,B,True,Léonard
+177,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240315_150000.wav,Kaw,SMA13599,2024-03-15T18:00:00Z,74.43,74.57,blanci,B,True,Léonard
+177,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240315_150000.wav,Kaw,SMA13599,2024-03-15T18:00:00Z,77.63,85.52,blanci,B,True,Léonard
+177,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM C_SMA13599/Data/SMA13599_20240315_150000.wav,Kaw,SMA13599,2024-03-15T18:00:00Z,88.44,88.59,blanci,B,True,Léonard
+180,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03771_SYL30/Data/2LA03771_20260107_163000.wav,Mataroni,2LA03771,2026-01-07T19:30:00Z,42.5,42.67,blanci,A,True,Léonard
+180,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03771_SYL30/Data/2LA03771_20260107_163000.wav,Mataroni,2LA03771,2026-01-07T19:30:00Z,47.22,59.55,blanci,A,True,Léonard
+182,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04448_SYL17/Data/2LA04448_20260113_070000.wav,Mataroni,2LA04448,2026-01-13T10:00:00Z,84.09,87.61,blanci,C,True,Léonard
+182,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04448_SYL17/Data/2LA04448_20260113_070000.wav,Mataroni,2LA04448,2026-01-13T10:00:00Z,95.45,95.89,blanci,C,True,Léonard
+183,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04118/Data/2LA04118_20251226_050000.wav,CDR,2LA04118,2025-12-26T08:00:00Z,56.15,56.33,blanci_uncertain,C,True,Léonard
+183,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04118/Data/2LA04118_20251226_050000.wav,CDR,2LA04118,2025-12-26T08:00:00Z,53.32,53.5,blanci,C,True,Léonard
+183,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04118/Data/2LA04118_20251226_050000.wav,CDR,2LA04118,2025-12-26T08:00:00Z,58.01,58.16,blanci,C,True,Léonard
+183,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04118/Data/2LA04118_20251226_050000.wav,CDR,2LA04118,2025-12-26T08:00:00Z,62.63,62.79,blanci,C,True,Léonard
+183,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04118/Data/2LA04118_20251226_050000.wav,CDR,2LA04118,2025-12-26T08:00:00Z,66.9,67.04,blanci,C,True,Léonard
+183,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04118/Data/2LA04118_20251226_050000.wav,CDR,2LA04118,2025-12-26T08:00:00Z,46.11,46.44,false_friend,C,True,Léonard
+202,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03771_SYL30/Data/2LA03771_20260113_073000.wav,Mataroni,2LA03771,2026-01-13T10:30:00Z,83.81,104.88,blanci,A,True,Léonard
+202,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03771_SYL30/Data/2LA03771_20260113_073000.wav,Mataroni,2LA03771,2026-01-13T10:30:00Z,108.1,108.41,blanci,A,True,Léonard
+202,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03771_SYL30/Data/2LA03771_20260113_073000.wav,Mataroni,2LA03771,2026-01-13T10:30:00Z,111.62,113.67,blanci,A,True,Léonard
+208,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05209_GI17/Data/2LA05209_20260111_153000.wav,Mataroni,2LA05209,2026-01-11T18:30:00Z,61.4,91.4,false_friend,A,True,Léonard
+210,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07933/2MA07933_20260226_060000.wav,PatawaEst,2MA07933,2026-02-26T09:00:00Z,85.87,92.1,false_friend,A,True,Léonard
+210,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07933/2MA07933_20260226_060000.wav,PatawaEst,2MA07933,2026-02-26T09:00:00Z,98.89,99.1,false_friend,A,True,Léonard
+210,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07933/2MA07933_20260226_060000.wav,PatawaEst,2MA07933,2026-02-26T09:00:00Z,102.83,113.04,false_friend,A,True,Léonard
+212,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA01489/Data/2MA01489_20251223_053000.wav,CDR,2MA01489,2025-12-23T08:30:00Z,15.45,34.97,blanci_uncertain,A,True,Léonard
+222,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05232_SYL31/Data/2LA05232_20260111_080000.wav,Mataroni,2LA05232,2026-01-11T11:00:00Z,77.25,106.97,blanci,A,True,Léonard
+226,Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026/2MA01489/2MA01489_20260101_170000.wav,PatawaOuest,2MA01489,2026-01-01T20:00:00Z,73.08,77.55,false_friend,A,True,Léonard
+226,Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026/2MA01489/2MA01489_20260101_170000.wav,PatawaOuest,2MA01489,2026-01-01T20:00:00Z,48.91,49.09,false_friend,A,True,Léonard
+230,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04377_MGM03/Data/2LA04377_20260110_063000.wav,Mataroni,2LA04377,2026-01-10T09:30:00Z,69.33,94.73,blanci_uncertain,A,True,Léonard
+233,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03542_MGM04/Data/2LA03542_20260108_080000.wav,Mataroni,2LA03542,2026-01-08T11:00:00Z,96.56,96.8,false_friend,A,True,Léonard
+233,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03542_MGM04/Data/2LA03542_20260108_080000.wav,Mataroni,2LA03542,2026-01-08T11:00:00Z,104.33,104.55,false_friend,A,True,Léonard
+234,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04336_SYL06/Data/2LA04336_20260108_080000.wav,Mataroni,2LA04336,2026-01-08T11:00:00Z,13.83,14.5,false_friend,A,True,Léonard
+236,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/SMA11407_ALOUATTA/Data/ALOUATTA_20251223_070000.wav,CDR,SMA11407,2025-12-23T10:00:00Z,28.27,30.92,blanci,A,True,Léonard
+236,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/SMA11407_ALOUATTA/Data/ALOUATTA_20251223_070000.wav,CDR,SMA11407,2025-12-23T10:00:00Z,38.4,56.9,blanci,A,True,Léonard
+241,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03015_MGM09/Data/2LA03015_20260107_100000.wav,Mataroni,2LA03015,2026-01-07T13:00:00Z,71.65,100.6,blanci,A,True,Léonard
+242,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA07942/Data/2MA07942_20251226_190000.wav,CDR,2MA07942,2025-12-26T22:00:00Z,71.4,101.4,false_friend,A,True,Léonard
+247,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04443_GI04/Data/2LA04443_20260112_150000.wav,Mataroni,2LA04443,2026-01-12T18:00:00Z,59.02,59.36,blanci,C,True,Léonard
+249,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260113_080000.wav,Mataroni,2LA04224,2026-01-13T11:00:00Z,71.87,72.21,blanci,C,True,Léonard
+249,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260113_080000.wav,Mataroni,2LA04224,2026-01-13T11:00:00Z,66.19,66.56,blanci,C,True,Léonard
+249,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260113_080000.wav,Mataroni,2LA04224,2026-01-13T11:00:00Z,54.78,55.05,blanci,C,True,Léonard
+249,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260113_080000.wav,Mataroni,2LA04224,2026-01-13T11:00:00Z,60.14,60.44,blanci,C,True,Léonard
+253,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/SMA11407_ALOUATTA/Data/ALOUATTA_20251223_063000.wav,CDR,SMA11407,2025-12-23T09:30:00Z,76.9,106.9,false_friend,A,True,Léonard
+254,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03655_SYL04/Data/2LA03655_20260106_160000.wav,Mataroni,2LA03655,2026-01-06T19:00:00Z,82.2,109.49,false_friend,A,True,Léonard
+260,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA10139/Data/2MA10139_20251223_060000.wav,CDR,2MA10139,2025-12-23T09:00:00Z,71.9,101.9,false_friend,A,True,Léonard
+261,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03587_MGM02/Data/2LA03587_20260113_060000.wav,Mataroni,2LA03587,2026-01-13T09:00:00Z,52.7,82.7,false_friend,A,True,Léonard
+264,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05239_SYL20/Data/2LA05239_20260112_170000.wav,Mataroni,2LA05239,2026-01-12T20:00:00Z,3.0,33.0,false_friend,A,True,Léonard
+265,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04445_GI08/Data/2LA04445_20260113_070000.wav,Mataroni,2LA04445,2026-01-13T10:00:00Z,39.33,47.9,false_friend,A,True,Léonard
+265,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04445_GI08/Data/2LA04445_20260113_070000.wav,Mataroni,2LA04445,2026-01-13T10:00:00Z,17.9,29.83,false_friend,A,True,Léonard
+269,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA10210/Data/2MA10210_20251226_150000.wav,CDR,2MA10210,2025-12-26T18:00:00Z,27.58,48.08,false_friend,C,True,Léonard
+270,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04336_SYL06/Data/2LA04336_20260108_160000.wav,Mataroni,2LA04336,2026-01-08T19:00:00Z,109.93,110.41,blanci,C,True,Léonard
+272,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03552_RB06/Data/2LA03552_20260109_150000.wav,Mataroni,2LA03552,2026-01-09T18:00:00Z,106.57,117.61,false_friend,C,True,Léonard
+273,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05209_GI17/Data/2LA05209_20260112_093000.wav,Mataroni,2LA05209,2026-01-12T12:30:00Z,43.73,66.52,false_friend,A,True,Léonard
+276,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04444_SYL14/Data/2LA04444_20260110_160000.wav,Mataroni,2LA04444,2026-01-10T19:00:00Z,98.13,98.39,false_friend,A,True,Léonard
+276,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04444_SYL14/Data/2LA04444_20260110_160000.wav,Mataroni,2LA04444,2026-01-10T19:00:00Z,100.25,104.47,false_friend,A,True,Léonard
+276,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04444_SYL14/Data/2LA04444_20260110_160000.wav,Mataroni,2LA04444,2026-01-10T19:00:00Z,113.79,114.19,false_friend,A,True,Léonard
+276,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04444_SYL14/Data/2LA04444_20260110_160000.wav,Mataroni,2LA04444,2026-01-10T19:00:00Z,116.08,116.55,false_friend,A,True,Léonard
+278,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03581_MGM07/Data/2LA03581_20260106_163000.wav,Mataroni,2LA03581,2026-01-06T19:30:00Z,75.57,82.65,blanci,B,True,Léonard
+278,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03581_MGM07/Data/2LA03581_20260106_163000.wav,Mataroni,2LA03581,2026-01-06T19:30:00Z,54.21,56.01,blanci,B,True,Léonard
+278,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03581_MGM07/Data/2LA03581_20260106_163000.wav,Mataroni,2LA03581,2026-01-06T19:30:00Z,56.31,62.49,blanci,B,True,Léonard
+278,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03581_MGM07/Data/2LA03581_20260106_163000.wav,Mataroni,2LA03581,2026-01-06T19:30:00Z,63.31,64.65,blanci,B,True,Léonard
+278,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03581_MGM07/Data/2LA03581_20260106_163000.wav,Mataroni,2LA03581,2026-01-06T19:30:00Z,66.24,69.7,blanci,B,True,Léonard
+278,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03581_MGM07/Data/2LA03581_20260106_163000.wav,Mataroni,2LA03581,2026-01-06T19:30:00Z,70.68,73.92,blanci,B,True,Léonard
+280,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260112_153000.wav,Mataroni,2LA04224,2026-01-12T18:30:00Z,63.63,64.0,blanci,C,False,Léonard
+280,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260112_153000.wav,Mataroni,2LA04224,2026-01-12T18:30:00Z,41.7,44.91,blanci,C,False,Léonard
+280,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260112_153000.wav,Mataroni,2LA04224,2026-01-12T18:30:00Z,47.36,53.53,blanci,C,False,Léonard
+281,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260112_153000.wav,Mataroni,2LA04224,2026-01-12T18:30:00Z,63.63,64.0,blanci,C,True,Léonard
+281,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260112_153000.wav,Mataroni,2LA04224,2026-01-12T18:30:00Z,41.7,44.91,blanci,C,True,Léonard
+281,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04224_RB02/Data/2LA04224_20260112_153000.wav,Mataroni,2LA04224,2026-01-12T18:30:00Z,47.36,53.53,blanci,C,True,Léonard
+283,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03656_SYL03/Data/2LA03656_20260107_060000.wav,Mataroni,2LA03656,2026-01-07T09:00:00Z,65.5,95.5,false_friend,C,True,Léonard
+284,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04115/Data/2LA04115_20251222_060000.wav,CDR,2LA04115,2025-12-22T09:00:00Z,80.47,80.69,blanci,A,True,Léonard
+285,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04171_GI13/Data/2LA04171_20260106_170000.wav,Mataroni,2LA04171,2026-01-06T20:00:00Z,43.2,73.2,false_friend,A,True,Léonard
+287,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA10139/Data/2MA10139_20251222_163000.wav,CDR,2MA10139,2025-12-22T19:30:00Z,77.6,107.6,false_friend,A,True,Léonard
+289,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA05190/Data/2LA05190_20251224_150000.wav,CDR,2LA05190,2025-12-24T18:00:00Z,0.4,30.4,false_friend,A,True,Léonard
+292,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05189_RB10/Data/2LA05189_20260112_163000.wav,Mataroni,2LA05189,2026-01-12T19:30:00Z,3.3,29.23,false_friend,A,True,Léonard
+293,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05232_SYL31/Data/2LA05232_20260113_093000.wav,Mataroni,2LA05232,2026-01-13T12:30:00Z,84.59,84.85,blanci,A,True,Léonard
+293,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05232_SYL31/Data/2LA05232_20260113_093000.wav,Mataroni,2LA05232,2026-01-13T12:30:00Z,101.04,108.59,blanci,A,True,Léonard
+293,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05232_SYL31/Data/2LA05232_20260113_093000.wav,Mataroni,2LA05232,2026-01-13T12:30:00Z,113.55,113.74,blanci,A,True,Léonard
+297,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04159_SYL19/Data/2LA04159_20260111_163000.wav,Mataroni,2LA04159,2026-01-11T19:30:00Z,8.0,38.0,false_friend,A,True,Léonard
+302,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA03021/Data/2LA03021_20251222_070000.wav,CDR,2LA03021,2025-12-22T10:00:00Z,44.6,74.6,false_friend,A,True,Léonard
+306,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04443_GI04/Data/2LA04443_20260107_173000.wav,Mataroni,2LA04443,2026-01-07T20:30:00Z,32.3,62.3,false_friend,A,True,Léonard
+307,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04168_GI05/Data/2LA04168_20260109_163000.wav,Mataroni,2LA04168,2026-01-09T19:30:00Z,62.8,92.8,false_friend,A,True,Léonard
+308,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05213_SYL21/Data/2LA05213_20260107_073000.wav,Mataroni,2LA05213,2026-01-07T10:30:00Z,80.1,110.1,false_friend,A,True,Léonard
+309,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07942/2MA07942_20260224_083000.wav,PatawaEst,2MA07942,2026-02-24T11:30:00Z,5.12,34.47,blanci_uncertain,A,True,Léonard
+311,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04448_SYL17/Data/2LA04448_20260111_180000.wav,Mataroni,2LA04448,2026-01-11T21:00:00Z,62.34,74.8,false_friend,A,True,Léonard
+312,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07933/2MA07933_20260224_070000.wav,PatawaEst,2MA07933,2026-02-24T10:00:00Z,91.62,91.89,blanci_uncertain,A,True,Léonard
+320,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05213_SYL21/Data/2LA05213_20260112_163000.wav,Mataroni,2LA05213,2026-01-12T19:30:00Z,99.92,106.8,false_friend,A,True,Léonard
+321,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07933/2MA07933_20260223_153000.wav,PatawaEst,2MA07933,2026-02-23T18:30:00Z,39.1,69.1,false_friend,A,True,Léonard
+322,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA08002/2MA08002_20260227_073000.wav,PatawaEst,2MA08002,2026-02-27T10:30:00Z,41.67,52.8,false_friend,A,True,Léonard
+324,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05239_SYL20/Data/2LA05239_20260107_070000.wav,Mataroni,2LA05239,2026-01-07T10:00:00Z,95.95,96.4,false_friend,A,True,Léonard
+324,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05239_SYL20/Data/2LA05239_20260107_070000.wav,Mataroni,2LA05239,2026-01-07T10:00:00Z,98.02,98.22,false_friend,A,True,Léonard
+324,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05239_SYL20/Data/2LA05239_20260107_070000.wav,Mataroni,2LA05239,2026-01-07T10:00:00Z,85.42,85.71,false_friend,A,True,Léonard
+328,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03656_SYL03/Data/2LA03656_20260110_153000.wav,Mataroni,2LA03656,2026-01-10T18:30:00Z,40.93,68.68,false_friend,A,True,Léonard
+333,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07942/2MA07942_20260226_150000.wav,PatawaEst,2MA07942,2026-02-26T18:00:00Z,35.87,37.39,blanci_uncertain,C,True,Léonard
+333,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07942/2MA07942_20260226_150000.wav,PatawaEst,2MA07942,2026-02-26T18:00:00Z,45.44,53.25,blanci_uncertain,C,True,Léonard
+333,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07942/2MA07942_20260226_150000.wav,PatawaEst,2MA07942,2026-02-26T18:00:00Z,54.63,56.37,blanci_uncertain,C,True,Léonard
+333,Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026/2MA07942/2MA07942_20260226_150000.wav,PatawaEst,2MA07942,2026-02-26T18:00:00Z,62.04,62.33,blanci_uncertain,C,True,Léonard
+335,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05213_SYL21/Data/2LA05213_20260109_180000.wav,Mataroni,2LA05213,2026-01-09T21:00:00Z,41.12,47.25,false_friend,C,True,Léonard
+344,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04530_MGM06/Data/2LA04530_20260106_160000.wav,Mataroni,2LA04530,2026-01-06T19:00:00Z,78.37,108.3,blanci_chorus,A,True,Léonard
+346,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA10139/Data/2MA10139_20251224_070000.wav,CDR,2MA10139,2025-12-24T10:00:00Z,70.5,100.5,false_friend,A,True,Léonard
+353,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03559_RB04/Data/2LA03559_20260109_150000.wav,Mataroni,2LA03559,2026-01-09T18:00:00Z,39.84,65.51,blanci,A,True,Léonard
+353,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03559_RB04/Data/2LA03559_20260109_150000.wav,Mataroni,2LA03559,2026-01-09T18:00:00Z,67.14,67.36,blanci,A,True,Léonard
+354,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04377_MGM03/Data/2LA04377_20260110_083000.wav,Mataroni,2LA04377,2026-01-10T11:30:00Z,100.93,101.69,false_friend,A,True,Léonard
+354,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04377_MGM03/Data/2LA04377_20260110_083000.wav,Mataroni,2LA04377,2026-01-10T11:30:00Z,110.54,110.9,false_friend,A,True,Léonard
+356,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03581_MGM07/Data/2LA03581_20260107_083000.wav,Mataroni,2LA03581,2026-01-07T11:30:00Z,48.77,54.73,blanci,A,True,Léonard
+356,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03581_MGM07/Data/2LA03581_20260107_083000.wav,Mataroni,2LA03581,2026-01-07T11:30:00Z,59.6,77.3,blanci,A,True,Léonard
+362,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03552_RB06/Data/2LA03552_20260107_173000.wav,Mataroni,2LA03552,2026-01-07T20:30:00Z,18.87,47.3,false_friend,A,True,Léonard
+365,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03556_SYL16/Data/2LA03556_20260109_180000.wav,Mataroni,2LA03556,2026-01-09T21:00:00Z,35.39,35.62,blanci_uncertain,B,True,Léonard
+365,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03556_SYL16/Data/2LA03556_20260109_180000.wav,Mataroni,2LA03556,2026-01-09T21:00:00Z,23.65,23.93,blanci_uncertain,B,True,Léonard
+365,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03556_SYL16/Data/2LA03556_20260109_180000.wav,Mataroni,2LA03556,2026-01-09T21:00:00Z,14.87,15.13,blanci_uncertain,B,True,Léonard
+371,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05210_SYL02/Data/2LA05210_20260107_060000.wav,Mataroni,2LA05210,2026-01-07T09:00:00Z,86.62,86.75,blanci,B,True,Léonard
+373,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA05190/Data/2LA05190_20251222_070000.wav,CDR,2LA05190,2025-12-22T10:00:00Z,38.56,64.83,false_friend,B,True,Léonard
+375,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05190_GI12/Data/2LA05190_20260112_060000.wav,Mataroni,2LA05190,2026-01-12T09:00:00Z,88.32,88.58,blanci,B,True,Léonard
+375,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05190_GI12/Data/2LA05190_20260112_060000.wav,Mataroni,2LA05190,2026-01-12T09:00:00Z,94.34,94.61,blanci,B,True,Léonard
+375,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05190_GI12/Data/2LA05190_20260112_060000.wav,Mataroni,2LA05190,2026-01-12T09:00:00Z,96.09,96.27,blanci,B,True,Léonard
+375,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05190_GI12/Data/2LA05190_20260112_060000.wav,Mataroni,2LA05190,2026-01-12T09:00:00Z,100.56,100.88,false_friend,B,True,Léonard
+378,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03550_SYL29/Data/2LA03550_20260111_063000.wav,Mataroni,2LA03550,2026-01-11T09:30:00Z,41.96,71.44,false_friend,B,True,Léonard
+379,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA03021/Data/2LA03021_20251221_120000.wav,CDR,2LA03021,2025-12-21T15:00:00Z,87.5,117.07,false_friend,B,True,Léonard
+380,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04171/Data/2LA04171_20251221_150000.wav,CDR,2LA04171,2025-12-21T18:00:00Z,35.81,58.47,false_friend,B,True,Léonard
+381,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA02707_MGM10/Data/2LA02707_20260108_160000.wav,Mataroni,2LA02707,2026-01-08T19:00:00Z,53.85,79.28,false_friend,B,True,Léonard
+382,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04501_RB07/Data/2LA04501_20260112_060000.wav,Mataroni,2LA04501,2026-01-12T09:00:00Z,23.76,24.11,blanci,B,True,Léonard
+382,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04501_RB07/Data/2LA04501_20260112_060000.wav,Mataroni,2LA04501,2026-01-12T09:00:00Z,28.56,28.99,blanci,B,True,Léonard
+382,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04501_RB07/Data/2LA04501_20260112_060000.wav,Mataroni,2LA04501,2026-01-12T09:00:00Z,32.12,32.45,false_friend,B,True,Léonard
+392,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04134_GI16/Data/2LA04134_20260111_163000.wav,Mataroni,2LA04134,2026-01-11T19:30:00Z,56.59,72.04,false_friend,B,True,Léonard
+392,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04134_GI16/Data/2LA04134_20260111_163000.wav,Mataroni,2LA04134,2026-01-11T19:30:00Z,73.27,85.21,false_friend,B,True,Léonard
+400,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04219_RB08/Data/2LA04219_20260107_070000.wav,Mataroni,2LA04219,2026-01-07T10:00:00Z,87.61,87.96,blanci,,True,Léonard
+400,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04219_RB08/Data/2LA04219_20260107_070000.wav,Mataroni,2LA04219,2026-01-07T10:00:00Z,90.42,90.69,blanci,,True,Léonard
+400,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04219_RB08/Data/2LA04219_20260107_070000.wav,Mataroni,2LA04219,2026-01-07T10:00:00Z,107.81,108.19,blanci,,True,Léonard
+402,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05232_SYL31/Data/2LA05232_20260106_163000.wav,Mataroni,2LA05232,2026-01-06T19:30:00Z,87.9,107.2,blanci,A,True,Léonard
+402,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA05232_SYL31/Data/2LA05232_20260106_163000.wav,Mataroni,2LA05232,2026-01-06T19:30:00Z,112.38,116.6,blanci,A,True,Léonard
+405,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04118_GI15/Data/2LA04118_20260108_060000.wav,Mataroni,2LA04118,2026-01-08T09:00:00Z,109.4,109.75,blanci,A,True,Léonard
+405,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04118_GI15/Data/2LA04118_20260108_060000.wav,Mataroni,2LA04118,2026-01-08T09:00:00Z,83.9,113.9,blanci_uncertain,A,True,Léonard
+410,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04530_MGM06/Data/2LA04530_20260110_080000.wav,Mataroni,2LA04530,2026-01-10T11:00:00Z,74.29,104.0,blanci_chorus,A,True,Léonard
+412,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA04168/Data/2LA04168_20251227_063000.wav,CDR,2LA04168,2025-12-27T09:30:00Z,59.8,89.8,false_friend,A,True,Léonard
+413,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03587_MGM02/Data/2LA03587_20260106_163000.wav,Mataroni,2LA03587,2026-01-06T19:30:00Z,62.7,72.55,false_friend,A,True,Léonard
+416,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04118_GI15/Data/2LA04118_20260112_070000.wav,Mataroni,2LA04118,2026-01-12T10:00:00Z,83.37,112.01,blanci_chorus,B,True,Léonard
+417,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03559_RB04/Data/2LA03559_20260107_070000.wav,Mataroni,2LA03559,2026-01-07T10:00:00Z,40.43,68.84,blanci_chorus,B,True,Léonard
+418,Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026/2MA07942/2MA07942_20251231_053000.wav,PatawaOuest,2MA07942,2025-12-31T08:30:00Z,36.37,56.91,false_friend,B,True,Léonard
+418,Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026/2MA07942/2MA07942_20251231_053000.wav,PatawaOuest,2MA07942,2025-12-31T08:30:00Z,58.26,58.91,false_friend,B,True,Léonard
+418,Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026/2MA07942/2MA07942_20251231_053000.wav,PatawaOuest,2MA07942,2025-12-31T08:30:00Z,60.2,63.2,false_friend,B,True,Léonard
+424,Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA03655_SYL04/Data/2LA03655_20260112_173000.wav,Mataroni,2LA03655,2026-01-12T20:30:00Z,83.41,111.93,blanci_uncertain,B,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,1.63,27.14,blanci,A,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,29.75,42.17,blanci,A,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,45.21,65.42,blanci,A,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,68.31,80.36,blanci,A,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,84.15,85.69,blanci,A,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,87.46,87.59,blanci,A,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,89.63,97.09,blanci,A,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,99.1,104.72,blanci,A,True,Léonard
+431,Projet Phénologie blanci/Quatrième relevé_juin 2024/Trésor 25062024/SMA13417 A/SMA13417_20240414_073000.wav,Tresor,SMA13417,2024-04-14T10:30:00Z,107.15,117.43,blanci,A,True,Léonard
+432,Projet Phénologie blanci/Troisième relevé_avril 2024/Kaw 09042024/SM D_SMA14079/Data/SMA14079_20240308_150000.wav,Kaw,SMA14079,2024-03-08T18:00:00Z,0.0,120.0,false_friend,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,9.54,9.81,blanci,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,14.93,15.26,blanci,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,20.97,21.2,blanci,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,26.62,26.94,blanci,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,19.38,19.48,blanci,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,29.99,40.94,false_friend,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,47.8,48.18,false_friend,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,51.81,52.21,false_friend,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,102.89,103.29,blanci,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,109.88,110.29,blanci,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,105.02,105.37,blanci,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,110.83,111.18,false_friend,A,True,Léonard
+433,Projet Phénologie blanci/Sixième relevé_novembre 2024/Molokoi 26112024/SM E_SMA14636/SMA14636_20241121_050000.wav,Molokoi,SMA14636,2024-11-21T08:00:00Z,114.3,116.95,blanci_chorus,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,0.0,15.83,blanci_chorus,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,19.26,38.65,blanci_chorus,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,40.99,62.73,blanci_chorus,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,64.32,81.63,blanci_chorus,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,83.13,95.96,blanci_chorus,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,97.73,106.93,blanci_chorus,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,109.9,119.28,blanci_chorus,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,108.0,109.84,false_friend,A,True,Léonard
+434,Projet Phénologie blanci/Premier relevé_décembre 2023/Trésor 26122023/SM4 A/SMA13417_20231113_063000.wav,Tresor,SMA13417,2023-11-13T09:30:00Z,82.85,83.02,false_friend,A,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,1.08,1.4,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,2.6,2.85,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,8.28,8.57,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,20.69,20.94,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,38.44,38.75,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,74.19,74.45,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,44.07,44.44,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,92.61,92.93,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,103.46,103.74,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,109.58,109.83,false_friend,B,True,Léonard
+435,Projet Phénologie blanci/Cinquième relevé_septembre 2024/Molokoi 03092024/SM E_SMA14636/SMA14636_20240628_080000.wav,Molokoi,SMA14636,2024-06-28T11:00:00Z,111.8,112.13,false_friend,B,True,Léonard
+437,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 amont/SMA14636_20240207_063000.wav,Molokoi,SMA14636,2024-02-07T09:30:00Z,11.62,28.22,false_friend,A,True,Léonard
+437,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 amont/SMA14636_20240207_063000.wav,Molokoi,SMA14636,2024-02-07T09:30:00Z,37.74,53.87,false_friend,A,True,Léonard
