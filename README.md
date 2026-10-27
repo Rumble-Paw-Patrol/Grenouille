@@ -8,7 +8,9 @@ Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
 
 **[Tableau de bord](https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8)** (page claude.ai, accès sur invitation) : c'est le plus utile pour avoir une vision globale du projet et pour suivre mon avancement en temps réel, je mets à jour la page tous les jours avec mes travaux récents.
 
-**Ce [README.md]** : j'y détaille la structure du projet, à quoi sert chaque dossier etc etc
+**Ce README.md** : j'y détaille la structure du projet, à quoi sert chaque dossier etc etc
+
+**Les README.md de chaque dossier** : Plus précis que le readme global du projet, spécifique à chaque dossier.
 
 ## Structure du dépôt
 
