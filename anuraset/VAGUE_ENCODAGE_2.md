@@ -1,13 +1,8 @@
 # Vague d'encodage 2 sur AnuraSet : sessions « AnuraSet encodage 5 » à « 15 »
 
-**État (29/09 soir) : prérequis faits (n° 152), sessions 5 à 14 prêtes ; 15 (MetaPerch)
-bloquée, poids non publiés.** Léonard écrit « go » dans une session quand sa ligne dit « oui ».
-Ce fichier prime sur le message de création de la session ; les précisions de Léonard au
-moment du go priment sur ce fichier. Décisions : n° 141, 150, 151, 152.
+**État (29/09 soir) : prérequis faits (n° 152), sessions 5 à 14 prêtes ; 15 (MetaPerch) bloquée, poids non publiés.** Léonard écrit « go » dans une session quand sa ligne dit « oui ». Ce fichier prime sur le message de création de la session ; les précisions de Léonard au moment du go priment sur ce fichier. Décisions : n° 141, 150, 151, 152.
 
-**Clôture (feuille de route V5, DECISIONS n° 156)** : la vague se termine le **09/10/2026** ;
-les sessions non finies ce jour-là sont abandonnées. Licence de chaque encodeur : V5 §2 ; les
-non libres ne servent plus que d'objectifs à battre.
+**Clôture (feuille de route V5, DECISIONS n° 156)** : la vague se termine le **09/10/2026** ; les sessions non finies ce jour-là sont abandonnées. Licence de chaque encodeur : V5 §2 ; les non libres ne servent plus que d'objectifs à battre.
 
 ## Sessions
 
@@ -38,76 +33,30 @@ non libres ne servent plus que d'objectifs à battre.
 
 ## Procédure commune (au go)
 
-**Jamais de fusion d'une branche de données (`donnees-anuraset-*`) dans
-`main`**, ni directement ni par une branche intermédiaire : on pousse sur la branche de données,
-puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sorties brutes).
+**Jamais de fusion d'une branche de données (`donnees-anuraset-*`) dans `main`**, ni directement ni par une branche intermédiaire : on pousse sur la branche de données, puis la fiche seule sur `main` (le 30/09, une fusion y avait versé 89 Mo de sorties brutes).
 
 
-1. `git pull origin main`. Lire : `documentation/encodeurs-bacpipe.md` (section « Règle » et
-   les fiches de ses encodeurs), `anuraset/LISEZMOI.md`,
-   DECISIONS n° 150 à 152. Outil `read_documentation` (session.resources) : disque et délai
-   d'inactivité de la machine.
-2. Environnement : `uv sync`, puis torch, torchvision, torchaudio en roues **CPU** (`uv pip
-   install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio` : les
-   roues CUDA remplissent le disque). Selon les encodeurs :
-   - bacpipe : `uv pip install --no-deps bacpipe==1.3.5`, puis seulement les modules que
-     bacpipe réclame à l'import du modèle ; `transformers<5` (n° 147) ; TensorFlow CPU
-     seulement si le modèle l'exige ;
-   - esp-aves2 : `uv pip install avex "transformers<5"`.
-   Noter les versions (torch, transformers, onnxruntime, tensorflow, avex, librosa) dans la
-   fiche.
-3. Données : `bash anuraset/telecharger_anuraset.sh` (7,2 Go,
-   ~6 min), `git archive 6f2ff13^ data | tar -x`
-   (étiquettes, récupérées dans l'historique), `uv run blanci --config
-   anuraset/anuraset.yaml anuraset prepare`, puis supprimer `data/external/anuraset/raw_data.zip`.
-4. Essai de 5 min d'abord, avec le script de la fin de ce fichier : f_e, fenêtre, dimension,
-   forme des jetons, embeddings ni constants ni NaN. Un écart avec ce fichier ou
-   `encodeurs-bacpipe.md` : s'arrêter et le dire.
-5. Encodage : `uv run python anuraset/encoder.py <encodeurs…>`
-   en arrière-plan (sélection du n° 141, fenêtres jointives), `OMP_NUM_THREADS=4`. Vérifier
-   toutes les 10 à 15 min, jamais de boucle serrée. Après un redémarrage du conteneur,
-   relancer : l'encodage reprend où il en était.
-6. Pousser chaque stock fini sur la branche `donnees-anuraset-<encodeur>` (branche orpheline,
-   dans un worktree) : `data/embeddings_anuraset/<stock>/` et `data/db/anuraset.sqlite`,
-   `git add -f`. Jamais de données sur `main`.
-7. Si la ligne dit `--tokens` : `uv run python anuraset/jetons.py
-   <encodeur>` (second passage dans l'encodeur ; reprise par paquets de 50 enregistrements).
-   Les jetons restent sur la machine (≈ 1 Go par encodeur de 768 dimensions).
-8. Benchmark : pour chaque encodeur et chaque espèce (DENMIN, PITAZU, PHYCUV, LEPLAT, BOAFAB),
-   `uv run python anuraset/global_bench.py <encodeur> <ESPECE>
-   sorties <options de la ligne>`, `OMP_NUM_THREADS=1` ; 4 processus en parallèle, **2 avec
-   `--tokens`** (mémoire). **Témoin** (n° 151) : si la logistique donne sur BOAFAB une AP
-   moyenne par site (minute) nettement sous 0,85, chercher d'abord un tuyau cassé.
-9. Garder `sorties/<encodeur>_*` hors de `main` : les sorties brutes de la vague 1 sont dans
-   l'historique (`git show 6f2ff13^:resultats/global/<fichier>`, audioprotopnet et
-   convnext_birdset dans `443f889`). Pour en ajouter, créer une branche de résultats et ne
-   jamais la fusionner.
-10. Fiche courte sur `main` : `documentation/benchmarks/fiches/<encodeur>.md`, 30 lignes au plus.
-    Contenu : réglages lus (f_e, fenêtre, dimension, couche, versions), débit, témoin BOAFAB, AP
-    moyenne par site et poolée (minute) par espèce pour chaque tête (les têtes sur jetons à
-    part), et, pour un transformer, « en retrait en sondage linéaire » ou non (n° 151).
-    Anomalies. `git pull --rebase` avant le push ; ne rien modifier d'autre (ni DECISIONS, ni
-    les rapports : la session principale les rédige dans le rapport global).
+1. `git pull origin main`. Lire : `documentation/encodeurs-bacpipe.md` (section « Règle » et les fiches de ses encodeurs), `anuraset/LISEZMOI.md`, DECISIONS n° 150 à 152. Outil `read_documentation` (session.resources) : disque et délai d'inactivité de la machine.
+2. Environnement : `uv sync`, puis torch, torchvision, torchaudio en roues **CPU** (`uv pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio` : les roues CUDA remplissent le disque). Selon les encodeurs :
+   - bacpipe : `uv pip install --no-deps bacpipe==1.3.5`, puis seulement les modules que bacpipe réclame à l'import du modèle ; `transformers<5` (n° 147) ; TensorFlow CPU seulement si le modèle l'exige ;
+   - esp-aves2 : `uv pip install avex "transformers<5"`. Noter les versions (torch, transformers, onnxruntime, tensorflow, avex, librosa) dans la fiche.
+3. Données : `bash anuraset/telecharger_anuraset.sh` (7,2 Go, ~6 min), `git archive 6f2ff13^ data | tar -x` (étiquettes, récupérées dans l'historique), `uv run blanci --config anuraset/anuraset.yaml anuraset prepare`, puis supprimer `data/external/anuraset/raw_data.zip`.
+4. Essai de 5 min d'abord, avec le script de la fin de ce fichier : f_e, fenêtre, dimension, forme des jetons, embeddings ni constants ni NaN. Un écart avec ce fichier ou `encodeurs-bacpipe.md` : s'arrêter et le dire.
+5. Encodage : `uv run python anuraset/encoder.py <encodeurs…>` en arrière-plan (sélection du n° 141, fenêtres jointives), `OMP_NUM_THREADS=4`. Vérifier toutes les 10 à 15 min, jamais de boucle serrée. Après un redémarrage du conteneur, relancer : l'encodage reprend où il en était.
+6. Pousser chaque stock fini sur la branche `donnees-anuraset-<encodeur>` (branche orpheline, dans un worktree) : `data/embeddings_anuraset/<stock>/` et `data/db/anuraset.sqlite`, `git add -f`. Jamais de données sur `main`.
+7. Si la ligne dit `--tokens` : `uv run python anuraset/jetons.py <encodeur>` (second passage dans l'encodeur ; reprise par paquets de 50 enregistrements). Les jetons restent sur la machine (≈ 1 Go par encodeur de 768 dimensions).
+8. Benchmark : pour chaque encodeur et chaque espèce (DENMIN, PITAZU, PHYCUV, LEPLAT, BOAFAB), `uv run python anuraset/global_bench.py <encodeur> <ESPECE> sorties <options de la ligne>`, `OMP_NUM_THREADS=1` ; 4 processus en parallèle, **2 avec `--tokens`** (mémoire). **Témoin** (n° 151) : si la logistique donne sur BOAFAB une AP moyenne par site (minute) nettement sous 0,85, chercher d'abord un tuyau cassé.
+9. Garder `sorties/<encodeur>_*` hors de `main` : les sorties brutes de la vague 1 sont dans l'historique (`git show 6f2ff13^:resultats/global/<fichier>`, audioprotopnet et convnext_birdset dans `443f889`). Pour en ajouter, créer une branche de résultats et ne jamais la fusionner.
+10. Fiche courte sur `main` : `documentation/benchmarks/fiches/<encodeur>.md`, 30 lignes au plus. Contenu : réglages lus (f_e, fenêtre, dimension, couche, versions), débit, témoin BOAFAB, AP moyenne par site et poolée (minute) par espèce pour chaque tête (les têtes sur jetons à part), et, pour un transformer, « en retrait en sondage linéaire » ou non (n° 151). Anomalies. `git pull --rebase` avant le push ; ne rien modifier d'autre (ni DECISIONS, ni les rapports : la session principale les rédige dans le rapport global).
 11. Finir par 5 lignes : ce qui est poussé, durées, anomalies.
 
 ## Précisions par session
 
-- **5 (birdnet_v3)** : gros plan. Deux lectures : la logistique sur l'embedding et son
-  classifieur sans entraînement (`--native`, colonne `classifieur_origine`) sur DENMIN, LEPLAT,
-  PHYCUV et BOAFAB (PITAZU n'est pas dans ses 11 560 classes). AnuraSet est peut-être dans ses
-  données d'entraînement (sources non publiées) : un score spectaculaire est à dire comme tel.
-- **6 (Bird-MAE)** : Large d'abord (encodage, jetons, benchmark). Puis Base :
-  `uv run python anuraset/importer_stock.py birdmae_base`,
-  `jetons.py birdmae_base`, `global_bench.py birdmae_base <ESPECE> sorties --tokens` (sa courbe
-  existe déjà, benchmark 07). But : trancher le verdict suspendu des n° 147 et 149. Huge :
-  seulement si les jetons de Large changent la donne.
-- **11 (rcl_fs_bsed)** : ~480 000 trames ; `global_bench.py` sans `--curve`, 2 processus. Tête
-  d'origine : `simple_prototype` (déjà dans le transfert).
-- **14 (esp-aves2 BEATs)** : avant l'encodage complet, comparer
-  `esp_aves2_naturelm_audio_v1_beats` à `naturebeats` (bacpipe) sur 50 fenêtres (cosinus) ;
-  identiques : ne pas l'encoder deux fois, le noter dans la fiche.
-- **15 (MetaPerch)** : relire `chirp/projects/metaperch/README.md` du dépôt
-  `google-research/perch` ; poids toujours absents : le dire en une ligne et s'arrêter.
+- **5 (birdnet_v3)** : gros plan. Deux lectures : la logistique sur l'embedding et son classifieur sans entraînement (`--native`, colonne `classifieur_origine`) sur DENMIN, LEPLAT, PHYCUV et BOAFAB (PITAZU n'est pas dans ses 11 560 classes). AnuraSet est peut-être dans ses données d'entraînement (sources non publiées) : un score spectaculaire est à dire comme tel.
+- **6 (Bird-MAE)** : Large d'abord (encodage, jetons, benchmark). Puis Base : `uv run python anuraset/importer_stock.py birdmae_base`, `jetons.py birdmae_base`, `global_bench.py birdmae_base <ESPECE> sorties --tokens` (sa courbe existe déjà, benchmark 07). But : trancher le verdict suspendu des n° 147 et 149. Huge : seulement si les jetons de Large changent la donne.
+- **11 (rcl_fs_bsed)** : ~480 000 trames ; `global_bench.py` sans `--curve`, 2 processus. Tête d'origine : `simple_prototype` (déjà dans le transfert).
+- **14 (esp-aves2 BEATs)** : avant l'encodage complet, comparer `esp_aves2_naturelm_audio_v1_beats` à `naturebeats` (bacpipe) sur 50 fenêtres (cosinus) ; identiques : ne pas l'encoder deux fois, le noter dans la fiche.
+- **15 (MetaPerch)** : relire `chirp/projects/metaperch/README.md` du dépôt `google-research/perch` ; poids toujours absents : le dire en une ligne et s'arrêter.
 
 ## Script de l'essai (étape 4)
 

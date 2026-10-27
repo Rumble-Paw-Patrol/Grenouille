@@ -1,25 +1,17 @@
 # Commandes et données
 
-Référence détaillée de la ligne de commande `blanci` (une cinquantaine de commandes) et du
-format des données. Le [README](../README.md) donne la vue d'ensemble et le démarrage rapide.
-Les renvois « n° » désignent les décisions numérotées du journal de décisions du projet (dépôt
-interne), les « § » les sections de son cadre. Les chemins `data/` et `config/local.yaml` sont locaux,
-ignorés par git.
+Référence détaillée de la ligne de commande `blanci` (une cinquantaine de commandes) et du format des données. Le [README](../README.md) donne la vue d'ensemble et le démarrage rapide. Les renvois « n° » désignent les décisions numérotées du journal de décisions du projet (dépôt interne), les « § » les sections de son cadre. Les chemins `data/` et `config/local.yaml` sont locaux, ignorés par git.
 
 ## Données
 
-L'audio reste sur le disque externe, jamais modifié. Sa racine se déclare dans
-`config/local.yaml` (copie de `config/local.example.yaml`, ignorée par git) ; les chemins sont
-stockés relatifs à cette racine, ils survivent à un changement de lettre ou de machine.
+L'audio reste sur le disque externe, jamais modifié. Sa racine se déclare dans `config/local.yaml` (copie de `config/local.example.yaml`, ignorée par git) ; les chemins sont stockés relatifs à cette racine, ils survivent à un changement de lettre ou de machine.
 
 ```
 <disque>/Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026/2LA04530_MGM06/Data/
     2LA04530_20260106_103000.wav      # micro 2LA04530, 6 janvier 2026, 10 h 30 locales
 ```
 
-Enregistrements de 2 min, 48 kHz stéréo. Le micro est le numéro de série (GUANO, sinon
-préfixe du nom), l'heure vient du GUANO avec le fuseau de l'enregistreur. WAV et FLAC sont
-inventoriés ; l'appariement avec les annotations se fait sur le nom sans extension.
+Enregistrements de 2 min, 48 kHz stéréo. Le micro est le numéro de série (GUANO, sinon préfixe du nom), l'heure vient du GUANO avec le fuseau de l'enregistreur. WAV et FLAC sont inventoriés ; l'appariement avec les annotations se fait sur le nom sans extension.
 
 ### Inventaire (base au 29/09/2026)
 
@@ -37,10 +29,7 @@ inventoriés ; l'appariement avec les annotations se fait sur le nom sans extens
 | | **total 2026** | **29 513** | **29 365** | **978,9** | **677,3** |
 | **Total** | | **96 292** | **96 119** | **3 204** | **2 216** |
 
-Go : taille réelle des fichiers sur les disques (10⁹ octets), aucun fichier inventorié
-manquant. 96 176 enregistrements sont en 48 kHz stéréo, les autres (116) en 24 ou 32 kHz.
-Fenêtres potentielles, chevauchement de 50 % (`encoders.overlap`), sur les 96 119
-enregistrements de 120 s :
+Go : taille réelle des fichiers sur les disques (10⁹ octets), aucun fichier inventorié manquant. 96 176 enregistrements sont en 48 kHz stéréo, les autres (116) en 24 ou 32 kHz. Fenêtres potentielles, chevauchement de 50 % (`encoders.overlap`), sur les 96 119 enregistrements de 120 s :
 
 | Fenêtre | Pas | Par enregistrement | Au total |
 |---|---|---:|---:|
@@ -48,14 +37,9 @@ enregistrements de 120 s :
 | 5 s | 2,5 s | 47 | 4 517 593 |
 | 6 s | 3 s | 39 | 3 748 641 |
 
-Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 895 micros
-dans le sac ou étouffés (piste 0 seule, calculés avant le n° 203 ; suites d'au moins 2 h,
-n° 194) et 8 notés à l'écoute ; 95 214 enregistrements restent encodables. Les 1 521 à l'horloge
-douteuse (Molokoi SMA14636, avril 2024) sont réintégrés : `clock_off` n'est plus qu'une
-remarque. Détail et anomalies : DECISIONS n° 153, 154 et 191.
+Écartés par les drapeaux (jamais encodés) : 173 de durée anormale, 88 hors relevé, 895 micros dans le sac ou étouffés (piste 0 seule, calculés avant le n° 203 ; suites d'au moins 2 h, n° 194) et 8 notés à l'écoute ; 95 214 enregistrements restent encodables. Les 1 521 à l'horloge douteuse (Molokoi SMA14636, avril 2024) sont réintégrés : `clock_off` n'est plus qu'une remarque. Détail et anomalies : DECISIONS n° 153, 154 et 191.
 
-Hors git, sous `data/` : `db/blanci.sqlite` (inventaire, fenêtres, labels en ajout seul),
-`embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet`, `models/`, `reports/`.
+Hors git, sous `data/` : `db/blanci.sqlite` (inventaire, fenêtres, labels en ajout seul), `embeddings/<encodeur>/<jeu>/<site>/<aaaamm>.parquet`, `models/`, `reports/`.
 
 ## Commandes
 

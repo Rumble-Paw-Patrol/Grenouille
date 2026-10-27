@@ -1,35 +1,20 @@
 # Benchmark 01 — Têtes et régularisations sur AnuraSet, un site à la fois (perch_v2)
 
-> **Note de l'audit du 10/10/2026 :** les p-valeurs de ce rapport sont calculées par amorçage
-> avec 1 000 tirages, selon p = 2·k/n. Quand aucun tirage ne traverse 0, p vaut 0. Environ la
-> moitié des comparaisons sont dans ce cas et sortent « significatives après Holm ». Avec le calcul
-> corrigé, p = 2·(k+1)/(n+1) a un plancher, et plus aucune comparaison ne survivrait à Holm sur
-> 115 à 245 comparaisons. Les intervalles de confiance restent valables. Lire « après Holm »
-> comme « intervalle à 95 % qui exclut 0 », en attendant une relance avec plus de tirages.
+> **Note de l'audit du 10/10/2026 :** les p-valeurs de ce rapport sont calculées par amorçage avec 1 000 tirages, selon p = 2·k/n. Quand aucun tirage ne traverse 0, p vaut 0. Environ la moitié des comparaisons sont dans ce cas et sortent « significatives après Holm ». Avec le calcul corrigé, p = 2·(k+1)/(n+1) a un plancher, et plus aucune comparaison ne survivrait à Holm sur 115 à 245 comparaisons. Les intervalles de confiance restent valables. Lire « après Holm » comme « intervalle à 95 % qui exclut 0 », en attendant une relance avec plus de tirages.
 
-28/09/2026 · commit `32d4832` + stock complété (n° 141) · statut : **indicateur** (d'autres
-anoures qu'A. blanci ; 2 à 3 sites par espèce).
+28/09/2026 · commit `32d4832` + stock complété (n° 141) · statut : **indicateur** (d'autres anoures qu'A. blanci ; 2 à 3 sites par espèce).
 
 ## En bref
 
-- **La logistique reste la tête à battre** d'un site à l'autre. Le kNN s'effondre sur 4
-  espèces sur 5, le prototype sur 2 (il gagne sur LEPLAT) : amorcer un site avec des exemples
-  venus d'ailleurs ne suffit pas.
-- **R37 (biais par site, σ fixé ou GLMM)** est la seule régularisation qui gagne nettement,
-  sur PITAZU (+0,05 d'AP poolée, meilleure sur ses deux sites tenus à l'écart). Ailleurs :
-  neutre.
-- **R19 et R20 classent mieux à l'intérieur d'un site, mais cassent la comparaison entre
-  sites** — là, et seulement là, où l'espèce occupe 26 à 41 % des fenêtres du site. A. blanci
-  étant rare, ce mécanisme devrait peu peser sur nos données : à vérifier.
-- **Le seuil ne voyage pas** : choisi sur les autres sites, le rappel à précision 0,5 de
-  PITAZU tombe à 0,01 (0,92 avec un seuil choisi sur place). Un nouveau site demandera son
-  propre seuil.
+- **La logistique reste la tête à battre** d'un site à l'autre. Le kNN s'effondre sur 4 espèces sur 5, le prototype sur 2 (il gagne sur LEPLAT) : amorcer un site avec des exemples venus d'ailleurs ne suffit pas.
+- **R37 (biais par site, σ fixé ou GLMM)** est la seule régularisation qui gagne nettement, sur PITAZU (+0,05 d'AP poolée, meilleure sur ses deux sites tenus à l'écart). Ailleurs : neutre.
+- **R19 et R20 classent mieux à l'intérieur d'un site, mais cassent la comparaison entre sites** — là, et seulement là, où l'espèce occupe 26 à 41 % des fenêtres du site. A. blanci étant rare, ce mécanisme devrait peu peser sur nos données : à vérifier.
+- **Le seuil ne voyage pas** : choisi sur les autres sites, le rappel à précision 0,5 de PITAZU tombe à 0,01 (0,92 avec un seuil choisi sur place). Un nouveau site demandera son propre seuil.
 - La recalibration de chaque pli (n° 135) dégrade l'AP poolée : elle reste coupée.
 
 ## 1. Question
 
-Parmi les têtes et régularisations programmées, lesquelles **généralisent à un site jamais vu**
-— le cœur du projet — sur des anoures néotropicaux proches de notre cas ?
+Parmi les têtes et régularisations programmées, lesquelles **généralisent à un site jamais vu** — le cœur du projet — sur des anoures néotropicaux proches de notre cas ?
 
 ## 2. Données
 
@@ -42,8 +27,7 @@ Parmi les têtes et régularisations programmées, lesquelles **généralisent �
 
 ![Fenêtres positives par site](figures/1_positifs_par_site.png)
 
-*Figure 1 — Fenêtres positives de chaque espèce, par site. Une seule espèce (BOAFAB) est
-équilibrée ; PITAZU et LEPLAT ont un site presque vide (30 et 82 fenêtres).*
+*Figure 1 — Fenêtres positives de chaque espèce, par site. Une seule espèce (BOAFAB) est équilibrée ; PITAZU et LEPLAT ont un site presque vide (30 et 82 fenêtres).*
 
 ## 3. Pipeline et choix
 
@@ -63,21 +47,17 @@ Parmi les têtes et régularisations programmées, lesquelles **généralisent �
 
 ![Tableau des têtes](figures/4_tableau_tetes.png)
 
-*Figure 2 — AP poolée · AP moyenne par site. En couleur : écart à la logistique significatif
-(Holm) et d'au moins 0,02.*
+*Figure 2 — AP poolée · AP moyenne par site. En couleur : écart à la logistique significatif (Holm) et d'au moins 0,02.*
 
 ![AP par site tenu à l'écart](figures/2_ap_par_site.png)
 
-*Figure 3 — AP de chaque tête sur chaque site tenu à l'écart. Les colonnes pâles sont les cas
-durs : DENMIN à INCT20955 (≤ 0,24 pour toutes les têtes), PITAZU à INCT41 (≤ 0,42).*
+*Figure 3 — AP de chaque tête sur chaque site tenu à l'écart. Les colonnes pâles sont les cas durs : DENMIN à INCT20955 (≤ 0,24 pour toutes les têtes), PITAZU à INCT41 (≤ 0,42).*
 
 ![AP poolée contre AP par site](figures/3_poolee_contre_site.png)
 
-*Figure 4 — Un grand écart entre les deux marqueurs signale des sites sur des échelles
-différentes : R19, R20 sur DENMIN, PITAZU, LEPLAT.*
+*Figure 4 — Un grand écart entre les deux marqueurs signale des sites sur des échelles différentes : R19, R20 sur DENMIN, PITAZU, LEPLAT.*
 
-Rappel à précision 0,5, seuil choisi sur les autres sites (entre parenthèses : seuil choisi
-sur place, optimiste) :
+Rappel à précision 0,5, seuil choisi sur les autres sites (entre parenthèses : seuil choisi sur place, optimiste) :
 
 | Tête | DENMIN | PITAZU | PHYCUV | LEPLAT | BOAFAB |
 |---|---|---|---|---|---|
@@ -87,44 +67,23 @@ sur place, optimiste) :
 
 ## 5. Hypothèses
 
-1. **Similarité contre logistique.** Le plus proche voisin d'une fenêtre d'un nouveau site est
-   d'abord un fond qui lui ressemble ; la logistique apprend les directions qui séparent le
-   chant du fond sur plusieurs sites. Exception : LEPLAT, où le prototype gagne en AP poolée
-   (0,85 contre 0,79) — appris sur 82 positifs seulement quand INCT20955 est tenu à l'écart,
-   une moyenne résiste peut-être mieux qu'une frontière apprise.
-2. **R19, R20.** Le centrage par site retranche la moyenne de toutes les fenêtres du site. Là
-   où l'espèce est partout (DENMIN : 41 % des fenêtres d'INCT17 ; PITAZU : 34 % ; LEPLAT :
-   26 % d'INCT20955), cette moyenne contient le chant : tout le site perd une part de son
-   signal, ses scores baissent d'un bloc, le classement entre sites se brise ; dans le site, le
-   fond retiré aide. Là où l'espèce est rare (PHYCUV, 2 à 12 %), rien ne casse. Test direct :
-   centrer sur les seuls enregistrements sans espèce.
-3. **R37 sur PITAZU.** Les deux sites ont des proportions de positifs sans commune mesure
-   (34 % contre 0,7 %) ; le biais par site absorbe ce niveau pendant l'apprentissage, les
-   poids restent sur le chant : meilleur sur les deux sites tenus à l'écart (0,84 contre 0,81 ;
-   0,24 contre 0,19).
-4. **Cas durs.** DENMIN à INCT20955 : 64 % de chants de faible qualité (35 % à INCT17) et
-   4 % de fenêtres positives, appris presque seulement sur INCT17 — des chants lointains
-   qu'aucune tête n'a vus. PITAZU à INCT41 : 30 positives ; l'ACP (R18=64) y double l'AP
-   (0,42 contre 0,19), sans doute en limitant ce que la tête apprend de propre à INCT17.
-5. **Seuil.** Les scores d'un site sont décalés d'un bloc par rapport à un autre (fond,
-   proportion de chant) : un seuil appris ailleurs tombe à côté. C'est aussi pourquoi la
-   recalibration par pli, apprise sur d'autres sites, dégrade l'AP poolée (annexe B).
+1. **Similarité contre logistique.** Le plus proche voisin d'une fenêtre d'un nouveau site est d'abord un fond qui lui ressemble ; la logistique apprend les directions qui séparent le chant du fond sur plusieurs sites. Exception : LEPLAT, où le prototype gagne en AP poolée (0,85 contre 0,79) — appris sur 82 positifs seulement quand INCT20955 est tenu à l'écart, une moyenne résiste peut-être mieux qu'une frontière apprise.
+2. **R19, R20.** Le centrage par site retranche la moyenne de toutes les fenêtres du site. Là où l'espèce est partout (DENMIN : 41 % des fenêtres d'INCT17 ; PITAZU : 34 % ; LEPLAT : 26 % d'INCT20955), cette moyenne contient le chant : tout le site perd une part de son signal, ses scores baissent d'un bloc, le classement entre sites se brise ; dans le site, le fond retiré aide. Là où l'espèce est rare (PHYCUV, 2 à 12 %), rien ne casse. Test direct : centrer sur les seuls enregistrements sans espèce.
+3. **R37 sur PITAZU.** Les deux sites ont des proportions de positifs sans commune mesure (34 % contre 0,7 %) ; le biais par site absorbe ce niveau pendant l'apprentissage, les poids restent sur le chant : meilleur sur les deux sites tenus à l'écart (0,84 contre 0,81 ; 0,24 contre 0,19).
+4. **Cas durs.** DENMIN à INCT20955 : 64 % de chants de faible qualité (35 % à INCT17) et 4 % de fenêtres positives, appris presque seulement sur INCT17 — des chants lointains qu'aucune tête n'a vus. PITAZU à INCT41 : 30 positives ; l'ACP (R18=64) y double l'AP (0,42 contre 0,19), sans doute en limitant ce que la tête apprend de propre à INCT17.
+5. **Seuil.** Les scores d'un site sont décalés d'un bloc par rapport à un autre (fond, proportion de chant) : un seuil appris ailleurs tombe à côté. C'est aussi pourquoi la recalibration par pli, apprise sur d'autres sites, dégrade l'AP poolée (annexe B).
 
 ## 6. Ce qu'on en retient pour A. blanci
 
-- Garder la **logistique** comme référence ; tester **R37** sur les données ONF (sites aux
-  proportions de positifs très différentes : notre cas).
-- **R19, R20** : ne pas les écarter sur la foi d'AnuraSet (espèces bien plus abondantes
-  qu'A. blanci) ; les juger sur les données ONF, site par site et en AP poolée.
-- **Un nouveau site aura besoin de son propre seuil** : quelques annotations sur place, ou la
-  prévalence du site (R73).
+- Garder la **logistique** comme référence ; tester **R37** sur les données ONF (sites aux proportions de positifs très différentes : notre cas).
+- **R19, R20** : ne pas les écarter sur la foi d'AnuraSet (espèces bien plus abondantes qu'A. blanci) ; les juger sur les données ONF, site par site et en AP poolée.
+- **Un nouveau site aura besoin de son propre seuil** : quelques annotations sur place, ou la prévalence du site (R73).
 - `benchmark.fold_calibration` reste à `none`.
 
 ## 7. Limites
 
 - Autres espèces, autres enregistreurs ; BOAFAB saturée (≈ 0,97) ne départage rien.
-- 2 à 3 sites par espèce : les intervalles (bootstrap par enregistrement) sont optimistes ;
-  plusieurs sites tenus à l'écart ont moins de 100 positives (DENMIN INCT4 : 6).
+- 2 à 3 sites par espèce : les intervalles (bootstrap par enregistrement) sont optimistes ; plusieurs sites tenus à l'écart ont moins de 100 positives (DENMIN INCT4 : 6).
 - Un seul encodeur, un seul tirage de négatifs.
 
 ## 8. Suites
@@ -137,8 +96,7 @@ sur place, optimiste) :
 
 ## Annexe A — Ce qu'a changé la correction de l'audit (n° 138–140)
 
-Positifs cachés écartés, chants coupés aux jonctions rattachés, 9 enregistrements courts
-d'INCT20955 réintégrés. Logistique, AP poolée (AP par site) :
+Positifs cachés écartés, chants coupés aux jonctions rattachés, 9 enregistrements courts d'INCT20955 réintégrés. Logistique, AP poolée (AP par site) :
 
 | Espèce | Fenêtres positives | 28/09 | Corrigé |
 |---|---|---|---|
@@ -147,11 +105,7 @@ d'INCT20955 réintégrés. Logistique, AP poolée (AP par site) :
 | PHYCUV | 905 → 984 | 0,87 (0,87) | 0,89 (0,89) |
 | BOAFAB | 1 803 → 1 858 | 0,96 (0,96) | 0,97 (0,97) |
 
-En moyenne sur les têtes : +0,04 (PITAZU), +0,01 ailleurs. Le haut du classement (famille
-logistique) et le bas (R19, R20, similarité) ne bougent pas ; au milieu, des têtes à quelques
-millièmes l'une de l'autre échangent leurs places. La « significativité » de R37 sur PITAZU, affirmée le 28/09 sans correction pour
-tests multiples, survit à Holm (bootstrap par enregistrement, donc à confirmer par l'AP site
-par site : c'est le cas, sur les deux sites).
+En moyenne sur les têtes : +0,04 (PITAZU), +0,01 ailleurs. Le haut du classement (famille logistique) et le bas (R19, R20, similarité) ne bougent pas ; au milieu, des têtes à quelques millièmes l'une de l'autre échangent leurs places. La « significativité » de R37 sur PITAZU, affirmée le 28/09 sans correction pour tests multiples, survit à Holm (bootstrap par enregistrement, donc à confirmer par l'AP site par site : c'est le cas, sur les deux sites).
 
 ## Annexe B — Recalibration par pli (`fold_calibration: platt`)
 
@@ -173,12 +127,6 @@ uv run blanci --config anuraset/anuraset.yaml anuraset campaign --encoders perch
 uv run --group notebook python documentation/benchmarks/2026-09-28_anuraset_perch_v2/generer.py
 ```
 
-Réglages non par défaut : `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` ; annexe B :
-`benchmark.fold_calibration: platt` sur 5 têtes. Les espèces ont tourné en parallèle, une par
-processus : chaque espèce repart de la graine, alors que `anuraset campaign` enchaîne les
-espèces sur un même tirage ; les négatifs, donc les chiffres, peuvent différer de quelques
-centièmes.
+Réglages non par défaut : `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` ; annexe B : `benchmark.fold_calibration: platt` sur 5 têtes. Les espèces ont tourné en parallèle, une par processus : chaque espèce repart de la graine, alors que `anuraset campaign` enchaîne les espèces sur un même tirage ; les négatifs, donc les chiffres, peuvent différer de quelques centièmes.
 
-Durées (CPU, 4 cœurs) : téléchargement 6 min (7,2 Go), encodage 37 min, têtes 7 à 18 min par
-espèce (une espèce par cœur). `donnees/` : tous les chiffres (CSV) dont sont tirés les
-figures et tableaux ; `tetes_avant_correction.csv` : la campagne du 28/09.
+Durées (CPU, 4 cœurs) : téléchargement 6 min (7,2 Go), encodage 37 min, têtes 7 à 18 min par espèce (une espèce par cœur). `donnees/` : tous les chiffres (CSV) dont sont tirés les figures et tableaux ; `tetes_avant_correction.csv` : la campagne du 28/09.

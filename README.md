@@ -1,9 +1,6 @@
 # Grenouille — Outil de détection automatique d'*Anomaloglossus blanci* dans un paysage sonore Guyanais
 
-Stage à l'Office National des Forêts de Guyane (15/09/2026 → 14/03/2027). *Anomaloglossus blanci* est une minuscule grenouille
-micro-endémique du quart Nord-Est de la Guyane et en danger d'extinction. Elle chante une note de 0,09 s environ, en moyenne toutes les 1,4 secondes dans une bande de fréquences saturée par d'autres espèces (4.4 - 5.5 kHz). L'ONF et ses partenaires ont posé des enregistreurs en forêt (96 292 enregistrements de 2 min, 3 204 h, multi-sites) ; le projet cherche un **détecteur qui fonctionne
-sur de nouveaux points d'écoute** encore jamais écoutés, qu'un naturaliste utilise **sans écrire de code** et que l'ONF
-peut réentraîner seul.
+Stage à l'Office National des Forêts de Guyane (15/09/2026 → 14/03/2027). *Anomaloglossus blanci* est une minuscule grenouille micro-endémique du quart Nord-Est de la Guyane et en danger d'extinction. Elle chante une note de 0,09 s environ, en moyenne toutes les 1,4 secondes dans une bande de fréquences saturée par d'autres espèces (4.4 - 5.5 kHz). L'ONF et ses partenaires ont posé des enregistreurs en forêt (96 292 enregistrements de 2 min, 3 204 h, multi-sites) ; le projet cherche un **détecteur qui fonctionne sur de nouveaux points d'écoute** encore jamais écoutés, qu'un naturaliste utilise **sans écrire de code** et que l'ONF peut réentraîner seul.
 
 Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
 
@@ -18,13 +15,11 @@ Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
 | Annotations | reprises de zéro, par plan de tirage stratifié (point d'écoute, heure, période), les points d'écoute étant répartis entre entraînement et test avant toute écoute. Poste d'annotation terminé ; 40 extraits écoutés au 16/10. Les labels seront vérifiés par des experts. **Aucun benchmark sur les données de l'ONF avant leur accord** |
 | Livrable | application Windows installable sans code : à venir (essai d'empaquetage prévu) |
 
-Prochaines étapes : annoter le lot 1 (424 extraits de 30 s), puis le jeu de test (250
-enregistrements entiers) ; finir l'encodage BirdNET 3.0 ; essai d'empaquetage `.exe`.
+Prochaines étapes : annoter le lot 1 (424 extraits de 30 s), puis le jeu de test (250 enregistrements entiers) ; finir l'encodage BirdNET 3.0 ; essai d'empaquetage `.exe`.
 
 ## Pour les encadrants : par où commencer
 
-**[Tableau de bord](https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8)** (page claude.ai, accès sur
-invitation) : c'est le plus utile pour avoir une vision globale du projet et pour suivre mon avancement en temps réel, je mets à jour la page tous les jours avec mes travaux récents.
+**[Tableau de bord](https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8)** (page claude.ai, accès sur invitation) : c'est le plus utile pour avoir une vision globale du projet et pour suivre mon avancement en temps réel, je mets à jour la page tous les jours avec mes travaux récents.
 
 ## Structure du dépôt
 
@@ -42,15 +37,11 @@ Grenouille/
     └── commandes.md, glossaire-bioacoustique.md, encodeurs-bacpipe.md
 ```
 
-Documents utiles pour entrer dans le projet : les
-[rapports de benchmark](documentation/benchmarks/LISEZMOI.md), la
-[bibliographie](documentation/biblio/biblio.md) et le
-[glossaire](documentation/glossaire-bioacoustique.md).
+Documents utiles pour entrer dans le projet : les [rapports de benchmark](documentation/benchmarks/LISEZMOI.md), la [bibliographie](documentation/biblio/biblio.md) et le [glossaire](documentation/glossaire-bioacoustique.md).
 
 ### Le code : le paquet `blanci/`
 
-La chaîne, telle qu'elle est dessinée sur le tableau de bord : du fichier audio au score par
-point d'écoute, puis la boucle d'annotation qui revient aux têtes.
+La chaîne, telle qu'elle est dessinée sur le tableau de bord : du fichier audio au score par point d'écoute, puis la boucle d'annotation qui revient aux têtes.
 
 ```
 Inventaire ─> Contrôle qualité ─> Traitement du signal* ─> Encodage
@@ -79,26 +70,17 @@ Réentraînement <─ Poste d'annotation <─ File de vérification
 | Poste d'annotation | écoute dans le navigateur, spectrogramme zoomable, chant délimité à la souris | `annotation/app.py` | `annotate`, `label`, `clips-export`, `clips-import` |
 | Réentraînement | apprend une nouvelle tête sur tous les labels, l'adopte seulement si elle n'est pas moins bonne sur le jeu gelé | `service.py` | `retrain` |
 
-Hors de la chaîne : `core/` (réglages, base de données, lecture de l'audio) et `exploration/`
-(fonctions et graphiques d'exploration).
+Hors de la chaîne : `core/` (réglages, base de données, lecture de l'audio) et `exploration/` (fonctions et graphiques d'exploration).
 
-La commande `blanci` (`cli.py`) donne accès à toutes les étapes. Quelques emplacements sont
-réservés pour plus tard : réglage fin des encodeurs, distillation, modèle maison, export ONNX.
+La commande `blanci` (`cli.py`) donne accès à toutes les étapes. Quelques emplacements sont réservés pour plus tard : réglage fin des encodeurs, distillation, modèle maison, export ONNX.
 
 ## Données
 
-**Le dépôt ne contient aucun enregistrement de l'ONF.** L'audio, la base de données, les
-embeddings et les modèles restent en local, sous `data/`. Seuls quelques extraits courts sont
-versionnés, pour les présentations et le tableau de bord.
+**Le dépôt ne contient aucun enregistrement de l'ONF.** L'audio, la base de données, les embeddings et les modèles restent en local, sous `data/`. Seuls quelques extraits courts sont versionnés, pour les présentations et le tableau de bord.
 
-Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), qui
-servent aux benchmarks. Elles sont rangées dans les branches `donnees-anuraset-*`, hors de
-`main`.
+Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), qui servent aux benchmarks. Elles sont rangées dans les branches `donnees-anuraset-*`, hors de `main`.
 
-Inventaire (base au 29/09/2026) : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an,
-66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé
-d'une semaine chacun, 29 513 enregistrements. Détail dans
-[documentation/commandes.md](documentation/commandes.md#inventaire-base-au-29092026).
+Inventaire (base au 29/09/2026) : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an, 66 779 enregistrements ; 2026 = cinq sites (CDR, Mataroni, Patawa Est et Ouest, RNRT), un relevé d'une semaine chacun, 29 513 enregistrements. Détail dans [documentation/commandes.md](documentation/commandes.md#inventaire-base-au-29092026).
 
 ## Installation et utilisation
 
@@ -109,15 +91,11 @@ uv sync --inexact             # installe tout
 uv run blanci --help
 ```
 
-Sous Windows, lancer une fois `setx UV_NO_SYNC 1` : sinon chaque `uv run` peut réinstaller torch
-au milieu d'un encodage.
+Sous Windows, lancer une fois `setx UV_NO_SYNC 1` : sinon chaque `uv run` peut réinstaller torch au milieu d'un encodage.
 
-Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`) :
-racine du disque externe, qui n'est jamais modifié. Pour écouter, ce n'est pas nécessaire :
-`blanci annotate` cherche lui-même les enregistrements sur les disques branchés.
+Les enregistrements se déclarent dans `config/local.yaml` (copie de `config/local.example.yaml`) : racine du disque externe, qui n'est jamais modifié. Pour écouter, ce n'est pas nécessaire : `blanci annotate` cherche lui-même les enregistrements sur les disques branchés.
 
-Toutes les commandes sont décrites dans **[documentation/commandes.md](documentation/commandes.md)**.
-Les principales :
+Toutes les commandes sont décrites dans **[documentation/commandes.md](documentation/commandes.md)**. Les principales :
 
 ```sh
 B="uv run blanci --config config/local.yaml"
@@ -130,8 +108,7 @@ $B export-labels                                           # annotations en CSV
 $B import-labels                                           # reprendre l'écoute sur une autre machine
 ```
 
-Les benchmarks AnuraSet ont leurs propres réglages et leur propre base, séparés des données de
-l'ONF :
+Les benchmarks AnuraSet ont leurs propres réglages et leur propre base, séparés des données de l'ONF :
 
 ```sh
 A="uv run blanci --config anuraset/anuraset.yaml"
@@ -147,15 +124,10 @@ $A anuraset prepare && $A anuraset profile
 | `03_traitement_du_signal` | régler la détection des notes, sans encodeur |
 | `04_attention_jetons` | voir sur le spectrogramme les zones que regarde la tête d'attention |
 
-Il faut les données de l'ONF pour les exécuter. Ils sont versionnés sans leurs sorties, qui
-contiendraient de l'audio.
+Il faut les données de l'ONF pour les exécuter. Ils sont versionnés sans leurs sorties, qui contiendraient de l'audio.
 
 ## Garanties méthodologiques
 
-- **Pas de fuite entre entraînement et test** : l'évaluation se fait par validation croisée
-  *par micro*. Couper au hasard entre fenêtres serait optimiste, car les fenêtres d'un même micro
-  partagent le même fond sonore.
-- **Fusion honnête** : les scores qu'on combine sont toujours calculés sur des données que la
-  tête n'a pas vues.
-- **Annotations jamais écrasées** : une correction ajoute un nouveau label, l'historique reste
-  intact.
+- **Pas de fuite entre entraînement et test** : l'évaluation se fait par validation croisée *par micro*. Couper au hasard entre fenêtres serait optimiste, car les fenêtres d'un même micro partagent le même fond sonore.
+- **Fusion honnête** : les scores qu'on combine sont toujours calculés sur des données que la tête n'a pas vues.
+- **Annotations jamais écrasées** : une correction ajoute un nouveau label, l'historique reste intact.
