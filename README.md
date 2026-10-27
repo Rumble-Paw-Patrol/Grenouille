@@ -4,22 +4,11 @@ Stage à l'Office National des Forêts de Guyane (15/09/2026 → 14/03/2027). *A
 
 Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
 
-## Où en est le projet (19/10/2026)
-
-| | État |
-|---|---|
-| Chaîne de traitement | écrite et testée : inventaire des enregistrements, embeddings, têtes de classification, module de traitement du signal (rythme des notes), fusion, évaluation, files d'écoute, poste d'annotation, réentraînement |
-| Choix de l'encodeur | pré-benchmark sur **AnuraSet** (jeu public d'anoures néotropicaux) : 24 encodeurs comparés, chacun avec la tête adaptée à sa sortie. Indicateur, pas verdict : le choix final se fera sur les données de l'ONF le 20/11/2026 |
-| Contrainte d'accès | l'encodeur livré doit être **libre d'accès** (poids publics, licence compatible avec l'usage par l'ONF). Meilleur libre à ce jour : `perch_v2` + sonde à prototypes (AP moyenne par site 0,81) |
-| Encodage du corpus ONF | Perch 2.0 terminé (61 h sur un processeur Intel Core i5), BirdNET 2.4 terminé, BirdNET 3.0 en cours |
-| Annotations | reprises de zéro, par plan de tirage stratifié (point d'écoute, heure, période), les points d'écoute étant répartis entre entraînement et test avant toute écoute. Poste d'annotation terminé ; 40 extraits écoutés au 16/10. Les labels seront vérifiés par des experts. **Aucun benchmark sur les données de l'ONF avant leur accord** |
-| Livrable | application Windows installable sans code : à venir (essai d'empaquetage prévu) |
-
-Prochaines étapes : annoter le lot 1 (424 extraits de 30 s), puis le jeu de test (250 enregistrements entiers) ; finir l'encodage BirdNET 3.0 ; essai d'empaquetage `.exe`.
-
 ## Pour les encadrants : par où commencer
 
 **[Tableau de bord](https://claude.ai/artifact/DLfBZopGjpLyJPBi9ViLi8)** (page claude.ai, accès sur invitation) : c'est le plus utile pour avoir une vision globale du projet et pour suivre mon avancement en temps réel, je mets à jour la page tous les jours avec mes travaux récents.
+
+**Ce [README.md]** : j'y détaille la structure du projet, à quoi sert chaque dossier etc etc
 
 ## Structure du dépôt
 
@@ -36,8 +25,6 @@ Grenouille/
     ├── prez/             présentations de suivi (.pptx)
     └── commandes.md, glossaire-bioacoustique.md, encodeurs-bacpipe.md
 ```
-
-Documents utiles pour entrer dans le projet : les [rapports de benchmark](documentation/benchmarks/LISEZMOI.md), la [bibliographie](documentation/biblio/biblio.md) et le [glossaire](documentation/glossaire-bioacoustique.md).
 
 ### Le code : le paquet `blanci/`
 
@@ -59,7 +46,7 @@ Réentraînement <─ Poste d'annotation <─ File de vérification
 | Étape | Ce qu'elle fait | Code | Commandes |
 |---|---|---|---|
 | Inventaire | range chaque enregistrement en base avec sa campagne, son site, son micro et son heure | `inputs/ingest.py` | `ingest`, `flag`, `status` |
-| Contrôle qualité | une passe sur tout le corpus avant l'encodage : écarte les fichiers cassés, silencieux, hors relevé, au son étouffé sur les deux pistes (micro dans un sac) | `inputs/qc.py` | `qc` |
+| Contrôle qualité | une passe sur tout le corpus avant l'encodage : écarte les fichiers cassés, silencieux, hors relevé, au son étouffé sur les deux pistes | `inputs/qc.py` | `qc` |
 | Traitement du signal* | filtre la bande 4,4–5,5 kHz, repère les fenêtres candidates et mesure le rythme du chant (une note de 0,09 s toutes les 1,2 à 1,9 s), sans apprentissage | `heads/signal_processing.py` | `onsets` |
 | Encodage | un encodeur pré-entraîné et gelé (Perch, BirdNET…) résume chaque fenêtre en un vecteur (embedding), et en jetons pour les têtes qui les lisent | `embedding/` | `embed`, `tokens` |
 | Têtes | une petite couche posée sur les embeddings donne un score par fenêtre : prototypes, régression logistique, sondes sur les jetons | `heads/` | `train`, `heads`, `heads-curve` |
@@ -114,17 +101,6 @@ Les benchmarks AnuraSet ont leurs propres réglages et leur propre base, sépar�
 A="uv run blanci --config anuraset/anuraset.yaml"
 $A anuraset prepare && $A anuraset profile
 ```
-
-## Notebooks
-
-| Notebook | Pour |
-|---|---|
-| `01_explorer_une_fenetre` | suivre un enregistrement à travers la chaîne : écoute, fenêtres, traitement du signal, embeddings |
-| `02_negatifs_apparies` | écouter les exemples négatifs choisis pour l'entraînement et mesurer combien contiennent en fait A. blanci |
-| `03_traitement_du_signal` | régler la détection des notes, sans encodeur |
-| `04_attention_jetons` | voir sur le spectrogramme les zones que regarde la tête d'attention |
-
-Il faut les données de l'ONF pour les exécuter. Ils sont versionnés sans leurs sorties, qui contiendraient de l'audio.
 
 ## Garanties méthodologiques
 
