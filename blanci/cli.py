@@ -310,9 +310,10 @@ def import_labels(
     """Recharge dans la base de cette machine les annotations exportées ailleurs : celles
     d'`export-labels` (poussées dans annotations/), et les CSV qu'un autre annotateur envoie
     par mail (« Benoît_reponses.json » du poste empaqueté, ou « Benoît_extraits_annotes.csv »…
-    du poste Streamlit ; les déposer dans annotations/). Le poste d'annotation reprend alors là où l'écoute s'était arrêtée et
-    montre les intervalles de chacun. Un nom encore inconnu rejoint la liste des annotateurs
-    (`annotations/annotateurs.txt`). Sans doublon : on peut relancer après chaque `git pull`."""
+    du poste Streamlit ; les déposer dans annotations/). Le poste d'annotation reprend alors là
+    où l'écoute s'était arrêtée et montre les intervalles de chacun.
+    Un nom encore inconnu rejoint la liste des annotateurs (`annotations/annotateurs.txt`).
+    Sans doublon : on peut relancer après chaque `git pull`."""
     cfg = _cfg(ctx)
     folder = dossier or project_path("annotations")
     report = import_annotations(connect(config_path(cfg, "db")), folder)
