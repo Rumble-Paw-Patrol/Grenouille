@@ -47,7 +47,7 @@ README = """Paquet d'écoute « {name} », envoyé par {author}
    spectrogramme. Pour chaque extrait :
    - d'accord : « Reprendre les intervalles de {author} », puis « Envoyer l'extrait » ;
    - sinon, tracer ses propres intervalles (clic gauche + glisser), changer l'étiquette
-     (touches 1 à 4), en ajouter une (à gauche, « Étiquettes ajoutées ») ;
+     (touches 1 à 4), en ajouter une (bouton +, au-dessus du spectrogramme) ;
    - un avis, un doute : le champ « Commentaire » ;
    - « Envoyer l'extrait » enregistre et passe au suivant.
 4. Au premier envoi, Chrome et Edge demandent le dossier où écrire vos réponses : choisir

@@ -74,8 +74,21 @@
 <aside>
   <div>
     <h1>🐸 Poste d'annotation</h1>
-    <div class="muted" id="about"></div>
   </div>
+  <details>
+    <summary>Mode d'emploi : souris et clavier</summary>
+    <table class="help">
+      <tr><td>Écouter, mettre en pause</td><td><b>Espace</b>, ou les lecteurs sous le
+        spectrogramme</td></tr>
+      <tr><td>Tracer un intervalle</td><td><b>Clic gauche + glisser</b></td></tr>
+      <tr><td>Ajuster un intervalle</td><td><b>Tirer son bord</b></td></tr>
+      <tr><td>Choisir l'étiquette</td><td>Touches <b>1</b> à <b>4</b>, ou clic sur une
+        étiquette en haut</td></tr>
+      <tr><td>Supprimer un intervalle</td><td>Le sélectionner, puis <b>Suppr</b></td></tr>
+      <tr><td>Zoomer</td><td><b>Molette</b> ; double-clic : vue de base</td></tr>
+      <tr><td>Se déplacer</td><td><b>Clic droit + glisser</b>, ou flèches ← →</td></tr>
+    </table>
+  </details>
   <section>
     <h3>Annotateur</h3>
     <select id="who"></select>
@@ -92,15 +105,6 @@
     <div id="masks"></div>
   </section>
   <section>
-    <h3>Étiquettes ajoutées</h3>
-    <div id="labels" class="row"></div>
-    <div class="row" style="margin-top:6px">
-      <input type="text" id="newlabel" class="grow" placeholder="Nouvelle étiquette">
-      <input type="color" id="newcolor" value="#B08CF2">
-      <button id="addlabel">Ajouter</button>
-    </div>
-  </section>
-  <section>
     <h3>Vos réponses</h3>
     <div class="muted" id="savestate"></div>
     <div class="row" style="margin-top:6px">
@@ -108,20 +112,6 @@
       <button id="download">⬇ Télécharger mes réponses</button>
     </div>
   </section>
-  <details>
-    <summary>Mode d'emploi : souris et clavier</summary>
-    <table class="help">
-      <tr><td>Écouter, mettre en pause</td><td><b>Espace</b>, ou les lecteurs sous le
-        spectrogramme</td></tr>
-      <tr><td>Tracer un intervalle</td><td><b>Clic gauche + glisser</b></td></tr>
-      <tr><td>Ajuster un intervalle</td><td><b>Tirer son bord</b></td></tr>
-      <tr><td>Choisir l'étiquette</td><td>Touches <b>1</b> à <b>4</b>, ou clic sur une
-        étiquette en haut</td></tr>
-      <tr><td>Supprimer un intervalle</td><td>Le sélectionner, puis <b>Suppr</b></td></tr>
-      <tr><td>Zoomer</td><td><b>Molette</b> ; double-clic : vue de base</td></tr>
-      <tr><td>Se déplacer</td><td><b>Clic droit + glisser</b>, ou flèches ← →</td></tr>
-    </table>
-  </details>
 </aside>
 <main>
   <div id="intro"></div>
@@ -179,8 +169,6 @@ const doneCount = () => P.items.filter(heard).length;
 
 // --- Panneau de gauche -------------------------------------------------------------------
 function sidebar() {
-  $("about").innerHTML = `Paquet « ${esc(P.nom)} » envoyé par ${esc(P.de)}.` +
-    (P.message ? `<br>${esc(P.message)}` : "");
   const who = $("who");
   who.innerHTML = `<option value="">Qui annote ?</option>` +
     names().map(n => `<option${sameName(n, me) ? " selected" : ""}>${esc(n)}</option>`).join("") +
@@ -195,10 +183,6 @@ function sidebar() {
     others().map(n => `<label class="check"><input type="checkbox" data-who="${esc(n)}"` +
       `${hidden.has(n) ? " checked" : ""}${everyone ? " disabled" : ""}> ${esc(n)}</label>`)
       .join("");
-  $("labels").innerHTML = Object.entries(custom).map(([code, v]) =>
-    `<span class="chip"><span style="color:${v.color}">●</span>${esc(v.name)}` +
-    `<button data-rm="${code}" title="Retirer de la liste">✕</button></span>`).join("") ||
-    `<span class="muted">Aucune (A. blanci, plusieurs, ?, faux ami sont toujours là).</span>`;
   saveState();
 }
 function saveState() {
@@ -234,21 +218,6 @@ $("masks").addEventListener("change", e => {
   put("masques", [...hidden]); put("tout-masquer", everyone);
   sidebar(); render();
 });
-$("addlabel").addEventListener("click", () => {
-  const name = $("newlabel").value.trim();
-  const code = "custom_" + name.normalize("NFKD").replace(/[̀-ͯ]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-  if (!name || code === "custom_") return;
-  custom[code] = {name, color: $("newcolor").value.toUpperCase()};
-  put("etiquettes", custom); $("newlabel").value = "";
-  sidebar(); render(true);
-});
-$("labels").addEventListener("click", e => {
-  const code = e.target.dataset.rm;
-  if (!code) return;
-  delete custom[code]; put("etiquettes", custom); sidebar(); render(true);
-});
-
 // --- Extrait ouvert ----------------------------------------------------------------------
 function firstUnheard(from) {
   for (let i = from + 1; i < P.items.length; i++) if (!heard(P.items[i])) return i;
@@ -353,6 +322,14 @@ async function render() {
   $("viewer").contentWindow.postMessage(
     {type: "streamlit:render", args, theme: {base: dark ? "dark" : "light"}}, "*");
 }
+let lastNonce = null;
+function addCustom(name, color) {
+  const code = "custom_" + name.normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!name || code === "custom_") return;
+  custom[code] = {name, color: color.toUpperCase()};
+  put("etiquettes", custom); render();
+}
 window.addEventListener("message", e => {
   const d = e.data;
   if (!d || !d.isStreamlitMessage) return;
@@ -360,6 +337,10 @@ window.addEventListener("message", e => {
   else if (d.type === "streamlit:setFrameHeight") $("viewer").style.height = `${d.height}px`;
   else if (d.type === "streamlit:setComponentValue") {
     const v = d.value;
+    if (v && v.add_label && v.add_label.nonce !== lastNonce) {  // « + » dans la barre du visualiseur
+      lastNonce = v.add_label.nonce;
+      addCustom(v.add_label.name, v.add_label.color);
+    }
     if (v && v.key === item().key && v.ivkey === ivkey()) current = v.intervals;
   }
 });

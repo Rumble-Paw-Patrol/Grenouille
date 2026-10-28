@@ -238,6 +238,7 @@ const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
 let raw = [], decoding = [];  // fichiers chargés, décodages lancés (`decode`)
 let view = null, intervals = [], selected = -1, vmax = [], loading = 0, newLabel = null;
+let otherSel = null;  // intervalle d'un autre annotateur mis en relief : "k:j"
 let newQuality = null;  // qualité des prochains intervalles (null : non dite)
 let spec = document.createElement("canvas"), specKey = "", specView = null;
 const specCache = new Map();  // clé → toile : dernières vues calculées (et celle préparée)
@@ -529,8 +530,8 @@ function render(args) {
   if (S.band === undefined) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
   }
-  if (S.contrast === undefined) S.contrast = 0;
-  if (![12, 24, 48, 96, "fft"].includes(S.slope)) S.slope = 24;
+  if (S.contrast === undefined) S.contrast = 4;
+  if (![12, 24, 48, 96, "fft"].includes(S.slope)) S.slope = "fft";
   $("ivbar").style.display = D.interval_mode ? "" : "none";
   $("qbar").style.display = D.interval_mode ? "" : "none";
   if (newLabel === null) {
@@ -568,7 +569,8 @@ function render(args) {
     view = {t0: D.t0, t1: D.t1, f0: 0, f1: D.fview};
     intervals = (D.intervals || [])
       .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
-    selected = -1; vmax = []; specKey = ""; specView = null; settling = false; buffers = [];
+    selected = -1; otherSel = null; vmax = []; specKey = "";
+    specView = null; settling = false; buffers = [];
     if (wide) clearTimeout(wide.timer);
     wide = null;
     load();
@@ -579,6 +581,7 @@ function render(args) {
         .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
       selected = -1;
     }
+    if (othersChanged) otherSel = null;
     if (ivChanged || othersChanged) list();
     if (nextChanged) prepareNext();
   }
@@ -937,12 +940,16 @@ function draw() {
       ctx.fillStyle = "#FFE08A"; ctx.fillRect(x0, M.t + PH() - 3, x1 - x0, 3);
     }
   });
-  // Les autres annotateurs, sous les siens : bords en tirets, une bande nommée chacun en bas.
+  // Les autres annotateurs, sous les siens : comme les siens (voile, barre haute épaisse, bords
+  // latéraux), mais en tirets ; une bande nommée chacun en bas ; un clic en met un en relief.
   (D.others || []).forEach((o, k) => {
     const y = M.t + PH() - 3 - 13 * (k + 1);
-    o.intervals.forEach(([t0, t1, l]) => {
-      const x0 = xOf(t0), x1 = xOf(t1), c = rgb(l);
-      ctx.setLineDash([4, 3]); ctx.strokeStyle = `rgba(${c}, 0.8)`; ctx.lineWidth = 1.2;
+    o.intervals.forEach(([t0, t1, l], j) => {
+      const x0 = xOf(t0), x1 = xOf(t1), c = rgb(l), on = otherSel === `${k}:${j}`;
+      ctx.fillStyle = `rgba(${c}, ${on ? 0.32 : 0.20})`; ctx.fillRect(x0, M.t, x1 - x0, PH());
+      ctx.setLineDash([8, 5]); ctx.strokeStyle = `rgba(${c}, 0.95)`; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(x0, M.t + 2.5); ctx.lineTo(x1, M.t + 2.5); ctx.stroke();
+      ctx.setLineDash([6, 4]); ctx.strokeStyle = `rgb(${c})`; ctx.lineWidth = on ? 3 : 1.5;
       ctx.beginPath(); ctx.moveTo(x0, M.t); ctx.lineTo(x0, M.t + PH());
       ctx.moveTo(x1, M.t); ctx.lineTo(x1, M.t + PH()); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = `rgba(${c}, 0.8)`; ctx.fillRect(x0, y, x1 - x0, 11);
@@ -1044,7 +1051,7 @@ function list() {
     x.textContent = "×"; x.title = "Effacer";
     x.onclick = ev => { ev.stopPropagation(); remove(i); };
     chip.onclick = () => {
-      selected = i;
+      selected = i; otherSel = null;
       const span = view.t1 - view.t0;
       if (iv.t1 < view.t0 || iv.t0 > view.t1) {
         view.t0 = (iv.t0 + iv.t1) / 2 - span / 2; view.t1 = view.t0 + span; clampView();
@@ -1061,12 +1068,12 @@ function list() {
 function others() {
   const box = $("others");
   box.innerHTML = "";
-  (D.others || []).forEach(o => {
+  (D.others || []).forEach((o, k) => {
     const row = document.createElement("div"), who = document.createElement("span");
     who.className = "who";
     who.textContent = o.intervals.length ? o.who : `${o.who} : aucun intervalle`;
     row.appendChild(who);
-    o.intervals.forEach(([t0, t1, l, q]) => {
+    o.intervals.forEach(([t0, t1, l, q], j) => {
       const chip = document.createElement("span");
       chip.className = "chip ro";
       chip.style.background = `rgba(${rgb(l)}, 0.10)`; chip.style.borderColor = `rgb(${rgb(l)})`;
@@ -1077,6 +1084,7 @@ function others() {
         b.className = "q"; b.dataset.q = q; b.textContent = q; chip.append(" · ", b);
       }
       chip.onclick = () => {
+        selected = -1; otherSel = `${k}:${j}`;
         const span = view.t1 - view.t0;
         if (t1 < view.t0 || t0 > view.t1) {
           view.t0 = (t0 + t1) / 2 - span / 2; view.t1 = view.t0 + span; clampView();
@@ -1100,6 +1108,13 @@ function hit(x) {  // [indice, bord ("t0", "t1") ou null] de l'intervalle sous l
   }
   const t = tOf(x);
   return [intervals.findIndex(iv => t >= iv.t0 && t <= iv.t1), null];
+}
+function otherAt(t) {  // "k:j" de l'intervalle d'un autre annotateur sous t, ou null
+  let found = null;
+  (D.others || []).forEach((o, k) => o.intervals.forEach(([t0, t1], j) => {
+    if (t >= t0 && t <= t1) found = `${k}:${j}`;
+  }));
+  return found;
 }
 function bandLine(y) {  // 0 ou 1 : pointillé de la bande sous le curseur, sinon -1
   return S.band.findIndex(f => Math.abs(yOf(f) - y) < 5);
@@ -1175,7 +1190,11 @@ window.addEventListener("mouseup", e => {
   if (!d.moved) {
     if (d.right) return;  // clic droit sans glisser : rien
     // Sélection par un clic seulement : un clic sur une étiquette change alors cet intervalle.
-    if (D.interval_mode) { selected = d.i; list(); }
+    if (D.interval_mode) {
+      selected = d.i;
+      otherSel = d.i >= 0 ? null : otherAt(d.t);
+      list();
+    }
     const p = players[active];  // la lecture reprendra de cet instant
     if (p && d.t >= D.t0 && d.t <= D.t1) p.currentTime = Math.max(0, d.t - D.audios[active].start);
     draw();
