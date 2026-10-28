@@ -48,6 +48,7 @@ import math
 import os
 import re
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -733,14 +734,52 @@ def _send_prefix(annotator: str) -> str:
     return re.sub(r"[^\w-]+", "_", annotator).strip("_") + "_"
 
 
-def _send_copy(con, annotator: str) -> None:
-    """Réécrit les CSV d'`annotator` dans `SEND_FOLDER` (`export_annotations`). Un fichier
-    ouvert dans Excel ne s'écrit pas : l'annotation est enregistrée quand même, la copie
-    attend l'envoi suivant."""
+@st.cache_resource
+def _exporter() -> tuple[ThreadPoolExecutor, threading.Lock, set, dict]:
+    """Un fil d'écriture des copies à envoyer, les annotateurs dont la copie attend son tour,
+    et la dernière erreur de chacun (à montrer au clic suivant)."""
+    return (
+        ThreadPoolExecutor(max_workers=1, thread_name_prefix="export"),
+        threading.Lock(),
+        set(),
+        {},
+    )
+
+
+def _export_job(db: str, annotator: str) -> None:
+    """Copie d'`annotator`, avec sa propre connexion (une connexion SQLite ne se partage pas
+    entre fils). Elle relit la base au moment de tourner : elle couvre tous les envois faits
+    pendant qu'elle attendait."""
+    _, lock, queued, errors = _exporter()
+    with lock:
+        queued.discard(annotator)
+    con = connect(Path(db))
     try:
         export_annotations(con, [annotator], SEND_FOLDER, _send_prefix(annotator))
     except OSError as exc:
-        st.toast(f"Copie à envoyer non mise à jour ({exc}) : fermer le CSV ouvert.")
+        errors[annotator] = f"{exc} : fermer le CSV ouvert"
+    except Exception as exc:  # sans quoi le fil l'avalerait : on la montre au clic suivant
+        errors[annotator] = f"{type(exc).__name__} : {exc}"
+    else:
+        errors.pop(annotator, None)
+    finally:
+        con.close()
+
+
+def _send_copy(con, annotator: str) -> None:
+    """Réécrit les CSV d'`annotator` dans `SEND_FOLDER` (`export_annotations`), en arrière-plan :
+    l'extrait suivant s'affiche sans attendre. Une copie déjà en attente pour lui suffit. Un
+    fichier ouvert dans Excel ne s'écrit pas : l'annotation est enregistrée quand même, la copie
+    attend l'envoi suivant (on le signale au clic d'après)."""
+    pool, lock, queued, errors = _exporter()
+    if error := errors.pop(annotator, None):
+        st.toast(f"Copie à envoyer non mise à jour ({error}).")
+    db = con.execute("PRAGMA database_list").fetchone()[2]
+    with lock:
+        if annotator in queued:
+            return
+        queued.add(annotator)
+    pool.submit(_export_job, db, annotator)
 
 
 def _send_panel(annotator: str) -> None:
