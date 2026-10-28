@@ -67,6 +67,7 @@ from blanci.inputs.dataset import (
     local_minutes,
     pairing_options,
     reannotations,
+    recordings_info,
     recordings_table,
     training_set,
 )
@@ -818,7 +819,7 @@ def export_annotations(
     labels = labels.merge(who, on="label_id", how="left")
     labels = labels[labels["annotator"].fillna("").str.casefold().isin(mine)]
     labels = labels[labels["source"] != "import"].assign(annotator=names[0])
-    rec = recordings_table(con)[["recording_id", "path", "site", "mic_id", "start_utc"]]
+    rec = recordings_info(con, labels["recording_id"])
     windows = labels.merge(rec, on="recording_id", how="left")
     columns = [
         "window_id", "path", "site", "mic_id", "start_utc", "offset_s", "dur_s", "label",

@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -150,14 +150,12 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     fichier, le site, le micro et l'heure de chaque enregistrement. Un extrait par ligne
     (intervalles résumés dans `intervalles`), un intervalle par ligne ; `valable` faux pour
     ceux qu'une réécoute plus récente a remplacés."""
-    rec = pd.read_sql_query(
-        "SELECT recording_id, path, site, mic_id, start_utc FROM recordings", con
-    )
     spans = pd.read_sql_query(
         "SELECT span_id, recording_id, start_s, end_s, other_label, classes, quality, species, "
         "conditions, annotator, source, created_at FROM spans ORDER BY span_id",
         con,
     )
+    rec = recordings_info(con, spans["recording_id"])
     _, intervals = load_spans(con)
     valid = current_intervals(spans, intervals)
     intervals = intervals.merge(
@@ -170,14 +168,18 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     spans["comment"] = conditions.map(lambda c: c.get("comment"))
     spans["multiclass"] = conditions.map(lambda c: c.get("multiclass", True))
     spans["classes"] = spans["classes"].map(lambda c: ", ".join(json.loads(c)) if c else "")
-    summary = intervals.groupby("span_id").apply(
-        lambda g: "; ".join(
-            f"{a:.2f}-{b:.2f} {lab}" + (f" ({q})" if q else "")
-            for a, b, lab, q in zip(
-                g["start_s"], g["end_s"], g["label"], g["quality"].fillna(""), strict=True
-            )
-        ),
-        include_groups=False,
+    summary = (
+        pd.Series(dtype=object)
+        if intervals.empty
+        else intervals.groupby("span_id").apply(
+            lambda g: "; ".join(
+                f"{a:.2f}-{b:.2f} {lab}" + (f" ({q})" if q else "")
+                for a, b, lab, q in zip(
+                    g["start_s"], g["end_s"], g["label"], g["quality"].fillna(""), strict=True
+                )
+            ),
+            include_groups=False,
+        )
     )
     counts = intervals[intervals["label"] != "false_friend"].groupby("span_id").size()
     spans["n_blanci"] = spans["span_id"].map(counts).fillna(0).astype(int)
@@ -366,6 +368,18 @@ def interval_labels(
                 continue
             rows.append((wid, rid, off, label, y, quality, info["comment"]))
     return pd.DataFrame(rows, columns=columns)
+
+
+def recordings_info(con: sqlite3.Connection, recording_ids: Iterable) -> pd.DataFrame:
+    """(recording_id, path, site, mic_id, start_utc) des seuls `recording_ids` : lire toute la
+    table `recordings` (près de 100 000 lignes) coûtait 0,7 s à chaque export du poste."""
+    ids = json.dumps(sorted(set(recording_ids)))
+    return pd.read_sql_query(
+        "SELECT recording_id, path, site, mic_id, start_utc FROM recordings "
+        "WHERE recording_id IN (SELECT value FROM json_each(?))",
+        con,
+        params=(ids,),
+    )
 
 
 def recordings_table(con: sqlite3.Connection) -> pd.DataFrame:
