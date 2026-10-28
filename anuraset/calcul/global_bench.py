@@ -1,6 +1,6 @@
 """Benchmark global (07) : un encodeur, une espèce, un processus.
 
-1. Transfert : un pli par site ; tête apprise sur les autres sites (tous les positifs, 20
+1. Transfert : un fold par site ; tête apprise sur les autres sites (tous les positifs, 20
    négatifs par positif et par site), puis **toutes** les fenêtres du site tenu à l'écart
    scorées. Scores gardés pour le niveau minute (max des fenêtres de chaque enregistrement),
    commun à tous les encodeurs quelle que soit leur fenêtre.
@@ -199,7 +199,7 @@ tokens = charger(encoder_id, meta["window_id"].tolist()) if token_heads else Non
 native = native_scores() if "--native" in sys.argv else None
 
 with threadpool_limits(limits=1, user_api="blas"):
-    # 1. Transfert, un pli par site : toutes les fenêtres du site tenu à l'écart.
+    # 1. Transfert, un fold par site : toutes les fenêtres du site tenu à l'écart.
     names = TRANSFER + token_heads + (["classifieur_origine"] if native is not None else [])
     transfer = np.full((len(names), len(y)), np.nan, dtype=np.float32)
     partial = out / f"{name}_{sp}_partiel.npz"  # reprise après un redémarrage de la machine
@@ -210,7 +210,7 @@ with threadpool_limits(limits=1, user_api="blas"):
             transfer, done = saved["scores"], set(saved["done"].tolist())
     for site in SITES:
         if site in done:
-            print(f"  pli {site} déjà fait (reprise)", flush=True)
+            print(f"  fold {site} déjà fait (reprise)", flush=True)
             continue
         test = np.flatnonzero(sites == site)
         train = rows[sites[rows] != site]
@@ -222,7 +222,7 @@ with threadpool_limits(limits=1, user_api="blas"):
             print(f"  {site} : apprentissage plafonné à {len(train)} fenêtres", flush=True)
         for i, spec in enumerate(TRANSFER):
             transfer[i, test] = score(spec, train, test)
-        for j, spec in enumerate(token_heads):  # sans régularisation, C par plis internes
+        for j, spec in enumerate(token_heads):  # sans régularisation, C par folds internes
             method, inputs = _inputs(spec, X_all, tokens)
             transfer[len(TRANSFER) + j, test] = fit_and_score(
                 method,
@@ -237,7 +237,7 @@ with threadpool_limits(limits=1, user_api="blas"):
             )
         done.add(site)
         np.savez(partial, heads=np.array(names), scores=transfer, done=np.array(sorted(done)))
-        print(f"  pli {site} {time.time() - t0:.0f} s", flush=True)
+        print(f"  fold {site} {time.time() - t0:.0f} s", flush=True)
     if native is not None:
         transfer[-1] = native
     np.savez_compressed(

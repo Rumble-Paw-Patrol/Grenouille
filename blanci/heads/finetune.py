@@ -16,7 +16,7 @@ têtes, fusion, benchmark complet ; rien d'autre à écrire.
 Contrainte d'évaluation, à ne pas contourner : un encodeur adapté sur tous les labels ne peut
 pas être jugé sur ces mêmes labels (fuite : la validation croisée des têtes paraîtrait
 excellente). Deux voies honnêtes :
-- adapter **pli par pli** (`finetune.per_fold`), un encodeur par pli des plis communs, et
+- adapter **fold par fold** (`finetune.per_fold`), un encodeur par fold des folds communs, et
   encoder chaque micro testé avec l'encodeur qui ne l'a pas vu ;
 - ou ne juger que sur ce qui n'a jamais servi : jeu gelé, nouveaux sites (Trésor, Kaw).
 
@@ -56,7 +56,7 @@ def finetune_encoder(
     method: str = "lora",
     fold: int | None = None,
 ):
-    """Adapte `encoder` sur les labels (hors micros du pli `fold` s'il est donné) et rend le
+    """Adapte `encoder` sur les labels (hors micros du fold `fold` s'il est donné) et rend le
     dossier du paquet ONNX de l'encodeur adapté. À écrire."""
     if method not in METHODS:
         raise ValueError(f"méthode inconnue : {method!r} (connues : {METHODS})")

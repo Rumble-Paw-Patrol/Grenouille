@@ -1,20 +1,20 @@
-"""Scores hors-pli enregistrés (DECISIONS n° 91) : le format commun de tous les benchmarks.
+"""Scores hors-fold enregistrés (DECISIONS n° 91) : le format commun de tous les benchmarks.
 
 Chaque benchmark (encodeur × tête, baseline, fusion, ensemble, détecteur) écrit ses
-scores hors-pli dans `paths.reports/oof/<source>.parquet`, une ligne par fenêtre évaluée :
+scores hors-fold dans `paths.reports/oof/<source>.parquet`, une ligne par fenêtre évaluée :
 
     source, kind, window_id, recording_id, offset_s, dur_s, point, site, y, presumed, score,
     fold, fingerprint
 
-- `fold` : pli où la fenêtre a été testée (plis communs à tous, `dataset.folds_for`) ;
+- `fold` : fold où la fenêtre a été testée (folds communs à tous, `dataset.folds_for`) ;
 - `fingerprint` : empreinte des labels, du jeu gelé et des réglages d'évaluation (négatifs
-  appariés, plis, graine) au moment du calcul. Deux sources d'empreintes différentes n'ont pas
+  appariés, folds, graine) au moment du calcul. Deux sources d'empreintes différentes n'ont pas
   vu les mêmes données : le benchmark complet le signale au lieu de les comparer en silence.
 
 Le niveau enregistrement est commun à toutes les sources : une fenêtre de 3 s et une de 5 s ne
 se comparent pas, deux scores maximaux par enregistrement si. Le stock sert aussi de matière
-première aux ensembles et à la fusion à plusieurs entrées : des scores déjà hors-pli, sur les
-mêmes plis.
+première aux ensembles et à la fusion à plusieurs entrées : des scores déjà hors-fold, sur les
+mêmes folds.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ KINDS = ("encoder_head", "baseline", "fusion", "ensemble", "detector")
 
 def labels_fingerprint(con: sqlite3.Connection, cfg: dict) -> str:
     """Empreinte courte de ce qui définit un benchmark : labels courants, jeux gelés, négatifs
-    appariés, plis, graine. Change dès qu'un label est ajouté."""
+    appariés, folds, graine. Change dès qu'un label est ajouté."""
     from blanci.inputs.dataset import current_labels, pairing_options
     from blanci.inputs.frozen import frozen_versions
 
@@ -136,7 +136,7 @@ def load_oof(cfg: dict, sources: list[str] | None = None) -> pd.DataFrame:
         paths = [source_path(cfg, s) for s in sources]
         missing = [s for s, p in zip(sources, paths, strict=True) if not p.exists()]
         if missing:
-            raise ValueError(f"sources sans scores hors-pli : {missing}")
+            raise ValueError(f"sources sans scores hors-fold : {missing}")
     else:
         paths = sorted(directory.glob("*.parquet")) if directory.exists() else []
     if not paths:
@@ -174,7 +174,7 @@ def list_sources(cfg: dict) -> pd.DataFrame:
 
 def recording_scores(table: pd.DataFrame) -> pd.DataFrame:
     """Score par (source, enregistrement) = maximum de ses fenêtres ; label = maximum ; point
-    (micro) et pli de l'enregistrement (-1 si la source n'en a pas)."""
+    (micro) et fold de l'enregistrement (-1 si la source n'en a pas)."""
     return (
         table.assign(fold=table["fold"].fillna(-1).astype(int))
         .groupby(["source", "recording_id"])

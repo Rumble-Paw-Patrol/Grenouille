@@ -3,7 +3,7 @@
 Le tuteur juge les modèles à 16 kHz (beats, naturebeats : rien au-dessus de 8 kHz) « très
 limite pour les paysages sonores ». La note d'A. blanci est à 4,4–5,5 kHz : l'objection ne
 vaut pour ce chant que si les fréquences hautes aident à le reconnaître. Mesure : AP(birdmae)
-sur l'audio natif contre AP(birdmae) sur l'audio filtré à 8 kHz, mêmes plis. Si le contrôle
+sur l'audio natif contre AP(birdmae) sur l'audio filtré à 8 kHz, mêmes folds. Si le contrôle
 égale birdmae natif, la f_e de 16 kHz n'est pas un défaut ici.
 
 Le filtre est appliqué à la f_e d'origine, avant le rééchantillonnage de l'encodeur.

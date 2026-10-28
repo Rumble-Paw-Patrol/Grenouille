@@ -1,5 +1,5 @@
 """Amorçage d'un site peu annoté : AP et rappel à précision 0,5 de chaque site tenu à l'écart,
-le seuil choisi sur les scores hors-pli des **autres** sites (ce qu'on aurait en arrivant sur un
+le seuil choisi sur les scores hors-fold des **autres** sites (ce qu'on aurait en arrivant sur un
 site nouveau) ou sur le site lui-même (oracle). Refait le tirage de `run_anuraset_heads` (même
 graine, une espèce par processus : mêmes fenêtres que la campagne ; l'AP par site doit
 retomber sur `donnees/sites.csv`). Écrit `donnees/amorcage.csv`. Lent (têtes réapprises) :

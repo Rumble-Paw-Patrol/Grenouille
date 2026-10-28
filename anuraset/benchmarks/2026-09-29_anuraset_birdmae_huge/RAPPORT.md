@@ -30,7 +30,7 @@ Identiques au benchmark 01 : 1 599 enregistrements AnuraSet (1 206 aux chants da
 | Étape | Choix | Pourquoi |
 |---|---|---|
 | Encodeur | `birdmae_huge` : Bird-MAE-Huge via bacpipe 1.3.5, CPU, 1 280 dimensions, moyenne des jetons de la dernière couche | le calcul de `birdmae` (extracteur de Base, réseau Huge), sous un nom qui le distingue de `birdmae_base` ; embeddings vérifiés identiques à ceux de `birdmae` (écart max 0) |
-| Tout le reste | comme le benchmark 01 : labels (n° 138), 20 négatifs par positif et par site, un pli par site, C et σ par plis internes, `glmm_grid: [0.3, 1, 3]` | seul l'encodeur change |
+| Tout le reste | comme le benchmark 01 : labels (n° 138), 20 négatifs par positif et par site, un fold par site, C et σ par folds internes, `glmm_grid: [0.3, 1, 3]` | seul l'encodeur change |
 | Têtes | les 14 de `anuraset.CAMPAIGN_HEADS` | même liste que le benchmark 01 |
 | Comparaisons | écart apparié à la logistique, bootstrap par enregistrement, Holm sur 65 comparaisons (13 têtes × 5 espèces) | idem (n° 139) ; optimiste |
 | Exécution | une espèce par processus | chaque espèce part de la graine |

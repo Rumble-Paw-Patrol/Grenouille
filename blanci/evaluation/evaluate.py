@@ -1,4 +1,4 @@
-"""Évaluation (§6) : plis groupés, AP, rappel à précision fixée, bootstrap, Wilson.
+"""Évaluation (§6) : folds groupés, AP, rappel à précision fixée, bootstrap, Wilson.
 
 Règle (§13.7) : toute évaluation passe par ici avec des groupes explicites ; un découpage
 aléatoire est une erreur. Métriques rejetées : exactitude, F1 au seuil 0,5, kappa.
@@ -25,12 +25,12 @@ def grouped_folds(
     seed: int = 0,
     assignment: dict[str, int] | None = None,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Plis groupés (par micro ou par site) et stratifiés ; jamais deux plis pour un même groupe.
+    """Folds groupés (par micro ou par site) et stratifiés ; jamais deux folds pour un même groupe.
 
-    Avec `assignment` ({groupe: pli}, `fold_assignment`), les plis sont ceux-là, quels que soient
-    les exemples : tous les modèles d'un benchmark sont alors jugés sur exactement les mêmes plis
+    Avec `assignment` ({groupe: fold}, `fold_assignment`), les folds sont ceux-là, quels que soient
+    les exemples : tous les modèles d'un benchmark sont alors jugés sur exactement les mêmes folds
     (DECISIONS n° 91). Sans, ils dépendent des exemples (StratifiedGroupKFold). `n_splits`
-    = "lomo" : un pli par micro positif (R77, `lomo_assignment`).
+    = "lomo" : un fold par micro positif (R77, `lomo_assignment`).
     """
     if groups is None or len(groups) != len(y):
         raise ValueError("groupes explicites obligatoires, un par exemple")
@@ -44,7 +44,7 @@ def grouped_folds(
         fold_of = np.array([assignment.get(str(g), -1) for g in groups])
         if (fold_of < 0).any():
             missing = sorted({str(g) for g in groups[fold_of < 0]})
-            raise ValueError(f"groupes sans pli dans l'affectation : {missing[:5]}")
+            raise ValueError(f"groupes sans fold dans l'affectation : {missing[:5]}")
         return [
             (np.flatnonzero(fold_of != f), np.flatnonzero(fold_of == f))
             for f in sorted(set(fold_of.tolist()))
@@ -53,12 +53,12 @@ def grouped_folds(
     return list(cv.split(np.zeros(len(y)), y, groups))
 
 
-LOMO = "lomo"  # R77 : un pli par micro (leave-one-micro-out), `head.n_splits: lomo`
+LOMO = "lomo"  # R77 : un fold par micro (leave-one-micro-out), `head.n_splits: lomo`
 
 
 def lomo_assignment(groups: np.ndarray, y: np.ndarray, seed: int = 0) -> dict[str, int]:
-    """R77 : un pli par groupe (micro) qui a des positifs ; les groupes sans positif sont
-    répartis entre ces plis au hasard (graine fixe), à parts égales. Chaque micro positif est
+    """R77 : un fold par groupe (micro) qui a des positifs ; les groupes sans positif sont
+    répartis entre ces folds au hasard (graine fixe), à parts égales. Chaque micro positif est
     ainsi jugé seul, par un modèle appris sur tous les autres."""
     groups = np.asarray(groups).astype(str)
     y = np.asarray(y).astype(int)
@@ -76,11 +76,11 @@ def lomo_assignment(groups: np.ndarray, y: np.ndarray, seed: int = 0) -> dict[st
 def fold_assignment(
     groups: np.ndarray, has_positive: np.ndarray, n_splits: int | str = 5, seed: int = 0
 ) -> dict[str, int]:
-    """Pli de chaque groupe (micro), calculé une fois sur les **enregistrements** annotés :
+    """Fold de chaque groupe (micro), calculé une fois sur les **enregistrements** annotés :
     une ligne par enregistrement, `has_positive` = il contient A. blanci.
 
     Indépendant de la grille et des négatifs présumés de chaque encodeur : tous les modèles
-    partagent ces plis (DECISIONS n° 91). Stratifié sur les enregistrements positifs.
+    partagent ces folds (DECISIONS n° 91). Stratifié sur les enregistrements positifs.
     """
     groups = np.asarray(groups).astype(str)
     y = np.asarray(has_positive).astype(int)
@@ -92,7 +92,7 @@ def fold_assignment(
     k = min(n_splits, len(unique))
     cv = StratifiedGroupKFold(n_splits=k, shuffle=True, random_state=seed)
     out: dict[str, int] = {}
-    with warnings.catch_warnings():  # classe rare : moins de positifs que de plis
+    with warnings.catch_warnings():  # classe rare : moins de positifs que de folds
         warnings.simplefilter("ignore", UserWarning)
         for fold, (_, test) in enumerate(cv.split(np.zeros(len(y)), y, groups)):
             out.update(dict.fromkeys(np.unique(groups[test]).tolist(), fold))
@@ -107,14 +107,14 @@ def average_precision(y: np.ndarray, scores: np.ndarray) -> float:
 
 
 def fold_mean_ap(y: np.ndarray, scores: np.ndarray, folds: np.ndarray) -> tuple[float, int]:
-    """(AP moyenne des plis, nombre de plis comptés) : l'AP de chaque pli, ses scores entre eux,
-    puis la moyenne sur les plis qui ont les deux classes (DECISIONS n° 133, 135).
+    """(AP moyenne des folds, nombre de folds comptés) : l'AP de chaque fold, ses scores entre eux,
+    puis la moyenne sur les folds qui ont les deux classes (DECISIONS n° 133, 135).
 
-    L'AP « poolée » met bout à bout les scores de modèles différents, un par pli : si les plis
+    L'AP « poolée » met bout à bout les scores de modèles différents, un par fold : si les folds
     retiennent des réglages différents (C, σ, époques), leurs scores ne sont pas sur la même
-    échelle et le classement commun se dégrade, sans que le classement dans chaque pli change.
-    L'AP par pli ne compare jamais deux modèles : elle ne voit que le classement. Plus bruitée
-    (chaque pli a peu de positifs), elle se lit à côté de l'AP poolée, pas à sa place."""
+    échelle et le classement commun se dégrade, sans que le classement dans chaque fold change.
+    L'AP par fold ne compare jamais deux modèles : elle ne voit que le classement. Plus bruitée
+    (chaque fold a peu de positifs), elle se lit à côté de l'AP poolée, pas à sa place."""
     y, scores, folds = np.asarray(y).astype(int), np.asarray(scores), np.asarray(folds)
     values = [
         average_precision(y[folds == f], scores[folds == f]) for f in np.unique(folds[folds >= 0])
@@ -147,13 +147,13 @@ def recall_at_precision(
 def cross_fitted_recall(
     y: np.ndarray, scores: np.ndarray, folds: np.ndarray, min_precision: float
 ) -> dict[str, Any]:
-    """Rappel à précision plancher, le seuil de chaque pli choisi sur les scores hors-pli des
-    **autres** plis puis appliqué à ce pli (R74, DECISIONS n° 140). Le seuil choisi et jugé sur
+    """Rappel à précision plancher, le seuil de chaque fold choisi sur les scores hors-fold des
+    **autres** folds puis appliqué à ce fold (R74, DECISIONS n° 140). Le seuil choisi et jugé sur
     les mêmes scores (`recall_at_precision`) est un oracle : il connaît les labels qu'il
-    mesure, son rappel est optimiste. Les fenêtres sans pli (`folds` < 0) sont ignorées.
+    mesure, son rappel est optimiste. Les fenêtres sans fold (`folds` < 0) sont ignorées.
 
     Renvoie `recall`, `k` (positifs retrouvés), `n_pos`, `precision` obtenue, `thresholds`
-    ({pli: seuil}) et `decided` (chaque exemple au-dessus du seuil de son pli)."""
+    ({fold: seuil}) et `decided` (chaque exemple au-dessus du seuil de son fold)."""
     y, scores = np.asarray(y).astype(int), np.asarray(scores, dtype=float)
     folds = np.asarray(folds)
     known = folds >= 0
@@ -337,20 +337,20 @@ def evaluate(
     folds: np.ndarray | None = None,
     clusters: np.ndarray | None = None,
 ) -> dict[str, Any]:
-    """Métriques sur des scores hors-pli. `groups` = identifiant d'enregistrement de chaque
+    """Métriques sur des scores hors-fold. `groups` = identifiant d'enregistrement de chaque
     fenêtre : unité d'agrégation au niveau « recording », et unité du bootstrap sans
     `clusters`. `clusters` (micro de chaque fenêtre) : unité du bootstrap ; les enregistrements
     d'un même micro partagent fond et faune, les tirer un à un rend l'intervalle trop étroit
-    (DECISIONS n° 139). `folds` (pli de test de chaque fenêtre, `regularization.fold_ids`) :
-    ajoute `ap_fold_mean`, l'AP moyenne par pli (`fold_mean_ap`), et `n_folds_ap` ; le rappel
-    à précision plancher est alors jugé avec un seuil choisi sur les autres plis
+    (DECISIONS n° 139). `folds` (fold de test de chaque fenêtre, `regularization.fold_ids`) :
+    ajoute `ap_fold_mean`, l'AP moyenne par fold (`fold_mean_ap`), et `n_folds_ap` ; le rappel
+    à précision plancher est alors jugé avec un seuil choisi sur les autres folds
     (`cross_fitted_recall`, n° 140), l'oracle restant en `recall@p…_oracle`. `threshold@p…` :
     le seuil choisi sur tous les scores, celui qu'on déploierait.
 
     Valeurs flottantes, sauf `level` (str) et `n_pos` / `n_neg` / `n_folds_ap` (int).
     """
     scores, labels, groups = np.asarray(scores), np.asarray(labels), np.asarray(groups)
-    if folds is not None:  # un enregistrement est d'un seul micro, donc d'un seul pli
+    if folds is not None:  # un enregistrement est d'un seul micro, donc d'un seul fold
         fold_of = pd.Series(np.asarray(folds), index=groups).groupby(level=0).first()
     units = groups if clusters is None else np.asarray(clusters)
     if level == "recording":

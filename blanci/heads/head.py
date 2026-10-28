@@ -33,7 +33,7 @@ from blanci.heads.signal_processing import GATED_SCORE
 
 @dataclass(frozen=True)
 class OOFScores:
-    """Scores hors-pli : chaque score vient d'un modèle entraîné sans son micro (§3).
+    """Scores hors-fold : chaque score vient d'un modèle entraîné sans son micro (§3).
 
     Seul type accepté en entrée de la fusion (§13.7).
     """
@@ -41,7 +41,7 @@ class OOFScores:
     values: np.ndarray
     folds: tuple[tuple[np.ndarray, np.ndarray], ...]
     method: str
-    raw: np.ndarray | None = None  # avant la recalibration par pli (`fold_calibration`)
+    raw: np.ndarray | None = None  # avant la recalibration par fold (`fold_calibration`)
 
 
 # --- Prototype différentiel et kNN ----------------------------------------------------------
@@ -468,7 +468,7 @@ def select_C(
     with_se: bool = False,
     **fit_kw,
 ) -> tuple:
-    """C maximisant l'AP moyenne en validation groupée (plis internes,
+    """C maximisant l'AP moyenne en validation groupée (folds internes,
     `regularization.grouped_search`).
 
     `fitter` : fit_logistic (défaut) ou fit_logistic_to_prototype (R30) ; `sample_weight` et
@@ -781,7 +781,7 @@ def oof_scores(
     calibration: str | None = None,
     calibration_splits: int = 3,
 ) -> OOFScores:
-    """Scores hors-pli sur plis groupés (par micro).
+    """Scores hors-fold sur folds groupés (par micro).
 
     Méthodes (`METHODS`) : exemplar_medoid (un seul exemple), exemplar (plus proche positif),
     knn, leurs variantes à k voisins (R39 : knn:k=5, exemplar:k=3, knn:k=5:w),
@@ -790,10 +790,10 @@ def oof_scores(
     (fenêtres, jetons, dim) ou (fenêtres, temps, fréquence, dim), `blanci/heads/attentive.py`),
     cascade (X = embeddings, `tokens` = jetons des mêmes fenêtres).
 
-    Pour `logistic`, le C est choisi dans chaque pli sur les seules données d'entraînement.
+    Pour `logistic`, le C est choisi dans chaque fold sur les seules données d'entraînement.
     `gated` (seuillage en amont) : fenêtres arrêtées, jamais apprises, score `GATED_SCORE`.
-    `assignment` : plis communs à tous les modèles ({point: pli}, `dataset.folds_for`).
-    `calibration` = "platt" : scores de chaque pli recalibrés avant d'être mis bout à bout
+    `assignment` : folds communs à tous les modèles ({point: fold}, `dataset.folds_for`).
+    `calibration` = "platt" : scores de chaque fold recalibrés avant d'être mis bout à bout
     (`calibrated_fold_scores`, DECISIONS n° 135) ; `raw` garde les scores d'avant.
     """
     X, y, groups = np.asarray(X, dtype=np.float32), np.asarray(y).astype(int), np.asarray(groups)
@@ -824,12 +824,12 @@ def oof_scores(
 
 
 FOLD_CALIBRATIONS = ("platt",)
-# Têtes entraînées sans C mais dont l'échelle dépend de l'entraînement du pli (recalibrées).
+# Têtes entraînées sans C mais dont l'échelle dépend de l'entraînement du fold (recalibrées).
 TRAINED_METHODS = ("gated", "dann", "multiclass", "attentive")
 
 
 def calibration_options(cfg: dict) -> dict[str, Any]:
-    """Options de `oof_scores` et `fusion_model_oof` pour la recalibration par pli, d'après
+    """Options de `oof_scores` et `fusion_model_oof` pour la recalibration par fold, d'après
     `benchmark.fold_calibration` (none | platt) et `benchmark.calibration_splits` ; {} sans."""
     bench = cfg.get("benchmark") or {}
     method = bench.get("fold_calibration")
@@ -852,25 +852,25 @@ def calibrated_fold_scores(
 ) -> tuple[np.ndarray, np.ndarray]:
     """(scores recalibrés, scores bruts) des fenêtres `test` : remède (b) du n° 133.
 
-    Chaque pli choisit ses réglages (C, R26) sur son entraînement ; un C petit resserre les
+    Chaque fold choisit ses réglages (C, R26) sur son entraînement ; un C petit resserre les
     scores. Mis bout à bout, des scores d'échelles différentes faussent le classement commun.
-    Ici, le C du pli est choisi une fois ; des plis internes (par micro, `splits`) donnent,
-    **avec ce même C**, des scores hors-pli de l'entraînement : même échelle que le modèle du
-    pli, sans qu'il les ait vus. Une calibration de Platt à classes équilibrées apprise sur
-    eux (`regularization.fold_platt`) ramène les scores du pli testé sur une échelle commune :
-    la cote « A. blanci contre fond », indépendante de la part de positifs du pli. Dans un pli,
+    Ici, le C du fold est choisi une fois ; des folds internes (par micro, `splits`) donnent,
+    **avec ce même C**, des scores hors-fold de l'entraînement : même échelle que le modèle du
+    fold, sans qu'il les ait vus. Une calibration de Platt à classes équilibrées apprise sur
+    eux (`regularization.fold_platt`) ramène les scores du fold testé sur une échelle commune :
+    la cote « A. blanci contre fond », indépendante de la part de positifs du fold. Dans un fold,
     le classement ne change pas (a > 0) ; seule la mise bout à bout change.
 
     Les réglages sans C (époques R42, weight decay R40, σ de R37=glmm) sont re-choisis dans
-    chaque pli interne : approximation. Les têtes par similarité (prototypes, exemplar, knn,
-    LDA) ne choisissent rien pli par pli et gardent la même échelle d'un pli à l'autre : non
+    chaque fold interne : approximation. Les têtes par similarité (prototypes, exemplar, knn,
+    LDA) ne choisissent rien fold par fold et gardent la même échelle d'un fold à l'autre : non
     recalibrées (la recalibration n'y ajouterait que le bruit de son estimation, mesuré au
-    n° 135). Sans plis internes utilisables (moins de deux micros à positifs dans
+    n° 135). Sans folds internes utilisables (moins de deux micros à positifs dans
     l'entraînement), les scores restent tels quels."""
     from blanci.heads.regularization import fold_platt, usable_folds
 
     if calibration not in FOLD_CALIBRATIONS:
-        raise ValueError(f"recalibration par pli inconnue : {calibration!r} ({FOLD_CALIBRATIONS})")
+        raise ValueError(f"recalibration par fold inconnue : {calibration!r} ({FOLD_CALIBRATIONS})")
     if _fitter(method) is None and method not in TRAINED_METHODS:
         raw = fit_and_score(method, X, y, groups, train, test, **options)
         return raw, raw

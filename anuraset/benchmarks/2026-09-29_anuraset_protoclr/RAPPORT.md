@@ -32,7 +32,7 @@ Identiques au benchmark 01 (tableau §3 de `2026-09-28_anuraset_perch_v2/RAPPORT
 |---|---|---|
 | Encodeur | protoclr (bacpipe 1.3.5, torch CPU), 384 dimensions, 16 kHz | encodeur léger du §2 |
 | Fenêtres | 6 s jointives | fenêtre imposée par le modèle |
-| Amorçage | par site : AP du site, rappel **et précision obtenue** au seuil de précision 0,5 choisi sur les scores hors-pli des autres sites | ce que verrait un site neuf sans annotation (`donnees/amorcage.csv`) |
+| Amorçage | par site : AP du site, rappel **et précision obtenue** au seuil de précision 0,5 choisi sur les scores hors-fold des autres sites | ce que verrait un site neuf sans annotation (`donnees/amorcage.csv`) |
 
 ## 4. Résultats
 

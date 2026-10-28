@@ -51,7 +51,7 @@ anuraset:
   # Deux ou trois anoures à note brève en 3–6 kHz (§2) : à fixer après `anuraset profile`.
   species: []
   negatives_per_positive: 20
-  # anuraset heads (R78) : têtes comparées, un pli par site ([] = la liste `anuraset.HEADS`).
+  # anuraset heads (R78) : têtes comparées, un fold par site ([] = la liste `anuraset.HEADS`).
   heads: []
   max_call_s: 5.0                      # au-delà : chœur continu, compté à part
   profile_per_species: 30              # chants lus pour la fréquence dominante

@@ -52,11 +52,11 @@
 - `heads-curve` : performance selon le nombre d'annotations du site
 - `fusion-bench` : compare les fusions
 - `ensemble` : combine plusieurs modèles
-- `sources` : contenu du stock de scores hors-pli
+- `sources` : contenu du stock de scores hors-fold
 - `upstream-bench` : portes du traitement du signal en amont
 - `detector-bench` : détecteurs audio
 - `benchmark-all` : tout, sur les mêmes enregistrements
-- `evaluate` : évaluation par sites tenus à l'écart ou plis par micro
+- `evaluate` : évaluation par sites tenus à l'écart ou folds par micro
 - `activity` : courbes d'activité journalières et saisonnières
 
 ## AnuraSet (archivé)

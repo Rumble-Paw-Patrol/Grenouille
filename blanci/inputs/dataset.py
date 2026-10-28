@@ -672,7 +672,7 @@ def training_set(
     """Fenêtres étiquetées de la grille (+ négatifs appariés présumés si per_positive > 0).
 
     `grid` = métadonnées du stock d'embeddings (window_id, recording_id, offset_s), avec dur_s.
-    Renvoie aussi `row` (indice dans `grid`), `point` (groupe des plis) et `site`.
+    Renvoie aussi `row` (indice dans `grid`), `point` (groupe des folds) et `site`.
     `exclude_recordings` (le jeu gelé, §6) : ni leurs labels, ni leurs fenêtres comme
     négatifs appariés. `row` reste l'indice dans la grille complète.
     Colonne `suspect_fn` : négatif annoté encadré d'annotations positives à moins de
@@ -827,12 +827,12 @@ def benchmark_folds(
     seed: int = 0,
     exclude_recordings: set[str] | None = None,
 ) -> dict[str, int]:
-    """Pli de chaque point (micro), commun à tous les modèles (DECISIONS n° 91).
+    """Fold de chaque point (micro), commun à tous les modèles (DECISIONS n° 91).
 
     Calculé sur les enregistrements annotés, par labels de fenêtres ou par intervalles (hors
     jeu gelé `exclude_recordings`), jamais sur les fenêtres d'un encodeur : deux encodeurs,
     une baseline ou une fusion voient exactement les mêmes micros tenus à l'écart dans chaque
-    pli. Un enregistrement est positif s'il a un label positif ou un intervalle positif
+    fold. Un enregistrement est positif s'il a un label positif ou un intervalle positif
     valable (n° 182).
     """
     from blanci.evaluation.evaluate import fold_assignment
@@ -857,7 +857,7 @@ def benchmark_folds(
 
 
 def folds_for(con: sqlite3.Connection, cfg: dict) -> dict[str, int]:
-    """`benchmark_folds` avec les réglages de la config (plis, graine, jeu gelé exclu)."""
+    """`benchmark_folds` avec les réglages de la config (folds, graine, jeu gelé exclu)."""
     from blanci.inputs.frozen import frozen_recordings
 
     return benchmark_folds(

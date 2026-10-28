@@ -10,7 +10,7 @@
 - **R37 (biais par site, σ fixé ou GLMM)** est la seule régularisation qui gagne nettement, sur PITAZU (+0,05 d'AP poolée, meilleure sur ses deux sites tenus à l'écart). Ailleurs : neutre.
 - **R19 et R20 classent mieux à l'intérieur d'un site, mais cassent la comparaison entre sites** — là, et seulement là, où l'espèce occupe 26 à 41 % des fenêtres du site. A. blanci étant rare, ce mécanisme devrait peu peser sur nos données : à vérifier.
 - **Le seuil ne voyage pas** : choisi sur les autres sites, le rappel à précision 0,5 de PITAZU tombe à 0,01 (0,92 avec un seuil choisi sur place). Un nouveau site demandera son propre seuil.
-- La recalibration de chaque pli (n° 135) dégrade l'AP poolée : elle reste coupée.
+- La recalibration de chaque fold (n° 135) dégrade l'AP poolée : elle reste coupée.
 
 ## 1. Question
 
@@ -38,7 +38,7 @@ Parmi les têtes et régularisations programmées, lesquelles **généralisent �
 | Fenêtres | 5 s, jointives | moitié moins d'encodage (37 min) ; les chants coupés par une jonction gardent la fenêtre qui en porte la plus grande part (n° 138) |
 | Labels | positive = contient un chant entier de l'espèce (ou sa plus grande part) ; fichiers où l'espèce est signalée sans chant daté : écartés pour elle | pas de positifs cachés parmi les négatifs (n° 138) |
 | Négatifs | 20 par positif et par site, tirés au hasard | même ratio que le benchmark ONF |
-| Plis | un pli par site (leave-one-site-out) ; C (0,001 à 10) et σ du GLMM (0,3 ; 1 ; 3) choisis par plis internes, eux aussi par site | mesure la généralisation à un site jamais vu, pas à un micro voisin |
+| Folds | un fold par site (leave-one-site-out) ; C (0,001 à 10) et σ du GLMM (0,3 ; 1 ; 3) choisis par folds internes, eux aussi par site | mesure la généralisation à un site jamais vu, pas à un micro voisin |
 | Têtes | 14 (`anuraset.CAMPAIGN_HEADS`) : référence, similarité, fond du site (R19–R21, DANN), biais (R37), déséquilibre (R13, focal), ACP (R18), LDA | une question par groupe (n° 136) |
 | Métriques | AP poolée (tous les sites ensemble) **et** AP par site tenu à l'écart ; rappel à précision 0,5 au seuil choisi sur les autres sites | l'AP poolée juge aussi l'échelle commune des scores ; l'AP par site juge le classement seul (n° 133) |
 | Comparaisons | écart apparié à la logistique, bootstrap par enregistrement, correction de Holm sur 65 comparaisons | optimiste : avec 2 à 3 sites, on ne peut pas tirer les sites ; l'AP par site sert de contrôle (n° 139) |
@@ -71,7 +71,7 @@ Rappel à précision 0,5, seuil choisi sur les autres sites (entre parenthèses 
 2. **R19, R20.** Le centrage par site retranche la moyenne de toutes les fenêtres du site. Là où l'espèce est partout (DENMIN : 41 % des fenêtres d'INCT17 ; PITAZU : 34 % ; LEPLAT : 26 % d'INCT20955), cette moyenne contient le chant : tout le site perd une part de son signal, ses scores baissent d'un bloc, le classement entre sites se brise ; dans le site, le fond retiré aide. Là où l'espèce est rare (PHYCUV, 2 à 12 %), rien ne casse. Test direct : centrer sur les seuls enregistrements sans espèce.
 3. **R37 sur PITAZU.** Les deux sites ont des proportions de positifs sans commune mesure (34 % contre 0,7 %) ; le biais par site absorbe ce niveau pendant l'apprentissage, les poids restent sur le chant : meilleur sur les deux sites tenus à l'écart (0,84 contre 0,81 ; 0,24 contre 0,19).
 4. **Cas durs.** DENMIN à INCT20955 : 64 % de chants de faible qualité (35 % à INCT17) et 4 % de fenêtres positives, appris presque seulement sur INCT17 — des chants lointains qu'aucune tête n'a vus. PITAZU à INCT41 : 30 positives ; l'ACP (R18=64) y double l'AP (0,42 contre 0,19), sans doute en limitant ce que la tête apprend de propre à INCT17.
-5. **Seuil.** Les scores d'un site sont décalés d'un bloc par rapport à un autre (fond, proportion de chant) : un seuil appris ailleurs tombe à côté. C'est aussi pourquoi la recalibration par pli, apprise sur d'autres sites, dégrade l'AP poolée (annexe B).
+5. **Seuil.** Les scores d'un site sont décalés d'un bloc par rapport à un autre (fond, proportion de chant) : un seuil appris ailleurs tombe à côté. C'est aussi pourquoi la recalibration par fold, apprise sur d'autres sites, dégrade l'AP poolée (annexe B).
 
 ## 6. Ce qu'on en retient pour A. blanci
 
@@ -107,7 +107,7 @@ Positifs cachés écartés, chants coupés aux jonctions rattachés, 9 enregistr
 
 En moyenne sur les têtes : +0,04 (PITAZU), +0,01 ailleurs. Le haut du classement (famille logistique) et le bas (R19, R20, similarité) ne bougent pas ; au milieu, des têtes à quelques millièmes l'une de l'autre échangent leurs places. La « significativité » de R37 sur PITAZU, affirmée le 28/09 sans correction pour tests multiples, survit à Holm (bootstrap par enregistrement, donc à confirmer par l'AP site par site : c'est le cas, sur les deux sites).
 
-## Annexe B — Recalibration par pli (`fold_calibration: platt`)
+## Annexe B — Recalibration par fold (`fold_calibration: platt`)
 
 AP poolée brute → recalibrée :
 
@@ -117,7 +117,7 @@ AP poolée brute → recalibrée :
 | logistic+R37 | 0,91 → 0,72 | 0,79 → 0,77 | 0,89 → 0,87 | 0,80 → 0,75 | 0,96 → 0,96 |
 | logistic+R19 | 0,62 → 0,23 | 0,50 → 0,49 | 0,89 → 0,88 | 0,34 → 0,34 | 0,96 → 0,96 |
 
-Jamais meilleure : les plis internes sont d'autres sites, la calibration ne s'y transpose pas.
+Jamais meilleure : les folds internes sont d'autres sites, la calibration ne s'y transpose pas.
 
 ## Annexe C — Reproduire
 

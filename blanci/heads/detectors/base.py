@@ -6,11 +6,11 @@ probablement A. blanci). C'est la forme du modèle de distillation et du modèle
 
 - `Detector` : `score(fenêtres, f_e)` ;
 - `TrainableDetector` : en plus `fit(fenêtres, f_e, labels)`, qui rend un détecteur appris. Le
-  banc d'essai l'entraîne pli par pli (plis communs, `dataset.folds_for`) : ses scores sont
-  hors-pli, comparables à ceux des encodeurs, des baselines et des ensembles.
+  banc d'essai l'entraîne fold par fold (folds communs, `dataset.folds_for`) : ses scores sont
+  hors-fold, comparables à ceux des encodeurs, des baselines et des ensembles.
 
 `evaluate_detector` juge un détecteur sur les fenêtres des baselines (annotations de 3 s et
-négatifs appariés, audio lu à la demande, jamais écrit) et range ses scores hors-pli dans le
+négatifs appariés, audio lu à la demande, jamais écrit) et range ses scores hors-fold dans le
 stock commun (`detector/<nom>`), d'où le benchmark complet et les ensembles le reprennent.
 """
 
@@ -69,7 +69,7 @@ def evaluate_detector(
     detector: Detector,
     audio: tuple[pd.DataFrame, list[np.ndarray], int] | None = None,
 ) -> dict[str, Any]:
-    """AP et rappel du détecteur, hors-pli s'il apprend ; scores rangés sous
+    """AP et rappel du détecteur, hors-fold s'il apprend ; scores rangés sous
     `detector/<nom>`. `audio` : fenêtres déjà lues (tests, plusieurs détecteurs)."""
     from blanci.evaluation.evaluate import evaluate, grouped_folds
     from blanci.evaluation.oof import labels_fingerprint, oof_frame, save_oof

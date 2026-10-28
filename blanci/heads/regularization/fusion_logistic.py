@@ -25,7 +25,7 @@ def choose_fusion_C(
 ) -> tuple[float | None, dict[float, float]]:
     """R50 : C de la fusion logistique `method` (`logistic`, ou ses variantes `+R52`, `+R53`,
     `+R56`), choisi par validation groupée. (None, {}) faute de deux valeurs, de deux micros
-    ou d'un pli à deux classes."""
+    ou d'un fold à deux classes."""
     from blanci.combination.fusion import fit_fusion_model
     from blanci.evaluation.evaluate import average_precision
 

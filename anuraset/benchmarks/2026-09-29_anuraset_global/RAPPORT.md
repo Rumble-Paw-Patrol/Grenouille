@@ -24,8 +24,8 @@ Mêmes enregistrements, espèces et positifs que les benchmarks 01 à 06 (n° 14
 
 | Étape | Choix | Pourquoi |
 |---|---|---|
-| Plis | un site tenu à l'écart à la fois (4 plis) | un site neuf est le cas réel (n° 125, 141) |
-| Apprentissage | tous les positifs + 20 négatifs par positif et par site, C par plis internes par site | protocole des benchmarks 01 à 06 |
+| Folds | un site tenu à l'écart à la fois (4 folds) | un site neuf est le cas réel (n° 125, 141) |
+| Apprentissage | tous les positifs + 20 négatifs par positif et par site, C par folds internes par site | protocole des benchmarks 01 à 06 |
 | Évaluation | toutes les fenêtres du site tenu à l'écart | prévalence réelle ; l'échantillon de négatifs rendait l'AP poolée optimiste |
 | Unité commune | minute : score = max des fenêtres de l'enregistrement | grilles différentes (3, 5, 6 s) : seule unité identique pour tous ; apparié |
 | Fenêtre | grille propre à chaque encodeur ; appariée seulement entre encodeurs à 5 s | mêmes fenêtres, mêmes labels |
@@ -92,7 +92,7 @@ Seuil choisi sur les autres sites (perch_v2, logistique, fenêtre, précision vi
 
 ## Annexe — Reproduire
 
-Outils : `anuraset/` (`global_bench.py`, `rassembler_global.py`). Stocks sur les branches `donnees-anuraset` (perch_v2) et `donnees-anuraset-<encodeur>`. Leurs modèles (table `models`) et leurs fenêtres (table `windows`) sont réunis dans une même `data/db/anuraset.sqlite`. Sorties brutes (scores hors-pli, courbes) : retirées de main, dans l'historique (`git show 6f2ff13^:resultats/global/<fichier>`).
+Outils : `anuraset/` (`global_bench.py`, `rassembler_global.py`). Stocks sur les branches `donnees-anuraset` (perch_v2) et `donnees-anuraset-<encodeur>`. Leurs modèles (table `models`) et leurs fenêtres (table `windows`) sont réunis dans une même `data/db/anuraset.sqlite`. Sorties brutes (scores hors-fold, courbes) : retirées de main, dans l'historique (`git show 6f2ff13^:resultats/global/<fichier>`).
 
 ```
 uv run python anuraset/calcul/global_bench.py <encodeur> <ESPECE> <sorties> --curve

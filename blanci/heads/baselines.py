@@ -3,7 +3,7 @@
 Elles répondent à la question du go/no-go de P0 : si aucun encodeur n'atteint AP ≥ 0,5 et
 rappel ≥ 0,8 à précision ≥ 0,1, le détecteur primaire sera « DSP + template matching ». Elles
 sont jugées exactement comme les encodeurs : mêmes fenêtres annotées, mêmes négatifs appariés,
-plis groupés par micro, mêmes métriques (`evaluate`).
+folds groupés par micro, mêmes métriques (`evaluate`).
 
 Fenêtres évaluées : celles des têtes (`dataset.training_set`) sur la grille w3 des
 enregistrements de `benchmark_recordings` : fenêtres étiquetées par les labels de fenêtres et
@@ -19,7 +19,7 @@ Scores (plus haut = plus probablement A. blanci) :
 - `rhythm` : nombre d'intervalles entre notes dans la plage d'A. blanci, départagés par `notes`.
 - `template_mean`, `template_max` : corrélation normalisée maximale du spectrogramme avec le
   gabarit moyen des notes des positifs d'entraînement, ou avec le meilleur de `n_exemplars`
-  notes prises une à une. Gabarits appris dans chaque pli, sans le micro testé : scores hors-pli.
+  notes prises une à une. Gabarits appris dans chaque fold, sans le micro testé : scores hors-fold.
 """
 
 from __future__ import annotations
@@ -213,7 +213,7 @@ def oof_template_scores(
     seed: int = 0,
     assignment: dict[str, int] | None = None,
 ) -> dict[str, np.ndarray]:
-    """Scores hors-pli des deux gabarits : appris sur les seuls positifs annotés du pli
+    """Scores hors-fold des deux gabarits : appris sur les seuls positifs annotés du fold
     d'entraînement (jamais sur les négatifs présumés), appliqués au micro tenu à l'écart."""
     rng = np.random.default_rng(seed)
     out = {name: np.full(len(specs), np.nan) for name in LEARNED}
@@ -343,9 +343,9 @@ def write_baseline_report(
     text = [
         "# Baselines sans encodeur (§3)",
         "",
-        "Critère du go/no-go de P0 (§9) : AP ≥ 0,5 et rappel ≥ 0,8 à précision ≥ 0,1, plis par "
-        "micro. Les baselines fixes n'apprennent rien : leurs scores sont hors-pli par nature ; "
-        "les gabarits sont appris dans chaque pli sans le micro testé.",
+        "Critère du go/no-go de P0 (§9) : AP ≥ 0,5 et rappel ≥ 0,8 à précision ≥ 0,1, folds par "
+        "micro. Les baselines fixes n'apprennent rien : leurs scores sont hors-fold par nature ; "
+        "les gabarits sont appris dans chaque fold sans le micro testé.",
         "",
     ]
     for level in ("window", "recording"):

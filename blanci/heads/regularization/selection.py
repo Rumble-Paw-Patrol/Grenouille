@@ -42,7 +42,7 @@ def sample_pool(
 def usable_folds(
     y: np.ndarray, groups: np.ndarray, n_splits: int | str, seed: int
 ) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Plis groupés internes (micros entiers) dont l'entraînement et le test ont les deux
+    """Folds groupés internes (micros entiers) dont l'entraînement et le test ont les deux
     classes ; [] s'il n'y a qu'un micro."""
     from blanci.evaluation.evaluate import grouped_folds
 
@@ -110,7 +110,7 @@ def grouped_search(
     (R50). `score(valeur, train, test)` rend l'AP sur `test` d'un modèle appris sur `train`.
 
     Renvoie (valeur retenue par `pick` (R75), ou None ; {valeur: AP moyenne} ; {valeur :
-    erreur type de cette moyenne, écart-type des AP des plis / √plis}). Les deux derniers
+    erreur type de cette moyenne, écart-type des AP des folds / √folds}). Les deux derniers
     forment le chemin de régularisation (R76)."""
     folds = usable_folds(y, groups, n_splits, seed)
     means, ses = {}, {}
@@ -134,7 +134,7 @@ def fine_grid(grid, points: int = 13) -> list[float]:
 
 
 def fold_ids(n: int, folds) -> np.ndarray:
-    """Numéro du pli de test de chaque fenêtre, d'après les plis (train, test) d'un `OOFScores`."""
+    """Fold de test de chaque fenêtre, d'après les folds (train, test) d'un `OOFScores`."""
     out = np.full(n, -1)
     for f, (_, test) in enumerate(folds):
         out[test] = f
@@ -144,11 +144,11 @@ def fold_ids(n: int, folds) -> np.ndarray:
 def cross_fitted_threshold(
     y: np.ndarray, scores: np.ndarray, folds: np.ndarray, min_precision: float
 ) -> dict[str, Any]:
-    """R74 : seuil de précision plancher choisi pour chaque pli sur les scores hors-pli des
-    *autres* plis, puis appliqué à ce pli. Précision et rappel obtenus : ce que le seuil fera
+    """R74 : seuil de précision plancher choisi pour chaque fold sur les scores hors-fold des
+    *autres* folds, puis appliqué à ce fold. Précision et rappel obtenus : ce que le seuil fera
     sur des micros qu'il n'a pas vus (le seuil choisi et jugé sur les mêmes scores est
     optimiste). Le calcul vit dans `evaluate.cross_fitted_recall`, que toute évaluation avec
-    plis utilise pour son rappel (DECISIONS n° 140)."""
+    folds utilise pour son rappel (DECISIONS n° 140)."""
     from blanci.evaluation.evaluate import cross_fitted_recall
 
     return cross_fitted_recall(y, scores, folds, min_precision)
@@ -162,11 +162,11 @@ def selection_estimate(
 ) -> dict[str, Any]:
     """R74 et R80 : ce que vaut la procédure « garder la variante à la meilleure AP ».
 
-    Pour chaque pli, la variante est choisie sur les scores hors-pli des autres plis, puis
-    jugée sur ce pli : le choix ne voit jamais les labels qu'on mesure. Comparée à l'AP, sur
-    les mêmes plis, de la variante qui gagne le tableau (choisie en voyant tout), elle dit
+    Pour chaque fold, la variante est choisie sur les scores hors-fold des autres folds, puis
+    jugée sur ce fold : le choix ne voit jamais les labels qu'on mesure. Comparée à l'AP, sur
+    les mêmes folds, de la variante qui gagne le tableau (choisie en voyant tout), elle dit
     combien le gagnant doit à la chance. AP au niveau enregistrement si `recordings` est
-    donné. Renvoie les variantes choisies, et les deux AP moyennes par pli."""
+    donné. Renvoie les variantes choisies, et les deux AP moyennes par fold."""
     from blanci.evaluation.evaluate import average_precision, to_recordings
 
     y, folds = np.asarray(y).astype(int), np.asarray(folds)

@@ -371,16 +371,16 @@ def fit_with_options(
     n_splits: int = 3,
     **options,
 ):
-    """Tête torch `fit` (fit_attentive, fit_gated) entourée de R40 et R42, sur plis groupés.
+    """Tête torch `fit` (fit_attentive, fit_gated) entourée de R40 et R42, sur folds groupés.
 
     R40 (`weight_decays`) : chaque valeur est jugée par l'AP moyenne en validation groupée
-    interne (`n_splits` plis, micros entiers, `grouped_search`), la meilleure est retenue. R42
-    (`early_stopping`) : dans chaque pli interne, la courbe du critère de validation
+    interne (`n_splits` folds, micros entiers, `grouped_search`), la meilleure est retenue. R42
+    (`early_stopping`) : dans chaque fold interne, la courbe du critère de validation
     (`monitor` : "loss" ou "ap") est relevée à chaque époque ; l'époque retenue minimise la
-    courbe moyenne des plis, et la tête est réentraînée sur tout `X` pour ce nombre d'époques
-    (en lot entier, une époque = un pas, quel que soit l'effectif). Un pli unique de 1 à 3
+    courbe moyenne des folds, et la tête est réentraînée sur tout `X` pour ce nombre d'époques
+    (en lot entier, une époque = un pas, quel que soit l'effectif). Un fold unique de 1 à 3
     micros donnait une époque au hasard (données simulées, DECISIONS n° 117). Faute de deux
-    micros, ou d'une classe dans un pli, R40/R42 sont sautées.
+    micros, ou d'une classe dans un fold, R40/R42 sont sautées.
     """
     from blanci.evaluation.evaluate import average_precision
 

@@ -1,5 +1,5 @@
-"""Têtes de CAMPAIGN_HEADS sur une espèce et un encodeur (un pli par site) ; garde aussi les
-scores hors-pli (pour l'amorçage d'un site). Usage : bench.py <encoder_id> <ESPECE> <sortie>"""
+"""Têtes de CAMPAIGN_HEADS sur une espèce et un encodeur (un fold par site) ; garde aussi les
+scores hors-fold (pour l'amorçage d'un site). Usage : bench.py <encoder_id> <ESPECE> <sortie>"""
 
 import sys
 import time

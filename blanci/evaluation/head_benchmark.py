@@ -1,4 +1,4 @@
-"""Benchmark des têtes (§3, DECISIONS n° 92–93) : toutes les têtes, mêmes fenêtres, mêmes plis.
+"""Benchmark des têtes (§3, DECISIONS n° 92–93) : toutes les têtes, mêmes fenêtres, mêmes folds.
 
 Têtes comparées sur les embeddings gelés d'un encodeur (`head.METHODS`, `pooling.POOLINGS`) :
 
@@ -23,15 +23,15 @@ Groupes de têtes pour `--methods` : `losses` (logistique + toutes les pertes), 
 (logistique, prototype et toutes les variantes par similarité, R39).
 
 Régularisations (`blanci/heads/regularization/`, DECISIONS n° 108) : dans le nom de la tête,
-`logistic+R18=16+R19`. Le nom canonique figure dans les tableaux et les scores hors-pli ;
+`logistic+R18=16+R19`. Le nom canonique figure dans les tableaux et les scores hors-fold ;
 `regularization.variants` ajoute des têtes régularisées à la liste par défaut.
 
 Deux mesures :
 
-1. `run_head_benchmark` : chaque tête en validation croisée groupée par micro, plis communs à
+1. `run_head_benchmark` : chaque tête en validation croisée groupée par micro, folds communs à
    tous les modèles ; AP et rappel aux précisions plancher, niveaux fenêtre et enregistrement ;
    comparaisons appariées contre la tête de référence (`head.reference`) ; diagnostic du fond
-   capté (prototype différentiel contre prototype simple, §3) ; scores hors-pli enregistrés
+   capté (prototype différentiel contre prototype simple, §3) ; scores hors-fold enregistrés
    (`blanci/evaluation/oof.py`).
 2. `annotation_curve` : AP sur un site cible selon le nombre k d'enregistrements positifs de ce
    site ajoutés à l'entraînement (k = 0 : transfert pur). Hypothèse à tester (notes.md) : le
@@ -278,8 +278,8 @@ def run_head_benchmark(
 
     reference = canonical(head_cfg.get("reference", "logistic"))
     comparisons = compare_to_reference(scores, reference, y, recordings, cfg, clusters=groups)
-    # R74, R80 : la variante gagnante doit-elle sa place à la chance ? Choisie pli par pli sur
-    # les autres plis, jugée sur le pli.
+    # R74, R80 : la variante gagnante doit-elle sa place à la chance ? Choisie fold par fold sur
+    # les autres folds, jugée sur le fold.
     selection = (
         selection_estimate(scores, y, fold_ids(len(y), folds), recordings)
         if len(scores) > 1
@@ -304,9 +304,9 @@ def level_rows(
     labels: dict[str, Any],
     clusters: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
-    """Une ligne de métriques par niveau (fenêtres, enregistrements) pour des scores hors-pli :
-    AP poolée et son intervalle, rappels, `ap_fold_mean` (AP moyenne par pli, n° 133) et, si
-    les plis ont été recalibrés (`benchmark.fold_calibration`), `ap_raw` : l'AP poolée des
+    """Une ligne de métriques par niveau (fenêtres, enregistrements) pour des scores hors-fold :
+    AP poolée et son intervalle, rappels, `ap_fold_mean` (AP moyenne par fold, n° 133) et, si
+    les folds ont été recalibrés (`benchmark.fold_calibration`), `ap_raw` : l'AP poolée des
     scores d'avant la recalibration (n° 135). `clusters` (micro de chaque fenêtre) : unité du
     bootstrap (n° 139)."""
     bench, seed = cfg["benchmark"], cfg["head"]["seed"]

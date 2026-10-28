@@ -1,11 +1,11 @@
-"""Benchmark des encodeurs (§2) : mêmes labels, mêmes plis, sondes légères sur embeddings gelés.
+"""Benchmark des encodeurs (§2) : mêmes labels, mêmes folds, sondes légères sur embeddings gelés.
 
 Sondes : kNN cosinus, prototype simple, prototype différentiel, régression logistique L2 (§3).
 L'écart entre les deux prototypes dit combien l'embedding capte le fond sonore partagé.
-Chaque sonde est évaluée en scores hors-pli, groupés par point (site/micro) : un micro ne se
-retrouve jamais des deux côtés d'un pli (§6). Chaque encodeur est jugé au niveau fenêtre et au
+Chaque sonde est évaluée en scores hors-fold, groupés par point (site/micro) : un micro ne se
+retrouve jamais des deux côtés d'un fold (§6). Chaque encodeur est jugé au niveau fenêtre et au
 niveau enregistrement, avec AP (IC bootstrap par micro, DECISIONS n° 139) et rappel aux précisions
-plancher, seuil choisi sur les autres plis (IC de Wilson en enregistrements, n° 140).
+plancher, seuil choisi sur les autres folds (IC de Wilson en enregistrements, n° 140).
 
 Les encodeurs se départagent sur les mêmes enregistrements par bootstrap apparié : « A meilleur
 que B » seulement si l'intervalle exclut zéro (§6), p-valeurs corrigées de Holm sur tout le
@@ -85,11 +85,11 @@ def probe_table(
     calibration: dict | None = None,
     clusters: np.ndarray | None = None,
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
-    """Une ligne par (sonde, niveau) ; renvoie aussi les scores hors-pli de chaque sonde.
+    """Une ligne par (sonde, niveau) ; renvoie aussi les scores hors-fold de chaque sonde.
 
     Avec `tokens` (fenêtres, jetons, dim), ajoute la sonde « attentive » (§3). Colonnes
-    `ap_fold_mean` (AP moyenne par pli) et, avec `calibration` (`head.calibration_options`),
-    `ap_raw` (AP poolée avant la recalibration par pli), DECISIONS n° 133, 135. `clusters`
+    `ap_fold_mean` (AP moyenne par fold) et, avec `calibration` (`head.calibration_options`),
+    `ap_raw` (AP poolée avant la recalibration par fold), DECISIONS n° 133, 135. `clusters`
     (micro de chaque fenêtre) : unité du bootstrap à la place de l'enregistrement (n° 139).
     """
     rows, scores = [], {}
@@ -133,7 +133,7 @@ def benchmark_encoder(
     cfg: dict,
     filters: dict | None = None,
 ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray, np.ndarray]:
-    """Évalue un encodeur. Renvoie (tableau, scores logistiques hors-pli, labels, enregistrements).
+    """Évalue un encodeur. Renvoie (tableau, scores logistiques hors-fold, labels, enregistrements).
 
     Les trois derniers servent aux comparaisons appariées entre encodeurs.
     """
@@ -174,7 +174,7 @@ def benchmark_encoder(
         clusters=groups,
     )
     fingerprint = labels_fingerprint(con, cfg)
-    for probe, values in scores.items():  # scores hors-pli : benchmark complet, ensembles
+    for probe, values in scores.items():  # scores hors-fold : benchmark complet, ensembles
         frame = oof_frame(
             f"{encoder_id}/{probe}",
             "encoder_head",

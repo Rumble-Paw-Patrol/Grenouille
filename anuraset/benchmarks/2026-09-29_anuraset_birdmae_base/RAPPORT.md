@@ -32,7 +32,7 @@ Identiques au benchmark 01 (tableau §3 de `2026-09-28_anuraset_perch_v2/RAPPORT
 | Étape | Choix | Pourquoi |
 |---|---|---|
 | Encodeur | birdmae_base : `DBD-research-group/Bird-MAE-Base` via bacpipe 1.3.5, torch CPU, transformers 4.57 | variante Base retenue au n° 72 (Huge : 0,5 fenêtre/s) ; transformers 5 ne charge pas le code du modèle |
-| Amorçage | par site : AP, rappel **et précision obtenue** au seuil de précision 0,5 choisi sur les scores hors-pli des autres sites ; rappel au seuil choisi sur place (oracle) ; 5 têtes, perch_v2 refait à l'identique pour comparer | ce que verrait un site neuf sans annotation (`amorcage.py`, `donnees/amorcage.csv`) |
+| Amorçage | par site : AP, rappel **et précision obtenue** au seuil de précision 0,5 choisi sur les scores hors-fold des autres sites ; rappel au seuil choisi sur place (oracle) ; 5 têtes, perch_v2 refait à l'identique pour comparer | ce que verrait un site neuf sans annotation (`amorcage.py`, `donnees/amorcage.csv`) |
 
 ## 4. Résultats
 

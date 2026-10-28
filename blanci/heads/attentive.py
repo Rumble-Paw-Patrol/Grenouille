@@ -17,7 +17,7 @@ le nom de la tête (`attentive+R41+R42`) :
 |---|---|
 | R40 | weight decay choisi par validation groupée sur une grille |
 | R41 | AdamW (weight decay découplé) au lieu de la L2 d'Adam |
-| R42 | arrêt précoce : époques choisies sur la courbe de validation moyenne des plis groupés |
+| R42 | arrêt précoce : époques choisies sur la courbe de validation moyenne des folds groupés |
 | R43 | pénalité d'entropie de l'attention : > 0 piquée (note brève), < 0 diffuse (chœur) |
 | R45 | dropout des jetons : chaque jeton masqué avec la probabilité p avant l'attention |
 | R46 | dropout des dimensions de z, le vecteur agrégé |

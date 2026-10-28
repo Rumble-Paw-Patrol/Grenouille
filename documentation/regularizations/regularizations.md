@@ -110,7 +110,7 @@ Conservée : **Oui** = programmée ou en place · **Écartée** = refusée · **
 | R54 | Descripteurs en marches monotones (5 classes) | Oui | `fusion_logistic.py`, `logistic+R54` |
 | R55 | GAM par P-splines (courbe lisse) | Oui | `fusion_logistic.py`, `logistic+R55` |
 | R56 | Pas de veto : plafond sur le poids des descripteurs séquentiels | Oui | `fusion_logistic.py`, `logistic+R56` |
-| R57 | Score de niveau 1 hors-pli pour l'empilement | Oui (toujours actif) | `blanci/combination/stacking.py` |
+| R57 | Score de niveau 1 hors-fold pour l'empilement | Oui (toujours actif) | `blanci/combination/stacking.py` |
 | R58 | Phénologie comme a priori bayésien | Écartée | |
 
 ## Post-traitement (enregistrement, point, temps)
@@ -132,7 +132,7 @@ Conservée : **Oui** = programmée ou en place · **Écartée** = refusée · **
 | R75 | Règle du « 1 écart-type » (défaut) | Oui | `selection.py`, `head.selection_rule` |
 | R76 | Grille de C plus fine, chemin de régularisation | Oui | `selection.py`, suffixe `+R76` |
 | R77 | Leave-one-micro-out | Oui | `head.n_splits: lomo` |
-| R78 | Réglage visant la généralisation entre sites (un pli par site sur AnuraSet) | Oui | `blanci anuraset heads` |
+| R78 | Réglage visant la généralisation entre sites (un fold par site sur AnuraSet) | Oui | `blanci anuraset heads` |
 | R79 | Bagging par tirage bootstrap des micros | Oui | `selection.py`, suffixe `+R79` |
 | R80 | Limiter les comparaisons (présélection des variantes, jeu gelé) | Oui (règle de travail) | |
 

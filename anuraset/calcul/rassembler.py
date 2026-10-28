@@ -28,7 +28,7 @@ pd.DataFrame([{sp: float((src / f"{sp}_duree_s.txt").read_text()) for sp in ESPE
     dst / "durees_s.csv", index=False
 )
 
-# Amorçage d'un site : seuil (précision 0,5) choisi sur les scores hors-pli des autres sites,
+# Amorçage d'un site : seuil (précision 0,5) choisi sur les scores hors-fold des autres sites,
 # appliqué au site tenu à l'écart ; comparé au seuil choisi sur place (oracle).
 rows = []
 for sp in ESPECES:

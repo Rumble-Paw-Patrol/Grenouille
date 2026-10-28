@@ -39,7 +39,7 @@ Mêmes enregistrements, espèces, sites et positifs que les benchmarks 01 à 07 
 
 | Étape | Choix | Pourquoi |
 |---|---|---|
-| Plis, apprentissage, évaluation | protocole 07 : un site tenu à l'écart ; toutes ses fenêtres jugées | n° 150 ; un site neuf, prévalence réelle |
+| Folds, apprentissage, évaluation | protocole 07 : un site tenu à l'écart ; toutes ses fenêtres jugées | n° 150 ; un site neuf, prévalence réelle |
 | Unité | minute (score = max des fenêtres de l'enregistrement), fenêtre en complément | grilles de 0,2 à 6 s : seule unité commune ; apparié |
 | Têtes, embedding | logistique, logistique + R37=glmm, LDA rétrécie, prototype simple | protocole 07 ; le prototype simple est la tête d'origine de protoclr et de rcl_fs_bsed |
 | Têtes sur jetons | attentive, logistique sur le maximum, sonde à prototypes (`proto_probe`) | n° 151, 152 : un transformer se juge sur ses jetons ; perch_v2 aussi, pour une comparaison équitable |

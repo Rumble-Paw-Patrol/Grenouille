@@ -19,11 +19,11 @@ Plan (à trancher le moment venu, §13.7 : pas avant le jalon M4) :
 4. Export ONNX (`encoders/export.py`) avec le spectrogramme dans le graphe ; exécution par
    ONNX Runtime, sans torch ni TensorFlow (§13.1).
 5. Jugement : banc d'essai des détecteurs (`blanci detector-bench --detector distilled`), mêmes
-   plis que tous les modèles ; écart d'AP au professeur sur le jeu gelé ; débit sur l'i5 (1 h
+   folds que tous les modèles ; écart d'AP au professeur sur le jeu gelé ; débit sur l'i5 (1 h
    d'audio en moins de 10 min, §13.6).
 
-Attention au benchmark : l'élève doit être distillé **pli par pli** à partir d'un professeur
-lui-même appris sans le micro testé ; sinon il hérite de scores en-pli et paraît meilleur qu'il
+Attention au benchmark : l'élève doit être distillé **fold par fold** à partir d'un professeur
+lui-même appris sans le micro testé ; sinon il hérite de scores en-fold et paraît meilleur qu'il
 n'est.
 
 Régularisations (`blanci/heads/regularization/`, DECISIONS n° 121) : perte de distillation

@@ -184,7 +184,7 @@ encoders:
 
 head:
   C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]
-  # Plis groupés par micro, communs à tous les modèles (n° 91) ; « lomo » : un pli par micro
+  # Folds groupés par micro, communs à tous les modèles (n° 91) ; « lomo » : un fold par micro
   # positif (leave-one-micro-out, R77, n° 122), plus long, chaque micro jugé seul.
   n_splits: 5
   # R75 : choix d'un réglage (C, weight decay, C de la fusion) par validation groupée. one_se :
@@ -211,7 +211,7 @@ head:
 # liste du 25/09/2026 (documentation/regularizations/regularizations.md). Toutes coupées : on les active tête par
 # tête dans le nom, `blanci heads --methods logistic,logistic+R18,logistic+R19+R18=16` (« =v »
 # remplace le réglage principal, noté ◆). Le nom canonique (R triées) est celui des rapports et
-# des scores hors-pli : on sait toujours lesquelles ont servi. Ordre : R19/R20 → R17 → R18 →
+# des scores hors-fold : on sait toujours lesquelles ont servi. Ordre : R19/R20 → R17 → R18 →
 # R21 → tête (poids R13/R15, pénalité R27/R28). Benchmark des têtes seulement (heads,
 # heads-curve) : train, benchmark et fusion gardent la logistique L2 tant que rien n'est retenu.
 # Ailleurs : R22 = pooling `logistic:gem` (gem2, gem5… pour un autre p), R30 = tête
@@ -222,10 +222,10 @@ regularization:
   R13: {}                 # pondération : chaque micro pèse autant dans sa classe
   R15: {hard_weight: 3.0} # ◆ négatifs annotés (faux amis, espèces) × 3 face aux présumés (n° 106)
   R17: {}                 # embeddings ramenés à la norme 1
-  R18: {components: 32}   # ◆ ACP ajustée sur l'entraînement de chaque pli
+  R18: {components: 32}   # ◆ ACP ajustée sur l'entraînement de chaque fold
   R19: {}                 # centrage : − moyenne de tout le stock du micro (sans labels)
   R20: {eps: 1.0e-6}      # AdaBN : (x − moyenne du micro) / écart-type du micro
-  # Retrait des directions qui trahissent le micro, sur les négatifs du pli. means : les écarts
+  # Retrait des directions qui trahissent le micro, sur les négatifs du fold. means : les écarts
   # entre moyennes des micros (solution fermée, ≤ micros − 1 directions, principe de LEACE) ;
   # inlp : classifieur de micros itéré (◆ tours au plus, directions au plus, C, arrêt dès que le
   # micro n'est plus prédit mieux que le hasard + tolerance). inlp retire trop de directions
@@ -249,9 +249,9 @@ regularization:
   # R46, R59).
   R40: {grid: [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1], n_splits: 3}  # weight decay, validation groupée
   R41: {weight_decay: 1.0e-2}          # ◆ AdamW au lieu de la L2 d'Adam (1e-3 couplé par défaut)
-  # Arrêt précoce : dans chaque pli groupé interne, courbe du critère de validation à chaque
+  # Arrêt précoce : dans chaque fold groupé interne, courbe du critère de validation à chaque
   # époque (◆ monitor : ap ou loss) ; l'époque qui optimise la courbe moyenne est retenue, puis la
-  # tête est réentraînée sur tout le pli d'entraînement pour ce nombre d'époques (au plus
+  # tête est réentraînée sur tout le fold d'entraînement pour ce nombre d'époques (au plus
   # max_epochs). Les deux critères se comparent dans un même run : attentive+R42=ap,
   # attentive+R42=loss. ap : défaut provisoire, à trancher sur la base complète (n° 117, 119).
   R42: {monitor: ap, max_epochs: 300, n_splits: 3}
@@ -313,13 +313,13 @@ benchmark:
   same_day_min_gap_min: 30         # 30 = l'enregistrement voisin (programme : 2 min / 30 min)
   n_boot: 1000                     # plus petite p atteignable 2/(n_boot+1) : avec Holm sur M comparaisons, n_boot ≳ 2M/α
   precisions: [0.1, 0.5]
-  # Mise bout à bout des plis (n° 133, 135). Chaque pli choisit ses réglages (C…) : un C petit
-  # resserre ses scores, et l'AP « poolée » (tous les plis ensemble) le paie sans que le
-  # classement dans le pli change. Les rapports donnent toujours aussi ap_fold_mean (AP moyenne
-  # par pli). fold_calibration: platt = chaque pli recalibré (Platt à classes équilibrées sur
-  # des scores hors-pli internes, au C du pli) avant la mise bout à bout ; ap_raw = l'AP poolée
-  # d'avant. Coût : (1 + calibration_splits) entraînements par pli. none = comme avant. Question
-  # ouverte (Léonard, 28/09) : garder des réglages fixes pour tous les plis reste possible.
+  # Mise bout à bout des folds (n° 133, 135). Chaque fold choisit ses réglages (C…) : un C petit
+  # resserre ses scores, et l'AP « poolée » (tous les folds ensemble) le paie sans que le
+  # classement dans le fold change. Les rapports donnent toujours aussi ap_fold_mean (AP moyenne
+  # par fold). fold_calibration: platt = chaque fold recalibré (Platt à classes équilibrées sur
+  # des scores hors-fold internes, au C du fold) avant la mise bout à bout ; ap_raw = l'AP poolée
+  # d'avant. Coût : (1 + calibration_splits) entraînements par fold. none = comme avant. Question
+  # ouverte (Léonard, 28/09) : garder des réglages fixes pour tous les folds reste possible.
   fold_calibration: none
   calibration_splits: 3
   # Référence du benchmark complet (`blanci benchmark-all`), fixée d'avance (n° 139) : choisie
@@ -357,7 +357,7 @@ fusion:
   # sans poids : elles se partagent le reste jusqu'à 1. Ex. {head: 0.7}.
   weights: {}
   grid_step: 0.1                   # weight_grid : pas de la grille des poids
-  # Autres entrées (ensemble de modèles) : head:<encodeur> (sa tête logistique, hors-pli,
+  # Autres entrées (ensemble de modèles) : head:<encodeur> (sa tête logistique, hors-fold,
   # ramenée sur la grille de l'encodeur principal).
   sources: []
   # Variantes de la logistique, combinables (n° 127, 130) : +R50 (C par validation groupée),
@@ -420,7 +420,7 @@ signal_processing:
       rhythm: {enabled: false, min_count: 1}       # intervalles entre notes d'A. blanci
 
 # Détecteurs audio → score, sans encodeur de fondation (DECISIONS n° 97, `blanci/heads/detectors/`).
-# Emplacements réservés, `blanci detector-bench --detector <nom>` les jugera sur les mêmes plis.
+# Emplacements réservés, `blanci detector-bench --detector <nom>` les jugera sur les mêmes folds.
 detectors:
   distilled: {band_hz: [3000, 7000]}   # distillation de la chaîne gelée (§3, après M4)
   homemade: {band_hz: [3000, 7000]}    # modèle fait maison, entraîné sur les labels
@@ -434,7 +434,7 @@ finetune:
   lora: {rank: 8, alpha: 16, dropout: 0.1, target_modules: [q_proj, v_proj], layers: 4}
   epochs: 10
   lr: 1.0e-4
-  per_fold: true                    # un encodeur par pli : sinon le benchmark fuit
+  per_fold: true                    # un encodeur par fold : sinon le benchmark fuit
   # R61 : pas d'apprentissage par couche (× llrd_decay à chaque couche en descendant) et dégel
   # progressif (une couche de plus toutes les unfreeze_every époques ; 0 = tout d'un coup).
   llrd_decay: 0.8

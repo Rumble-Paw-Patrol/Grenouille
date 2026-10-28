@@ -10,8 +10,8 @@ revient toutes les ~1,4 s.
 
 Contrat : celui des détecteurs entraînables (`detectors/base.py`) — `fit(fenêtres, f_e, labels)`
 rend un détecteur appris, `score(fenêtres, f_e)` un score par fenêtre. Le banc d'essai
-(`blanci detector-bench --detector homemade`) l'entraîne pli par pli sur les plis communs : ses
-scores rejoignent le stock hors-pli, le benchmark complet et les ensembles sans autre code.
+(`blanci detector-bench --detector homemade`) l'entraîne fold par fold sur les folds communs : ses
+scores rejoignent le stock hors-fold, le benchmark complet et les ensembles sans autre code.
 
 Contraintes à garder : peu de positifs (51 enregistrements, 13 micros, tous à Mataroni) → risque
 fort de sur-apprentissage au site ; augmentation de données (bruit de fond d'autres micros,

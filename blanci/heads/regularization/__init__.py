@@ -4,7 +4,7 @@
 Toutes coupées par défaut. Une tête du benchmark les active dans son nom :
 `logistic+R18=16+R19` = régression logistique, ACP à 16 composantes (R18), centrage par micro
 (R19). « =v » remplace le réglage principal de la section `regularization` de la config. Le nom
-canonique (régularisations triées par numéro) est celui des rapports et des scores hors-pli :
+canonique (régularisations triées par numéro) est celui des rapports et des scores hors-fold :
 on sait toujours lesquelles ont servi.
 
 Un paquet découpé par thème (DECISIONS n° 134) ; tout s'importe d'ici
@@ -30,8 +30,8 @@ Programmées ici, appliquées dans cet ordre :
 | R19 | fenêtre | centrage par micro : − moyenne de tout le stock du micro (sans labels) |
 | R20 | fenêtre | AdaBN : (x − moyenne du micro) / écart-type du micro |
 | R17 | fenêtre | embedding ramené à la norme 1 |
-| R18 | pli | ACP ajustée sur l'entraînement du pli (`components`) |
-| R21 | pli | retrait des directions qui trahissent le micro (négatifs seulement) |
+| R18 | fold | ACP ajustée sur l'entraînement du fold (`components`) |
+| R21 | fold | retrait des directions qui trahissent le micro (négatifs seulement) |
 | R37 | fenêtre | indicatrices du micro (et du site) ajoutées à l'entrée : biais pénalisés |
 | R13 | poids | chaque micro pèse autant dans sa classe |
 | R15 | poids | négatifs annotés (faux amis, espèces) × `hard_weight` face aux présumés |
@@ -46,7 +46,7 @@ Sélection des réglages et entraînements légers (DECISIONS n° 122) :
 | R74 | seuil et variante jugés à part | `cross_fitted_threshold`, `selection_estimate` |
 | R75 | règle du « 1 écart-type » (`head.selection_rule`) | `pick`, `grouped_search` |
 | R76 | grille de C plus fine, chemin de régularisation (`train`) | `+R76`, `fine_grid` |
-| R77 | un pli par micro | `head.n_splits: lomo` (`evaluate.lomo_assignment`) |
+| R77 | un fold par micro | `head.n_splits: lomo` (`evaluate.lomo_assignment`) |
 | R79 | bagging par tirage bootstrap des micros | `+R79`, `bagged` |
 | R81 | pseudo-étiquetage sur un réservoir non annoté | `+R81`, `with_pseudo_labels` |
 
@@ -89,13 +89,13 @@ ont une mécanique propre :
 | R50 | `fusion.fit_fusion_model` | méthode `logistic+R50` ; C : `choose_fusion_C` (ici) |
 | R52, R53, R56 | `fusion.py` | `logistic+R52`, `+R53`, `+R56` ; `fit_constrained_logistic` |
 | R54, R55 | `fusion.py` | `logistic+R54`, `+R55` ; `DescriptorBasis`, `fit_fusion_logistic` |
-| R57 | `stacking.py` | toujours là : la fusion n'apprend que sur des scores hors-pli |
+| R57 | `stacking.py` | toujours là : la fusion n'apprend que sur des scores hors-fold |
 | R60 | `finetune.py` | LoRA sur les couches hautes (`finetune.lora.layers`), à écrire |
 | R66 | `dann.py` | tête `dann` ; mécanique ici |
 | R67 | `head.fit_multiclass` | tête `multiclass` ; classes : `window_classes` (ici) |
 | R70 | `evaluate.to_recordings` | le maximum, déjà le défaut |
 | R73 | `service.train_and_register` | `decision.prevalence` ; `threshold_at_prevalence`, `platt` |
-| R78 | `anuraset.run_anuraset_heads` | `blanci anuraset heads`, un pli par site |
+| R78 | `anuraset.run_anuraset_heads` | `blanci anuraset heads`, un fold par site |
 | R85 | `gated.py` | tête `gated` |
 
 Écartées au tri des 26 et 27/09 : R33, R48, R51 (remplacée par R52), R58, R68, R69, R71, R72,
@@ -104,12 +104,12 @@ R82 (DECISIONS n° 116, 125–127). Plus tard : R83.
 R19 et R20 lisent le stock d'embeddings entier du micro (`store_domain_statistics`) : aucune
 étiquette, ce que la chaîne aura aussi sur un nouveau site. Elles ne valent que pour
 l'embedding par défaut (pas pour les jetons résumés `logistic:<pooling>`). R18 et R21 sont
-ajustées dans chaque pli sur les seules fenêtres d'entraînement ; le C des têtes logistiques est
+ajustées dans chaque fold sur les seules fenêtres d'entraînement ; le C des têtes logistiques est
 ensuite choisi sur ces fenêtres transformées.
 
 R37 (DECISIONS n° 116) : une colonne par micro de l'entraînement, non standardisée ; son poids
 est le biais du micro, d'a priori N(0, σ²) (σ = `scale`, en logit, indépendant de C : voir
-`head.standardize`). Un micro absent de l'entraînement (le micro du pli de test, un nouveau
+`head.standardize`). Un micro absent de l'entraînement (le micro du fold de test, un nouveau
 site) a toutes ses colonnes à 0 : biais commun. Le biais absorbe le niveau de chaque micro
 pendant l'apprentissage, w n'a plus à le coder. Sur données simulées, un σ petit (biais « très
 pénalisés ») laissait le raccourci dans w : le mécanisme dépend de σ, à choisir sur la base

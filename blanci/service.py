@@ -141,7 +141,7 @@ def train_and_register(
 ) -> TrainResult:
     """Entraîne la tête sur tous les labels, calibre le seuil, enregistre le tout.
 
-    Le seuil est calculé sur les scores **hors-pli** : un seuil calibré sur des scores en-pli
+    Le seuil est calculé sur les scores **hors-fold** : un seuil calibré sur des scores en-fold
     serait optimiste, la tête ayant vu chacun de ses exemples (§6).
     """
     params = encoder_params(con, encoder_id)
@@ -184,7 +184,7 @@ def train_and_register(
     if prevalence:
         corrected = threshold_at_prevalence(y, oof.values, min_precision, float(prevalence))
         recall, threshold = corrected["recall"], corrected["threshold"]
-    # R74 : le même seuil, choisi pli par pli sur les autres plis : ce qu'il fera sur des micros
+    # R74 : le même seuil, choisi fold par fold sur les autres folds : ce qu'il fera sur des micros
     # qu'il n'a pas vus (le rappel ci-dessus est mesuré sur les scores qui ont fixé le seuil).
     crossfit = cross_fitted_threshold(y, oof.values, fold_ids(len(y), oof.folds), min_precision)
     metrics = evaluate(
@@ -387,7 +387,7 @@ def write_regularization_path(cfg: dict, head: Head, stem: str) -> Path:
     )
     ax.set_xscale("log")
     ax.set_xlabel("C (plus petit = plus régularisé)")
-    ax.set_ylabel("AP moyenne des plis internes")
+    ax.set_ylabel("AP moyenne des folds internes")
     ax.legend(frameon=False)
     fig.tight_layout()
     fig.savefig(reports / f"{stem}.png", dpi=120)
@@ -1101,7 +1101,7 @@ def evaluate_holdout(
             assignment=folds_for(con, cfg),
         )
         scores, mask = oof.values, np.ones(len(y), dtype=bool)
-        protocol = "plis groupés par micro"
+        protocol = "folds groupés par micro"
     else:
         mask = data["site"].str.lower().isin(wanted).to_numpy()
         if not mask.any():
@@ -1433,11 +1433,11 @@ def train_fusion(
     Méthode (`fusion.method`), emplacement du traitement du signal (`signal_processing.position`) et
     autres sources (`fusion.sources`) viennent de la config (`blanci/combination/stacking.py`) :
 
-    1. plis communs par micro : dans chaque pli, une tête entraînée sans le micro donne le
-       score hors-pli des fenêtres étiquetées **et** de toutes les fenêtres de leurs
+    1. folds communs par micro : dans chaque fold, une tête entraînée sans le micro donne le
+       score hors-fold des fenêtres étiquetées **et** de toutes les fenêtres de leurs
        enregistrements (persistance) ; les autres sources sont calculées de même ;
-    2. fusion évaluée hors-pli sur les mêmes plis, comparée à la tête seule (bootstrap apparié
-       par enregistrement) ; seuil de la fusion pris sur ses scores hors-pli ;
+    2. fusion évaluée hors-fold sur les mêmes folds, comparée à la tête seule (bootstrap apparié
+       par enregistrement) ; seuil de la fusion pris sur ses scores hors-fold ;
     3. fusion finale ajustée sur tout le jeu de développement, enregistrée en JSON.
     """
     from blanci.combination.stacking import build_level1, final_model, fused_oof, positions_from
@@ -1696,7 +1696,7 @@ def retrain(
     """Réentraîne la tête et ne l'adopte que si elle n'est pas moins bonne (ONF, §4).
 
     1. drapeaux posés à l'écoute recalculés (labels ajoutés depuis le dernier passage) ;
-    2. nouvelle tête sur tous les labels hors jeu gelé, seuil calibré hors-pli
+    2. nouvelle tête sur tous les labels hors jeu gelé, seuil calibré hors-fold
        (`train_and_register`) ;
     3. nouvelle tête et tête adoptée jugées sur le même jeu gelé, à leur seuil ;
     4. adoption si l'AP (niveau enregistrement) et le rappel au seuil de la nouvelle tête ne
@@ -1866,11 +1866,11 @@ def upstream_bench(
     - `sweep` : pour chaque porte et chaque seuil de `signal_processing.GATE_GRIDS`, négatifs
       arrêtés (calcul économisé) et positifs perdus (rappel plafond, en enregistrements). Sans
       encodeur, sur les fenêtres des baselines (3 s) ; avec `encoder_id`, sur celles de son
-      stock, et l'AP (enregistrements) des scores logistiques hors-pli après la porte
+      stock, et l'AP (enregistrements) des scores logistiques hors-fold après la porte
       (approximation : la tête n'est pas réentraînée sans les fenêtres arrêtées) ;
     - `comparison` (avec encodeur et portes actives dans `upstream`) : la combinaison
-      configurée, cette fois fidèle (tête réentraînée sans les fenêtres arrêtées, pli par
-      pli), contre l'absence de porte, par bootstrap apparié.
+      configurée, cette fois fidèle (tête réentraînée sans les fenêtres arrêtées, fold par
+      fold), contre l'absence de porte, par bootstrap apparié.
     """
     from blanci.heads.baselines import evaluation_windows
     from blanci.heads.signal_processing import gate_mask, gate_sweep

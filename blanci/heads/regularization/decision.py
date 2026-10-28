@@ -1,5 +1,5 @@
 """R73 : courbe d'exploitation, seuil pour la précision du stock, calibration de Platt, changement
-de prévalence ; recalibration de chaque pli avant la mise bout à bout (`fold_platt`, n° 135)."""
+de prévalence ; recalibration de chaque fold avant la mise bout à bout (`fold_platt`, n° 135)."""
 
 from __future__ import annotations
 
@@ -76,19 +76,19 @@ def prior_shift(p, source_prevalence: float, target_prevalence: float):
     return odds / (1 + odds)
 
 
-# --- Recalibration par pli (DECISIONS n° 133, 135) ----------------------------------------------
+# --- Recalibration par fold (DECISIONS n° 133, 135) ----------------------------------------------
 
 
 def fold_platt(scores: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     """(a, b) : a·score + b est la cote (logit) « A. blanci contre fond » à **classes
-    équilibrées**, donc indépendante de la part de positifs, apprise sur des scores hors-pli.
-    Sert à mettre les plis sur une même échelle avant de les mettre bout à bout
+    équilibrées**, donc indépendante de la part de positifs, apprise sur des scores hors-fold.
+    Sert à mettre les folds sur une même échelle avant de les mettre bout à bout
     (`head.calibrated_fold_scores`, `fusion.fusion_model_oof`).
 
     Scores centrés-réduits d'abord, puis logistique à une variable faiblement pénalisée (C =
     100) : stable même quand les scores séparent parfaitement les classes. Sans les deux
     classes, ou si la pente sort négative (scores à l'envers), repli sur le seul centrage-
-    réduction : l'échelle reste commune, le classement du pli n'est jamais retourné."""
+    réduction : l'échelle reste commune, le classement du fold n'est jamais retourné."""
     from sklearn.linear_model import LogisticRegression
 
     scores, y = np.asarray(scores, dtype=float), np.asarray(y).astype(int)

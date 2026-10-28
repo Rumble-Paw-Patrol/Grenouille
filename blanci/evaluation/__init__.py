@@ -1,7 +1,7 @@
 """Étape 5 — mesurer.
 
-- `evaluate` : plis groupés, AP, rappel à précision fixée, bootstrap, Wilson.
-- `oof` : scores hors-pli enregistrés, format commun des benchmarks.
+- `evaluate` : folds groupés, AP, rappel à précision fixée, bootstrap, Wilson.
+- `oof` : scores hors-fold enregistrés, format commun des benchmarks.
 - `benchmark` : benchmark des encodeurs.
 - `head_benchmark` : benchmark des têtes.
 - `full_benchmark` : benchmark complet, toutes sources.

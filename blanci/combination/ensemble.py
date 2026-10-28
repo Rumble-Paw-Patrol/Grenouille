@@ -3,11 +3,11 @@
 Trois façons, du plus simple au plus riche :
 
 1. **Combinaison tardive, par enregistrement** (`run_ensemble`) : n'importe quelles sources du
-   stock de scores hors-pli (`blanci/evaluation/oof.py`) — encodeur × tête, baseline, fusion,
+   stock de scores hors-fold (`blanci/evaluation/oof.py`) — encodeur × tête, baseline, fusion,
    détecteur — ramenées au score maximal par enregistrement, sur les enregistrements évalués
    par toutes.
    Méthodes de `fusion.FUSION_METHODS` (moyenne, rangs, OU, ET, poids appris ou cherchés),
-   apprises pli par pli sur les plis communs. Les grilles différentes (3 s, 5 s) ne gênent pas :
+   apprises fold par fold sur les folds communs. Les grilles différentes (3 s, 5 s) ne gênent pas :
    tout le monde voit les mêmes enregistrements.
 2. **Combinaison par fenêtre** : c'est la fusion à N entrées (`blanci/combination/stacking.py`,
    `fusion.sources: [head:<encodeur>]`) — la tête d'un autre encodeur est ramenée sur la grille
@@ -72,7 +72,7 @@ def run_ensemble(
     methods: list[str] | None = None,
     allow_mixed: bool = False,
 ) -> dict[str, Any]:
-    """Chaque méthode de combinaison, hors-pli, contre la meilleure source seule."""
+    """Chaque méthode de combinaison, hors-fold, contre la meilleure source seule."""
     methods = methods or ["mean", "rank_mean", "max", "logistic", "weight_grid"]
     from blanci.heads.regularization import fusion_variant
 
@@ -171,8 +171,8 @@ def concat_benchmark(
     encoder_ids: list[str],
     methods: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Têtes sur les embeddings concaténés, mêmes plis que tous les autres modèles ; scores
-    hors-pli enregistrés sous `<a>+<b>/<tête>`."""
+    """Têtes sur les embeddings concaténés, mêmes folds que tous les autres modèles ; scores
+    hors-fold enregistrés sous `<a>+<b>/<tête>`."""
     from blanci.heads.head import oof_scores
     from blanci.inputs.dataset import folds_for
 

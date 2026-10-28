@@ -1,6 +1,6 @@
 """Benchmark complet des modèles (DECISIONS n° 98) : toutes les sources, mêmes enregistrements.
 
-Sources : tout ce que le stock de scores hors-pli contient (`blanci sources`) — encodeurs ×
+Sources : tout ce que le stock de scores hors-fold contient (`blanci sources`) — encodeurs ×
 têtes (`benchmark`, `heads`), baselines (`baselines`), fusions (`fusion-bench`), ensembles
 (`ensemble`), détecteurs (`detector-bench`).
 
@@ -9,8 +9,8 @@ et une de 5 s ne se comparent pas, deux enregistrements si. Par défaut, sur les
 enregistrements évalués par **toutes** les sources retenues (mêmes positifs, mêmes négatifs) ;
 chacune sur les siens avec `common=False`.
 
-Colonnes : AP [IC bootstrap par micro], AP moyenne par pli, rappel aux précisions plancher
-[Wilson] avec un seuil choisi sur les autres plis (l'oracle en `recall@p…_oracle`), rappel par
+Colonnes : AP [IC bootstrap par micro], AP moyenne par fold, rappel aux précisions plancher
+[Wilson] avec un seuil choisi sur les autres folds (l'oracle en `recall@p…_oracle`), rappel par
 site au même seuil, et pour les encodeurs le coût (dimension, fenêtre, débit mesuré à
 l'encodage). Comparaison appariée de chaque source à la référence, fixée d'avance
 (`benchmark.reference` ou `--reference`) ; à défaut la meilleure AP, signalée comme choisie
@@ -76,7 +76,7 @@ def run_full_benchmark(
     """Tableau de toutes les sources, comparaisons à la référence, rappel par site."""
     table = load_oof(cfg, sources)
     if table.empty:
-        raise ValueError("aucun score hors-pli enregistré (benchmark, heads, baselines…)")
+        raise ValueError("aucun score hors-fold enregistré (benchmark, heads, baselines…)")
     table = table.dropna(subset=["score"])
     per_recording = recording_scores(table)
     site_of = table.groupby("recording_id")["site"].first()
@@ -114,11 +114,11 @@ def run_full_benchmark(
         for p in bench["precisions"]:
             recall, threshold = recall_at_precision(y, s, p)
             row[f"recall@p{p}_oracle"] = recall
-            if (folds >= 0).any():  # seuil choisi sur les autres plis (n° 140)
+            if (folds >= 0).any():  # seuil choisi sur les autres folds (n° 140)
                 crossed = cross_fitted_recall(y, s, folds, p)
                 recall, k, n_pos = crossed["recall"], crossed["k"], crossed["n_pos"]
                 decided = crossed["decided"]
-            else:  # source sans plis (externe) : seul l'oracle est calculable
+            else:  # source sans folds (externe) : seul l'oracle est calculable
                 decided = s >= threshold if np.isfinite(threshold) else np.zeros(len(s), bool)
                 k, n_pos = int((decided & (y == 1)).sum()), int(y.sum())
             row[f"recall@p{p}"] = recall

@@ -134,7 +134,7 @@ class Regularizer:
     def pool_windows(self, project, train: np.ndarray) -> np.ndarray:
         """R81 : le réservoir de fenêtres non annotées, passé par les mêmes transformations que
         les fenêtres annotées. `pool_from: train` (défaut) : seulement les micros
-        d'entraînement ; `all` : aussi ceux du pli jugé (adaptation sans labels à un micro
+        d'entraînement ; `all` : aussi ceux du fold jugé (adaptation sans labels à un micro
         nouveau)."""
         ctx = self.context
         if ctx.pool is None or ctx.pool_groups is None:

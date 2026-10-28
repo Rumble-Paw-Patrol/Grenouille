@@ -3,7 +3,7 @@ fait maison, et un détecteur de référence déjà branché.
 
 `get_detector(nom, cfg)` : `distilled`, `homemade` (emplacements, lèvent NotImplementedError
 tant qu'ils ne sont pas écrits), `band_contrast` (contraste de bande, sans apprentissage : il
-montre que le banc d'essai, le stock hors-pli et le benchmark complet sont prêts).
+montre que le banc d'essai, le stock hors-fold et le benchmark complet sont prêts).
 """
 
 from __future__ import annotations

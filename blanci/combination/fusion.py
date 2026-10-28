@@ -1,7 +1,7 @@
 """Tête de fusion, niveau 2 du stacking (§3, DECISIONS n° 94).
 
-Entrées (colonnes de niveau 1), toutes hors-pli : le score de `head` (`OOFScores`, §13.7 : un
-score en-pli ferait croire à la fusion que `head` est parfaite), les descripteurs du module
+Entrées (colonnes de niveau 1), toutes hors-fold : le score de `head` (`OOFScores`, §13.7 : un
+score en-fold ferait croire à la fusion que `head` est parfaite), les descripteurs du module
 séquentiel, et autant d'autres sources qu'on veut : têtes d'autres encodeurs (ensemble de
 modèles). Environ 10 positifs indépendants par coefficient.
 
@@ -79,7 +79,7 @@ def _fill(X: np.ndarray, mean: np.ndarray) -> np.ndarray:
 
 def _check(head_oof: OOFScores, y: np.ndarray, columns: list[str]) -> None:
     if not isinstance(head_oof, OOFScores):
-        raise TypeError("la fusion n'accepte que des scores hors-pli (OOFScores, §13.7)")
+        raise TypeError("la fusion n'accepte que des scores hors-fold (OOFScores, §13.7)")
     n_coef = 1 + len(columns)
     if int(np.sum(y)) < POSITIVES_PER_COEF * n_coef:
         warnings.warn(
@@ -114,7 +114,7 @@ def fusion_oof(
     seed: int = 0,
     assignment: dict[str, int] | None = None,
 ) -> OOFScores:
-    """Scores hors-pli de la fusion, pour l'évaluer sur les mêmes groupes que `head`."""
+    """Scores hors-fold de la fusion, pour l'évaluer sur les mêmes groupes que `head`."""
     _check(head_oof, y, columns)
     y = np.asarray(y).astype(int)
     folds = grouped_folds(y, groups, n_splits, seed, assignment)
@@ -328,7 +328,7 @@ def fit_fusion_model(
     segments: int = 8,
     smoothness: float = 1.0,
 ) -> FusionModel:
-    """Apprend une fusion `method` sur (X, y) : X = entrées de niveau 1, hors-pli.
+    """Apprend une fusion `method` sur (X, y) : X = entrées de niveau 1, hors-fold.
 
     Variantes de la logistique, combinables (`regularization.fusion_settings`) : `+R50` (C
     choisi sur `C_grid` par validation groupée interne sur `groups` ; sans groupes, le C
@@ -430,10 +430,10 @@ def fusion_model_oof(
     calibration_splits: int = 3,
     **options,
 ) -> OOFScores:
-    """Scores hors-pli d'une fusion sur les plis communs : chaque pli apprend sa fusion sans
-    le micro testé (les entrées sont déjà hors-pli, §3) ; R50 choisit son C dans chaque pli,
-    sur les seuls micros d'entraînement. `calibration` = "platt" : chaque pli recalibré avant
-    la mise bout à bout, comme `head.calibrated_fold_scores` (C du pli gardé dans les plis
+    """Scores hors-fold d'une fusion sur les folds communs : chaque fold apprend sa fusion sans
+    le micro testé (les entrées sont déjà hors-fold, §3) ; R50 choisit son C dans chaque fold,
+    sur les seuls micros d'entraînement. `calibration` = "platt" : chaque fold recalibré avant
+    la mise bout à bout, comme `head.calibrated_fold_scores` (C du fold gardé dans les folds
     internes) ; `raw` garde les scores d'avant (DECISIONS n° 135)."""
     y = np.asarray(y).astype(int)
     X = np.asarray(X, dtype=float)
@@ -483,15 +483,15 @@ def _fold_calibration(
     splits: int,
     options: dict,
 ) -> tuple[float, float]:
-    """(a, b) de Platt du pli (`regularization.fold_platt`), appris sur des scores hors-pli
-    internes de l'entraînement du pli, avec le C retenu par le pli (R50 retiré : même échelle
-    que la fusion du pli). (1, 0) sans plis internes utilisables, et pour les règles fixes
-    (`weighted`, `mean`, `rank_mean`, `max`, `min`) : rien n'y est choisi pli par pli."""
+    """(a, b) de Platt du fold (`regularization.fold_platt`), appris sur des scores hors-fold
+    internes de l'entraînement du fold, avec le C retenu par le fold (R50 retiré : même échelle
+    que la fusion du fold). (1, 0) sans folds internes utilisables, et pour les règles fixes
+    (`weighted`, `mean`, `rank_mean`, `max`, `min`) : rien n'y est choisi fold par fold."""
     from blanci.heads.head import FOLD_CALIBRATIONS
     from blanci.heads.regularization import fold_platt, fusion_settings, usable_folds
 
     if calibration not in FOLD_CALIBRATIONS:
-        raise ValueError(f"recalibration par pli inconnue : {calibration!r} ({FOLD_CALIBRATIONS})")
+        raise ValueError(f"recalibration par fold inconnue : {calibration!r} ({FOLD_CALIBRATIONS})")
     if method in ("weighted", "mean", "rank_mean", "max", "min"):
         return 1.0, 0.0
     inner_folds = usable_folds(y, groups, splits, seed)

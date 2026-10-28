@@ -1,14 +1,14 @@
 """Stacking : entrées de niveau 1, emplacement du traitement du signal, benchmark de la fusion
 (DECISIONS n° 94–95).
 
-Entrées de niveau 1 d'une fusion, toutes hors-pli, sur les plis communs (`dataset.folds_for`) :
+Entrées de niveau 1 d'une fusion, toutes hors-fold, sur les folds communs (`dataset.folds_for`) :
 
 - `head` : score de la tête logistique de l'encodeur principal ;
 - descripteurs du traitement du signal (`fusion.columns`) : rythme dans la fenêtre (débuts de
   notes, calculés sur l'audio) et persistance dans l'enregistrement (calculée sur les scores de
-  la tête, pli par pli) ;
+  la tête, fold par fold) ;
 - autres sources (`fusion.sources`, ensemble de modèles) :
-  - `head:<encodeur>` : tête logistique d'un autre encodeur, apprise pli par pli sur ses propres
+  - `head:<encodeur>` : tête logistique d'un autre encodeur, apprise fold par fold sur ses propres
     fenêtres, appliquée à toutes les fenêtres des enregistrements testés, ramenée sur la grille
     de l'encodeur principal (`fusion.project_scores`).
 
@@ -24,7 +24,7 @@ Emplacement du traitement du signal (`signal_processing.position`, une liste, vi
   résument ses scores sur l'enregistrement), entrent dans la fusion.
 
 `fusion_benchmark` compare chaque emplacement × chaque méthode de fusion à la tête seule, sur
-les mêmes plis (bootstrap apparié par enregistrement), et donne la part de chaque entrée.
+les mêmes folds (bootstrap apparié par enregistrement), et donne la part de chaque entrée.
 """
 
 from __future__ import annotations
@@ -251,7 +251,7 @@ def _secondary_head_oof(
     target: pd.DataFrame,
     assignment: dict[str, int],
 ) -> np.ndarray:
-    """Score hors-pli d'un autre encodeur sur les fenêtres cibles : pour chaque pli commun, une
+    """Score hors-fold d'un autre encodeur sur les fenêtres cibles : pour chaque fold commun, une
     tête apprise sur ses fenêtres des autres micros score toutes ses fenêtres des
     enregistrements testés, ramenées sur la grille cible."""
     head_cfg, bench = cfg["head"], cfg["benchmark"]
@@ -298,7 +298,7 @@ def _secondary_head_oof(
     return out
 
 
-# --- Matrice de fusion et scores hors-pli ---------------------------------------------------------
+# --- Matrice de fusion et scores hors-fold --------------------------------------------------------
 
 
 def design_matrix(
@@ -347,7 +347,7 @@ def fused_oof(
     cfg: dict,
     sources: list[str] | tuple[str, ...] = (),
 ) -> tuple[np.ndarray, list[str]]:
-    """Score hors-pli de la chaîne (emplacement × méthode) ; tête seule s'il n'y a rien à
+    """Score hors-fold de la chaîne (emplacement × méthode) ; tête seule s'il n'y a rien à
     fusionner. Portes réappliquées : amont (rythme) et seuillage en amont."""
     values, _, columns = _fused(level1, method, position, cfg, sources)
     return values, columns
@@ -360,7 +360,7 @@ def _fused(
     cfg: dict,
     sources: list[str] | tuple[str, ...] = (),
 ) -> tuple[np.ndarray, np.ndarray | None, list[str]]:
-    """(scores hors-pli, scores d'avant la recalibration par pli ou None, entrées)."""
+    """(scores hors-fold, scores d'avant la recalibration par fold ou None, entrées)."""
     X, columns = design_matrix(level1, position, cfg, sources)
     raw = None
     if len(columns) == 1:
@@ -412,7 +412,7 @@ def fusion_benchmark(
     reference = level1.head.values
     folds = grouped_folds(level1.y, level1.groups, cfg["head"]["n_splits"], seed, level1.assignment)
     fids = np.full(len(level1.y), -1)
-    for f, (_, test) in enumerate(folds):  # les plis de `fusion_model_oof`
+    for f, (_, test) in enumerate(folds):  # les folds de `fusion_model_oof`
         fids[test] = f
     rows, comparisons, weights = [], [], []
     for position in positions:
@@ -444,7 +444,7 @@ def fusion_benchmark(
                     seed=seed,
                     folds=fids,
                 )
-                if raw is not None:  # recalibration par pli (n° 135) : l'AP poolée d'avant
+                if raw is not None:  # recalibration par fold (n° 135) : l'AP poolée d'avant
                     metrics["ap_raw"] = evaluate(
                         raw, level1.y, level1.recordings, level=level, n_boot=0
                     )["ap"]

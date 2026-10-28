@@ -538,7 +538,7 @@ def heads(
     site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
 ) -> None:
     """Benchmark des têtes (DECISIONS n° 92) : recherche par l'exemple, prototypes, kNN, linear
-    probe (et ses poolings), attentive, cascade ; mêmes fenêtres, mêmes plis."""
+    probe (et ses poolings), attentive, cascade ; mêmes fenêtres, mêmes folds."""
     from blanci.evaluation.benchmark import to_markdown
     from blanci.evaluation.head_benchmark import run_head_benchmark
 
@@ -563,10 +563,10 @@ def heads(
     if selection:  # R74, R80
         verdict = (
             f"Gagnante du tableau : {selection['winner']} (AP {selection['winner_ap']:.3f}). "
-            f"AP moyenne par pli : {selection['fold_ap_winner']:.3f} pour elle, "
+            f"AP moyenne par fold : {selection['fold_ap_winner']:.3f} pour elle, "
             f"{selection['fold_ap_selection']:.3f} pour la procédure « garder la meilleure » "
-            "choisie sans voir le pli jugé. Un grand écart = une victoire due à la chance. "
-            f"Choix par pli : {selection['chosen']}."
+            "choisie sans voir le fold jugé. Un grand écart = une victoire due à la chance. "
+            f"Choix par fold : {selection['chosen']}."
         )
         text += ["## Sélection honnête (R74, R80)", "", verdict, ""]
     by_positive = out.get("by_positive")
@@ -582,19 +582,19 @@ def heads(
         typer.echo(f"fond capté : {out['background']['verdict']}")
     if selection:
         typer.echo(
-            f"sélection honnête (R74) : {selection['fold_ap_selection']:.3f} par pli contre "
+            f"sélection honnête (R74) : {selection['fold_ap_selection']:.3f} par fold contre "
             f"{selection['fold_ap_winner']:.3f} pour la gagnante {selection['winner']}"
         )
     typer.echo(f"rapport : {reports / (stem + '.md')}")
 
 
 def _ap_line(row: dict) -> str:
-    """« AP 0,612 [lo ; hi] ; par pli 0,590 ; avant recalibration 0,480 » (n° 133, 135)."""
+    """« AP 0,612 [lo ; hi] ; par fold 0,590 ; avant recalibration 0,480 » (n° 133, 135)."""
     text = f"AP {row['ap']:.3f}"
     if "ap_lo" in row:
         text += f" [{row['ap_lo']:.3f} ; {row['ap_hi']:.3f}]"
     if pd.notna(row.get("ap_fold_mean")):
-        text += f" ; par pli {row['ap_fold_mean']:.3f}"
+        text += f" ; par fold {row['ap_fold_mean']:.3f}"
     if pd.notna(row.get("ap_raw")):
         text += f" ; avant recalibration {row['ap_raw']:.3f}"
     return text
@@ -724,7 +724,7 @@ def benchmark(
     site: Annotated[str | None, typer.Option(help="Restreindre à un site.")] = None,
     dataset: Annotated[str | None, typer.Option(help="Restreindre à un jeu.")] = None,
 ) -> None:
-    """Tableau comparatif des encodeurs (§2), en plis groupés par micro."""
+    """Tableau comparatif des encodeurs (§2), en folds groupés par micro."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     filters = {k: v for k, v in (("site", site), ("dataset", dataset)) if v}
@@ -781,7 +781,7 @@ def train(
     ] = None,
     site: Annotated[str | None, typer.Option(help="N'entraîner que sur un site.")] = None,
 ) -> None:
-    """Entraîne la tête logistique et calibre son seuil sur les scores hors-pli."""
+    """Entraîne la tête logistique et calibre son seuil sur les scores hors-fold."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     result = train_and_register(
@@ -933,7 +933,7 @@ def evaluate(
         typer.Option(help="Juger la dernière tête sur un jeu gelé (version, ou « last »)."),
     ] = None,
 ) -> None:
-    """Évalue sur des sites tenus à l'écart, ou en plis groupés par micro si aucun n'est donné.
+    """Évalue sur des sites tenus à l'écart, ou en folds groupés par micro si aucun n'est donné.
 
     Avec --frozen : la tête enregistrée, à son seuil, sur un jeu gelé jamais vu (§6).
     """
@@ -1059,7 +1059,7 @@ def fusion(
         ),
     ] = "default",
 ) -> None:
-    """Fusion (§3) : évaluée hors-pli contre la tête seule, puis enregistrée pour `score`."""
+    """Fusion (§3) : évaluée hors-fold contre la tête seule, puis enregistrée pour `score`."""
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
     result = train_fusion(con, encoder, cfg, head)
@@ -1150,7 +1150,7 @@ def ensemble(
     sources: Annotated[
         str | None,
         typer.Option(
-            help="Sources du stock hors-pli à combiner par enregistrement, ex. "
+            help="Sources du stock hors-fold à combiner par enregistrement, ex. "
             "« birdmae-…/logistic,perch_v2-…/logistic,baseline/template_max/c0 »."
         ),
     ] = None,
@@ -1164,7 +1164,7 @@ def ensemble(
     ] = False,
 ) -> None:
     """Ensemble de modèles (DECISIONS n° 96) : combinaison par enregistrement de sources du
-    stock hors-pli (`blanci sources` les liste), ou concaténation d'embeddings."""
+    stock hors-fold (`blanci sources` les liste), ou concaténation d'embeddings."""
     from blanci.combination.ensemble import concat_benchmark, run_ensemble
     from blanci.evaluation.benchmark import to_markdown
 
@@ -1202,13 +1202,13 @@ def ensemble(
 
 @app.command()
 def sources(ctx: typer.Context) -> None:
-    """Sources du stock de scores hors-pli : ce que le benchmark complet et les ensembles
+    """Sources du stock de scores hors-fold : ce que le benchmark complet et les ensembles
     peuvent comparer ou combiner."""
     from blanci.evaluation.oof import list_sources
 
     table = list_sources(_cfg(ctx))
     if table.empty:
-        typer.echo("aucun score hors-pli enregistré (lancer benchmark, heads, baselines…)")
+        typer.echo("aucun score hors-fold enregistré (lancer benchmark, heads, baselines…)")
         return
     for row in table.itertuples():
         typer.echo(
@@ -1224,7 +1224,7 @@ def detector_bench(
         str, typer.Option(help="band_contrast, distilled ou homemade (emplacements réservés).")
     ],
 ) -> None:
-    """Banc d'essai d'un détecteur audio → score (DECISIONS n° 97) : hors-pli sur les plis
+    """Banc d'essai d'un détecteur audio → score (DECISIONS n° 97) : hors-fold sur les folds
     communs s'il apprend, scores rangés dans le stock commun. Lit l'audio (lecture seule)."""
     from blanci.heads.detectors import evaluate_detector, get_detector
 
@@ -1233,14 +1233,14 @@ def detector_bench(
     out = evaluate_detector(con, cfg, get_detector(detector, cfg))
     for row in out["table"].itertuples():
         typer.echo(f"  {row.level:<10} AP {row.ap:.3f} [{row.ap_lo:.3f} ; {row.ap_hi:.3f}]")
-    typer.echo(f"scores hors-pli : {out['source']}")
+    typer.echo(f"scores hors-fold : {out['source']}")
 
 
 @app.command("benchmark-all")
 def benchmark_all(
     ctx: typer.Context,
     sources: Annotated[
-        str | None, typer.Option(help="Sources à comparer (défaut : tout le stock hors-pli).")
+        str | None, typer.Option(help="Sources à comparer (défaut : tout le stock hors-fold).")
     ] = None,
     reference: Annotated[
         str | None,
@@ -1288,7 +1288,7 @@ def benchmark_all(
         "# Benchmark complet des modèles",
         "",
         f"{out['n_common_recordings']} enregistrements ; référence : {out['reference']}{chosen}.",
-        "Rappel : seuil choisi sur les autres plis (DECISIONS n° 140).",
+        "Rappel : seuil choisi sur les autres folds (DECISIONS n° 140).",
         "Colonnes à remplir à la main : licence, prise en main (§2).",
         "",
         to_markdown(table[[c for c in shown if c in table]]),
@@ -1587,7 +1587,7 @@ def anuraset_heads(
         typer.Option(help="Têtes, régularisations comprises (défaut : anuraset.heads)."),
     ] = None,
 ) -> None:
-    """R78 : benchmark des têtes sur AnuraSet, un pli par site (généralisation entre sites)."""
+    """R78 : benchmark des têtes sur AnuraSet, un fold par site (généralisation entre sites)."""
     from blanci.evaluation.anuraset import (
         read_strong_labels,
         run_anuraset_heads,
@@ -1662,7 +1662,7 @@ def anuraset_campaign(
 ) -> None:
     """Campagne AnuraSet d'un seul tenant (DECISIONS n° 136) : extraction et inventaire,
     profil des espèces et choix (note brève en 3–6 kHz d'abord), embeddings, encodeurs puis
-    têtes et régularisations, un pli par site. Reprenable : ce qui est fait est sauté."""
+    têtes et régularisations, un fold par site. Reprenable : ce qui est fait est sauté."""
     from blanci.evaluation.anuraset import (
         choose_species,
         dominant_frequencies,
@@ -1740,7 +1740,7 @@ def anuraset_benchmark(
         str | None, typer.Option(help="Codes AnuraSet ; défaut : anuraset.species.")
     ] = None,
 ) -> None:
-    """Pré-benchmark AnuraSet (§2) : sondes par encodeur et par espèce, plis par site."""
+    """Pré-benchmark AnuraSet (§2) : sondes par encodeur et par espèce, folds par site."""
     from blanci.evaluation.anuraset import (
         read_strong_labels,
         run_anuraset_benchmark,

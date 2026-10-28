@@ -3,7 +3,7 @@
 AnuraSet (Cañas et al. 2023, Zenodo 8342596, licence CC BY) : 1 612 enregistrements d'une
 minute, 4 sites du Brésil, 42 espèces, chaque chant daté (début, fin, qualité L/M/H). On y
 choisit deux ou trois anoures à note brève en 3–6 kHz, comme A. blanci, et on juge chaque
-encodeur exactement comme sur les données ONF : mêmes sondes, mêmes métriques, plis groupés
+encodeur exactement comme sur les données ONF : mêmes sondes, mêmes métriques, folds groupés
 par site. Indicateur, pas garantie : autres espèces, autre forêt, autres enregistreurs.
 
 Tout vit à part des données ONF (`anuraset/anuraset.yaml` : base, stocks, rapports séparés).
@@ -194,7 +194,7 @@ def suggest_species(
     min_sites: int = 2,
 ) -> pd.DataFrame:
     """Espèces proches d'A. blanci : note brève, dominante en 3–6 kHz, assez de chants, sur
-    au moins deux sites (sinon les plis par site n'ont pas de sens)."""
+    au moins deux sites (sinon les folds par site n'ont pas de sens)."""
     ok = (
         profile["dominant_hz"].between(*band_hz)
         & (profile["duration_median_s"] <= max_duration_s)
@@ -346,10 +346,10 @@ def run_anuraset_heads(
     calls: pd.DataFrame,
     methods: list[str] | None = None,
 ) -> dict[str, pd.DataFrame]:
-    """R78 : le benchmark des têtes sur AnuraSet, **un pli par site** (leave-one-site-out).
+    """R78 : le benchmark des têtes sur AnuraSet, **un fold par site** (leave-one-site-out).
 
     Chaque tête est apprise sur 3 sites et jugée sur le 4ᵉ ; son C, et le weight decay des
-    têtes torch, sont choisis par des plis internes eux aussi par site : les réglages retenus
+    têtes torch, sont choisis par des folds internes eux aussi par site : les réglages retenus
     sont ceux qui passent d'un site à l'autre, pas d'un micro à l'autre d'un même site. En
     attendant des positifs hors de Mataroni, c'est là qu'on juge ce qui généralise.
 
@@ -415,7 +415,7 @@ def run_anuraset_heads(
                 inputs,
                 y,
                 groups,
-                n_splits=n_sites,  # un pli par site
+                n_splits=n_sites,  # un fold par site
                 method=method,
                 C_grid=head_cfg["C_grid"],
                 seed=head_cfg["seed"],
@@ -477,7 +477,7 @@ def window_comparisons(
     """Chaque tête contre la référence au niveau **fenêtre**, bootstrap apparié qui tire des
     enregistrements entiers. Sur AnuraSet, une espèce commune chante dans presque chaque
     enregistrement d'une minute : l'AP par enregistrement n'y est plus définie, celle par
-    fenêtre si (n° 136). Les plis sont des sites, mais 2 à 4 sites ne suffisent pas à tirer
+    fenêtre si (n° 136). Les folds sont des sites, mais 2 à 4 sites ne suffisent pas à tirer
     des sites : l'intervalle reste optimiste, les p-valeurs sont corrigées de Holm
     (`_holm_by_level`, n° 139)."""
     from blanci.evaluation.evaluate import paired_bootstrap
@@ -510,7 +510,7 @@ def write_anuraset_heads_report(out: dict, encoder_id: str, reports_dir: Path) -
     shown = ["species", "head", "level", "n_pos", "n_neg", "ap", "ap_lo", "ap_hi"]
     shown += ["ap_fold_mean", "ap_raw", "recall@p0.1"]  # par site ; avant recalibration
     text = [
-        f"# Têtes sur AnuraSet, un pli par site (R78) : {encoder_id}",
+        f"# Têtes sur AnuraSet, un fold par site (R78) : {encoder_id}",
         "",
         "Chaque tête est apprise sur les autres sites et jugée sur le site tenu à l'écart ; ses "
         "réglages sont choisis de même. Indicateur de généralisation entre sites, sur d'autres "
@@ -547,7 +547,7 @@ def run_anuraset_benchmark(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(tableau encodeur × espèce × sonde × niveau, comparaisons appariées par espèce).
 
-    Négatifs : `negatives_per_positive` fenêtres par positif, tirées dans chaque site ; plis
+    Négatifs : `negatives_per_positive` fenêtres par positif, tirées dans chaque site ; folds
     groupés par site ; niveau « recording » = l'enregistrement d'une minute.
     """
     acfg, bench, head = cfg["anuraset"], cfg["benchmark"], cfg["head"]
@@ -614,7 +614,7 @@ def write_anuraset_report(
     text = [
         "# Pré-benchmark AnuraSet (§2)",
         "",
-        "Plis groupés par site. Indicateur du classement des encodeurs sur des anoures "
+        "Folds groupés par site. Indicateur du classement des encodeurs sur des anoures "
         "néotropicaux, pas une mesure sur A. blanci.",
         "",
     ]
@@ -669,7 +669,7 @@ SPECIES_LEVELS = [
 def choose_species(profile: pd.DataFrame, n: int = 3) -> pd.DataFrame:
     """Jusqu'à `n` espèces pour la campagne, par niveaux (`SPECIES_LEVELS`) : d'abord celles
     qui ressemblent à A. blanci (note brève en 3–6 kHz), puis on élargit. Toujours au moins
-    deux sites : sans cela, un pli par site n'a pas de sens. Colonne `criterion` : le niveau
+    deux sites : sans cela, un fold par site n'a pas de sens. Colonne `criterion` : le niveau
     qui a retenu l'espèce."""
     chosen: list[pd.DataFrame] = []
     taken: set[str] = set()
@@ -694,8 +694,8 @@ def choose_species(profile: pd.DataFrame, n: int = 3) -> pd.DataFrame:
 
 
 def rank_encoders(results: pd.DataFrame, level: str = "window") -> pd.DataFrame:
-    """Encodeurs classés par l'AP moyenne de la sonde logistique sur les espèces (un pli par
-    site), avec l'AP moyenne par pli et le nombre d'espèces. Niveau fenêtre par défaut : une
+    """Encodeurs classés par l'AP moyenne de la sonde logistique sur les espèces (un fold par
+    site), avec l'AP moyenne par fold et le nombre d'espèces. Niveau fenêtre par défaut : une
     espèce commune chante dans presque tous les enregistrements d'une minute, et l'AP par
     enregistrement n'y est plus définie (répétition générale du n° 136)."""
     part = results[(results["probe"] == "logistic") & (results["level"] == level)]
@@ -746,7 +746,7 @@ def run_anuraset_campaign(
     methods: list[str] | None = None,
 ) -> dict[str, Any]:
     """Campagne AnuraSet (DECISIONS n° 136) : les encodeurs sur les espèces choisies (sonde
-    logistique et autres sondes du §3, un pli par site), puis toutes les têtes de
+    logistique et autres sondes du §3, un fold par site), puis toutes les têtes de
     `CAMPAIGN_HEADS` sur le meilleur encodeur. `species` : sortie de `choose_species`."""
     codes = list(species["species"])
     results, comparisons = run_anuraset_benchmark(con, cfg, encoder_ids, codes, calls)
@@ -779,7 +779,7 @@ def write_campaign_report(out: dict[str, Any], reports_dir: Path) -> Path:
         "# Campagne AnuraSet",
         "",
         "Chaque modèle est appris sur les autres sites et jugé sur un site qu'il n'a jamais vu "
-        "(un pli par site) : c'est la généralisation d'un site à l'autre qu'on mesure. "
+        "(un fold par site) : c'est la généralisation d'un site à l'autre qu'on mesure. "
         "Indicateur sur d'autres anoures que A. blanci, pas un verdict (DECISIONS n° 136).",
         "",
         "## Espèces",
@@ -807,7 +807,7 @@ def write_campaign_report(out: dict[str, Any], reports_dir: Path) -> Path:
             "",
             "Une tête ne bat la logistique que si `significant_holm` : p-valeur corrigée de "
             "Holm sur toutes les têtes et toutes les espèces (DECISIONS n° 139). Les "
-            "enregistrements d'un site sont tirés un à un, alors que les plis sont des sites : "
+            "enregistrements d'un site sont tirés un à un, alors que les folds sont des sites : "
             "l'intervalle reste optimiste ; l'AP par site tenu à l'écart dit la variabilité.",
             "",
             to_markdown(comparisons),
