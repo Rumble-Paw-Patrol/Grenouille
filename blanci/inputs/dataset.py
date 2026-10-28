@@ -168,19 +168,16 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     spans["comment"] = conditions.map(lambda c: c.get("comment"))
     spans["multiclass"] = conditions.map(lambda c: c.get("multiclass", True))
     spans["classes"] = spans["classes"].map(lambda c: ", ".join(json.loads(c)) if c else "")
-    summary = (
-        pd.Series(dtype=object)
-        if intervals.empty
-        else intervals.groupby("span_id").apply(
-            lambda g: "; ".join(
-                f"{a:.2f}-{b:.2f} {lab}" + (f" ({q})" if q else "")
-                for a, b, lab, q in zip(
-                    g["start_s"], g["end_s"], g["label"], g["quality"].fillna(""), strict=True
-                )
-            ),
-            include_groups=False,
-        )
+    quality = intervals["quality"].fillna("")
+    text = (
+        intervals["start_s"].map("{:.2f}".format)
+        + "-"
+        + intervals["end_s"].map("{:.2f}".format)
+        + " "
+        + intervals["label"]
+        + quality.map(lambda q: f" ({q})" if q else "")
     )
+    summary = text.groupby(intervals["span_id"]).agg("; ".join)
     counts = intervals[intervals["label"] != "false_friend"].groupby("span_id").size()
     spans["n_blanci"] = spans["span_id"].map(counts).fillna(0).astype(int)
     spans["intervalles"] = spans["span_id"].map(summary).fillna("")
