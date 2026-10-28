@@ -39,24 +39,26 @@ README = """Paquet d'écoute « {name} », envoyé par {author}
 
 {message}
 
-1. Dézipper le paquet (clic droit > Extraire tout), puis double-cliquer sur
-   « Ouvrir le poste.html ». Il s'ouvre dans le navigateur : rien à installer. Chrome ou Edge
-   de préférence (ils écrivent vos réponses directement dans un dossier).
-2. En haut à gauche, « Annotateur » : choisir son nom (ou « Ajouter quelqu'un… »).
-3. {n} extraits à écouter. Les intervalles de {author} sont en tirets, à son nom, en bas du
-   spectrogramme. Pour chaque extrait :
-   - d'accord : « Reprendre les intervalles de {author} », puis « Envoyer l'extrait » ;
-   - sinon, tracer ses propres intervalles (clic gauche + glisser), changer l'étiquette
-     (touches 1 à 4), en ajouter une (bouton +, au-dessus du spectrogramme) ;
-   - un avis, un doute : le champ « Commentaire » ;
-   - « Envoyer l'extrait » enregistre et passe au suivant.
+1. Dézipper le paquet s'il ne s'est pas dézippé automatiquement, puis double-cliquer sur
+   « Ouvrir le poste.html ». Il s'ouvre dans le navigateur : rien à installer et pas besoin
+   d'internet. Chrome ou Edge de préférence (ils écrivent vos réponses directement dans un
+   dossier).
+2. En haut à gauche, « Annotateur » : s'identifier (ou « Ajouter quelqu'un… » si votre nom
+   n'est pas dans la liste).
+3. Il y a {n} extraits à écouter. Les intervalles tracés par {author} sont en pointillés, à
+   son nom, en dessous du spectrogramme, et déjà repris comme point de départ de votre
+   réponse. Pour chaque extrait :
+   - un avis : le champ « Commentaire » ;
+   - si vous êtes d'accord : cliquez sur « Envoyer l'extrait », sans rien toucher ;
+   - sinon, tracer ses propres intervalles (clic gauche + glisser), changer l'étiquette, en
+     ajouter une (bouton +, au-dessus du spectrogramme) ;
+   - cliquer sur « Envoyer l'extrait » enregistre votre choix et passe à l'extrait suivant.
 4. Au premier envoi, Chrome et Edge demandent le dossier où écrire vos réponses : choisir
    par exemple ce dossier-ci. Elles y sont réécrites après chaque extrait. Avec un autre
-   navigateur, cliquer « Télécharger mes réponses » à la fin.
-5. À la fin, la page dit que c'est terminé et où sont vos deux fichiers (votre nom suivi de
-   « _extraits_annotes.csv » et « _intervalles_annotes.csv ») : les envoyer par mail à
-   {author}. On peut s'arrêter et reprendre plus tard : le navigateur garde vos réponses
-   (même navigateur, même ordinateur).
+   navigateur, vos annotations et commentaires ne sont pas sauvegardés automatiquement :
+   cliquez sur « Télécharger mes réponses » à la fin.
+5. À la fin, la page dit que c'est terminé et où est votre fichier (votre nom suivi de
+   « _reponses.json ») : l'envoyer par mail à {author}.
 """
 
 
