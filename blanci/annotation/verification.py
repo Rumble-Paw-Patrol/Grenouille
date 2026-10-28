@@ -2,8 +2,8 @@
 
 On tire parmi les extraits que l'annotateur a écoutés dans le poste (méthode par intervalles), à
 leur dernière version : une annotation remplacée par une séance d'annotation plus récente
-(`dataset.add_versions`, `remplace_par`) n'est jamais tirée, son remplaçante peut l'être. Les extraits
-déjà envoyés dans un tirage précédent (`exclude`) sont écartés aussi, pour ne pas faire
+(`dataset.add_versions`, `remplace_par`) n'est jamais tirée, sa remplaçante peut l'être. Les
+extraits déjà envoyés dans un tirage précédent (`exclude`) sont écartés aussi, pour ne pas faire
 vérifier deux fois le même.
 
 La file écrite par `scripts/verification/tirage_verification.py` est une file d'écoute ordinaire
