@@ -16,6 +16,7 @@ elle n'existe pas. L'audio n'est que lu.
 from __future__ import annotations
 
 import io
+import json
 import sqlite3
 from collections import Counter
 from pathlib import Path
@@ -717,6 +718,47 @@ def extract_intervals(
         ]
         for who, span_id in latest
     }
+
+
+def extract_comments(
+    con: sqlite3.Connection,
+    recording_id: str,
+    start_s: float,
+    end_s: float,
+    annotator: str | list[str | None] | None = None,
+) -> list[dict[str, Any]]:
+    """Commentaires laissés sur l'extrait [start_s, end_s], du plus ancien au plus récent :
+    {who, date, text, start_s, end_s}. Ceux des extraits écoutés qui le recouvrent d'au moins
+    `SAME_EXTRACT_OVERLAP` du plus court (toutes versions : un réenvoi sans commentaire n'efface
+    pas l'ancien), et ceux des fenêtres qui le touchent (annotation par fenêtres). Un même texte
+    du même annotateur n'est gardé qu'une fois, à sa dernière date. `annotator` : comme
+    `extract_intervals`."""
+    from blanci.inputs.dataset import SAME_EXTRACT_OVERLAP, annotator_filter
+
+    condition, params = annotator_filter(annotator)
+    extra = f" AND {condition}" if condition else ""
+    spans = con.execute(
+        "SELECT annotator, created_at, conditions, start_s, end_s FROM spans "
+        "WHERE recording_id = ? AND conditions LIKE '%\"comment\"%'"
+        " AND MIN(end_s, ?) - MAX(start_s, ?) >= ? * MAX(MIN(end_s - start_s, ?), 1e-9)" + extra,
+        (recording_id, end_s, start_s, SAME_EXTRACT_OVERLAP, end_s - start_s, *params),
+    ).fetchall()
+    condition, params = annotator_filter(annotator, "l.annotator")
+    windows = con.execute(
+        "SELECT l.annotator, l.created_at, l.conditions, w.offset_s, w.offset_s + w.dur_s "
+        "FROM labels l JOIN windows w USING (window_id) WHERE w.recording_id = ? "
+        "AND l.conditions LIKE '%\"comment\"%' AND w.offset_s < ? AND w.offset_s + w.dur_s > ?"
+        + (f" AND {condition}" if condition else ""),
+        (recording_id, end_s, start_s, *params),
+    ).fetchall()
+    kept: dict[tuple, dict[str, Any]] = {}
+    for who, date, conditions, a, b in sorted([*spans, *windows], key=lambda r: r[1] or ""):
+        text = (json.loads(conditions or "{}").get("comment") or "").strip()
+        if text:
+            key = ((who or "").casefold(), text)
+            kept.pop(key, None)  # réordonné à sa dernière date
+            kept[key] = {"who": who, "date": date, "text": text, "start_s": a, "end_s": b}
+    return list(kept.values())
 
 
 def local_time(start_utc: str | None, utc_offset_h: float) -> str:

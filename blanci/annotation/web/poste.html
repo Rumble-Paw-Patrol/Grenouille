@@ -66,6 +66,8 @@
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px;
           border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; }
   .chip button { padding: 0 7px; border: 0; background: none; color: var(--muted); }
+  .comments { max-width: 900px; font-size: 13px; }
+  .comments ul { margin: 2px 0 6px; padding-left: 20px; }
   details summary { cursor: pointer; color: var(--muted); }
   table.help td { padding: 2px 6px; vertical-align: top; font-size: 12.5px; }
 </style>
@@ -111,6 +113,7 @@
   <section>
     <h3>Masquer les annotations de</h3>
     <div id="masks"></div>
+    <label class="check"><input type="checkbox" id="nocomments"> Masquer les commentaires</label>
   </section>
   <section>
     <h3>Vos réponses</h3>
@@ -127,6 +130,7 @@
     <h2 id="title"></h2>
     <div class="muted mono" id="caption"></div>
     <iframe id="viewer" src="donnees/visualiseur.html" title="Spectrogramme"></iframe>
+    <div class="comments" id="comments"></div>
     <div class="form">
       <input type="text" id="species" placeholder="Espèce du faux ami (si connue)">
       <input type="text" id="comment"
@@ -160,6 +164,7 @@ let me = get("annotateur", "");
 let answers = me ? get(`reponses:${me}`, {}) : {};
 let custom = get("etiquettes", P.custom || {});
 let hidden = new Set(get("masques", [])), everyone = get("tout-masquer", false);
+let noComments = get("sans-commentaires", false);
 let pos = 0, version = 0, current = [], ready = false, dir = null, unsaved = false;
 const fold = s => String(s || "").toLocaleLowerCase("fr");
 const sameName = (a, b) => fold(a) === fold(b);
@@ -169,7 +174,9 @@ function names() {
   for (const n of get("ajoutes", [])) if (!out.some(o => sameName(o, n))) out.push(n);
   return out;
 }
-const others = () => [...new Set(P.items.flatMap(it => Object.keys(it.others)))];
+// paquets d'avant les commentaires : pas de `comments`
+const others = () => [...new Set(P.items.flatMap(it =>
+  [...Object.keys(it.others), ...(it.comments || []).map(c => c.who)]))];
 const item = () => P.items[pos];
 const heard = it => Object.prototype.hasOwnProperty.call(answers, it.key);
 const doneCount = () => P.items.filter(heard).length;
@@ -223,7 +230,11 @@ $("masks").addEventListener("change", e => {
   else if (e.target.checked) hidden.add(e.target.dataset.who);
   else hidden.delete(e.target.dataset.who);
   put("masques", [...hidden]); put("tout-masquer", everyone);
-  sidebar(); render();
+  sidebar(); render(); comments();
+});
+$("nocomments").checked = noComments;
+$("nocomments").addEventListener("change", e => {
+  noComments = e.target.checked; put("sans-commentaires", noComments); comments();
 });
 // --- Extrait ouvert ----------------------------------------------------------------------
 function firstUnheard(from) {
@@ -243,6 +254,20 @@ function shownOthers(it) {  // {nom : intervalles} des autres, sauf soi et les m
   return Object.fromEntries(Object.entries(it.others)
     .filter(([n]) => !sameName(n, me) && !hidden.has(n)));
 }
+// Commentaires déjà laissés sur l'extrait (soi compris), masqués comme les intervalles.
+function comments() {
+  const it = item(), t0 = it.offset_s, t1 = it.offset_s + it.dur_s;
+  const shown = noComments || everyone ? []
+    : (it.comments || []).filter(c => !hidden.has(c.who));
+  $("comments").innerHTML = shown.length
+    ? "💬 <b>Commentaires déjà laissés</b><ul>" + shown.map(c => {
+        const whole = Math.abs(c.start_s - t0) < 0.05 && Math.abs(c.end_s - t1) < 0.05;
+        const where = whole ? "" : ` · ${c.start_s.toFixed(1)}–${c.end_s.toFixed(1)} s`;
+        return `<li><b>${esc(c.who)}</b> <span class="muted">(${esc(String(c.date || "")
+          .slice(0, 10))}${where})</span> : ${esc(c.text)}</li>`;
+      }).join("") + "</ul>"
+    : "";
+}
 function open() {
   const it = item();
   const mine = answers[it.key];
@@ -257,7 +282,7 @@ function open() {
     `${it.offset_s.toFixed(1)}–${(it.offset_s + it.dur_s).toFixed(1)} s` +
     (it.reason ? ` · ${it.reason}` : "") + (mine ? " · déjà envoyé" : "");
   $("end").innerHTML = ""; $("work").hidden = false;
-  sidebar(); controls(); render();
+  sidebar(); controls(); render(); comments();
   window.scrollTo({top: 0});
 }
 function controls() {

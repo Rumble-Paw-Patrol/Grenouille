@@ -111,6 +111,7 @@ def build_package(
     from blanci.annotation.workbench import (
         CHANNELS,
         INTERVAL_ANSWERS,
+        extract_comments,
         extract_intervals,
         local_time,
         read_annotators,
@@ -175,6 +176,11 @@ def build_package(
                 "others": {
                     (who or "(sans nom)"): [list(iv) for iv in ivs] for who, ivs in others.items()
                 },
+                # commentaires déjà laissés, de tous : la page masque comme les intervalles
+                "comments": [
+                    dict(c, who=c["who"] or "(sans nom)")
+                    for c in extract_comments(con, rid, start, start + dur)
+                ],
             }
         )
     package = {

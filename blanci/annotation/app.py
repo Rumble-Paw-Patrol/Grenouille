@@ -66,6 +66,7 @@ from blanci.annotation.workbench import (
     CHANNELS,
     INTERVAL_ANSWERS,
     add_annotator,
+    extract_comments,
     extract_intervals,
     latest_labels,
     load_candidates,
@@ -818,16 +819,17 @@ def _take_buttons(others: dict[str, list], ikey_base: str, take_key: str) -> Non
         )
 
 
-def _masking_panel(names: list[str]) -> tuple[list[str], bool]:
+def _masking_panel(names: list[str]) -> tuple[list[str], bool, bool]:
     """Cases « Masquer les annotations de » : une par annotateur de la liste, et « tout le
-    monde ». Renvoie (noms masqués, tout le monde)."""
+    monde » ; puis « Masquer les commentaires ». Renvoie (noms masqués, tout le monde,
+    commentaires masqués). Les commentaires d'un annotateur masqué le sont aussi."""
     st.markdown("**Masquer les annotations de**")
     everyone = st.checkbox(
         "Tout le monde",
         key="hide_everyone",
     )
     columns = st.columns(2)
-    return [
+    hidden = [
         name
         for i, name in enumerate(names)
         if columns[i % 2].checkbox(
@@ -835,7 +837,31 @@ def _masking_panel(names: list[str]) -> tuple[list[str], bool]:
             key=f"hide::{name}",
             disabled=everyone,
         )
-    ], everyone
+    ]
+    no_comments = st.checkbox(
+        "Masquer les commentaires",
+        key="hide_comments",
+        help="Commentaires laissés sur l'extrait (par vous ou d'autres), affichés sous le "
+        "spectrogramme.",
+    )
+    return hidden, everyone, no_comments
+
+
+def _comments_panel(comments: list[dict], t0: float, t1: float) -> None:
+    """Commentaires déjà laissés sur l'extrait, sous le spectrogramme : qui, quand, et la
+    partie de l'enregistrement quand ce n'est pas tout l'extrait (fenêtre, autre découpage)."""
+    if not comments:
+        return
+    lines = []
+    for c in comments:
+        where = (
+            ""
+            if abs(c["start_s"] - t0) < 0.05 and abs(c["end_s"] - t1) < 0.05
+            else f" · {c['start_s']:.1f}–{c['end_s']:.1f} s"
+        )
+        date = str(c["date"] or "")[:10]
+        lines.append(f"- **{c['who'] or '(sans nom)'}** ({date}{where}) : {c['text']}")
+    st.markdown("💬 **Commentaires déjà laissés**\n" + "\n".join(lines))
 
 
 def _recordings_root(cfg) -> list[Path]:
@@ -906,7 +932,7 @@ def main() -> None:
             help="◀ ▶ et l'envoi d'une réponse vont au précédent ou au prochain candidat jamais "
             "écouté ; décoché, au voisin dans la file.",
         )
-        hidden, everyone = _masking_panel(names)
+        hidden, everyone, no_comments = _masking_panel(names)
         _labels_panel(custom)
         # Rubrique « Méthode » masquée (annotation par fenêtres suspendue) : mettre
         # SHOW_METHOD à True pour la réafficher.
@@ -1043,6 +1069,9 @@ def main() -> None:
         extract = f"{candidate['path']}:{t0:.2f}:{t1:.2f}"
         # Ses intervalles (son dernier envoi, sauf s'il se masque) et ceux des autres affichés.
         saved = extract_intervals(con, candidate["recording_id"], t0, t1, shown)
+        comments = (
+            [] if no_comments else extract_comments(con, candidate["recording_id"], t0, t1, shown)
+        )
         mine = next((k for k in saved if k is not None and k.casefold() == me.casefold()), None)
         own = saved.pop(mine, []) if me else []
         others = {k or "(sans nom)": v for k, v in saved.items()}
@@ -1088,6 +1117,7 @@ def main() -> None:
         )
         if not window_mode:
             _take_buttons(others, ikey_base, take_key)
+        _comments_panel(comments, t0, t1)
         intervals = st.session_state[ikey]
         channel = st.session_state[ckey]
 
