@@ -60,8 +60,8 @@ def main() -> None:
     }
     path = write_queue(cfg, sample, args.nom, about)
     print(f"{info['tires']} extraits tirés sur {info['tirables']} tirables : {path}")
-    n_re, n_sent = info["reannotes_exclus"], info["deja_envoyes_exclus"]
-    print(f"  écartés : {n_re} réannotés, {n_sent} déjà envoyés")
+    n_old, n_sent = info["versions_remplacees_exclues"], info["deja_envoyes_exclus"]
+    print(f"  écartés : {n_old} versions remplacées, {n_sent} déjà envoyés")
     print(f"Paquet : uv run blanci paquet {args.nom} --file {args.nom}")
     if info["tires"] < args.n:
         print(f"  Attention : {info['tires']} extraits seulement sur {args.n} demandés.")

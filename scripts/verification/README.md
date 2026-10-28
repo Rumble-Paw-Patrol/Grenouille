@@ -10,7 +10,7 @@ uv run blanci paquet verif_1 --file verif_1 --message "..."
 ```
 
 **Jamais tirés** :
-- les extraits que j'ai réécoutés (`remplace_par` renseigné ou `reannotations.csv`, voir `annotations/README.md`) : leur version actuelle est une correction faite après coup, pas un premier jugement ;
+- les annotations remplacées par une séance d'annotation plus récente (`remplace_par` renseigné, voir `annotations/README.md`) : seule la dernière version d'un extrait réécouté peut être tirée ;
 - ceux d'un tirage déjà envoyé : `--exclure verif_1` au tirage suivant (sans cela, deux tirages peuvent retomber sur les mêmes extraits) ;
 - les extraits de contrôle rapide (`source` = `flag`), sauf `--source plan flag` ;
 - ceux d'un autre annotateur (`--annotateur`, par défaut Léonard et L).

@@ -194,26 +194,50 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     return extracts, intervals
 
 
+# Un extrait réécouté en recouvre un plus ancien d'au moins cette part du plus court des deux :
+# même extrait, même avec d'autres bornes (une erreur corrigée). Deux extraits voisins qui se
+# touchent à peine ne sont pas liés.
+SAME_EXTRACT_OVERLAP = 0.5
+
+
+def _last_version(i: int, replaced_by: dict[int, int]) -> int:
+    while i in replaced_by:
+        i = replaced_by[i]
+    return i
+
+
 def add_versions(extracts: pd.DataFrame) -> pd.DataFrame:
-    """Versions successives d'un même extrait : même enregistrement, mêmes bornes (au
-    centième), même annotateur (casse ignorée). Ajoute `version` (1 pour le premier envoi),
-    `n_versions` et `remplace_par` (`span_id` de la dernière version, vide pour elle-même et
-    pour un extrait jamais réécouté). `extracts` : `span_id`, `recording_id`, `start_s`,
-    `end_s`, `annotator`, comme `annotated_spans`."""
-    ordered = extracts.sort_values("span_id")
-    keys = [
-        ordered["recording_id"],
-        ordered["annotator"].fillna("").str.casefold(),
-        ordered["start_s"].round(2),
-        ordered["end_s"].round(2),
-    ]
-    group = ordered.groupby(keys, sort=False)["span_id"]
-    latest = group.transform("max")
+    """Versions successives d'un même extrait : même enregistrement, même annotateur (casse
+    ignorée) et extraits qui se recouvrent d'au moins `SAME_EXTRACT_OVERLAP` du plus court,
+    quelles que soient leurs bornes. Ajoute `version` (1 pour le premier envoi), `n_versions` et
+    `remplace_par` (`span_id` de la dernière version, vide pour elle-même et pour un extrait
+    jamais réécouté). `extracts` : `span_id`, `recording_id`, `start_s`, `end_s`, `annotator`,
+    comme `annotated_spans`."""
     out = extracts.copy()
-    out["version"] = group.cumcount().add(1).reindex(extracts.index)
-    out["n_versions"] = group.transform("size").reindex(extracts.index)
-    out["remplace_par"] = latest.where(latest != ordered["span_id"]).reindex(extracts.index)
-    out["remplace_par"] = out["remplace_par"].astype("Int64")
+    out["version"], out["n_versions"] = 1, 1
+    out["remplace_par"] = pd.array([pd.NA] * len(out), dtype="Int64")
+    names = out["annotator"].fillna("").str.casefold()
+    for _, group in out.groupby([out["recording_id"], names], sort=False):
+        if len(group) < 2:
+            continue
+        group = group.sort_values("span_id")
+        ids = group["span_id"].to_numpy()
+        a, b = group["start_s"].to_numpy(float), group["end_s"].to_numpy(float)
+        overlap = np.minimum(b[:, None], b[None, :]) - np.maximum(a[:, None], a[None, :])
+        shortest = np.minimum((b - a)[:, None], (b - a)[None, :])
+        same = overlap >= SAME_EXTRACT_OVERLAP * np.maximum(shortest, 1e-9)
+        newer = np.triu(same, k=1)  # [i, j] : j (plus récent) recouvre i
+        replaced_by = {
+            i: int(np.flatnonzero(newer[i])[-1]) for i in range(len(ids)) if newer[i].any()
+        }
+
+        roots = np.array([_last_version(i, replaced_by) for i in range(len(ids))])
+        for root in set(roots):
+            members = np.flatnonzero(roots == root)
+            rows = group.index[members]
+            out.loc[rows, "n_versions"] = len(members)
+            out.loc[rows, "version"] = np.arange(1, len(members) + 1)
+            out.loc[group.index[members[members != root]], "remplace_par"] = int(ids[root])
     return out
 
 

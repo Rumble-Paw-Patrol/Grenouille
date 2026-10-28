@@ -1,10 +1,10 @@
 """Tirage au hasard d'extraits à faire vérifier par un encadrant.
 
 On tire parmi les extraits que l'annotateur a écoutés dans le poste (méthode par intervalles), à
-leur dernière version. Un extrait réécouté (`dataset.add_versions`) n'est jamais tiré : sa
-version actuelle est une correction faite après coup, pas un jugement à froid, et la vérifier
-mesurerait la correction plutôt que l'annotation. Les extraits déjà envoyés dans un tirage
-précédent (`exclude`) sont écartés aussi, pour ne pas faire vérifier deux fois le même.
+leur dernière version : une annotation remplacée par une séance d'annotation plus récente
+(`dataset.add_versions`, `remplace_par`) n'est jamais tirée, son remplaçante peut l'être. Les extraits
+déjà envoyés dans un tirage précédent (`exclude`) sont écartés aussi, pour ne pas faire
+vérifier deux fois le même.
 
 La file écrite par `scripts/verification/tirage_verification.py` est une file d'écoute ordinaire
 (`candidats.csv`) : `blanci paquet <nom> --file <file>` en fait un paquet à envoyer.
@@ -58,7 +58,7 @@ def verification_sample(
     extracts = extracts[extracts["annotator"].fillna("").str.casefold().isin(mine)]
     extracts = add_versions(extracts.assign(annotator=sorted(mine)[0] if mine else ""))
     extracts = extracts[extracts["source"].isin(sources)]
-    reannotated = extracts["n_versions"] > 1
+    replaced = extracts["remplace_par"].notna()
     keys = _key(extracts["recording_id"], extracts["start_s"], extracts["end_s"])
     sent = set()
     for queue in exclude:
@@ -70,8 +70,7 @@ def verification_sample(
             )
         )
     already_sent = keys.isin(sent)
-    pool = extracts[~reannotated & ~already_sent]
-    pool = pool[pool["remplace_par"].isna()]
+    pool = extracts[~replaced & ~already_sent]
     rng = np.random.default_rng(seed)
     picked = pool.iloc[np.sort(rng.permutation(len(pool))[:n])] if len(pool) else pool
     sample = pd.DataFrame(
@@ -90,11 +89,9 @@ def verification_sample(
     )[CANDIDATE_COLUMNS]
     sample = sample.sample(frac=1.0, random_state=seed).reset_index(drop=True)
     info = {
-        "extraits_ecoutes": int((extracts["remplace_par"].isna()).sum()),
-        "reannotes_exclus": int((reannotated & extracts["remplace_par"].isna()).sum()),
-        "deja_envoyes_exclus": int(
-            (already_sent & ~reannotated & extracts["remplace_par"].isna()).sum()
-        ),
+        "extraits_ecoutes": int((~replaced).sum()),
+        "versions_remplacees_exclues": int(replaced.sum()),
+        "deja_envoyes_exclus": int((already_sent & ~replaced).sum()),
         "tirables": len(pool),
         "tires": len(sample),
     }
