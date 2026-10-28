@@ -272,8 +272,9 @@ function open() {
   const it = item();
   const mine = answers[it.key];
   const ownSaved = Object.entries(it.others).find(([n]) => sameName(n, me));
-  // sans réponse à soi, on part des intervalles de l'envoyeur : envoyer tel quel = d'accord
-  current = (mine ? mine.intervals : ownSaved ? ownSaved[1] : it.proposal || []).map(i => [...i]);
+  // rien de tracé = d'accord avec l'envoyeur (ses intervalles restent en pointillés)
+  current = (mine ? (mine.accord ? [] : mine.intervals) : ownSaved ? ownSaved[1] : [])
+    .map(i => [...i]);
   version++;
   $("species").value = mine?.species || "";
   $("comment").value = mine?.comment || "";
@@ -374,10 +375,13 @@ $("send").addEventListener("click", async () => {
   }
   const it = item(), t0 = it.offset_s, t1 = it.offset_s + it.dur_s;
   const r2 = t => Math.round(t * 100) / 100;
+  const traced = current
+    .map(([a, b, l, q]) => [r2(Math.max(a, t0)), r2(Math.min(b, t1)), l, q || null])
+    .filter(([a, b]) => b > a);
+  const accord = !traced.length && (it.proposal || []).length > 0;  // rien tracé = d'accord
   answers[it.key] = {
-    intervals: current
-      .map(([a, b, l, q]) => [r2(Math.max(a, t0)), r2(Math.min(b, t1)), l, q || null])
-      .filter(([a, b]) => b > a),
+    intervals: accord ? it.proposal.map(i => [...i]) : traced,
+    accord,
     species: $("species").value.trim() || null,
     comment: $("comment").value.trim() || null,
     created_at: new Date().toISOString().replace(/\.\d+Z$/, "Z"),

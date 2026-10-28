@@ -34,24 +34,22 @@ from blanci.core.locate import locate
 
 PAGE = Path(__file__).with_name("web") / "poste.html"
 
-README = """Paquet d'écoute « {name} », envoyé par {author}
+README = """Paquet d'écoute « {name} »
 {line}
 
 {message}
 
-1. Dézipper le paquet s'il ne s'est pas dézippé automatiquement, puis double-cliquer sur
+1. Dézipper le paquet, puis double-cliquer sur
    « Ouvrir le poste.html ». Il s'ouvre dans le navigateur : rien à installer et pas besoin
    d'internet. Chrome ou Edge de préférence (ils écrivent vos réponses directement dans un
    dossier).
 2. En haut à gauche, « Annotateur » : s'identifier (ou « Ajouter quelqu'un… » si votre nom
    n'est pas dans la liste).
-3. Il y a {n} extraits à écouter. Les intervalles tracés par {author} sont en pointillés, à
-   son nom, en dessous du spectrogramme, et déjà repris comme point de départ de votre
-   réponse. Pour chaque extrait :
+3. Il y a {n} extraits à écouter. Les intervalles que j'ai tracés sont en pointillés, à
+   mon nom, en dessous du spectrogramme. Pour chaque extrait :
    - un avis : le champ « Commentaire » ;
-   - si vous êtes d'accord : cliquez sur « Envoyer l'extrait », sans rien toucher ;
-   - sinon, tracer ses propres intervalles (clic gauche + glisser), changer l'étiquette, en
-     ajouter une (bouton +, au-dessus du spectrogramme) ;
+   - si mes intervalles vous conviennent : ne rien tracer et cliquer sur « Envoyer l'extrait » ;
+   - sinon, tracer ses propres intervalles (clic gauche + glisser) ;
    - cliquer sur « Envoyer l'extrait » enregistre votre choix et passe à l'extrait suivant.
 4. Au premier envoi, Chrome et Edge demandent le dossier où écrire vos réponses : choisir
    par exemple ce dossier-ci. Elles y sont réécrites après chaque extrait. Avec un autre
@@ -171,7 +169,8 @@ def build_package(
                 "dur_s": dur,
                 "source": getattr(row, "source", None) or "plan",
                 "reason": getattr(row, "reason", None) or "",
-                # point de départ de l'encadrant : envoyer sans rien toucher = être d'accord
+                # intervalles de l'encadrant, repris à l'envoi si rien n'est tracé (accord) ;
+                # jamais affichés en plein : l'encadrant les voit en pointillés
                 "proposal": [list(iv) for iv in next((v for v in mine.values() if v), [])],
                 "others": {
                     (who or "(sans nom)"): [list(iv) for iv in ivs] for who, ivs in others.items()
@@ -207,7 +206,7 @@ def build_package(
         README.format(
             name=name,
             author=author,
-            line="=" * (len(name) + len(author) + 30),
+            line="=" * (len(name) + 20),
             message=message or "Merci pour votre écoute !",
             n=len(items),
         ),
