@@ -140,6 +140,7 @@ def build_package(
     audio = folder / "donnees" / "audio"
     audio.mkdir(parents=True)
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
+    authors = ["Léonard", "L"] if author in ("Léonard", "L") else [author]
     items = []
     for i, row in enumerate(queue.itertuples(index=False), start=1):
         rid, start, dur = row.recording_id, float(row.offset_s), float(row.dur_s)
@@ -152,6 +153,7 @@ def build_package(
             encoding="utf-8",
         )
         others = extract_intervals(con, rid, start, start + dur)
+        mine = extract_intervals(con, rid, start, start + dur, authors)
         items.append(
             {
                 "key": key,
@@ -166,6 +168,8 @@ def build_package(
                 "dur_s": dur,
                 "source": getattr(row, "source", None) or "plan",
                 "reason": getattr(row, "reason", None) or "",
+                # point de départ de l'encadrant : envoyer sans rien toucher = être d'accord
+                "proposal": [list(iv) for iv in next((v for v in mine.values() if v), [])],
                 "others": {
                     (who or "(sans nom)"): [list(iv) for iv in ivs] for who, ivs in others.items()
                 },

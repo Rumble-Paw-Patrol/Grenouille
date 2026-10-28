@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -58,12 +59,14 @@ from blanci.heads.signal_processing import (
 )
 from blanci.inputs.dataset import (
     EXCLUDED_LABELS,
+    add_versions,
     annotated_spans,
     current_labels,
     embedded_training_set,
     folds_for,
     local_minutes,
     pairing_options,
+    reannotations,
     recordings_table,
     training_set,
 )
@@ -783,6 +786,8 @@ def _text(value: Any) -> str | None:
 
 
 EXPORT_FILES = ("extraits_annotes.csv", "intervalles_annotes.csv", "fenetres_annotees.csv")
+# Écrit avec les trois autres mais jamais relu à l'import : un relevé des extraits réécoutés.
+REANNOTATIONS_FILE = "reannotations.csv"
 
 
 def export_annotations(
@@ -800,6 +805,12 @@ def export_annotations(
       l'annotateur de son extrait ;
     - fenetres_annotees.csv : fenêtres annotées une à une (méthode par fenêtres) : label,
       qualité, espèce, commentaire (tel qu'écrit par l'annotateur), source, annotateur.
+
+    La base est en ajout seul : un extrait réécouté y figure plusieurs fois. Dans
+    extraits_annotes.csv, `remplace_par` donne le `span_id` de sa dernière version (vide pour
+    elle-même et pour un extrait jamais réécouté) ; `reannotations.csv` (écrit s'il a des
+    lignes ou existe déjà) met en regard la première et la dernière version de chaque extrait
+    réécouté. Il n'est pas relu par `import_annotations`.
     """
     mine = {n.casefold() for n in names}
     labels = current_labels(con)
@@ -816,8 +827,11 @@ def export_annotations(
     windows = windows[columns].sort_values(["path", "offset_s"])
     extracts, intervals = annotated_spans(con)
     extracts = extracts[extracts["annotator"].fillna("").str.casefold().isin(mine)]
-    extracts = extracts.assign(annotator=names[0])
+    extracts = add_versions(extracts.assign(annotator=names[0]))
     intervals = intervals.merge(extracts[["span_id", "annotator"]], on="span_id", how="inner")
+    again = reannotations(extracts)
+    extracts = extracts.drop(columns=["version", "n_versions"])
+    extracts = extracts[[*extracts.columns.drop("recording_id"), "recording_id"]]
     folder.mkdir(parents=True, exist_ok=True)
     counts = {}
     for name, frame in zip(EXPORT_FILES, (extracts, intervals, windows), strict=True):
@@ -825,6 +839,10 @@ def export_annotations(
         if len(frame) or name != EXPORT_FILES[2] or path.exists():
             frame.to_csv(path, index=False)
         counts[name] = len(frame)
+    path = folder / f"{prefix}{REANNOTATIONS_FILE}"
+    if len(again) or path.exists():
+        again.to_csv(path, index=False)
+    counts[REANNOTATIONS_FILE] = len(again)
     return counts
 
 
@@ -841,6 +859,19 @@ def _export_sets(folder: Path) -> list[tuple[Path | None, Path | None, Path | No
     ]
 
 
+def _unpack_answers(folder: Path, into: Path) -> None:
+    """Les « <nom>_reponses.json » d'un poste empaqueté (`annotation/paquet.py`) : un seul
+    fichier qui contient les deux CSV. Ils sont réécrits dans `into` sous les noms d'un envoi
+    de poste (« <nom>_extraits_annotes.csv »…), que `_export_sets` sait relire."""
+    for path in sorted(folder.glob("*reponses.json")):
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        if data.get("format") != "blanci-reponses-1":
+            raise ValueError(f"{path.name} : pas un fichier de réponses du poste")
+        prefix = path.name[: -len("reponses.json")]
+        for name in ("extraits_annotes", "intervalles_annotes"):
+            (into / f"{prefix}{name}.csv").write_text(data[name], encoding="utf-8")
+
+
 def import_annotations(con: sqlite3.Connection, folder: Path) -> dict[str, Any]:
     """Recharge les annotations d'`export_annotations` (extraits_annotes.csv,
     intervalles_annotes.csv, fenetres_annotees.csv dans `folder`, éventuellement précédés du
@@ -855,10 +886,13 @@ def import_annotations(con: sqlite3.Connection, folder: Path) -> dict[str, Any]:
     report: dict[str, Any] = {
         "spans": 0, "intervals": 0, "labels": 0, "already": 0, "unknown": 0, "annotators": [],
     }  # fmt: skip
-    for extracts_csv, intervals_csv, windows_csv in _export_sets(folder):
-        part = _import_set(con, extracts_csv, intervals_csv, windows_csv)
-        for key, value in part.items():
-            report[key] += value
+    with tempfile.TemporaryDirectory() as unpacked:
+        _unpack_answers(folder, Path(unpacked))
+        for source in (folder, Path(unpacked)):
+            for extracts_csv, intervals_csv, windows_csv in _export_sets(source):
+                part = _import_set(con, extracts_csv, intervals_csv, windows_csv)
+                for key, value in part.items():
+                    report[key] += value
     report["annotators"] = list(dict.fromkeys(report["annotators"]))
     return report
 

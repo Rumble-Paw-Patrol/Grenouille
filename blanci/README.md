@@ -10,6 +10,6 @@ Le paquet Python du projet : un sous-dossier par étape de la chaîne (inventair
 - `heads/` : étape 3, les têtes de détection (embedding ou signal vers score), leurs régularisations et les baselines.
 - `combination/` : étape 4, la combinaison de plusieurs modèles (fusion, stacking, ensemble).
 - `evaluation/` : étape 5, la mesure (plis groupés, AP, rappel à précision fixée, benchmarks).
-- `annotation/` : étape 6, la boucle d'écoute (sélection des candidats, poste d'annotation Streamlit).
+- `annotation/` : étape 6, la boucle d'écoute (sélection des candidats, poste d'annotation Streamlit, paquet d'écoute pour les encadrants, tirage au hasard des extraits à faire vérifier hors réannotés : `verification.py`).
 - `results/` : étape 7, les sorties écologiques (agrégation fenêtre vers point d'écoute, courbes d'activité).
 - `exploration/` : les fonctions et graphiques des notebooks de `notebooks/`.

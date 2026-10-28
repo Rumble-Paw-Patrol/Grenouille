@@ -195,6 +195,69 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     return extracts, intervals
 
 
+def add_versions(extracts: pd.DataFrame) -> pd.DataFrame:
+    """Versions successives d'un même extrait : même enregistrement, mêmes bornes (au
+    centième), même annotateur (casse ignorée). Ajoute `version` (1 pour le premier envoi),
+    `n_versions` et `remplace_par` (`span_id` de la dernière version, vide pour elle-même et
+    pour un extrait jamais réécouté). `extracts` : `span_id`, `recording_id`, `start_s`,
+    `end_s`, `annotator`, comme `annotated_spans`."""
+    ordered = extracts.sort_values("span_id")
+    keys = [
+        ordered["recording_id"],
+        ordered["annotator"].fillna("").str.casefold(),
+        ordered["start_s"].round(2),
+        ordered["end_s"].round(2),
+    ]
+    group = ordered.groupby(keys, sort=False)["span_id"]
+    latest = group.transform("max")
+    out = extracts.copy()
+    out["version"] = group.cumcount().add(1).reindex(extracts.index)
+    out["n_versions"] = group.transform("size").reindex(extracts.index)
+    out["remplace_par"] = latest.where(latest != ordered["span_id"]).reindex(extracts.index)
+    out["remplace_par"] = out["remplace_par"].astype("Int64")
+    return out
+
+
+def reannotations(extracts: pd.DataFrame) -> pd.DataFrame:
+    """Un extrait réécouté par ligne : sa première et sa dernière version côte à côte (classes,
+    intervalles, commentaire, date) et le nombre de versions. `extracts` : `annotated_spans`
+    passé par `add_versions`."""
+    columns = [
+        "path", "site", "mic_id", "start_utc", "start_s", "end_s", "annotator", "n_versions",
+        "span_avant", "span_apres", "date_avant", "date_apres", "classes_avant", "classes_apres",
+        "n_blanci_avant", "n_blanci_apres", "intervalles_avant", "intervalles_apres",
+        "commentaire_avant", "commentaire_apres", "recording_id",
+    ]  # fmt: skip
+    again = extracts[extracts["n_versions"] > 1].sort_values("span_id")
+    if again.empty:
+        return pd.DataFrame(columns=columns)
+    rows = []
+    final = again["remplace_par"].fillna(again["span_id"])  # la dernière version groupe les autres
+    for _, group in again.groupby(final.astype("int64"), sort=False):
+        first, last = group.iloc[0], group.iloc[-1]
+        rows.append(
+            {
+                **{c: last[c] for c in ("path", "site", "mic_id", "start_utc", "start_s", "end_s")},
+                "annotator": last["annotator"],
+                "n_versions": len(group),
+                "span_avant": first["span_id"],
+                "span_apres": last["span_id"],
+                "date_avant": first["created_at"],
+                "date_apres": last["created_at"],
+                "classes_avant": first["classes"],
+                "classes_apres": last["classes"],
+                "n_blanci_avant": first["n_blanci"],
+                "n_blanci_apres": last["n_blanci"],
+                "intervalles_avant": first["intervalles"],
+                "intervalles_apres": last["intervalles"],
+                "commentaire_avant": first["comment"],
+                "commentaire_apres": last["comment"],
+                "recording_id": last["recording_id"],
+            }
+        )
+    return pd.DataFrame(rows, columns=columns).sort_values("date_apres").reset_index(drop=True)
+
+
 def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFrame:
     """Intervalles encore valables : un extrait réécouté plus tard qui couvre entièrement un
     intervalle le remplace (correction en ajout seul, comme les labels). Un intervalle dont

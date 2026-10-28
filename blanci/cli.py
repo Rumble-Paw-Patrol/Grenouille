@@ -295,7 +295,8 @@ def export_labels(
     typer.echo(
         f"{counts['extraits_annotes.csv']} extraits écoutés, "
         f"{counts['intervalles_annotes.csv']} intervalles, "
-        f"{counts['fenetres_annotees.csv']} fenêtres annotées : {out}"
+        f"{counts['fenetres_annotees.csv']} fenêtres annotées, "
+        f"{counts['reannotations.csv']} extraits réécoutés : {out}"
     )
 
 

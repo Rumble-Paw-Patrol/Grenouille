@@ -17,7 +17,7 @@
 - `candidates` : file d'écoute (plan, hasard, enregistrements entiers, drapeau)
 - `annotate` : poste d'annotation dans le navigateur
 - `label` : ajoute un label à une fenêtre
-- `export-labels` : exporte ses annotations en CSV
+- `export-labels` : exporte ses annotations en CSV (dont `reannotations.csv`, les extraits réécoutés)
 - `import-labels` : recharge des annotations exportées ailleurs
 - `paquet` : paquet d'écoute pour un encadrant sans GitHub ni disques
 - `agreement` : accord entre deux annotateurs
