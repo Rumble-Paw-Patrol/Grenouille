@@ -1080,7 +1080,11 @@ def main() -> None:
         take_key = f"take::{ikey_base}"  # change à chaque « Reprendre les intervalles de… »
         ikey = f"{ikey_base}::{st.session_state.get(take_key, 0)}"
         if ikey not in st.session_state:
-            st.session_state[ikey] = [list(i) for i in own]
+            # Intervalles tracés avant de s'identifier : repris à son nom, pas perdus.
+            anon_base = f"iv::{extract}::::{masked}"
+            anon = f"{anon_base}::{st.session_state.get(f'take::{anon_base}', 0)}"
+            draft = st.session_state.pop(anon, None) if me else None
+            st.session_state[ikey] = [list(i) for i in (draft or own)]
         shown = [
             {
                 "t0": o,

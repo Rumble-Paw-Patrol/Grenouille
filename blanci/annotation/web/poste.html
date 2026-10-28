@@ -220,8 +220,19 @@ $("who").addEventListener("change", e => {
     if (name && !names().some(n => sameName(n, name))) put("ajoutes", [...get("ajoutes", []), name]);
     name = names().find(n => sameName(n, name)) || "";
   }
+  // Travail commencé sans nom (intervalles, espèce, commentaire) : repris à son nom.
+  const draft = !me && name && (current.length || $("species").value || $("comment").value)
+    ?{at: item().key, current, species: $("species").value, comment: $("comment").value}
+    : null;
   me = name; put("annotateur", me);
   answers = me ? get(`reponses:${me}`, {}) : {};
+  if (draft && !answers[draft.at]) {
+    pos = P.items.findIndex(it => it.key === draft.at); open();
+    current = draft.current; version++;
+    $("species").value = draft.species; $("comment").value = draft.comment;
+    render();
+    return;
+  }
   pos = firstUnheard(-1); open();
 });
 $("list").addEventListener("change", e => { pos = +e.target.value; open(); });
