@@ -24,7 +24,9 @@ Validé contre bacpipe 1.3.5 (torch 2.6, TensorFlow 2.15, Windows) le 23/09/2026
   cachée, jeton de classe retiré, 32 temps × 8 fréquences), BEATs et NatureBEATs (jetons avant
   la moyenne que fait bacpipe, temps × 8 fréquences), AudioProtoPNet (carte de la dernière
   couche, celle que lit sa tête à prototypes) ; `embed_tokens` les rend en grille
-  (fenêtres, temps, fréquence, dim).
+  (fenêtres, temps, fréquence, dim) ;
+- `openvino` : graphe ONNX (perch_v2) ou réseau torch (AudioProtoPNet, ConvNeXt BirdSet)
+  calculé par OpenVINO, sur l'Iris Xe (n° 179, 208).
 """
 
 from __future__ import annotations
@@ -106,6 +108,10 @@ def _load_bacpipe_model(
 # d'abord : jeton t·F + f) ; audioprotopnet rend une carte (lot, canaux, fréquence, temps).
 TOKEN_FREQ_BANDS = {"birdmae": 8, "beats": 8, "naturebeats": 8, "audioprotopnet": None}
 
+# Modèles torch dont le réseau (`model.model`, un ConvNeXt Hugging Face qui rend
+# `last_hidden_state` et `pooler_output`) peut être calculé par OpenVINO (réglage `openvino`).
+OPENVINO_TORCH = {"audioprotopnet", "convnext_birdset"}
+
 
 def _default_device() -> str:
     try:
@@ -156,7 +162,12 @@ class BacpipeEncoder(BaseEncoder):
         )
         self.model_name = model_name
         self.openvino = openvino  # sa précision entre dans l'identité du stock (f16 ≠ f32)
-        self._light_session(openvino, Path(model_base_path), keep_logits=bool(logit_classes))
+        self._light_session(
+            openvino,
+            Path(model_base_path),
+            keep_logits=bool(logit_classes),
+            samples=module.LENGTH_IN_SAMPLES,
+        )
         self.sample_rate = int(module.SAMPLE_RATE)
         self.window_s = module.LENGTH_IN_SAMPLES / module.SAMPLE_RATE
         self._last_tokens: np.ndarray | None = None
@@ -171,19 +182,20 @@ class BacpipeEncoder(BaseEncoder):
         self._logits.clear()
 
     def _light_session(
-        self, openvino: dict | None, model_base_path: Path, keep_logits: bool
+        self, openvino: dict | None, model_base_path: Path, keep_logits: bool, samples: int
     ) -> None:
         """Modèle ONNX (perch_v2) : remplace la session de bacpipe par celle d'un graphe réduit
         aux sorties utiles (`pruned`, DECISIONS n° 180), calculé par OpenVINO si `openvino` le
         demande et que le périphérique est là (le lot devient alors celui du réglage), sinon par
-        ONNX Runtime comme avant. Sans effet sur les autres modèles."""
+        ONNX Runtime comme avant. Modèle torch de `OPENVINO_TORCH` avec `openvino` : son réseau
+        est calculé par OpenVINO (`_openvino_backbone`). Sans effet sur les autres modèles."""
         from blanci.embedding.encoders.pruned import PrunedSession, pruned_model
 
         holder = getattr(self._model, "model", None)
         source = getattr(getattr(holder, "session", None), "_model_path", None)
         if source is None:
             if openvino:
-                raise ValueError(f"{self.name} : le réglage openvino demande un modèle ONNX")
+                self._openvino_backbone(openvino, model_base_path, samples)
             return
         names = [out.name for out in holder.session.get_outputs()]
         unused = {"spectrogram"} | (set() if keep_logits else {"label"})
@@ -211,6 +223,32 @@ class BacpipeEncoder(BaseEncoder):
             return
         holder.session = PrunedSession(session, kept, names)
         print(f"{self.name} : sorties {', '.join(kept)} ; {session.get_providers()[0]}", flush=True)
+
+    def _openvino_backbone(self, openvino: dict, model_base_path: Path, samples: int) -> None:
+        """Réseau torch (ConvNeXt) calculé par OpenVINO à la place de torch : sur l'Iris Xe en
+        float16, AudioProtoPNet passe de ~0,7 à ~7 fenêtres/s dans `embed` (DECISIONS n° 208).
+        Le prétraitement (spectrogramme) reste celui
+        de bacpipe, l'encodeur garde son lot (le réseau découpe en lots de `batch_size`). Sans
+        OpenVINO ou sans le périphérique : torch, et la précision rangée avec le stock est f32
+        (un stock encodé en f16 refuse alors la reprise au lieu de mélanger)."""
+        import torch
+
+        from blanci.embedding.encoders.openvino_session import openvino_backbone
+
+        if self.model_name not in OPENVINO_TORCH:
+            raise ValueError(
+                f"{self.name} : le réglage openvino demande un modèle ONNX ou l'un de "
+                f"{sorted(OPENVINO_TORCH)}"
+            )
+        with torch.no_grad():
+            example = self._model.preprocess(torch.zeros(1, samples))
+        cache = model_base_path / ".cache" / "openvino" / self.model_name
+        backbone = openvino_backbone(self._model.model, example, openvino, cache)
+        if backbone is None:
+            self.openvino = {**openvino, "precision": "f32"}
+            return
+        self._model.model = backbone
+        print(f"{self.name} : réseau sur OpenVINO ({backbone.device})", flush=True)
 
     def _resolve_classes(self, names: list[str]) -> list[int]:
         if not names:

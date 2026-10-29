@@ -163,7 +163,10 @@ encoders:
       # d'AnuraSet (PITAZU n'y est pas).
       logit_classes: [Dendropsophus minutus, Leptodactylus latrans, Physalaemus cuvieri,
                       Hypsiboas faber]
-    audioprotopnet: {backend: bacpipe, model: audioprotopnet}   # jetons gardés par bacpipe
+    # Jetons gardés par bacpipe. Option `openvino: {device: GPU, batch_size: 4, precision: f16}` :
+    # réseau sur l'Iris Xe, ~7 fenêtres/s au lieu de ~0,7 avec torch dans `embed` (n° 208) ;
+    # même option pour convnext_birdset.
+    audioprotopnet: {backend: bacpipe, model: audioprotopnet}
     avesecho_passt: {backend: bacpipe, model: avesecho_passt}
     biolingual: {backend: bacpipe, model: biolingual}           # fenêtre de 10 s
     insect66: {backend: bacpipe, model: insect66}
