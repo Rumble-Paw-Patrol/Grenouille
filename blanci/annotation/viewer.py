@@ -1135,7 +1135,8 @@ let drag = null, noMenuUntil = 0;
 canvas.addEventListener("mousedown", e => {
   if ((e.button !== 0 && e.button !== 2) || !D || drag) return;
   canvas.focus();
-  const x = localX(e), y = localY(e), t = tOf(x), line = bandLine(y);
+  const x = localX(e), y = localY(e), line = bandLine(y);
+  const t = Math.min(Math.max(tOf(x), D.t0), D.t1);  // un clic hors de l'extrait est borné
   const right = e.button === 2;
   const [i, edge] = D.interval_mode && !right ? hit(x) : [-1, null];
   let mode = "pan";
