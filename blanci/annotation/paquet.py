@@ -39,7 +39,8 @@ README = """Paquet d'écoute « {name} »
 
 {message}
 
-1. Dézipper le paquet, puis double-cliquer sur
+1. Dézipper le paquet (clic droit, « Extraire tout » : ne pas ouvrir la page depuis le zip,
+   elle ne trouverait pas ses données), puis double-cliquer sur
    « Ouvrir le poste.html ». Il s'ouvre dans le navigateur : rien à installer et pas besoin
    d'internet. Chrome ou Edge de préférence (ils écrivent vos réponses directement dans un
    dossier).

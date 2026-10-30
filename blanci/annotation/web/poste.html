@@ -149,6 +149,12 @@
 <script>
 "use strict";
 const P = window.PAQUET, $ = id => document.getElementById(id);
+if (!P) {  // page lancée depuis le zip, sans le dossier donnees/ : le dire plutôt que planter
+  document.body.innerHTML = "<p style='padding:2em;font-size:16px'>Données du paquet " +
+    "introuvables. Le paquet est encore dans le zip : le <b>dézipper</b> (clic droit, « Extraire " +
+    "tout »), puis ouvrir « Ouvrir le poste.html » depuis le dossier obtenu.</p>";
+  throw new Error("donnees/paquet.js introuvable");
+}
 const ADD = "__ajouter__";
 
 // --- Mémoire du navigateur, propre au paquet ---------------------------------------------
@@ -516,11 +522,6 @@ function esc(s) {
 
 // --- Ouverture -----------------------------------------------------------------------------
 (async () => {
-  if (!P) {
-    document.body.innerHTML = "<p style='padding:2em'>Données du paquet introuvables : ouvrir " +
-      "« Ouvrir le poste.html » depuis le dossier du paquet dézippé.</p>";
-    return;
-  }
   if (window.indexedDB && "showDirectoryPicker" in window) {
     dir = await idb("readonly", s => s.get(P.nom)).catch(() => null) || null;
   }
