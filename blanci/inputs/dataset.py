@@ -15,7 +15,10 @@ Labels courants, transfert vers la grille, négatifs appariés.
   décroissance de la note, l'est deux fois moins). **« Bord »** si elle ne fait qu'effleurer
   un intervalle (durée commune non nulle sous ce seuil) : label `edge`, écartée de
   l'entraînement ; négative si elle est entièrement dans l'extrait sans toucher
-  d'intervalle ; sans label sinon (pas entièrement écoutée). Avec des fenêtres glissantes à
+  d'intervalle ; sans label sinon (pas entièrement écoutée). Des extraits qui se touchent
+  (4 × 30 s d'un enregistrement de 2 min) comptent pour une seule plage : une fenêtre à cheval
+  sur leur frontière est entièrement écoutée, elle prend la classe et le commentaire de
+  l'extrait qui la couvre le plus. Avec des fenêtres glissantes à
   moitié recouvrantes (`encoders.overlap: 0.5`), chaque intervalle a au moins une fenêtre
   positive, quelle que soit sa durée : écarter les bords ne perd aucun chant. Un intervalle
   « A. blanci ? » rend incertaine toute fenêtre non positive qui le touche
@@ -304,6 +307,25 @@ def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFr
     return intervals[keep].reset_index(drop=True)
 
 
+def _within_union(
+    w0: np.ndarray, w1: np.ndarray, s0: np.ndarray, s1: np.ndarray, eps: float = 1e-6
+) -> np.ndarray:
+    """Fenêtres [w0, w1] entièrement couvertes par la réunion des extraits [s0, s1], deux
+    extraits qui se touchent ou se recouvrent (à 0,01 s près, les bornes sont arrondies) ne
+    faisant qu'une plage."""
+    order = np.argsort(s0)
+    ranges: list[list[float]] = []
+    for a, b in zip(s0[order], s1[order], strict=True):
+        if ranges and a <= ranges[-1][1] + 0.01:
+            ranges[-1][1] = max(ranges[-1][1], b)
+        else:
+            ranges.append([a, b])
+    out = np.zeros(len(w0), dtype=bool)
+    for a, b in ranges:
+        out |= (w0 >= a - eps) & (w1 <= b + eps)
+    return out
+
+
 def interval_labels(
     spans: pd.DataFrame,
     intervals: pd.DataFrame,
@@ -340,9 +362,12 @@ def interval_labels(
         w1 = w0 + g["dur_s"].to_numpy(dtype=float)
         sp = spans_of[rid]
         iv = valid_of.get(rid, valid.iloc[:0])
-        inside = (w0[:, None] >= sp["start_s"].to_numpy()[None, :] - eps) & (
-            w1[:, None] <= sp["end_s"].to_numpy()[None, :] + eps
-        )
+        s0, s1 = sp["start_s"].to_numpy(dtype=float), sp["end_s"].to_numpy(dtype=float)
+        inside = (w0[:, None] >= s0[None, :] - eps) & (w1[:, None] <= s1[None, :] + eps)
+        # Extraits voisins (30 s d'un enregistrement de 2 min) : une fenêtre à cheval sur leur
+        # frontière est entièrement écoutée, elle n'est pas à écarter.
+        covered = _within_union(w0, w1, s0, s1)
+        overlap_span = np.minimum(w1[:, None], s1[None, :]) - np.maximum(w0[:, None], s0[None, :])
         i0, i1 = iv["start_s"].to_numpy(dtype=float), iv["end_s"].to_numpy(dtype=float)
         common = np.minimum(w1[:, None], i1[None, :]) - np.maximum(w0[:, None], i0[None, :])
         touch = common > eps
@@ -382,8 +407,14 @@ def interval_labels(
             elif (enough[j] & friend).any():
                 label, y = "false_friend", 0
                 info, quality = latest(enough[j] & friend)
-            elif inside[j].any():
-                info = span_info.loc[sp["span_id"].to_numpy()[np.flatnonzero(inside[j])].max()]
+            elif covered[j]:
+                span_ids = sp["span_id"].to_numpy()
+                if inside[j].any():  # un seul extrait la contient : le plus récent
+                    chosen = span_ids[np.flatnonzero(inside[j])].max()
+                else:  # à cheval : l'extrait qui en couvre le plus, le plus récent à égalité
+                    top = overlap_span[j] >= overlap_span[j].max() - eps
+                    chosen = span_ids[np.flatnonzero(top)].max()
+                info = span_info.loc[chosen]
                 label, y, quality = info["other_label"], 0, info["quality"]
             else:
                 continue
