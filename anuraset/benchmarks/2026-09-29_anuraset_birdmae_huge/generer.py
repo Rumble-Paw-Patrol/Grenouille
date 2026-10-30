@@ -213,6 +213,7 @@ def figure_poolee_site(tetes: pd.DataFrame, order: list[str]) -> None:
     fig.savefig(FIGURES / "3_poolee_contre_site.png", dpi=150)
     plt.close(fig)
 
+
 ENCODEURS = {"perch_v2": "#1baf7a", "birdmae_huge": "#2a78d6"}
 TETES_COMPAREES = ["logistic", "lda_shrunk", "logistic+R37"]
 
@@ -234,12 +235,28 @@ def figure_encodeurs(d: dict[str, pd.DataFrame]) -> None:
             for yi, a, b in zip(y + dy, vals["perch_v2"], vals["birdmae_huge"], strict=True):
                 ax.plot([a, b], [yi, yi], color=FILET, linewidth=2, zorder=1)
             for enc, marker in [("perch_v2", "o"), ("birdmae_huge", "D")]:
-                ax.scatter(vals[enc], y + dy, s=30, color=ENCODEURS[enc], marker=marker,
-                           edgecolor=SURFACE, linewidth=1, zorder=2,
-                           label=enc if k == 0 else None)
+                ax.scatter(
+                    vals[enc],
+                    y + dy,
+                    s=30,
+                    color=ENCODEURS[enc],
+                    marker=marker,
+                    edgecolor=SURFACE,
+                    linewidth=1,
+                    zorder=2,
+                    label=enc if k == 0 else None,
+                )
             for yi in y + dy:
-                ax.text(-0.02, yi, head, ha="right", va="center", fontsize=7,
-                        family="DejaVu Sans Mono", color=ENCRE_2)
+                ax.text(
+                    -0.02,
+                    yi,
+                    head,
+                    ha="right",
+                    va="center",
+                    fontsize=7,
+                    family="DejaVu Sans Mono",
+                    color=ENCRE_2,
+                )
         ax.set_title(title, fontsize=10, color=ENCRE)
         ax.set_xlim(0, 1)
         ax.grid(axis="x", color=FILET, linewidth=0.6)
@@ -267,8 +284,17 @@ def figure_amorcage(d: dict[str, pd.DataFrame], order: list[str]) -> None:
         for enc, marker in [("perch_v2", "o"), ("birdmae_huge", "D")]:
             f = frames[enc]
             part = f[(f["species"] == sp) & (f["held_out_site"] == site)].set_index("head")
-            ax.scatter(part.reindex(order)["ap"], y, s=34, color=ENCODEURS[enc], marker=marker,
-                       edgecolor=SURFACE, linewidth=1, zorder=2, label=enc)
+            ax.scatter(
+                part.reindex(order)["ap"],
+                y,
+                s=34,
+                color=ENCODEURS[enc],
+                marker=marker,
+                edgecolor=SURFACE,
+                linewidth=1,
+                zorder=2,
+                label=enc,
+            )
         n = int(part["n_pos"].iloc[0])
         ax.set_title(f"{sp} à {site} ({n} pos.)", fontsize=10, color=ENCRE)
         ax.set_xlim(0, 1)

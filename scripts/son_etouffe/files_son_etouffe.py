@@ -119,7 +119,9 @@ def main() -> None:
     others = others[~others["reason"].str.contains("micro_dans_sac")].copy()
     others["reason"] = others["reason"].str.replace("ecartes/", "autres_drapeaux/", regex=False)
 
-    about = {"origine": "scripts/son_etouffe/files_son_etouffe.py, d'après F:/data/reports/son_etouffe/"}
+    about = {
+        "origine": "scripts/son_etouffe/files_son_etouffe.py, d'après F:/data/reports/son_etouffe/"
+    }
     write_queue(
         cfg,
         extracts(lost, durations, "muffled_perdus"),

@@ -8,9 +8,9 @@ valable. Lecture seule : la base est ouverte en `mode=ro`, rien n'est écrit dan
 `recordings.qc_flags` ni sur les disques d'audio. Sorties : `paths.reports/son_etouffe/`
 (mesures, enregistrements, suites, épisodes, micros) et la file `paths.queues/son_etouffe/`.
 
-    uv run python scripts/son_etouffe/qc_deux_pistes.py                 # lit l'audio (reprenable), puis tout
-    uv run python scripts/son_etouffe/qc_deux_pistes.py --sans-audio    # refait tableaux et file seulement
-    uv run python scripts/son_etouffe/qc_deux_pistes.py --micros Kaw/SMA10283 --limite 20 --sortie <dossier>
+    uv run python scripts/son_etouffe/qc_deux_pistes.py               # lit l'audio (reprenable)
+    uv run python scripts/son_etouffe/qc_deux_pistes.py --sans-audio  # tableaux et file seulement
+    options : --micros Kaw/SMA10283, --limite 20, --sortie <dossier>
 
 Chaque fichier est lu une fois : `qc_indices` sur chaque colonne de `sf.read(always_2d=True)`
 donne exactement `qc_indices(*load_audio(path, 0))` et `qc_indices(*load_audio(path, 1))`.
@@ -426,8 +426,9 @@ def main() -> None:
     else:
         target = cfg if not args.sortie else cfg | {"paths": cfg["paths"] | {"queues": str(folder)}}
         about = {
-            "méthode": "suites `muffled` recalculées piste par piste (scripts/son_etouffe/qc_deux_pistes.py), "
-            "un extrait de 30 s par épisode, cas à une seule piste étouffée d'abord",
+            "méthode": "suites `muffled` recalculées piste par piste "
+            "(scripts/son_etouffe/qc_deux_pistes.py), un extrait de 30 s par épisode, "
+            "cas à une seule piste étouffée d'abord",
             "mesures": str(folder),
         }
         path = write_queue(target, queue, "son_etouffe", about)

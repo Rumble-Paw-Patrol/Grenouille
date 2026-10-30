@@ -8,6 +8,7 @@ $log = Join-Path $repo 'rapports\encodage.log'
 function Note($m) { "{0:yyyy-MM-dd HH:mm} {1}" -f (Get-Date), $m | Add-Content $log -Encoding utf8 }
 
 Set-Location $repo
+$env:HF_HUB_OFFLINE = '1'  # modèles Hugging Face lus dans le cache : pas de code retéléchargé en cours d'encodage
 $echecs = 0
 while ($true) {
   $debut = Get-Date
