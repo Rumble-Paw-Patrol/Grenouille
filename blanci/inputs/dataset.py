@@ -8,11 +8,11 @@ Labels courants, transfert vers la grille, négatifs appariés.
 - Intervalles (§5.6, DECISIONS n° 182, 183, 201) : sur un extrait écouté (span), une fenêtre
   est **positive si sa durée commune avec un intervalle atteint le plus petit de : la moitié
   de l'intervalle (`MIN_INTERVAL_OVERLAP`), la moitié de la fenêtre, et un seuil de bord :
-  `INTERVAL_START_S` (0,1 s, une note) si elle coupe le début de l'intervalle,
+  `INTERVAL_START_S` (0,07 s, l'attaque) si elle coupe le début de l'intervalle,
   `INTERVAL_END_S` (0,2 s) si elle en coupe la fin**. Un cri court doit donc être à moitié
   dans la fenêtre ; d'un long chant, la fenêtre doit tenir sa première note (le début, tracé
   au ras de l'attaque, est sûr) ou les 0,2 s de sa dernière (la fin, tracée dans la
-  décroissance de la note, l'est deux fois moins). **« Bord »** si elle ne fait qu'effleurer
+  décroissance de la note, l'est bien moins). **« Bord »** si elle ne fait qu'effleurer
   un intervalle (durée commune non nulle sous ce seuil) : label `edge`, écartée de
   l'entraînement ; négative si elle est entièrement dans l'extrait sans toucher
   d'intervalle ; sans label sinon (pas entièrement écoutée). Des extraits qui se touchent
@@ -64,10 +64,10 @@ EXCLUDED_LABELS = ("blanci_uncertain", "uncertain", "edge")
 # l'intervalle ou de la fenêtre, plafonnée au seuil du bord coupé (n° 201). La moitié
 # garantit, avec des fenêtres recouvrantes de moitié, au moins une fenêtre positive par
 # intervalle ; les plafonds suivent la précision du tracé : le début d'un intervalle est posé
-# sur l'attaque d'une note (0,1 s : la note entière), la fin dans sa décroissance, deux fois
-# moins nette (0,2 s).
+# sur l'attaque d'une note (0,07 s : l'attaque, qui porte l'essentiel), la fin dans sa
+# décroissance, bien moins nette (0,2 s).
 MIN_INTERVAL_OVERLAP = 0.5
-INTERVAL_START_S = 0.1
+INTERVAL_START_S = 0.07
 INTERVAL_END_S = 0.2
 PAIRING_STRATEGIES = ("nearest", "other_day", "same_day", "mixed")
 
