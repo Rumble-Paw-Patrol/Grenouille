@@ -43,6 +43,8 @@ from blanci.inputs.labels import POSITIVE_LABELS
 # Drapeaux confirmés à l'écoute (`confirm_flags`) : clés propres, que ni l'inventaire ni le
 # contrôle audio ne réécrivent. Ils écartent comme le drapeau calculé, qu'il soit levé ou non.
 CONFIRMED_FLAGS = ("confirmed_muffled", "confirmed_duration_off", "confirmed_off_campaign")
+# Écouté et gardé malgré un drapeau (calculé ou posé à l'écoute) : l'emporte sur tous les autres.
+KEEP_FLAG = "keep"
 EXCLUDING_FLAGS = ("muffled", "silent", "duration_off", "off_campaign", *CONFIRMED_FLAGS)
 AUDIO_FLAGS = ("silent", "muffled")
 # Ancien nom du drapeau (« micro dans sac », piste 0 seule, avant le n° 203) : lu comme `muffled`
@@ -74,7 +76,10 @@ def flag_raised(flags: dict[str, Any], key: str) -> bool:
 
 
 def is_excluded(qc: Any, keys: tuple[str, ...] = EXCLUDING_FLAGS) -> bool:
+    """Écarté par l'un des drapeaux `keys`, sauf `keep` (écouté et jugé bon, `keep_flags`)."""
     flags = parse_flags(qc)
+    if flags.get(KEEP_FLAG):
+        return False
     return any(flag_raised(flags, k) for k in keys)
 
 
@@ -98,6 +103,23 @@ def confirm_flags(
         new = current | dict.fromkeys(keys, True)
         if new != current:
             updates.append((json.dumps(new), rid))
+    _write_flags(con, updates)
+    return len(updates)
+
+
+def keep_flags(con: sqlite3.Connection, recording_ids: Iterable[str]) -> int:
+    """Pose `keep` sur ces enregistrements : plus écartés, quels que soient leurs drapeaux.
+    Renvoie le nombre d'enregistrements modifiés."""
+    updates = []
+    for rid in dict.fromkeys(recording_ids):
+        row = con.execute(
+            "SELECT qc_flags FROM recordings WHERE recording_id = ?", (rid,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"enregistrement absent de la base : {rid}")
+        current = parse_flags(row[0])
+        if not current.get(KEEP_FLAG):
+            updates.append((json.dumps(current | {KEEP_FLAG: True}), rid))
     _write_flags(con, updates)
     return len(updates)
 

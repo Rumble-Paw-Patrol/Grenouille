@@ -6,7 +6,8 @@ drapeau calculé, mais que ni `blanci flag` ni `blanci qc` ne réécrivent).
   l'enregistrement porte ;
 - `muffled_douteux`, `muffled_perdus` : `confirmed_muffled`.
 
-Sauf `--garder` (enregistrements écoutés et jugés bons, par `recording_id`) et les enregistrements
+Sauf `--garder` (enregistrements écoutés et jugés bons, par `recording_id` : ils reçoivent `keep`,
+qui lève tout écartement, même posé à l'écoute) et les enregistrements
 où A. blanci est entendu (jamais écartés). Sans `--ecrire`, ne fait que compter.
 """
 
@@ -18,7 +19,13 @@ import sqlite3
 import pandas as pd
 
 from blanci.core.config import config_path, default_user_config, load_config
-from blanci.inputs.qc import confirm_flags, flag_raised, parse_flags, positive_recordings
+from blanci.inputs.qc import (
+    confirm_flags,
+    flag_raised,
+    keep_flags,
+    parse_flags,
+    positive_recordings,
+)
 
 QUEUES = {
     "autres_drapeaux": ("duration_off", "off_campaign"),
@@ -37,6 +44,8 @@ def main() -> None:
     queues = config_path(cfg, "queues")
     con = sqlite3.connect(config_path(cfg, "db"))
     protected = positive_recordings(con)
+    if args.ecrire and args.garder:  # `keep` : gardés même s'ils portent un autre drapeau
+        keep_flags(con, args.garder)
     for name, flags in QUEUES.items():
         ids = pd.read_csv(queues / name / "candidats.csv")["recording_id"].drop_duplicates()
         kept = ids[ids.isin(args.garder) | ids.isin(protected)]
