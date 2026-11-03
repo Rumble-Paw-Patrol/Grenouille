@@ -40,7 +40,10 @@ from blanci.inputs.labels import POSITIVE_LABELS
 
 # Drapeaux qui écartent un enregistrement du corpus : jamais encodé, donc ni négatif apparié,
 # ni candidat à écouter, ni score. La pluie notée à l'écoute est une remarque.
-EXCLUDING_FLAGS = ("muffled", "silent", "duration_off", "off_campaign")
+# Drapeaux confirmés à l'écoute (`confirm_flags`) : clés propres, que ni l'inventaire ni le
+# contrôle audio ne réécrivent. Ils écartent comme le drapeau calculé, qu'il soit levé ou non.
+CONFIRMED_FLAGS = ("confirmed_muffled", "confirmed_duration_off", "confirmed_off_campaign")
+EXCLUDING_FLAGS = ("muffled", "silent", "duration_off", "off_campaign", *CONFIRMED_FLAGS)
 AUDIO_FLAGS = ("silent", "muffled")
 # Ancien nom du drapeau (« micro dans sac », piste 0 seule, avant le n° 203) : lu comme `muffled`
 # tant que `blanci qc` n'a pas recalculé la base, donc l'enregistrement reste écarté.
@@ -73,6 +76,30 @@ def flag_raised(flags: dict[str, Any], key: str) -> bool:
 def is_excluded(qc: Any, keys: tuple[str, ...] = EXCLUDING_FLAGS) -> bool:
     flags = parse_flags(qc)
     return any(flag_raised(flags, k) for k in keys)
+
+
+def confirm_flags(
+    con: sqlite3.Connection, recording_ids: Iterable[str], flags: Iterable[str]
+) -> int:
+    """Pose `confirmed_<drapeau>` sur ces enregistrements, après écoute. Renvoie le nombre
+    d'enregistrements modifiés. Les autres clés de `qc_flags` ne bougent pas."""
+    keys = [f"confirmed_{f}" for f in flags]
+    unknown = [k for k in keys if k not in CONFIRMED_FLAGS]
+    if unknown:
+        raise ValueError(f"drapeau inconnu : {unknown} (attendus : {CONFIRMED_FLAGS})")
+    updates = []
+    for rid in dict.fromkeys(recording_ids):
+        row = con.execute(
+            "SELECT qc_flags FROM recordings WHERE recording_id = ?", (rid,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"enregistrement absent de la base : {rid}")
+        current = parse_flags(row[0])
+        new = current | dict.fromkeys(keys, True)
+        if new != current:
+            updates.append((json.dumps(new), rid))
+    _write_flags(con, updates)
+    return len(updates)
 
 
 def positive_recordings(con: sqlite3.Connection) -> set[str]:
