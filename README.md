@@ -17,15 +17,16 @@ Le paquet Python s'appelle `blanci`, la commande aussi : `uv run blanci --help`.
 ```
 Grenouille/
 ├── blanci/               -> le code : un dossier par étape de la chaîne (voir ci-dessous)
-├── config/               -> réglages et chemins d’accès aux données (default.yaml)
-├── annotations/          -> annotations exportées (CSV) et files d'écoute
-├── anuraset/             -> tout AnuraSet : réglages, scripts, les 8 rapports de benchmark (benchmarks/)
+├── config/               -> les réglages et chemins d’accès aux données (default.yaml)
+├── annotations/          -> mes annotations réalisées et les files d'écoute correspondantes (tout au format csv)
+├── scripts/              -> essentiellement les scripts de copie du dataset sur disques durs de l'ONF et scripts d'encodage
+├── anuraset/             -> tout ce qui concerne le pré-benchmark AnuraSet
 └── documentation/
-    ├── regularizations/  -> catalogue des régularisations des têtes (R1 à R85)
-    ├── biblio/           -> bibliographie commentée, offre de stage
-    ├── prez/             -> présentations de suivi (.pptx)
-    ├── encodeurs/        -> les encodeurs de bacpipe et leurs spécificités
-    └── commandes/        -> le glossaire des commandes blanci
+    ├── regularizations/  -> le catalogue exhaustif des régularisations envisageables, 85 au total (R1 à R85)
+    ├── biblio/           -> la bibliographie commentée
+    ├── prez/             -> les présentations de suivi (.pptx)
+    ├── encodeurs/        -> ce qu'il y a à savoir sur les encodeurs du projet
+    └── commandes/        -> le glossaire des commandes python du projet
 ```
 
 ### Le code : le paquet `blanci/`
