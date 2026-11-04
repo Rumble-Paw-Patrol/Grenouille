@@ -70,7 +70,7 @@ Inventaire : 2023 = phénologie sur trois sites (Kaw, Molokoï, Trésor), un an,
 
 **Le dépôt ne contient aucun enregistrement de l'ONF.** L'audio, la base de données, les embeddings et les modèles restent en local, sous `data/`. Seuls quelques extraits courts sont versionnés, pour les présentations et le tableau de bord.
 
-Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), qui servent aux benchmarks. Elles sont rangées dans les branches `donnees-anuraset-*`, hors de `main`. C'est pour ça qu'il y a pleins de branches qui traînent.
+Seules données publiques versionnées : celles d'**AnuraSet** (Cañas et al. 2023, CC BY), qui servent aux benchmarks. Elles sont rangées dans les tags `donnees-anuraset-*` (un par encodeur, hors de `main`) ; `anuraset/encodage/importer_stock.py <encodeur>` les recharge.
 
 ## Installation et utilisation
 

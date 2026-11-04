@@ -80,4 +80,4 @@ Rappel à précision 0,5, seuil choisi sur les autres sites (seuil sur place) :
 
 ## Annexe — Reproduire
 
-Comme le benchmark 02 (`anuraset/`), avec `perch_bird` et `perch_bird-bacpipe1.3.5@o0`. Stock sur la branche `donnees-anuraset-perch_bird`. Durées (CPU, 4 cœurs) : encodage 88 min (3,7 fenêtres/s), têtes 8 à 16 min par espèce (`donnees/durees_s.csv`).
+Comme le benchmark 02 (`anuraset/`), avec `perch_bird` et `perch_bird-bacpipe1.3.5@o0`. Stock sur le tag `donnees-anuraset-perch_bird`. Durées (CPU, 4 cœurs) : encodage 88 min (3,7 fenêtres/s), têtes 8 à 16 min par espèce (`donnees/durees_s.csv`).

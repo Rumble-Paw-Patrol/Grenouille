@@ -22,7 +22,7 @@ Le module est `blanci/evaluation/anuraset.py`, les commandes `blanci anuraset �
 - `encoder.py <encodeurs…>` : même sélection que `anuraset campaign` (n° 141), encodage seul.
 - `telecharger_anuraset.sh` : `raw_data.zip` d'AnuraSet par 12 plages d'octets en parallèle (vague d'encodage 2).
 - `jetons.py <encodeur>` : jetons de toutes les fenêtres d'un stock (moyennés sur la fréquence, float16, par paquets de 50 enregistrements), pour `calcul/global_bench.py --tokens` (vague d'encodage 2).
-- `importer_stock.py <encodeur>` : stock et modèle d'une branche `donnees-anuraset-*` ajoutés à la base locale, sans l'écraser (vague d'encodage 2).
+- `importer_stock.py <encodeur>` : stock et modèle d'un tag `donnees-anuraset-*` ajoutés à la base locale, sans l'écraser (vague d'encodage 2).
 
 ## `calcul/`
 

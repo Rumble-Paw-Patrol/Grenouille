@@ -115,7 +115,7 @@ La précision promise (0,5) n'est tenue qu'une fois sur ces six lignes. Toutes l
 
 ## Annexe B — Reproduire
 
-Stock et base : branche `donnees-anuraset-birdmae_base` (`data/LISEZMOI_donnees_anuraset.md`).
+Stock et base : tag `donnees-anuraset-birdmae_base` (`data/LISEZMOI_donnees_anuraset.md`).
 
 ```
 uv pip install --no-deps bacpipe==1.3.5   # + tqdm librosa huggingface_hub panel matplotlib

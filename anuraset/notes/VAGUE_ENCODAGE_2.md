@@ -1,5 +1,7 @@
 # Vague d'encodage 2 sur AnuraSet : sessions « AnuraSet encodage 5 » à « 15 »
 
+**04/11/2026 : les branches `donnees-anuraset-*` sont devenues des tags du même nom** (lecture : `git fetch origin tag <nom>`, puis `git archive <nom> …`). La procédure ci-dessous est celle de la vague, quand c’étaient encore des branches.
+
 **État (29/09 soir) : prérequis faits (n° 152), sessions 5 à 14 prêtes ; 15 (MetaPerch) bloquée, poids non publiés.** Léonard écrit « go » dans une session quand sa ligne dit « oui ». Ce fichier prime sur le message de création de la session ; les précisions de Léonard au moment du go priment sur ce fichier. Décisions : n° 141, 150, 151, 152.
 
 **Clôture (feuille de route V5, DECISIONS n° 156)** : la vague se termine le **09/10/2026** ; les sessions non finies ce jour-là sont abandonnées. Licence de chaque encodeur : V5 §2 ; les non libres ne servent plus que d'objectifs à battre.

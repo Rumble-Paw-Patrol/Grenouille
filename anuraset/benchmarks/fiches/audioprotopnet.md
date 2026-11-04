@@ -27,4 +27,4 @@ Logistique : AP moyenne par site (minute) **0,990** ≥ 0,85 : tuyau sain.
 CNN à prototypes : la sonde à prototypes sur jetons (sa tête d'origine) change le classement, comme le prévoit le n° 151 ; pas « en retrait ». Non libre : à comparer au meilleur libre, jamais livré (licence à confirmer).
 
 ## Anomalies
-Sorties `resultats/global/audioprotopnet_*` dans l'historique (`git show 443f889:resultats/global/<fichier>`) ; stock sur `donnees-anuraset-audioprotopnet`. Courbe d'amorçage des têtes sur jetons : non faite. Un seul site porte l'écart significatif (DENMIN) ; PITAZU reste bas (0,60) pour toutes les têtes.
+Sorties `resultats/global/audioprotopnet_*` dans l'historique (`git show 443f889:resultats/global/<fichier>`) ; stock sur le tag `donnees-anuraset-audioprotopnet`. Courbe d'amorçage des têtes sur jetons : non faite. Un seul site porte l'écart significatif (DENMIN) ; PITAZU reste bas (0,60) pour toutes les têtes.

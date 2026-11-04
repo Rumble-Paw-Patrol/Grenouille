@@ -92,7 +92,7 @@ Seuil choisi sur les autres sites (perch_v2, logistique, fenêtre, précision vi
 
 ## Annexe — Reproduire
 
-Outils : `anuraset/` (`global_bench.py`, `rassembler_global.py`). Stocks sur les branches `donnees-anuraset` (perch_v2) et `donnees-anuraset-<encodeur>`. Leurs modèles (table `models`) et leurs fenêtres (table `windows`) sont réunis dans une même `data/db/anuraset.sqlite`. Sorties brutes (scores hors-fold, courbes) : retirées de main, dans l'historique (`git show 6f2ff13^:resultats/global/<fichier>`).
+Outils : `anuraset/` (`global_bench.py`, `rassembler_global.py`). Stocks sur les tags `donnees-anuraset` (perch_v2) et `donnees-anuraset-<encodeur>`. Leurs modèles (table `models`) et leurs fenêtres (table `windows`) sont réunis dans une même `data/db/anuraset.sqlite`. Sorties brutes (scores hors-fold, courbes) : retirées de main, dans l'historique (`git show 6f2ff13^:resultats/global/<fichier>`).
 
 ```
 uv run python anuraset/calcul/global_bench.py <encodeur> <ESPECE> <sorties> --curve

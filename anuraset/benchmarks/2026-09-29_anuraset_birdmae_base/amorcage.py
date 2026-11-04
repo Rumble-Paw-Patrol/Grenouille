@@ -43,8 +43,8 @@ from blanci.heads.regularization import (
 ICI = Path(__file__).resolve().parent
 ENCODEURS = {  # nom → (stock, base, dossier des embeddings)
     "birdmae_base": ("birdmae_base-bacpipe1.3.5@o0", None, None),
-    # perch_v2 : stock et base de la branche `donnees-anuraset` (benchmark 01), extraits sous
-    # data/perch_ref/ (git archive origin/donnees-anuraset data/db data/embeddings_anuraset)
+    # perch_v2 : stock et base du tag `donnees-anuraset` (benchmark 01), extraits sous
+    # data/perch_ref/ (git archive donnees-anuraset data/db data/embeddings_anuraset)
     "perch_v2": (
         "perch_v2-bacpipe1.3.5@o0",
         "data/perch_ref/data/db/anuraset.sqlite",

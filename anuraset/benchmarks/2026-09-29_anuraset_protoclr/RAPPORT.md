@@ -100,4 +100,4 @@ python anuraset/calcul/rassembler.py sorties/ \
 uv run --group notebook python anuraset/benchmarks/2026-09-29_anuraset_protoclr/generer.py
 ```
 
-Réglages non par défaut : `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` (comme le 01). Holm recalculé sur les 5 espèces ensemble au rassemblement. Stock sur la branche `donnees-anuraset-protoclr`. Durées (CPU, 4 cœurs) : encodage 25 min (dont 9 de calcul, le reste en lecture et rééchantillonnage), têtes 7 à 11 min par espèce (`donnees/durees_s.csv`).
+Réglages non par défaut : `regularization.R37.glmm_grid: [0.3, 1.0, 3.0]` (comme le 01). Holm recalculé sur les 5 espèces ensemble au rassemblement. Stock sur le tag `donnees-anuraset-protoclr`. Durées (CPU, 4 cœurs) : encodage 25 min (dont 9 de calcul, le reste en lecture et rééchantillonnage), têtes 7 à 11 min par espèce (`donnees/durees_s.csv`).

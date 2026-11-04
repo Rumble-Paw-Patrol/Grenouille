@@ -15,4 +15,4 @@
 
 **Lecture** : bio et all à égalité en AP par site (0,59), audioset en dessous (0,50), surtout en poolée (0,29). 2 à 3 sites par espèce, pas de test apparié (rapport global). CNN : « en retrait en sondage linéaire » sans objet (règle n° 151 : transformers).
 
-**Anomalies** : l'encodage de `bio` a duré 1 296 s contre 467 et 476 s pour `all` et `audioset` à débit affiché voisin, cause non élucidée (stock complet). PITAZU : deux sites, AP très variable. Stocks : branches `donnees-anuraset-esp_aves2_effnetb0_{bio,all,audioset}`.
+**Anomalies** : l'encodage de `bio` a duré 1 296 s contre 467 et 476 s pour `all` et `audioset` à débit affiché voisin, cause non élucidée (stock complet). PITAZU : deux sites, AP très variable. Stocks : tags `donnees-anuraset-esp_aves2_effnetb0_{bio,all,audioset}`.

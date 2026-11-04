@@ -1,9 +1,9 @@
-"""Importe le stock d'un encodeur depuis sa branche de données, sans écraser la base locale :
+"""Importe le stock d'un encodeur depuis son tag de données, sans écraser la base locale :
 les fichiers du stock sont extraits, et son modèle (table `models`) et ses fenêtres (table
 `windows`) sont ajoutés à `data/db/anuraset.sqlite`, qui doit déjà exister (anuraset prepare
 ou un stock importé avant).
 
-Usage : importer_stock.py <encodeur> [<branche>]   (branche : donnees-anuraset-<encodeur> ;
+Usage : importer_stock.py <encodeur> [<tag>]   (tag : donnees-anuraset-<encodeur> ;
 perch_v2 : donnees-anuraset)
 """
 
@@ -14,10 +14,10 @@ import tempfile
 from pathlib import Path
 
 name = sys.argv[1]
-branch = sys.argv[2] if len(sys.argv) > 2 else f"donnees-anuraset-{name}"
-subprocess.run(["git", "fetch", "origin", branch], check=True)
+tag = sys.argv[2] if len(sys.argv) > 2 else f"donnees-anuraset-{name}"
+subprocess.run(["git", "fetch", "--no-tags", "origin", "tag", tag], check=True)
 archive = subprocess.run(
-    ["git", "archive", f"origin/{branch}", "data/embeddings_anuraset"],
+    ["git", "archive", tag, "data/embeddings_anuraset"],
     check=True,
     capture_output=True,
 )
@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory() as tmp:
     theirs = Path(tmp) / "anuraset.sqlite"
     theirs.write_bytes(
         subprocess.run(
-            ["git", "show", f"origin/{branch}:data/db/anuraset.sqlite"],
+            ["git", "show", f"{tag}:data/db/anuraset.sqlite"],
             check=True,
             capture_output=True,
         ).stdout
@@ -49,4 +49,4 @@ with tempfile.TemporaryDirectory() as tmp:
     width = len(models[0]) if models else 0
     con.executemany(f"INSERT OR REPLACE INTO models VALUES ({','.join('?' * width)})", models)
     con.commit()
-print(f"importé depuis {branch} : {[m[0] for m in models]}")
+print(f"importé depuis {tag} : {[m[0] for m in models]}")
