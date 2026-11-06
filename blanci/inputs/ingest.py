@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, BinaryIO
 
+import numpy as np
 import soundfile as sf
 
 from blanci.core.db import recording_id_for
@@ -27,6 +28,7 @@ from blanci.inputs.qc import (
     apply_audio_flags,
     apply_metadata_flags,
     audio_qc,
+    parse_flags,
 )
 
 # <préfixe>_<AAAAMMJJ>_<HHMMSS>[_suffixe] — convention Wildlife Acoustics.
@@ -43,6 +45,8 @@ class IngestReport:
     skipped: int = 0
     errors: list[tuple[str, str]] = field(default_factory=list)
     duplicates: list[tuple[str, str]] = field(default_factory=list)  # (écarté, conservé)
+    # Même nom, contenu différent : (écarté faute d'identifiant libre, conservé, raison).
+    conflicts: list[tuple[str, str, str]] = field(default_factory=list)
     relocated: int = 0  # déjà connus sous un chemin qui n'existe plus : chemin mis à jour
     flagged: dict[str, int] = field(default_factory=dict)  # drapeaux d'inventaire, total
 
@@ -136,6 +140,96 @@ def start_utc(guano: dict[str, str], stem: str, utc_offset_h: float) -> str | No
     return stamp.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+SIGNATURE_S = 1.0  # secondes d'audio décodé comparées entre deux copies
+SIGNATURE_TOLERANCE = 4 / 32768  # écart d'échantillon toléré : quelques pas de quantification
+
+
+def audio_signature(path: Path) -> dict[str, Any]:
+    """Ce qui identifie un enregistrement au-delà de son nom : nombre d'échantillons, fréquence,
+    pistes, numéro de série et horodatage GUANO (WAV seulement), et la première seconde
+    décodée (`head`). Décodée, pas lue en octets : un WAV et le FLAC tiré du même
+    enregistrement (compression sans perte) donnent le même son, à un pas d'arrondi près."""
+    info = sf.info(path)
+    guano = read_guano(path) if path.suffix.lower() == ".wav" else {}
+    frames = min(info.frames, int(SIGNATURE_S * info.samplerate))
+    head, _ = sf.read(path, frames=frames, dtype="float32", always_2d=True)
+    return {
+        "frames": info.frames,
+        "sample_rate": info.samplerate,
+        "channels": info.channels,
+        "serial": guano.get("Serial"),
+        "timestamp": guano.get("Timestamp"),
+        "head": head,
+    }
+
+
+def same_recording(a: Path, b: Path) -> tuple[bool, str]:
+    """(même enregistrement, raison du désaccord). Les champs GUANO ne se comparent que s'ils
+    sont présents dans les deux fichiers (un FLAC n'en a pas) ; l'audio, échantillon par
+    échantillon sur la première seconde, à `SIGNATURE_TOLERANCE` près."""
+    sa, sb = audio_signature(a), audio_signature(b)
+    for key in ("frames", "sample_rate", "channels", "serial", "timestamp"):
+        if sa[key] is not None and sb[key] is not None and sa[key] != sb[key]:
+            return False, f"{key} : {sa[key]} ≠ {sb[key]}"
+    gap = float(np.abs(sa["head"] - sb["head"]).max()) if sa["head"].size else 0.0
+    if gap > SIGNATURE_TOLERANCE:
+        return False, f"audio : écart maximal {gap:.4f} sur la première seconde"
+    return True, ""
+
+
+def clock_corrected(stem: str, mic_id: str | None, corrections: Any) -> bool:
+    """L'horloge de ce fichier est dans `recorder.clock_corrections` : micro, et horodatage du
+    nom de fichier dans [from, to[ (« AAAA-MM-JJ » ou « AAAA-MM-JJTHH:MM », comparés au format
+    ISO). Son heure de début se lit alors dans le nom, pas dans le GUANO."""
+    parsed = parse_songmeter_name(stem)
+    if parsed is None or mic_id is None:
+        return False
+    stamp = parsed[1].isoformat()
+    return any(
+        str(c["mic_id"]) == mic_id and str(c["from"]) <= stamp < str(c["to"])
+        for c in corrections or ()
+    )
+
+
+def apply_clock_corrections(con: sqlite3.Connection, recorder: dict[str, Any]) -> int:
+    """Remet l'heure de début des horloges corrigées (`recorder.clock_corrections`) sur le nom
+    de fichier et y pose `clock_corrected` (une remarque). Idempotent : l'heure se recalcule
+    depuis le nom, jamais depuis l'heure déjà rangée. Un enregistrement sorti de la période
+    perd la remarque, pas l'heure corrigée (seul un réinventaire relit le GUANO). Renvoie le
+    nombre d'enregistrements concernés."""
+    corrections = recorder.get("clock_corrections") or []
+    mics = sorted({str(c["mic_id"]) for c in corrections})
+    if not mics:
+        return 0
+    rows = con.execute(
+        "SELECT recording_id, path, mic_id, start_utc, qc_flags FROM recordings "
+        f"WHERE mic_id IN ({', '.join('?' * len(mics))})",
+        mics,
+    ).fetchall()
+    offset = float(recorder["filename_utc_offset_h"])
+    concerned, updates = 0, []
+    for rid, path, mic, start, qc in rows:
+        stem = Path(path).stem
+        if not clock_corrected(stem, mic, corrections):
+            # Hors période (plage resserrée) : la remarque part, l'heure rangée reste.
+            flags = parse_flags(qc)
+            if flags.pop("clock_corrected", None) is not None:
+                updates.append((start, json.dumps(flags), rid))
+            continue
+        concerned += 1
+        new_start = start_utc({}, stem, offset)
+        flags = parse_flags(qc)
+        new_flags = flags | {"clock_corrected": True}
+        if new_start != start or new_flags != flags:
+            updates.append((new_start, json.dumps(new_flags), rid))
+    if updates:
+        with con:
+            con.executemany(
+                "UPDATE recordings SET start_utc = ?, qc_flags = ? WHERE recording_id = ?", updates
+            )
+    return concerned
+
+
 def describe_recording(
     path: Path,
     root: Path,
@@ -174,6 +268,9 @@ def describe_recording(
     qc = None
     if run_qc:
         qc = json.dumps(audio_qc(io.BytesIO(data), cfg["qc"]))
+    # Horloge corrigée : l'heure du nom de fichier fait foi (`apply_clock_corrections`).
+    if clock_corrected(path.stem, mic_id, cfg["recorder"].get("clock_corrections")):
+        guano = {k: v for k, v in guano.items() if k != "Timestamp"}
 
     return {
         "recording_id": recording_id_for(rel),
@@ -205,9 +302,13 @@ def ingest(
     """Inventorie `scan` (défaut : <root>/<jeu>) ; chemins stockés relatifs à `root`.
 
     Reprenable : un chemin déjà inventorié est sauté. Un **doublon** (même nom de fichier,
-    à la casse près, déjà inventorié sous un autre chemin) est écarté et signalé : les cartes
-    SD rapportées d'un relevé contiennent encore les fichiers du relevé précédent, copies
-    exactes qui compteraient deux fois, sous deux sites. Le premier inventorié l'emporte :
+    à la casse près, déjà inventorié sous un autre chemin, **et même contenu** : nombre
+    d'échantillons, fréquence, pistes, GUANO, première seconde décodée, `same_recording`) est
+    écarté et signalé : les cartes SD rapportées d'un relevé contiennent encore les fichiers du
+    relevé précédent, copies exactes qui compteraient deux fois, sous deux sites. Même nom et
+    contenu différent : un **conflit** (`report.conflicts`), signalé, jamais confondu avec un
+    doublon ; le second fichier n'est pas inventorié (même identifiant), il faut trancher à la
+    main. Le premier inventorié l'emporte :
     inventorier les relevés dans l'ordre chronologique, pour que chaque fichier reste
     rattaché au relevé où il a été enregistré.
 
@@ -260,7 +361,16 @@ def ingest(
         moved = False
         if stem in by_stem and by_stem[stem] != rel:
             if (root / by_stem[stem]).exists():
-                report.duplicates.append((rel, by_stem[stem]))  # l'autre copie est toujours là
+                # L'autre copie est toujours là : doublon si le contenu concorde (taille,
+                # GUANO, audio décodé), sinon conflit de noms, signalé (même identifiant).
+                try:
+                    same, why = same_recording(path, root / by_stem[stem])
+                except Exception as exc:  # fichier illisible : signalé, pas bloquant
+                    same, why = False, f"illisible : {type(exc).__name__}: {exc}"
+                if same:
+                    report.duplicates.append((rel, by_stem[stem]))
+                else:
+                    report.conflicts.append((rel, by_stem[stem], why))
                 continue
             # L'ancien chemin n'existe plus sous cette racine : le fichier a été copié ou
             # déplacé (nouveau disque, dossiers réorganisés). Même identifiant, donc labels et
@@ -286,6 +396,7 @@ def ingest(
             con.commit()
             print(f"  {n} fichiers parcourus ({report.added} ajoutés)", flush=True)
     con.commit()
+    apply_clock_corrections(con, cfg["recorder"])
     # Les drapeaux d'inventaire dépendent de toute la série d'un micro : recalculés ici.
     report.flagged = apply_metadata_flags(con, cfg["qc"], cfg["recorder"]["filename_utc_offset_h"])
     if run_qc:  # `muffled_*` rangés ne sont que des candidats : règle des suites (n° 194, 203)

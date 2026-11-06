@@ -47,6 +47,7 @@ from blanci.inputs.dataset import (
     benchmark_subset,
 )
 from blanci.inputs.frozen import freeze as freeze_recordings
+from blanci.inputs.ingest import apply_clock_corrections
 from blanci.inputs.ingest import ingest as run_ingest
 from blanci.inputs.labels import POSITIVE_LABELS
 from blanci.inputs.qc import (
@@ -169,6 +170,7 @@ def ingest(
     typer.echo(
         f"{report.added} ajoutés, {report.skipped} déjà inventoriés, "
         f"{report.relocated} déplacés, {len(report.duplicates)} doublons écartés, "
+        f"{len(report.conflicts)} conflits de noms (même nom, autre contenu), "
         f"{len(report.errors)} erreurs"
     )
     _echo_flags(report.flagged)
@@ -178,6 +180,7 @@ def ingest(
     for kind, header, rows in (
         ("errors", ("path", "error"), report.errors),
         ("duplicates", ("ecarte", "conserve"), report.duplicates),
+        ("conflicts", ("ecarte", "conserve", "raison"), report.conflicts),
     ):
         if not rows:
             continue
@@ -185,7 +188,8 @@ def ingest(
         out.parent.mkdir(parents=True, exist_ok=True)
         with out.open("w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerows([header, *rows])
-        typer.echo(f"détail ({'erreurs' if kind == 'errors' else 'doublons'}) : {out}")
+        names = {"errors": "erreurs", "duplicates": "doublons", "conflicts": "conflits"}
+        typer.echo(f"détail ({names[kind]}) : {out}")
 
 
 def _echo_flags(flagged: dict[str, int]) -> None:
@@ -249,8 +253,9 @@ def qc_command(
 
 @app.command()
 def flag(ctx: typer.Context) -> None:
-    """Recalcule tous les drapeaux, sans lire l'audio : inventaire (durée anormale, hors
-    relevé), audio depuis les indices déjà calculés (seuils actuels de `qc`), écoute.
+    """Recalcule tous les drapeaux, sans lire l'audio : horloges corrigées
+    (`recorder.clock_corrections`), inventaire (durée anormale, hors relevé), audio depuis les
+    indices déjà calculés (seuils actuels de `qc`), écoute.
 
     Écartent du corpus : silencieux, son étouffé (les deux pistes), durée anormale, hors relevé. Un
     enregistrement signalé reste dans la base et sur le
@@ -260,6 +265,8 @@ def flag(ctx: typer.Context) -> None:
     """
     cfg = _cfg(ctx)
     con = connect(config_path(cfg, "db"))
+    corrected = apply_clock_corrections(con, cfg["recorder"])
+    typer.echo(f"horloges corrigées (recorder.clock_corrections) : {corrected} enregistrements")
     _echo_flags(apply_metadata_flags(con, cfg["qc"], cfg["recorder"]["filename_utc_offset_h"]))
     audio = apply_audio_flags(con, cfg["qc"])
     typer.echo(

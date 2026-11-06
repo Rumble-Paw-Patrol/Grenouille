@@ -39,6 +39,14 @@ recorder:
   # Utilisé seulement si l'en-tête GUANO du WAV est absent ou sans fuseau (toujours en FLAC).
   # Heure des noms de fichiers Song Meter = heure locale réglée sur l'enregistreur. [À VÉRIFIER]
   filename_utc_offset_h: -3        # Guyane : UTC−3, pas d'heure d'été
+  # Horloges corrigées : pour ce micro et ces dates (horodatage du nom de fichier, [from, to[),
+  # l'heure de début se lit dans le nom de fichier, pas dans l'en-tête GUANO. Molokoï SMA14636,
+  # fichiers du 20/02/2024 16 h 30 au 11/04/2024 11 h 30 (entre deux relèves) : en-tête écrit en
+  # UTC−4, une heure d'avance. Vérifié sur le son : le niveau de SMA14636 ne se superpose à celui
+  # du micro voisin SMA14163 (150 m) qu'une fois reculé d'une heure (corrélation 0,57 contre 0,34
+  # sans décalage, profil journalier retiré ; notebook 05).
+  clock_corrections:
+    - {mic_id: SMA14636, from: "2024-02-20T16:30", to: "2024-04-11T12:00"}
 
 signal:
   note_max_s: 0.103                # durée max d'une note d'A. blanci (0,090–0,103 s)
@@ -112,8 +120,9 @@ qc:
   expected_duration_s: 120.0       # programme des Song Meter : 2 min toutes les 30 min
   duration_tolerance_s: 1.0        # au-delà : duration_off (test, déclenchement manuel)
   campaign_gap_days: 7             # trou plus long dans la série d'un micro : sort du relevé
-  # Heure du nom de fichier contre heure de l'en-tête GUANO : au-delà de cet écart, on ne sait
-  # pas laquelle croire, l'enregistrement est écarté (clock_off, DECISIONS n° 154).
+  # Heure du nom de fichier contre heure de l'en-tête GUANO : au-delà de cet écart, `clock_off`
+  # est levé. Une remarque, qui n'écarte rien (DECISIONS n° 191) : une horloge vérifiée se
+  # corrige dans `recorder.clock_corrections`, et l'enregistrement porte alors `clock_corrected`.
   clock_tolerance_min: 5
 
 
