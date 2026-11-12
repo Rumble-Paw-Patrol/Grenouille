@@ -12,5 +12,7 @@ Mes annotations sont exportées par `blanci export-labels` qui écrit les CSV di
 
 **Réécouter un extrait** : la base est en ajout seul, une réannotation ajoute une ligne, l'ancienne reste. Dans `extraits_annotes.csv`, `remplace_par` donne le `span_id` de la dernière version d'un extrait réécouté, vide sur cette dernière et sur les extraits jamais réécoutés : **les lignes à lire sont celles où `remplace_par` est vide**. Dans `intervalles_annotes.csv`, c'est `valable`. Une réécoute est le même extrait si elle porte sur le même enregistrement, par le même annotateur, et recouvre l'ancien d'au moins la moitié du plus court des deux : les bornes peuvent changer.
 
+**Pour l'entraînement, seul le dernier envoi compte, quel que soit l'annotateur** : un extrait envoyé plus tard qui couvre entièrement un intervalle le remplace (`current_intervals`). Un encadrant qui renvoie un extrait sans rien tracer (accord implicite ou simple commentaire) reprend donc nos intervalles sous son nom ; s'il y dit qu'ils sont faux, il faut réannoter l'extrait d'après son commentaire, et c'est cette réannotation qui comptera. Les retours d'encadrants se relisent dans une file à part (ex. `files_ecoute/doutes/`).
+
 
 **Reprendre l'écoute sur une autre machine** : `git pull`, puis `blanci import-labels` (relit les trois CSV de ce dossier dans la base de la machine, sans doublon ; à relancer après chaque `git pull`). Le poste d'annotation coche alors les candidats déjà écoutés.
