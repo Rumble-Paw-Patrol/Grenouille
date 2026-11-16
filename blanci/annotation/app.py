@@ -12,7 +12,8 @@
   ✓ et label pour ceux déjà écoutés) ; on peut revenir sur n'importe lequel et le
   réécouter, une nouvelle réponse s'ajoute à l'ancienne (correction, jamais écrasée).
   « Sauter les candidats déjà écoutés » : ◀ ▶ et l'envoi d'une réponse vont au précédent ou
-  au prochain jamais écouté, sinon au voisin dans la file.
+  au prochain jamais écouté, sinon au voisin dans la file. Une file où tout est déjà écouté
+  (file de réécoute) s'ouvre sur son premier candidat et se parcourt de voisin en voisin.
 - **Annotateurs** : on se choisit dans le menu « Annotateur » (liste du projet,
   `annotations/annotateurs.txt`, où « Ajouter quelqu'un… » inscrit un nouveau venu). En
   rouvrant un extrait, on retrouve ses propres intervalles, modifiables, et ceux du dernier
@@ -384,10 +385,12 @@ def _follow(key: str, widget: str) -> None:
 
 
 def _advance(con, queue, who, pos, skip_done, key, end) -> None:
-    """Après une réponse : candidat suivant, ou fin de file si tout est écouté."""
+    """Après une réponse : candidat suivant, ou fin de file si cette réponse vient d'écouter
+    le dernier. `skip_done` est faux dans une file déjà finie (réécoute) : on passe au voisin,
+    sans écran de fin."""
     done = progress(con, queue, who)
     st.session_state[key] = next_position(done, pos, skip_done)
-    st.session_state[end] = bool(done.notna().all())
+    st.session_state[end] = skip_done and bool(done.notna().all())
 
 
 def _pick(key: str, widget: str, end: str) -> None:
@@ -977,14 +980,19 @@ def main() -> None:
 
     key = f"pos::{chosen}"
     end = f"end::{chosen}"  # file finie : plus aucun extrait affiché, jusqu'au choix d'un candidat
-    if key not in st.session_state:  # ouverture de la file : premier candidat pas écouté
+    # Ouverture de la file : premier candidat pas écouté, ou le premier de la file si tout est
+    # déjà écouté (file de réécoute, comme « doutes ») ; l'écran de fin n'apparaît qu'à la
+    # réponse qui finit la file.
+    if key not in st.session_state:
         st.session_state[key] = max(next_position(done, -1, True), 0)
-        st.session_state[end] = bool(done.notna().all())
+        st.session_state[end] = False
     pos = min(max(int(st.session_state[key]), 0), n - 1)
     st.session_state[key] = pos
     finished = bool(done.notna().all())
     if not finished:
         st.session_state[end] = False
+    # File finie : plus rien à sauter, ◀ ▶ et l'envoi vont au voisin.
+    skip_done = skip_done and not finished
     with candidate_slot:
         _candidate_strip(queue, done, chosen, key, end, offset_h)
     if finished and st.session_state.get(end):
@@ -994,7 +1002,7 @@ def main() -> None:
         )
         return
     if finished:
-        st.success("File terminée : tous les candidats ont été écoutés.")
+        st.caption("Tous les candidats sont écoutés : ◀ ▶ parcourent la file.")
 
     candidate = queue.iloc[pos].to_dict()
     st.subheader(  # « en-ecoute » : la feuille de style met le point rouge devant
