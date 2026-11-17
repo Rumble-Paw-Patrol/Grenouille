@@ -80,8 +80,9 @@ from blanci.annotation.etiquettes import (
     remove_quality,
     suggestions,
 )
+from blanci.annotation.habillage import STYLES, next_style, read_prefs, write_prefs
 from blanci.annotation.selection import NEEDS_ENCODER
-from blanci.annotation.style import BRAND, CHART_COLORS, CSS, LABEL_COLORS, UNHEARD_COLOR
+from blanci.annotation.style import BRAND, CHART_COLORS, LABEL_COLORS, UNHEARD_COLOR, css
 from blanci.annotation.viewer import HELP, asset, asset_src, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
@@ -878,11 +879,45 @@ def _take_buttons(others: dict[str, list], ikey_base: str, take_key: str) -> Non
         )
 
 
+def _toggle_theme() -> None:
+    """Bascule jour ↔ nuit. Sans choix encore fait, on part du thème que la page affiche."""
+    shown = read_prefs()["theme"] or getattr(getattr(st.context, "theme", None), "type", None)
+    write_prefs(theme="dark" if shown == "light" else "light")
+
+
+def _next_style() -> None:
+    write_prefs(style=next_style(str(read_prefs()["style"])))
+
+
+def _look_buttons() -> None:
+    """« Mode jour / nuit » et « Style » (Braise, Lagune, Ardoise : un clic passe au suivant) ;
+    le choix est gardé d'une séance à l'autre (`habillage.py`) et vaut aussi pour le
+    visualiseur et le bandeau."""
+    prefs = read_prefs()
+    mode = {"light": "jour", "dark": "nuit"}.get(str(prefs["theme"]), "selon le système")
+    left, right = st.columns(2)
+    left.button(
+        "Mode jour / nuit",
+        key="look_theme",
+        on_click=_toggle_theme,
+        width="stretch",
+        help=f"Actuellement : {mode}. Un clic bascule entre clair et sombre.",
+    )
+    right.button(
+        f"Style : {STYLES[str(prefs['style'])]}",
+        key="look_style",
+        on_click=_next_style,
+        width="stretch",
+        help="Un clic passe à l'habillage suivant.",
+    )
+
+
 def _masking_panel(names: list[str]) -> tuple[list[str], bool, bool]:
     """Cases « Masquer les annotations de » : une par annotateur de la liste, et « tout le
     monde » ; puis « Masquer les commentaires ». Renvoie (noms masqués, tout le monde,
     commentaires masqués). Les commentaires d'un annotateur masqué le sont aussi."""
     st.header("Affichage")
+    _look_buttons()
     st.markdown("**Masquer les annotations de**")
     everyone = st.checkbox(
         "Tout le monde",
@@ -1021,7 +1056,8 @@ def _notes(saved: dict, me: str, heard) -> list[str]:
 def main() -> None:
     species = (read_header() or DEFAULT_HEADER)["species"]
     st.set_page_config(page_title=f"Annotation · {species}", page_icon="🐸", layout="wide")
-    st.markdown(NO_GREY + "\n" + CSS, unsafe_allow_html=True)
+    prefs = read_prefs()
+    st.markdown(NO_GREY + "\n" + css(prefs["theme"], prefs["style"]), unsafe_allow_html=True)
     if hasattr(st, "iframe"):  # `components.html` est retiré des Streamlit récents
         st.iframe(READONLY_MENUS, height=1)
     else:

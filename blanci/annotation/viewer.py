@@ -19,6 +19,7 @@ import tempfile
 import threading
 from pathlib import Path
 
+from blanci.annotation.habillage import look
 from blanci.annotation.style import FONTS, LABEL_COLORS
 from blanci.inputs.labels import QUALITIES
 
@@ -1433,8 +1434,23 @@ function theme(t) {
   }
   if (base === "light" || base === "dark") document.documentElement.dataset.theme = base;
 }
+// Habillage choisi dans le poste : mode (jour / nuit) et style, posés en variables de la page.
+function look(l) {
+  if (!l) return;
+  const root = document.documentElement, rename = {"bg-2": "fond", "surface-solid": "champ"};
+  if (l.theme) root.dataset.theme = l.theme;
+  const mode = root.dataset.theme
+    || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  for (const [k, v] of Object.entries((l.vars || {})[mode] || {})) {
+    const name = "--" + (rename[k] || k);
+    if (l.style === "braise" && !l.theme) root.style.removeProperty(name);
+    else root.style.setProperty(name, v);
+  }
+}
 window.addEventListener("message", e => {
-  if (e.data && e.data.type === "streamlit:render") { theme(e.data.theme); render(e.data.args); }
+  if (e.data && e.data.type === "streamlit:render") {
+    theme(e.data.theme); look(e.data.args && e.data.args.look); render(e.data.args);
+  }
 });
 window.addEventListener("resize", () => { if (D) resize(); });
 // Polices chargées après le premier dessin : graduations et hauteur de la barre à refaire.
@@ -1601,4 +1617,4 @@ def viewer(args: dict, component_key: str = "viewer") -> dict | None:
         import streamlit.components.v1 as components
 
         _component = components.declare_component("blanci_viewer", path=str(_prepare()))
-    return _component(**args, key=component_key, default=None)
+    return _component(**args, look=look(), key=component_key, default=None)

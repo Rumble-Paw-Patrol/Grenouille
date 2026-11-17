@@ -16,7 +16,8 @@ Deux étages :
   (fond, panneau de gauche, boutons, cartes, titres, cadres du bandeau et du visualiseur).
   Sombre par défaut ; le thème clair est pris quand la page porte `data-gr-theme="light"`
   (posé par le script de `app.py`, d'après le thème choisi par Streamlit), ou, avant ce
-  script, quand le système est en clair.
+  script, quand le système est en clair. `css()` y ajoute le mode (jour / nuit) et le style
+  choisis par l'utilisateur dans le poste (palettes et préférences : `habillage.py`).
 - `LABEL_COLORS` : couleurs des étiquettes d'intervalle, pour le visualiseur et la carte.
 
 Le bandeau (titre, grenouille, spectrogramme) est un composant à part : `bandeau.py`.
@@ -28,6 +29,13 @@ navigateur garde ses forces pour le spectrogramme.
 from __future__ import annotations
 
 import re
+
+from blanci.annotation.habillage import (
+    BRAISE_DARK,
+    BRAISE_LIGHT,
+    declarations,
+    palette,
+)
 
 # Couleurs du tableau de bord, thème sombre puis thème clair.
 BG = "#050B0A"
@@ -134,30 +142,12 @@ _GRAIN = (
     "filter='url(%23n)'/></svg>\")"
 )
 
-CSS = """<style>
+CSS = (
+    """<style>
 @import url("__FONTS__");
 :root {
-  --bg: #050B0A; --bg-2: #08120F; --surface: rgba(16, 29, 25, .72); --surface-solid: #0F1C18;
-  --surface-2: rgba(255, 255, 255, .055); --ink: #E9F2EC; --muted: #93A89D;
-  --line: rgba(160, 210, 185, .14); --line-fort: rgba(160, 210, 185, .28);
-  --accent: #F5A53A; --accent-2: #E4573F; --accent-3: #9E2A6B; --accent-ink: #1A0B03;
-  --gold: #FFE08A; --gold-soft: rgba(255, 210, 110, .12); --teal: #4FD8C0;
-  --ok: #5FD394; --ok-soft: rgba(95, 211, 148, .13); --warn: #F5B547;
-  --warn-soft: rgba(245, 181, 71, .13); --bad: #F07A63; --bad-soft: rgba(240, 122, 99, .14);
-  --nuit-ligne: rgba(160, 210, 185, .16);
+__VARS_DARK__
   --marge: clamp(16px, 4vw, 56px);
-  --ombre: 0 20px 50px -24px rgba(0, 0, 0, .8), 0 1px 0 rgba(255, 255, 255, .04) inset;
-  --aura-1: rgba(228, 87, 63, .20); --aura-2: rgba(79, 216, 192, .13);
-  --aura-3: rgba(158, 42, 107, .18);
-  --voile: 5, 11, 10;
-  --fond-side: linear-gradient(180deg, rgba(6, 14, 12, .94), rgba(4, 9, 8, .97));
-  --fond-bande: radial-gradient(120% 140% at 0% 0%, #1A0E1C 0%, #070C0B 46%, #040807 100%);
-  --halo-1: rgba(228, 87, 63, .22); --halo-2: rgba(79, 216, 192, .10);
-  --titre: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%);
-  --titre-ombre: drop-shadow(0 2px 10px rgba(4, 8, 7, .9));
-  --fond-fenetre: rgba(10, 20, 17, .97);
-  --ombre-fenetre: 0 30px 80px -24px rgba(0, 0, 0, .95);
-  --ombre-menu: 0 20px 50px -20px rgba(0, 0, 0, .9);
   --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
   --f-serif: "Instrument Serif", Georgia, serif;
   --f-body: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
@@ -168,49 +158,11 @@ CSS = """<style>
 /* Thème clair : celui du tableau de bord. */
 @media (prefers-color-scheme: light) {
   html:not([data-gr-theme="dark"]) {
-      --bg: #EDF3EF; --bg-2: #E3ECE6; --surface: rgba(255, 255, 255, .78);
-      --surface-solid: #FFFFFF; --surface-2: rgba(20, 60, 45, .06); --ink: #11201A;
-      --muted: #55675E; --line: rgba(20, 70, 50, .14); --line-fort: rgba(20, 70, 50, .26);
-      --accent: #B9530D; --accent-2: #C2352A; --accent-3: #8A1F5C; --accent-ink: #FFFFFF;
-      --gold: #A86F00; --gold-soft: rgba(215, 150, 20, .14); --teal: #137F70;
-      --ok: #237A4A; --ok-soft: rgba(35, 122, 74, .12); --warn: #9A5E00;
-      --warn-soft: rgba(200, 130, 0, .13); --bad: #B33A28; --bad-soft: rgba(179, 58, 40, .12);
-      --nuit-ligne: rgba(20, 70, 50, .14);
-      --ombre: 0 18px 40px -26px rgba(20, 50, 40, .45);
-      --aura-1: rgba(235, 120, 60, .16); --aura-2: rgba(30, 160, 140, .13);
-      --aura-3: rgba(170, 60, 120, .09);
-      --voile: 237, 243, 239;
-      --fond-side: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(237, 243, 239, .92));
-      --fond-bande: radial-gradient(120% 140% at 0% 0%, #F8E7DC 0%, #EEF3EF 46%, #E5EDE8 100%);
-      --halo-1: rgba(235, 120, 60, .16); --halo-2: rgba(30, 160, 140, .10);
-      --titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
-      --titre-ombre: none;
-      --fond-fenetre: rgba(255, 255, 255, .97);
-      --ombre-fenetre: 0 30px 80px -24px rgba(20, 50, 40, .45);
-      --ombre-menu: 0 20px 50px -20px rgba(20, 50, 40, .35);
+__VARS_LIGHT__
   }
 }
 html[data-gr-theme="light"] {
-  --bg: #EDF3EF; --bg-2: #E3ECE6; --surface: rgba(255, 255, 255, .78);
-  --surface-solid: #FFFFFF; --surface-2: rgba(20, 60, 45, .06); --ink: #11201A;
-  --muted: #55675E; --line: rgba(20, 70, 50, .14); --line-fort: rgba(20, 70, 50, .26);
-  --accent: #B9530D; --accent-2: #C2352A; --accent-3: #8A1F5C; --accent-ink: #FFFFFF;
-  --gold: #A86F00; --gold-soft: rgba(215, 150, 20, .14); --teal: #137F70;
-  --ok: #237A4A; --ok-soft: rgba(35, 122, 74, .12); --warn: #9A5E00;
-  --warn-soft: rgba(200, 130, 0, .13); --bad: #B33A28; --bad-soft: rgba(179, 58, 40, .12);
-  --nuit-ligne: rgba(20, 70, 50, .14);
-  --ombre: 0 18px 40px -26px rgba(20, 50, 40, .45);
-  --aura-1: rgba(235, 120, 60, .16); --aura-2: rgba(30, 160, 140, .13);
-  --aura-3: rgba(170, 60, 120, .09);
-  --voile: 237, 243, 239;
-  --fond-side: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(237, 243, 239, .92));
-  --fond-bande: radial-gradient(120% 140% at 0% 0%, #F8E7DC 0%, #EEF3EF 46%, #E5EDE8 100%);
-  --halo-1: rgba(235, 120, 60, .16); --halo-2: rgba(30, 160, 140, .10);
-  --titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
-  --titre-ombre: none;
-  --fond-fenetre: rgba(255, 255, 255, .97);
-  --ombre-fenetre: 0 30px 80px -24px rgba(20, 50, 40, .45);
-  --ombre-menu: 0 20px 50px -20px rgba(20, 50, 40, .35);
+__VARS_LIGHT__
 }
 
 /* Fond : les trois lueurs du tableau de bord (braise en haut à gauche, sarcelle en haut à
@@ -567,7 +519,47 @@ html[data-gr-theme="light"] {
     0 0 60px -24px rgba(245, 165, 58, .3);
 }
 
-</style>""".replace("__FONTS__", FONTS).replace("__GRAIN__", _GRAIN)
+</style>""".replace("__FONTS__", FONTS)
+    .replace("__GRAIN__", _GRAIN)
+    .replace("__VARS_DARK__", declarations(BRAISE_DARK))
+    .replace("__VARS_LIGHT__", declarations(BRAISE_LIGHT, "    "))
+)
+
+# Mode choisi : le texte de Streamlit suit son propre thème, pas nos variables ; on le force.
+_TEXT = (
+    ".stApp, .stApp :is(p, li, label, span, h1, h2, h3, h4, td, th, summary,"
+    " [data-testid='stMarkdownContainer'], [data-testid='stWidgetLabel']) { color: var(--ink); }"
+)
+
+
+def css(theme: str | None, style: str) -> str:
+    """`CSS` plus le choix de l'utilisateur. Un mode choisi (`theme`) l'emporte sur le système
+    et sur le menu de Streamlit (`color-scheme` et texte forcés) ; sans choix, le système
+    décide et seul le style est posé, dans les deux modes. `:root` répété : passer devant les
+    règles `data-gr-theme`."""
+    if theme is None and style == "braise":
+        return CSS
+    top = "html:root:root:root"
+    if theme in ("light", "dark"):
+        extra = [
+            f"{top} {{ color-scheme: {theme};",
+            declarations(palette(theme, style)),
+            "}",
+            _TEXT,
+        ]
+    else:
+        extra = [
+            f"{top} {{",
+            declarations(palette("dark", style)),
+            "}",
+            f'@media (prefers-color-scheme: light) {{ {top}:not([data-gr-theme="dark"]) {{',
+            declarations(palette("light", style)),
+            "} }",
+            f'{top}[data-gr-theme="light"] {{',
+            declarations(palette("light", style)),
+            "}",
+        ]
+    return CSS.replace("</style>", "\n".join(extra) + "\n</style>")
 
 
 BRAND = '<div class="gr-brand"><b>Grenouille</b></div>'

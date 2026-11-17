@@ -27,6 +27,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from blanci.annotation.habillage import look
 from blanci.annotation.style import FONTS
 from blanci.core.config import PROJECT_ROOT, project_path
 
@@ -251,9 +252,23 @@ function poser(a) {
   ecouteur.charger(a.image ? a.sound : null, a.cycle_ms);
   if (a.sprite) montrerGrenouille(); else $(".perchoir").hidden = true;
 }
+// Habillage choisi dans le poste : mode (jour / nuit) et style, posés en variables de la page.
+function look(l) {
+  if (!l) return;
+  const root = document.documentElement, rename = {"bg-2": "fond", "surface-solid": "champ"};
+  if (l.theme) root.dataset.theme = l.theme;
+  const mode = root.dataset.theme
+    || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  for (const [k, v] of Object.entries((l.vars || {})[mode] || {})) {
+    const name = "--" + (rename[k] || k);
+    if (l.style === "braise" && !l.theme) root.style.removeProperty(name);
+    else root.style.setProperty(name, v);
+  }
+}
 window.addEventListener("message", e => {
   if (e.data && e.data.type === "streamlit:render") {
-    theme(e.data.theme); poser(e.data.args && e.data.args.header); setHeight(true);
+    const a = e.data.args || {};
+    theme(e.data.theme); look(a.look); poser(a.header); setHeight(true);
   }
 });
 send("streamlit:componentReady", {apiVersion: 1});
@@ -583,5 +598,5 @@ def bandeau() -> dict:
         for key in ("image", "sound"):
             path = HEADER_DIR / str(args.get(key) or "")
             args[key] = _publish(path) if args.get(key) and path.is_file() else None
-    _component(header=args, key="bandeau", default=None)
+    _component(header=args, look=look(), key="bandeau", default=None)
     return args
