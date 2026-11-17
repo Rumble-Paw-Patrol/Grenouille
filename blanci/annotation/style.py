@@ -416,6 +416,10 @@ __VARS_LIGHT__
   border: 0 !important; box-shadow: none !important;
 }
 .stApp input, .stApp textarea, .stApp [data-baseweb="select"] { color: var(--ink) !important; }
+/* Menus : la main partout, pas le curseur de texte (on y choisit, on n'y tape rien). */
+.stApp [data-baseweb="select"], .stApp [data-baseweb="select"] *,
+.stApp [data-testid="stSelectbox"] .react-aria-ComboBox,
+.stApp [data-testid="stSelectbox"] .react-aria-ComboBox * { cursor: pointer !important; }
 .stApp input:disabled { color: var(--muted) !important; -webkit-text-fill-color: var(--muted); }
 [data-baseweb="popover"] [role="listbox"] {
   background: var(--surface-solid) !important; border: 1px solid var(--line-fort);

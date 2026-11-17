@@ -314,6 +314,9 @@ let view = null, intervals = [], selected = -1, vmax = [], loading = 0, newLabel
 let otherSel = null;  // intervalle d'un envoi déjà fait mis en relief : "rang de l'envoi:j"
 // Envois rendus silencieux d'un clic sur leur nom (plus dessinés), par extrait.
 const muted = new Set();
+// Ses propres intervalles cachés (clic sur « Vous : ») pour mieux voir les envois déjà faits
+// dessous ; rien n'est effacé. Tracer un intervalle, ou en choisir un, les remontre.
+let ownHidden = false;
 const muteKey = r => `${D.extract}|${r.id}`;
 // Envois déjà faits (historique, ou à défaut un par annotateur de `others`), avec leur rang
 // `idx` et `silent` : masqués dans le panneau de gauche, ou rendus silencieux.
@@ -781,7 +784,7 @@ function render(args) {
     view = {t0: D.t0, t1: D.t1, f0: 0, f1: D.fview};
     intervals = (D.intervals || [])
       .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
-    selected = -1; otherSel = null; vmax = []; specKey = "";
+    selected = -1; otherSel = null; vmax = []; specKey = ""; ownHidden = false;
     specView = null; settling = false; buffers = [];
     if (wide) clearTimeout(wide.timer);
     wide = null;
@@ -1173,7 +1176,7 @@ function draw() {
   const shown = drag && drag.mode === "draw" && drag.moved
     ? [...intervals, {t0: Math.min(drag.t, drag.t2), t1: Math.max(drag.t, drag.t2),
                       label: newLabel}]
-    : intervals;
+    : ownHidden ? [] : intervals;
   shown.forEach((iv, i) => {
     const x0 = xOf(iv.t0), x1 = xOf(iv.t1), c = COLORS[iv.label] || [200, 200, 200];
     ctx.fillStyle = `rgba(${c}, 0.20)`; ctx.fillRect(x0, M.t, x1 - x0, PH());
@@ -1247,9 +1250,15 @@ function zoomFreq(factor, at) {
 function list() {
   const box = $("list");
   box.innerHTML = "";
-  box.className = "ivrow"; box.hidden = !D.interval_mode;
-  const me = document.createElement("span");
-  me.className = "who me"; me.textContent = "Vous :"; box.appendChild(me);
+  box.className = "ivrow" + (ownHidden ? " silent" : ""); box.hidden = !D.interval_mode;
+  const me = document.createElement("button");
+  me.className = "head";
+  me.innerHTML = '<span class="who me">Vous :</span>';
+  me.title = ownHidden ? "Vos intervalles sont cachés : cliquer pour les remontrer"
+                       : "Cacher vos intervalles, pour mieux voir ceux déjà posés dessous "
+                         + "(rien n'est effacé)";
+  me.onclick = () => { ownHidden = !ownHidden; selected = -1; list(); draw(); };
+  box.appendChild(me);
   if (!intervals.length) {
     const none = document.createElement("span");
     none.className = "none"; none.textContent = "aucun intervalle (tout l'extrait sera négatif)";
@@ -1272,7 +1281,7 @@ function list() {
     x.textContent = "×"; x.title = "Effacer";
     x.onclick = ev => { ev.stopPropagation(); remove(i); };
     chip.onclick = () => {
-      selected = i; otherSel = null;
+      selected = i; otherSel = null; ownHidden = false;
       const span = view.t1 - view.t0;
       if (iv.t1 < view.t0 || iv.t0 > view.t1) {
         view.t0 = (iv.t0 + iv.t1) / 2 - span / 2; view.t1 = view.t0 + span; clampView();
@@ -1349,6 +1358,7 @@ function remove(i) { intervals.splice(i, 1); selected = -1; changed(); }
 const localX = e => e.clientX - canvas.getBoundingClientRect().left;
 const localY = e => e.clientY - canvas.getBoundingClientRect().top;
 function hit(x) {  // [indice, bord ("t0", "t1") ou null] de l'intervalle sous le curseur
+  if (ownHidden) return [-1, null];  // ses intervalles cachés ne se prennent pas
   for (let i = intervals.length - 1; i >= 0; i--) {
     const iv = intervals[i];
     if (Math.abs(x - xOf(iv.t0)) < 6) return [i, "t0"];
@@ -1390,6 +1400,7 @@ canvas.addEventListener("mousedown", e => {
   let mode = "pan";
   if (!right && line >= 0) mode = "band";
   else if (!right && D.interval_mode) mode = edge ? "edge" : "draw";
+  if (mode === "draw" && ownHidden) { ownHidden = false; list(); }
   drag = {mode, right, x: e.clientX, y: e.clientY, view: {...view}, moved: false, t, t2: t, i,
           edge, line};
 });

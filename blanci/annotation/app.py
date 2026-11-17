@@ -431,7 +431,16 @@ def _follow(key: str, widget: str) -> None:
     st.session_state[key] = st.session_state[widget]
 
 
-EVERYONE, ME = "Tout le monde", "Moi"
+# « Moi » dans « Sauter les extraits déjà écoutés par » : l'annotateur choisi. « Tout le monde »
+# n'est pas une option des menus : c'est leur « Select all » de Streamlit, renommé dans la page
+# (`READONLY_MENUS`) ; tous les noms choisis valent tout le monde (`_everyone`).
+ME = "Moi"
+
+
+def _everyone(picked: list[str], names: list[str]) -> bool:
+    """Tous les annotateurs de la liste choisis : vaut « tout le monde » (y compris ceux qui ne
+    sont pas dans la liste, et les lignes sans annotateur)."""
+    return bool(names) and set(names) <= set(picked)
 
 
 def _stored_names(con, names: list[str]) -> list[str]:
@@ -443,14 +452,16 @@ def _stored_names(con, names: list[str]) -> list[str]:
     return list(dict.fromkeys([*(a for (a,) in stored if a and a.casefold() in wanted), *names]))
 
 
-def _skip_who(con, me: str, picked: list[str]) -> tuple[bool, list | None]:
+def _skip_who(
+    con, me: str, picked: list[str], names: list[str]
+) -> tuple[bool, list | None]:
     """Menu « Sauter les extraits déjà écoutés par » : (on saute, annotateurs dont les écoutes
     comptent ; None : tout le monde, les lignes sans annotateur comprises). « Moi » : l'annotateur
     choisi (rien tant qu'il n'est pas choisi). Ne dépend pas de ce qui est masqué."""
-    if EVERYONE in picked:
+    chosen = [me if p == ME else p for p in picked if p != ME or me]
+    if _everyone(chosen, names):
         return True, None
-    names = [me if p == ME else p for p in picked if p != ME or me]
-    return bool(names), _stored_names(con, names) if names else []
+    return bool(chosen), _stored_names(con, chosen) if chosen else []
 
 
 def _to_skip(con, queue, skipping: bool, who: list | None):
@@ -745,7 +756,14 @@ READONLY_MENUS = """<script>
   const root = window.parent.document;
   if (window.parent.__blanciMenus) return;
   window.parent.__blanciMenus = true;
-  const fix = () => root.querySelectorAll('div[data-baseweb="select"] input').forEach(i => {
+  // « Select all » des menus à choix multiples : « Tout le monde ».
+  const rename = () => root.querySelectorAll('[role="option"] div').forEach(d => {
+    if (d.childElementCount === 0 && d.textContent.trim() === "Select all") {
+      d.textContent = "Tout le monde";
+    }
+  });
+  const fix = () => (rename(), root.querySelectorAll('div[data-baseweb="select"] input'))
+    .forEach(i => {
     if (i.readOnly) return;
     i.readOnly = true; i.setAttribute("inputmode", "none"); i.style.caretColor = "transparent";
     i.style.cursor = "pointer";
@@ -874,25 +892,21 @@ def _send_panel(annotator: str) -> None:
 
 
 def _masking_panel(names: list[str]) -> tuple[list[str], bool, list[str], bool]:
-    """Menus « Masquer les annotations de » et « Masquer les commentaires de » : « Tout le
-    monde » ou des annotateurs de la liste. Renvoie (annotations : noms masqués, tout le monde ;
-    commentaires : noms masqués, tout le monde). Les deux sont indépendants ; les envois masqués
-    restent listés sous le spectrogramme, marqués « masqué ». Les noms choisis restent affichés
-    dans le menu : un masquage ne s'oublie pas."""
+    """Menus « Masquer les annotations de » et « Masquer les commentaires de » : des
+    annotateurs de la liste, ou tous (« Tout le monde » en tête du menu). Renvoie
+    (annotations : noms masqués, tout le monde ; commentaires : noms masqués, tout le monde).
+    Les deux sont indépendants ; les envois masqués restent listés sous le spectrogramme,
+    marqués « masqué ». Les noms choisis restent affichés dans le menu : un masquage ne
+    s'oublie pas."""
     st.header("Affichage")
-    options = [EVERYONE, *names]
+    options = list(names)
     ivs = st.multiselect(
         "Masquer les annotations de", options, key="hide_pick", placeholder="Personne"
     )
     notes = st.multiselect(
         "Masquer les commentaires de", options, key="hide_comments_pick", placeholder="Personne"
     )
-    return (
-        [n for n in ivs if n != EVERYONE],
-        EVERYONE in ivs,
-        [n for n in notes if n != EVERYONE],
-        EVERYONE in notes,
-    )
+    return ivs, _everyone(ivs, names), notes, _everyone(notes, names)
 
 
 def _comments_panel(comments: list[dict], t0: float, t1: float) -> None:
@@ -1252,10 +1266,10 @@ def main() -> None:
         st.header("Navigation")
         skip_pick = st.multiselect(
             "Sauter les extraits déjà écoutés par",
-            [ME, EVERYONE, *names],
+            [ME, *names],
             default=[ME],
             key="skip_pick",
-            placeholder="Personne : ◀ ▶ vont au voisin",
+            placeholder="Personne",
             help="« Moi » : l'annotateur choisi. Rien de choisi : ◀ ▶ et la validation vont à "
             "l'extrait voisin.",
         )
@@ -1302,7 +1316,7 @@ def main() -> None:
     n = len(queue)
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
     # Ce que ◀ ▶ et la validation sautent : ses écoutes, celles des collègues, ou rien.
-    nav_args = _skip_who(con, me, skip_pick)
+    nav_args = _skip_who(con, me, skip_pick, names)
     skipping = nav_args[0]
     nav = _to_skip(con, queue, *nav_args)
     all_heard = skipping and bool(nav.notna().all())
