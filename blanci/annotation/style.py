@@ -310,9 +310,9 @@ __VARS_LIGHT__
 /* Titres de section (Session, Sélection, Écoute, Méthode) : surtitres ambrés, soulignés d'un
    filet qui part de l'accent, comme les en-têtes de section. */
 [data-testid="stSidebar"] h2:not([data-testid="stExpander"] h2) {
-  position: relative; font-family: var(--f-mono) !important; font-size: 11px !important;
+  position: relative; font-family: var(--f-mono) !important; font-size: 14px !important;
   font-weight: 500 !important; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--accent) !important; padding: var(--avant-section) 0 10px !important;
+  color: var(--accent) !important; padding: var(--avant-section) 0 8px !important;
   margin: 0 !important; line-height: 1.2 !important;
 }
 [data-testid="stSidebar"] h2:not([data-testid="stExpander"] h2)::after {
@@ -322,10 +322,15 @@ __VARS_LIGHT__
     transparent);
 }
 /* Panneau de gauche : un seul écart entre deux éléments (`--pas`), quels qu'ils soient, et
-   `--pas` + `--avant-section` au-dessus d'un titre de section. Streamlit donne aux textes une
-   marge de 16 px qu'il reprend par une marge négative de leur cadre : un titre de section
-   (sans marge) mangeait ainsi l'écart qui le suit. */
-[data-testid="stSidebarUserContent"] { --pas: 12px; --avant-section: 16px; }
+   `--pas` + `--avant-section` de part et d'autre d'un titre de section (au-dessus de son
+   texte, au-dessous de son filet) : le contenu est centré entre son titre et le suivant.
+   Streamlit donne aux textes une marge de 16 px qu'il reprend par une marge négative de leur
+   cadre : un titre de section (sans marge) mangeait ainsi l'écart qui le suit. */
+[data-testid="stSidebarUserContent"] { --pas: 12px; --avant-section: 8px; }
+[data-testid="stSidebarUserContent"]
+  [data-testid="stElementContainer"]:has(> [data-testid="stHeading"]) {
+  margin-bottom: var(--avant-section);
+}
 [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"] { gap: var(--pas) !important; }
 [data-testid="stSidebarUserContent"] [data-testid="stMarkdownContainer"] {
   margin-bottom: 0 !important;
@@ -335,6 +340,10 @@ __VARS_LIGHT__
 }
 [data-testid="stSidebarUserContent"] [data-testid="stMarkdownContainer"] p { line-height: 1.4; }
 [data-testid="stSidebarUserContent"] [data-testid="stCheckbox"] label { min-height: 0 !important; }
+/* La case centrée sur la première ligne de son texte (Streamlit la décale de 2,5 px). */
+[data-testid="stSidebarUserContent"] [data-testid="stCheckbox"] label > div:not([data-testid]) {
+  margin-top: 0 !important;
+}
 [data-testid="stSidebarUserContent"] [data-testid="stCheckbox"] {
   margin-top: 0 !important; min-height: 0 !important;
 }

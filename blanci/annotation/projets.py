@@ -47,9 +47,9 @@ def label(name: str) -> str:
     return DEFAULT_LABEL if name == DEFAULT_PROJECT else name
 
 
-def create_project(name: str) -> str:
-    """Crée le projet (dossiers vides : en-tête et étiquettes d'origine tant qu'on n'y touche
-    pas) et renvoie son nom. ValueError si le nom est vide, déjà pris ou impropre à un dossier."""
+def _valid_name(name: str, keep: str | None = None) -> str:
+    """`name` nettoyé ; ValueError s'il est vide, déjà pris (sauf par `keep`) ou impropre à un
+    dossier."""
     name = re.sub(r"\s+", " ", name or "").strip()
     if not name:
         raise ValueError("Écrire le nom du projet.")
@@ -57,10 +57,40 @@ def create_project(name: str) -> str:
         raise ValueError(
             'Nom de projet impossible : éviter / \\ : * ? " < > | et le point initial.'
         )
-    if name.casefold() in (p.casefold() for p in list_projects()) or name == DEFAULT_LABEL:
+    taken = [p.casefold() for p in list_projects() if p != keep]
+    if name.casefold() in taken or name == DEFAULT_LABEL:
         raise ValueError(f"Le projet « {name} » existe déjà.")
+    return name
+
+
+def create_project(name: str) -> str:
+    """Crée le projet (dossiers vides : en-tête et étiquettes d'origine tant qu'on n'y touche
+    pas) et renvoie son nom. ValueError si le nom est vide, déjà pris ou impropre à un dossier."""
+    name = _valid_name(name)
     (PROJECTS_DIR / name / QUEUES_NAME).mkdir(parents=True)
     return name
+
+
+def rename_project(old: str, new: str) -> str:
+    """Renomme le dossier du projet `old` (pas le projet de départ) ; renvoie le nouveau nom.
+    Le style retenu pour lui le suit (`habillage.rename_style`)."""
+    from blanci.annotation.habillage import rename_style
+
+    if old == DEFAULT_PROJECT:
+        raise ValueError("Le projet de départ ne se renomme pas.")
+    new = _valid_name(new, keep=old)
+    if new != old:
+        (PROJECTS_DIR / old).rename(PROJECTS_DIR / new)
+        rename_style(old, new)
+    return new
+
+
+def header_dir(name: str) -> Path:
+    """Dossier de l'en-tête du projet `name` (celui d'origine pour le projet de départ)."""
+    folder = project_dir(name)
+    if folder is None:
+        return _default_files.get("header") or bandeau.HEADER_DIR
+    return folder / "entete"
 
 
 def _ours(path: Path) -> bool:

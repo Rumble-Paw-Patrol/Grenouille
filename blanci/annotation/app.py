@@ -3,8 +3,9 @@
     uv sync --group app
     uv run blanci annotate   (les enregistrements sont cherchés sur les disques branchés)
 
-Le poste sert à n'importe quel projet d'écoute : l'en-tête (titre, espèce, chant et sa bande),
-les étiquettes et les qualités se règlent dans le poste et se gardent dans `annotations/`.
+Le poste sert à n'importe quel projet d'écoute : l'en-tête (titre, espèce, chant et sa bande)
+se règle dans la fenêtre « Nouveau projet… » ou « Modifier ce projet… » du menu « Projet » ;
+les étiquettes et les qualités dans le visualiseur ; tout se garde dans `annotations/`.
 
 - **File d'écoute** (panneau de gauche) : une file déjà écrite, ou une nouvelle file tirée sur
   place par n'importe quelle méthode de l'outil de sélection (`blanci/annotation/selection.py` :
@@ -55,6 +56,7 @@ import itertools
 import math
 import os
 import re
+import shutil
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -237,10 +239,6 @@ def _selection_panel(cfg, con) -> tuple[str, Path | None, str | None]:
             )
         )
         st.session_state["queue_path"] = str(chosen)
-        readme = chosen.parent / "LISEZMOI.md"
-        if readme.is_file():
-            with st.expander("Informations sur cette file d'écoute"):
-                st.markdown(readme.read_text(encoding="utf-8"))
         return mode, chosen, encoder
     if mode == MAP:
         return mode, None, encoder
@@ -861,39 +859,12 @@ def _send_copy(con, annotator: str) -> None:
 def _send_panel(annotator: str) -> None:
     """Le dossier où arrivent ses annotations validées, et un bouton qui l'ouvre (Windows)."""
     st.header("Annotations validées")
-    who = f"« {_send_prefix(annotator)}… .csv »" if annotator else "à votre nom"
-    st.caption(
-        f"Chaque annotation validée est copiée dans ce dossier, fichiers {who} : pour vérifier "
-        "qu'elle est bien enregistrée, ou la transmettre."
-    )
+    st.caption("Chaque annotation validée est copiée dans ce dossier avec le nom de l'annotateur.")
     if hasattr(os, "startfile") and st.button(
         "📂 Ouvrir le dossier des annotations", use_container_width=True, help=str(SEND_FOLDER)
     ):
         SEND_FOLDER.mkdir(parents=True, exist_ok=True)
         os.startfile(SEND_FOLDER)
-
-
-def _take(ikey_base: str, take_key: str, intervals: list) -> None:
-    """Rappel de « Reprendre les intervalles de… » : une copie devient ses intervalles, sous une
-    nouvelle clé que le visualiseur recharge (`intervals_key`)."""
-    version = st.session_state.get(take_key, 0) + 1
-    st.session_state[take_key] = version
-    st.session_state[f"{ikey_base}::{version}"] = [list(i) for i in intervals]
-
-
-def _take_buttons(others: dict[str, list], ikey_base: str, take_key: str) -> None:
-    """Un bouton par autre annotateur qui a tracé des intervalles : on les reprend à son compte
-    (d'accord avec lui), quitte à les retoucher avant l'envoi. Remplace ses propres tracés."""
-    shown = [(who, ivs) for who, ivs in others.items() if ivs]
-    for column, (who, ivs) in zip(st.columns(max(len(shown), 1)), shown, strict=False):
-        column.button(
-            f"Reprendre les intervalles de {who}",
-            key=f"take::{ikey_base}::{who}",
-            on_click=_take,
-            args=(ikey_base, take_key, ivs),
-            help="D'accord : ses intervalles deviennent les vôtres (à retoucher si besoin), "
-            "puis « Valider l'annotation ». Remplace ce que vous avez tracé.",
-        )
 
 
 def _masking_panel(names: list[str]) -> tuple[list[str], bool, bool]:
@@ -902,20 +873,16 @@ def _masking_panel(names: list[str]) -> tuple[list[str], bool, bool]:
     commentaires masqués). Les commentaires d'un annotateur masqué le sont aussi."""
     st.header("Affichage")
     st.markdown("**Masquer les annotations de**")
-    everyone = st.checkbox(
-        "Tout le monde",
-        key="hide_everyone",
-    )
-    columns = st.columns(2)
-    hidden = [
-        name
-        for i, name in enumerate(names)
-        if columns[i % 2].checkbox(
-            name,
-            key=f"hide::{name}",
-            disabled=everyone,
-        )
-    ]
+    # Grille de deux colonnes, rangée par rangée (« Tout le monde » en tête) : les cases d'une
+    # rangée sont à la même hauteur, et aucune ne reste seule dans sa colonne.
+    everyone, hidden = False, []
+    items = [None, *names]  # None : « Tout le monde »
+    for row in range(0, len(items), 2):
+        for column, name in zip(st.columns(2), items[row : row + 2], strict=False):
+            if name is None:
+                everyone = column.checkbox("Tout le monde", key="hide_everyone")
+            elif column.checkbox(name, key=f"hide::{name}", disabled=everyone):
+                hidden.append(name)
     no_comments = st.checkbox("Masquer les commentaires", key="hide_comments")
     return hidden, everyone, no_comments
 
@@ -967,53 +934,6 @@ def _missing_recording(cfg, path: str) -> None:
         st.warning(f"Pas de {path} sous {folder}.")
 
 
-def _header_panel() -> None:
-    """En-tête du poste pour un autre projet : titre, espèce, sous-titre, un enregistrement du
-    chant et sa bande d'écoute (`bandeau.save_header`) ; l'en-tête d'origine se rétablit d'un
-    clic."""
-    current = read_header()
-    base = current or DEFAULT_HEADER
-    band = (current or {}).get("band_khz") or [None, None]
-    with st.expander("En-tête du poste (espèce, chant)"):
-        title = st.text_input("Titre", value=base["title"])
-        species = st.text_input("Espèce", value=base["species"])
-        subtitle = st.text_input("Sous-titre", value=base["subtitle"])
-        song = st.file_uploader(
-            "Chant de l'espèce",
-            type=["wav", "mp3", "flac", "ogg"],
-            help="Ses 30 premières secondes sont gardées : « Écouter le chant » les joue, le "
-            "spectrogramme de l'en-tête les montre.",
-        )
-        st.caption(
-            "Bande d'écoute du chant (kHz) : en pointillés sur le spectrogramme, cadré "
-            "autour d'elle."
-        )
-        cols = st.columns(2)
-        lo = cols[0].number_input("de (kHz)", 0.0, 96.0, band[0], 0.1, placeholder="4,4")
-        hi = cols[1].number_input("à (kHz)", 0.0, 96.0, band[1], 0.1, placeholder="5,5")
-        legend = st.text_input("Légende (lieu, date…)", placeholder="facultatif")
-        if st.button("Appliquer", type="primary", use_container_width=True):
-            if lo is None or hi is None:
-                st.error("Donner la bande d'écoute du chant (de … à … kHz).")
-            else:
-                try:
-                    save_header(
-                        title,
-                        species,
-                        subtitle,
-                        (lo, hi),
-                        song.getvalue() if song is not None else None,
-                        legend,
-                    )
-                except ValueError as exc:
-                    st.error(str(exc))
-                else:
-                    st.rerun()
-        if current and st.button("Revenir à l'en-tête d'origine", use_container_width=True):
-            reset_header()
-            st.rerun()
-
-
 def _notes(saved: dict, me: str, heard) -> list[str]:
     """Ce qui a déjà été dit de l'extrait sans intervalle à montrer : chaque envoi vide (de soi
     ou d'un autre), ou une ancienne réponse par fenêtres."""
@@ -1036,44 +956,153 @@ def _notes(saved: dict, me: str, heard) -> list[str]:
     return notes
 
 
+def _project_fields(kind: str, active: str) -> None:
+    """Contenu de la fenêtre « Nouveau projet » ou « Modifier le projet » : nom, puis l'en-tête
+    du poste (titre, espèce, sous-titre, chant de l'espèce et sa bande d'écoute, légende), qui
+    s'écrit dans le dossier du projet (`bandeau.save_header`). Un nouveau projet part des
+    étiquettes d'origine ; sans espèce ni chant, il garde aussi l'en-tête d'origine."""
+    new = kind == "new"
+    folder = None if new else projets.header_dir(active)
+    current = None if new else read_header(folder)
+    base = current or DEFAULT_HEADER
+    band = list(base.get("band_khz") or [None, None]) if not new else [None, None]
+    default = not new and active == projets.DEFAULT_PROJECT
+    with st.form(f"project::{kind}", border=False):
+        name = st.text_input(
+            "Nom du projet",
+            value="" if new else projets.label(active),
+            disabled=default,
+            help="Le projet de départ ne se renomme pas." if default else None,
+        )
+        st.markdown("**En-tête du poste**")
+        cols = st.columns(2)
+        title = cols[0].text_input("Titre", value=base["title"])
+        species = cols[1].text_input(
+            "Espèce", value="" if new else base["species"], placeholder="Anomaloglossus blanci"
+        )
+        subtitle = st.text_input("Sous-titre", value=base["subtitle"])
+        song = st.file_uploader(
+            "Chant de l'espèce" + ("" if new else " (vide : garder celui du projet)"),
+            type=["wav", "mp3", "flac", "ogg"],
+            help="Ses 30 premières secondes sont gardées : « Écouter le chant » les joue, le "
+            "spectrogramme de l'en-tête les montre.",
+        )
+        cols = st.columns([1, 1, 2])
+        lo = cols[0].number_input("Bande d'écoute de (kHz)", 0.0, 96.0, band[0], 0.1)
+        hi = cols[1].number_input("à (kHz)", 0.0, 96.0, band[1], 0.1)
+        legend = cols[2].text_input(
+            "Légende du chant (lieu, date…)",
+            value=(current or {}).get("legend_text", ""),
+            placeholder="facultatif",
+        )
+        st.caption("La bande d'écoute est tracée en pointillés sur le spectrogramme de l'en-tête.")
+        sent = st.form_submit_button(
+            "Créer le projet" if new else "Enregistrer", type="primary", use_container_width=True
+        )
+    if not new and current and st.button("Revenir à l'en-tête d'origine", use_container_width=True):
+        reset_header(folder)
+        st.rerun()
+    if not sent:
+        return
+    unchanged = (title, species, subtitle, song, lo, hi, legend) == (
+        base["title"],
+        base["species"],
+        base["subtitle"],
+        None,
+        band[0],
+        band[1],
+        (current or {}).get("legend_text", ""),
+    )
+    if not new and unchanged and (default or name.strip() == active):
+        st.rerun()  # rien de changé : la fenêtre se ferme
+    has_header = bool(species.strip() or song is not None or current) and not (
+        not new and unchanged
+    )
+    if has_header and (lo is None or hi is None):
+        st.error("Donner la bande d'écoute du chant (de … à … kHz).")
+        return
+    try:
+        if new:
+            created = projets.create_project(name)
+            folder = projets.header_dir(created)
+        if has_header:
+            try:
+                save_header(
+                    title,
+                    species,
+                    subtitle,
+                    (lo, hi),
+                    song.getvalue() if song is not None else None,
+                    legend,
+                    folder=folder,
+                )
+            except ValueError:
+                if new:  # projet à moitié créé : on le retire, rien n'y a été écrit d'autre
+                    shutil.rmtree(projets.project_dir(created), ignore_errors=True)
+                raise
+        target = created if new else active
+        if not new and not default:
+            target = projets.rename_project(active, name)
+    except ValueError as exc:
+        st.error(str(exc))
+        return
+    write_prefs(projet=target)
+    st.session_state.pop("project_pick", None)
+    st.rerun()
+
+
+@st.dialog("Nouveau projet", width="large")
+def _new_project_dialog(active: str) -> None:
+    _project_fields("new", active)
+
+
+@st.dialog("Modifier le projet", width="large")
+def _edit_project_dialog(active: str) -> None:
+    _project_fields("edit", active)
+
+
 def _project_input() -> None:
     """Menu « Projet » : le projet actif (préréglage : en-tête, étiquettes, files d'écoute et
-    style) ; en choisir un autre recharge la page avec ses fichiers. « Nouveau projet… » en crée
-    un, qui part de l'en-tête et des étiquettes d'origine."""
-    if "project_added" in st.session_state:  # un menu ne se change qu'avant d'être affiché
-        st.session_state["project_pick"] = st.session_state.pop("project_added")
+    style) ; en choisir un autre recharge la page avec ses fichiers. « Modifier ce projet… » et
+    « Nouveau projet… » ouvrent une fenêtre au milieu de la page (`_project_fields`), et le menu
+    revient au projet actif."""
     names = projets.list_projects()
     active = str(read_prefs()["projet"])
     if active not in names:
         active = names[0]
-    if st.session_state.get("project_pick") not in (*names, _NEW_PROJECT):
+    if st.session_state.get("project_pick") not in names:
         st.session_state["project_pick"] = active
-    picked = st.selectbox(
+    st.selectbox(
         "Projet",
-        [*names, _NEW_PROJECT],
+        [*names, _EDIT_PROJECT, _NEW_PROJECT],
         key="project_pick",
-        format_func=lambda n: n if n == _NEW_PROJECT else projets.label(n),
+        format_func=lambda n: (
+            f"✏️ Modifier « {projets.label(active)} »…"
+            if n == _EDIT_PROJECT
+            else n
+            if n == _NEW_PROJECT
+            else projets.label(n)
+        ),
         on_change=_choose_project,
+        args=(active,),
     )
-    if picked == _NEW_PROJECT:
-        with st.form("new_project", border=False):
-            name = st.text_input("Nom du nouveau projet")
-            if st.form_submit_button("Créer"):
-                try:
-                    st.session_state["project_added"] = projets.create_project(name)
-                except ValueError as exc:
-                    st.error(str(exc))
-                else:
-                    write_prefs(projet=st.session_state["project_added"])
-                    st.rerun()
+    dialog = st.session_state.pop("project_dialog", None)
+    if dialog == "new":
+        _new_project_dialog(active)
+    elif dialog == "edit":
+        _edit_project_dialog(active)
 
 
 _NEW_PROJECT = "➕ Nouveau projet…"
+_EDIT_PROJECT = "✏️ Modifier ce projet…"
 
 
-def _choose_project() -> None:
+def _choose_project(active: str) -> None:
     picked = st.session_state.get("project_pick")
-    if picked and picked != _NEW_PROJECT:
+    if picked in (_NEW_PROJECT, _EDIT_PROJECT):
+        st.session_state["project_dialog"] = "new" if picked == _NEW_PROJECT else "edit"
+        st.session_state["project_pick"] = active
+    elif picked:
         write_prefs(projet=picked)
 
 
@@ -1124,7 +1153,6 @@ def main() -> None:
             annotator = _annotator_input(names)
         with project_col:
             _project_input()
-        _header_panel()
         mode, chosen, encoder = _selection_panel(cfg, con)
         candidate_slot = st.container()
         st.header("Navigation")
@@ -1191,8 +1219,12 @@ def main() -> None:
     st.session_state[key] = pos
     if not all_heard:
         st.session_state[end] = False
-    with candidate_slot:
+    with candidate_slot:  # liste des extraits, puis, en dernier, ce qu'on sait de la file
         _candidate_strip(queue, done, chosen, key, end, offset_h)
+        readme = chosen.parent / "LISEZMOI.md"
+        if readme.is_file():
+            with st.expander("Informations sur cette file d'écoute"):
+                st.markdown(readme.read_text(encoding="utf-8"))
     if all_heard and st.session_state.get(end):
         st.success(
             "File terminée : tous les extraits sont écoutés. Pour en réécouter un, le choisir "
@@ -1288,13 +1320,10 @@ def main() -> None:
         own = saved.pop(mine, []) if me else []
         others = {k or "(sans nom)": v for k, v in saved.items()}
         masked = "all" if everyone else ",".join(sorted(h.casefold() for h in hidden))
-        ikey_base = f"iv::{extract}::{me.casefold()}::{masked}"
-        take_key = f"take::{ikey_base}"  # change à chaque « Reprendre les intervalles de… »
-        ikey = f"{ikey_base}::{st.session_state.get(take_key, 0)}"
+        ikey = f"iv::{extract}::{me.casefold()}::{masked}"
         if ikey not in st.session_state:
             # Intervalles tracés avant de s'identifier : repris à son nom, pas perdus.
-            anon_base = f"iv::{extract}::::{masked}"
-            anon = f"{anon_base}::{st.session_state.get(f'take::{anon_base}', 0)}"
+            anon = f"iv::{extract}::::{masked}"
             draft = st.session_state.pop(anon, None) if me else None
             st.session_state[ikey] = [list(i) for i in (draft or own)]
         shown_windows = [
@@ -1342,8 +1371,6 @@ def main() -> None:
             ckey,
             not window_mode,
         )
-        if not window_mode:
-            _take_buttons(others, ikey_base, take_key)
         _comments_panel(comments, t0, t1)
         intervals = st.session_state[ikey]
         channel = st.session_state[ckey]

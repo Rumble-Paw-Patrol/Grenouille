@@ -55,6 +55,7 @@ DEFAULT_HEADER = {
     "band_height": 36.7,
     "cycle_ms": 18000,
     "sprite": True,
+    "band_khz": [4.4, 5.5],  # pour pré-remplir « Modifier le projet »
 }
 
 INDEX = r"""<!doctype html>
@@ -610,6 +611,7 @@ def save_header(
         "cycle_ms": max(1000, round(duration * 1000)),
         "sprite": False,
         "band_khz": [lo, hi],
+        "legend_text": legend.strip(),  # la légende telle que tapée, pour la modifier
     }
     (folder / "entete.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

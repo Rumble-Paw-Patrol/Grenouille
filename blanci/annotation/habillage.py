@@ -285,6 +285,21 @@ def write_prefs(
         pass
 
 
+def rename_style(old: str, new: str) -> None:
+    """Un projet renommé garde son style, et reste le projet actif s'il l'était."""
+    raw = _read_raw()
+    styles = raw.get("styles") if isinstance(raw.get("styles"), dict) else {}
+    if old in styles:
+        styles[new] = styles.pop(old)
+    raw["styles"] = styles
+    if raw.get("projet") == old:
+        raw["projet"] = new
+    try:
+        prefs_path().write_text(json.dumps(raw), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def next_style(style: str) -> str:
     ids = list(STYLES)
     return ids[(ids.index(style) + 1) % len(ids)] if style in ids else ids[0]
