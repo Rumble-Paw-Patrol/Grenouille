@@ -115,19 +115,30 @@ INDEX = r"""<!doctype html>
   .val { font-family: var(--mono); font-size: 11px; color: var(--ink); min-width: 3.2em; }
   .contrastv { min-width: 1.2em; text-align: center; }
   button.mini { padding: 1px 8px; border-radius: 999px; font-weight: 600; min-width: 26px; }
-  #follow.on, #bandonly.on { border-color: var(--accent-2); color: var(--accent-2); }
+  /* Boutons à deux états (Suivre, Bande seule) : allumés comme le bouton du micro choisi. */
+  button.toggle { font-weight: 600; color: var(--muted); }
+  button.toggle.on { background: linear-gradient(135deg, var(--accent), var(--accent-2));
+                     color: var(--accent-ink); border-color: transparent;
+                     box-shadow: 0 4px 16px -6px var(--accent-2); }
   button.mini.on { border-color: var(--accent-2); color: var(--accent-2);
                    box-shadow: 0 0 0 1px var(--accent-2) inset; }
-  /* Un encadré par micro (moitié de la largeur chacun) : filtre dynamique et contraste en
-     haut, son lecteur, puis le bouton qui l'affiche et le fait entendre, contre la toile. */
+  /* Un encadré par micro (moitié de la largeur chacun) : volume, filtre dynamique et
+     contraste sur une ligne en haut, son lecteur, puis le bouton qui l'affiche et le fait
+     entendre, contre la toile. */
   .mics { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 10px;
           margin: 2px 0 8px; }
   .mic { display: grid; gap: 7px; padding: 8px 9px 9px; border: 1px solid var(--line);
          border-radius: 12px; background: var(--surface-2); transition: border-color .2s; }
   .mic.on { border-color: var(--accent); box-shadow: 0 0 18px -10px var(--accent); }
-  .mic-set { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
-             justify-content: center; }
-  .mic-set > span { display: inline-flex; gap: 5px; align-items: center; }
+  /* Une seule ligne : les curseurs rétrécissent ; sur un écran étroit, retour à la ligne. */
+  .mic-set { display: flex; flex-wrap: nowrap; gap: 6px 10px; align-items: center;
+             justify-content: center; min-width: 0; }
+  .mic-set > span { display: inline-flex; gap: 5px; align-items: center; min-width: 0;
+                    flex: 0 1 auto; white-space: nowrap; }
+  .mic-set input[type=range] { width: 90px; min-width: 36px; flex: 1 1 90px; }
+  .mic-set .gainv, .mic-set .rangev { min-width: 3em; }
+  .mic-set > span:last-child { flex-shrink: 0; }  /* contraste : ses boutons ne rétrécissent pas */
+  @media (max-width: 1000px) { .mic-set { flex-wrap: wrap; } }
   .mic-audio audio { display: block; width: 100%; height: 32px; }
   .mic:not(.on) .mic-audio { opacity: .55; }
   .mic-btn { width: 100%; padding: 5px 10px; font-weight: 600; color: var(--muted); }
@@ -267,18 +278,19 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
   <span class="group"><span class="lbl">Bande</span>
     <input type="number" id="lo" min="0" max="24" step="0.1"> –
     <input type="number" id="hi" min="0" max="24" step="0.1"> kHz
-    <button id="bandonly" aria-pressed="false"
-            title="Enfoncé : on n'entend que la bande, le reste est coupé">Bande seule</button>
     <select id="slope" title="Raideur du filtre hors de la bande : plus elle est forte, plus les
  sons hors bande sont coupés, mais plus le filtre « sonne » sur les claquements">
       <option value="12">12 dB/oct</option><option value="24">24 dB/oct</option>
       <option value="48">48 dB/oct</option><option value="96">96 dB/oct</option>
       <option value="fft" title="Coupure franche : rien hors de la bande, mais pré-écho et
  traînée à la fréquence des frontières sur les claquements">FFT (coupure franche)</option>
-    </select></span>
+    </select>
+    <button id="bandonly" class="toggle" aria-pressed="false"
+            title="Allumé : on n'entend que la bande, filtrée comme choisi à gauche">Bande
+ seule</button></span>
   <span class="group">
     <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
-    <button id="follow" aria-pressed="false"
+    <button id="follow" class="toggle" aria-pressed="false"
             title="La vue suit la tête de lecture pendant l'écoute">Suivre</button>
   </span>
   <span id="status"></span>
@@ -359,6 +371,11 @@ function mic(i) {
   while (S.mics.length <= i) {
     S.mics.push({gain: S.gain ?? MIC_DEFAULT.gain, range: S.range ?? MIC_DEFAULT.range,
                  contrast: S.contrast ?? MIC_DEFAULT.contrast});
+  }
+  // Réglage enregistré avant qu'un champ existe (le volume) : sans valeur, le gain vaudrait
+  // NaN, que Web Audio refuse en levant une erreur qui couperait tout `applyAudio`.
+  for (const [k, v] of Object.entries(MIC_DEFAULT)) {
+    if (!Number.isFinite(S.mics[i][k])) S.mics[i][k] = k === "gain" ? (S.gain ?? v) : v;
   }
   return S.mics[i];
 }

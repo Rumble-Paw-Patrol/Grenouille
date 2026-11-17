@@ -440,7 +440,8 @@ ME = "Moi"
 def _everyone(picked: list[str], names: list[str]) -> bool:
     """Tous les annotateurs de la liste choisis : vaut « tout le monde » (y compris ceux qui ne
     sont pas dans la liste, et les lignes sans annotateur)."""
-    return bool(names) and set(names) <= set(picked)
+    picked_keys = {p.strip().casefold() for p in picked}
+    return bool(names) and {n.strip().casefold() for n in names} <= picked_keys
 
 
 def _stored_names(con, names: list[str]) -> list[str]:
@@ -1264,9 +1265,16 @@ def main() -> None:
         mode, chosen, encoder = _selection_panel(cfg, con)
         candidate_slot = st.container()
         st.header("Navigation")
+        # Soi-même n'y est que sous « Moi » : son nom en plus ferait un doublon.
+        me_key = annotator.strip().casefold()
+        skip_options = [ME, *(n for n in names if n.strip().casefold() != me_key)]
+        if "skip_pick" in st.session_state:  # nom retiré des options en changeant d'annotateur
+            st.session_state.skip_pick = [
+                p for p in st.session_state.skip_pick if p in skip_options
+            ]
         skip_pick = st.multiselect(
             "Sauter les extraits déjà écoutés par",
-            [ME, *names],
+            skip_options,
             default=[ME],
             key="skip_pick",
             placeholder="Personne",
