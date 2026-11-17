@@ -860,12 +860,12 @@ async function load() {
   slots.forEach(s => { s.innerHTML = ""; });
   players = []; graphs = []; active = shownTrack(); raw = []; decoding = [];
   prepToken++;  // la préparation en cours visait cet extrait ou un autre : on reprend ce qu'elle a
+  // Ce qui était préparé pour cet extrait passe au chargement ; le reste (l'extrait d'après)
+  // reste en réserve, `prepareNext` le reprend ou le libère.
   given = {};
   for (const [src, p] of Object.entries(ahead)) {
-    if (D.audios.some(a => a.src === src)) given[src] = p;
-    else if (p.fft) URL.revokeObjectURL(p.fft.url);
+    if (D.audios.some(a => a.src === src)) { given[src] = p; delete ahead[src]; }
   }
-  ahead = {};
   $("status").textContent = "chargement de l'audio…";
   if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
   const data = await Promise.all(D.audios.map(a =>
@@ -930,13 +930,18 @@ async function decodeTrack(data) {
   return {x, rate, vmax: reference(x, rate)};
 }
 
-// --- Extrait suivant, préparé pendant qu'on annote celui-ci ---------------------------------
-// Python donne les fichiers du suivant (`D.next`) avant de les avoir écrits : on les guette,
-// puis on les charge, on décode la piste affichée, on calcule son niveau de référence et son
-// spectrogramme à la vue d'ouverture et, en mode FFT, son son filtré.
-// `load`, `decode` et `renderSpectrogram` reprennent tout cela à l'ouverture.
+// --- Extraits suivants, préparés pendant qu'on annote celui-ci ------------------------------
+// Python donne les fichiers des deux extraits suivants (`D.next`, une liste de micros par
+// extrait) avant de les avoir écrits : on les guette, puis, un extrait après l'autre, on les
+// charge, on décode la piste affichée, on calcule son niveau de référence, son spectrogramme à
+// la vue d'ouverture et son son filtré FFT. `load`, `decode` et `renderSpectrogram` reprennent
+// tout cela à l'ouverture. Le décodage et le spectrogramme attendent que la page soit libre
+// (`idle`), la FFT tourne dans un fil à part : l'annotation en cours n'est pas ralentie.
 let ahead = {}, given = {}, prepToken = 0, prepTimer = null;
-const idle = () => new Promise(ok => (window.requestIdleCallback || setTimeout)(() => ok()));
+// Au plus 1 s d'attente : une page jamais libre (onglet caché, lecture en cours) ne bloque pas
+// la préparation.
+const idle = () => new Promise(ok => window.requestIdleCallback
+  ? requestIdleCallback(() => ok(), {timeout: 1000}) : setTimeout(ok, 30));
 function prepSoon() { clearTimeout(prepTimer); prepTimer = setTimeout(prepareNext, 400); }
 async function waitFile(src, token) {
   for (let k = 0; k < 300 && token === prepToken; k++) {  // 5 min au plus
@@ -947,36 +952,39 @@ async function waitFile(src, token) {
   return null;
 }
 async function prepareNext() {
-  const token = ++prepToken, next = D.next || [];
+  const token = ++prepToken, list = (D.next || []).filter(x => x.length);
+  const wanted = new Set(list.flat().map(a => a.src));
   for (const [src, p] of Object.entries(ahead)) {
-    if (next.some(a => a.src === src)) continue;
+    if (wanted.has(src)) continue;
     if (p.fft) URL.revokeObjectURL(p.fft.url);
     delete ahead[src];
   }
-  if (!next.length || !actx) return;
+  pinned.clear();
+  if (!actx) return;
+  for (const next of list) {
+    if (token !== prepToken || !await prepareOne(next, token)) return;
+  }
+}
+async function prepareOne(next, token) {
   const raws = await Promise.all(next.map(a => ahead[a.src]?.raw || waitFile(a.src, token)));
-  if (token !== prepToken || raws.some(r => !r)) return;
+  if (token !== prepToken || raws.some(r => !r)) return false;
   next.forEach((a, i) => { ahead[a.src] = ahead[a.src] || {raw: raws[i]}; });
-  const track = async i => {
-    const p = ahead[next[i].src];
-    if (!p.x) { await idle(); Object.assign(p, await decodeTrack(p.raw)); }
-    return p;
-  };
-  const ch = S.channel < next.length ? S.channel : 0, a = next[ch], p = await track(ch);
+  const ch = S.channel < next.length ? S.channel : 0, a = next[ch], p = ahead[a.src];
+  if (!p.x) { await idle(); Object.assign(p, await decodeTrack(p.raw)); }
   await idle();
-  if (token !== prepToken) return;
+  if (token !== prepToken) return false;
   const v = {t0: a.start, t1: a.start + p.x.length / p.rate, f0: 0, f1: D.fview};
   const cols = Math.max(1, Math.round(W())), rows = Math.max(1, Math.round(PH()));
   const n = fftSize(v, p.rate), m = mic(ch), key = specKeyOf(a.src, v, cols, rows, n, m);
+  pinned.add(key);
   if (!specCache.has(key)) remember(key, paint(p.x, p.rate, a.start, p.vmax, v, cols, rows, n, m));
-  const fk = fftWant();
-  if (!fk) return;
-  const q = p;  // le son filtré : celui du micro affiché, le seul qu'on entend
-  if (token !== prepToken || q.fft?.key === fk) return;
-  const y = await filtered(q.x, q.rate, Math.max(S.band[0], 1), S.band[1]);
-  if (token !== prepToken || !ahead[a.src]) return;
-  if (q.fft) URL.revokeObjectURL(q.fft.url);
-  q.fft = {key: fk, url: wavURL(y, q.rate)};
+  const fk = fftWant();  // le son filtré : celui du micro affiché
+  if (p.fft?.key === fk) return true;
+  const y = await filtered(p.x, p.rate, Math.max(S.band[0], 1), S.band[1]);
+  if (token !== prepToken || !ahead[a.src]) return false;
+  if (p.fft) URL.revokeObjectURL(p.fft.url);
+  p.fft = {key: fk, url: wavURL(y, p.rate)};
+  return true;
 }
 
 // --- Spectrogramme calculé à la résolution de la vue --------------------------------------
@@ -1048,9 +1056,15 @@ function specKeyOf(src, v, cols, rows, n, m) {
   const t = [v.t0, v.t1, v.f0, v.f1].map(z => z.toFixed(2));
   return [src, ...t, cols, rows, n, m.range, m.contrast].join();
 }
+// Les spectrogrammes préparés pour les extraits suivants (`pinned`) ne sont pas chassés par
+// les vues calculées pendant un zoom sur l'extrait en cours.
+const pinned = new Set();
 function remember(key, canvas) {
   specCache.delete(key); specCache.set(key, canvas);
-  while (specCache.size > 6) specCache.delete(specCache.keys().next().value);
+  for (const k of [...specCache.keys()]) {
+    if (specCache.size <= 6 + pinned.size) break;
+    if (!pinned.has(k)) specCache.delete(k);
+  }
 }
 function renderSpectrogram(cols, rows) {
   const ch = shownTrack(), a = D.audios[ch], n = fftSize(view, buffers.rate), m = mic(ch);
@@ -1692,7 +1706,7 @@ def viewer_args(
     colors: dict[str, str] | None = None,
     fview_hz: float = 10_000.0,
     height: int = 320,
-    next_audios: list[tuple[str, str, float]] | None = None,
+    next_audios: list[list[tuple[str, str, float]]] | None = None,
     qualities: list[str] | None = None,
     names: dict[str, str] | None = None,
     suggestions: list[tuple[str, str, str]] | None = None,
@@ -1708,8 +1722,9 @@ def viewer_args(
     l'ouverture de l'extrait, ou quand `intervals_key` change (autre annotateur) ; `others` :
     {annotateur : intervalles}, ceux des autres, affichés sans pouvoir être modifiés ;
     `band_hz`, `channel` : réglages de départ, la première fois ;
-    `next_audios` : comme `audios`, pour l'extrait suivant, que le navigateur prépare pendant
-    qu'on annote celui-ci (fichiers attendus s'ils ne sont pas encore écrits) ;
+    `next_audios` : une liste comme `audios` par extrait suivant (les deux prochains), que le
+    navigateur prépare dans l'ordre pendant qu'on annote celui-ci (fichiers attendus s'ils ne
+    sont pas encore écrits) ;
     `qualities` : celles proposées (défaut : A, B, C) ; `names` : {code : nom} de toutes les
     étiquettes connues, même retirées (pastilles des intervalles déjà posés) ; `suggestions` :
     (code, nom, #RRGGBB) que le « + » propose avant un nom libre ; avec elles, les « − » et les
@@ -1762,8 +1777,8 @@ def viewer_args(
         "channel": int(channel),
         "height": int(height),
         "next": [
-            {"name": name, "src": src, "start": float(start)}
-            for name, src, start in next_audios or []
+            [{"name": name, "src": src, "start": float(start)} for name, src, start in audios]
+            for audios in next_audios or []
         ],
     }
 

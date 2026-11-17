@@ -453,9 +453,7 @@ def _stored_names(con, names: list[str]) -> list[str]:
     return list(dict.fromkeys([*(a for (a,) in stored if a and a.casefold() in wanted), *names]))
 
 
-def _skip_who(
-    con, me: str, picked: list[str], names: list[str]
-) -> tuple[bool, list | None]:
+def _skip_who(con, me: str, picked: list[str], names: list[str]) -> tuple[bool, list | None]:
     """Menu « Sauter les extraits déjà écoutés par » : (on saute, annotateurs dont les écoutes
     comptent ; None : tout le monde, les lignes sans annotateur comprises). « Moi » : l'annotateur
     choisi (rien tant qu'il n'est pas choisi). Ne dépend pas de ce qui est masqué."""
@@ -528,18 +526,25 @@ def _prefetcher() -> tuple[ThreadPoolExecutor, dict]:
     return ThreadPoolExecutor(max_workers=1, thread_name_prefix="prefetch"), {}
 
 
-def _prefetch(full: str, extract: tuple[float, float] | None = None, whole: bool = True) -> None:
-    """Lit à l'avance le candidat suivant pendant qu'on écoute celui-ci : quand on l'ouvre,
-    `_media` reprend le résultat au lieu de relire le disque. Une seule lecture d'avance.
-    `whole` : l'enregistrement entier aussi (inutile s'il est déjà en cache : extrait suivant
-    du même enregistrement)."""
+def _prefetch(targets: list[tuple[str, tuple[float, float] | None, bool]]) -> None:
+    """Lit à l'avance les candidats suivants, dans l'ordre, pendant qu'on écoute celui-ci :
+    quand on en ouvre un, `_media` reprend le résultat au lieu de relire le disque. Chaque
+    cible : (fichier, extrait ou None, `whole`), `whole` : l'enregistrement entier aussi
+    (inutile s'il est déjà en cache : extrait suivant du même enregistrement). Les lectures
+    d'avance qui ne visent plus aucun des suivants sont abandonnées."""
     pool, pending = _prefetcher()
-    spans = ([(0.0, math.inf)] if whole else []) + ([extract] if extract else [])
-    todo = [(full, o, d) for o, d in spans if (full, o, d) not in pending]
-    for stale in [k for k in pending if k not in todo and k[0] != full]:
-        pending.pop(stale, None)
-    for args in todo:
-        pending[args] = pool.submit(_build_media, *args)
+    wanted = [
+        (full, o, d)
+        for full, extract, whole in targets
+        for o, d in ([(0.0, math.inf)] if whole else []) + ([extract] if extract else [])
+    ]
+    for stale in [k for k in pending if k not in wanted]:
+        future = pending.pop(stale, None)
+        if future is not None:
+            future.cancel()  # sans effet si la lecture a commencé
+    for args in wanted:
+        if args not in pending:
+            pending[args] = pool.submit(_build_media, *args)
 
 
 def _media_key(full: str, offset_s: float, dur_s: float, channel: int) -> str:
@@ -657,11 +662,21 @@ def _details(qualities: list[str], with_quality: bool = True) -> tuple[str | Non
     return None if quality == "—" else quality, comment.strip() or None
 
 
-def _comment_box(form_key: str, annotator: str) -> tuple[bool, str | None]:
+def _comment_key(form_key: str) -> str:
+    return f"comment::{form_key}::{st.session_state.get('validated', 0)}"
+
+
+def _request_submit(extract: str) -> None:
+    """Rappel de « Valider l'annotation » : l'envoi se fait au début du passage suivant, avant
+    de redessiner l'extrait (`main`), comme pour « Valider » à droite du spectrogramme."""
+    st.session_state["submit_request"] = extract
+
+
+def _comment_box(form_key: str, annotator: str, extract: str) -> tuple[bool, str | None]:
     """Commentaire facultatif et « Valider l'annotation », côte à côte, sous le spectrogramme.
     Hors formulaire : « Valider » à droite du spectrogramme prend aussi le commentaire tapé.
     Renvoie (bouton cliqué, commentaire)."""
-    comment_key = f"comment::{form_key}::{st.session_state.get('validated', 0)}"
+    comment_key = _comment_key(form_key)
     with st.container(border=True):
         cols = st.columns([5, 2], vertical_alignment="bottom")
         comment = cols[0].text_input(
@@ -673,6 +688,8 @@ def _comment_box(form_key: str, annotator: str) -> tuple[bool, str | None]:
             use_container_width=True,
             disabled=not annotator.strip(),
             help=None if annotator.strip() else _NO_ANNOTATOR,
+            on_click=_request_submit,
+            args=(extract,),
         )
     return clicked, (comment or "").strip() or None
 
@@ -1268,18 +1285,14 @@ def main() -> None:
         # Soi-même n'y est que sous « Moi » : son nom en plus ferait un doublon.
         me_key = annotator.strip().casefold()
         skip_options = [ME, *(n for n in names if n.strip().casefold() != me_key)]
-        if "skip_pick" in st.session_state:  # nom retiré des options en changeant d'annotateur
-            st.session_state.skip_pick = [
-                p for p in st.session_state.skip_pick if p in skip_options
-            ]
+        # « Moi » au départ ; un nom retiré des options en changeant d'annotateur s'en va.
+        picked = st.session_state.get("skip_pick", [ME])
+        st.session_state.skip_pick = [p for p in picked if p in skip_options]
         skip_pick = st.multiselect(
             "Sauter les extraits déjà écoutés par",
             skip_options,
-            default=[ME],
             key="skip_pick",
             placeholder="Personne",
-            help="« Moi » : l'annotateur choisi. Rien de choisi : ◀ ▶ et la validation vont à "
-            "l'extrait voisin.",
         )
         hidden, everyone, hidden_comments, no_comments = _masking_panel(names)
         _send_panel(annotator)
@@ -1381,20 +1394,33 @@ def main() -> None:
     # ◀ ▶ : voisin dans la file, ou précédent / prochain qui reste à écouter (sans faire le tour).
     before = next_position(nav, pos, skipping, step=-1, wrap=False)
     after = next_position(nav, pos, skipping, wrap=False)
-    # Chargement d'avance de l'extrait suivant, pendant qu'on écoute celui-ci : lu sur le disque
-    # ici (`_prefetch`), puis décodé et dessiné par le navigateur (`next_audios`), avant le rendu
-    # du visualiseur pour que les deux commencent tout de suite.
-    next_audios = None
+    # Chargement d'avance des deux extraits suivants, pendant qu'on écoute celui-ci : lus sur le
+    # disque ici (`_prefetch`), puis décodés, dessinés et filtrés par le navigateur
+    # (`next_audios`), avant le rendu du visualiseur pour que les deux commencent tout de suite.
+    next_audios = []
     if media is not None and after != pos:
-        upcoming = queue.iloc[after].to_dict()
-        next_full = locate(str(upcoming["path"]), raw, extra, cfg["audio"].get("renamed"))
-        planned_next = upcoming.get("source") == "plan" and not window_mode
-        span = (float(upcoming["offset_s"]), float(upcoming["dur_s"]))
-        # Même enregistrement : seul l'extrait suivant (jeu de test en extraits de 30 s) est à lire.
-        same = next_full is not None and str(next_full) == str(full)
-        if next_full is not None and (not same or planned_next):
-            _prefetch(str(next_full), span if planned_next else None, whole=not same)
-            next_audios = _next_audios(str(next_full), *(span if planned_next else (0.0, math.inf)))
+        upcoming_pos = [after]
+        after2 = next_position(nav, after, skipping, wrap=False)
+        if after2 not in (after, pos):
+            upcoming_pos.append(after2)
+        targets, previous = [], str(full)
+        for q in upcoming_pos:
+            upcoming = queue.iloc[q].to_dict()
+            next_full = locate(str(upcoming["path"]), raw, extra, cfg["audio"].get("renamed"))
+            if next_full is None:
+                break
+            planned_next = upcoming.get("source") == "plan" and not window_mode
+            span = (float(upcoming["offset_s"]), float(upcoming["dur_s"]))
+            # Même enregistrement : seul l'extrait (jeu de test en extraits de 30 s) est à lire.
+            same = str(next_full) == previous
+            previous = str(next_full)
+            if same and not planned_next:
+                continue
+            targets.append((str(next_full), span if planned_next else None, not same))
+            next_audios.append(
+                _next_audios(str(next_full), *(span if planned_next else (0.0, math.inf)))
+            )
+        _prefetch(targets)
 
     # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait (mode fenêtres).
     cand_offset, cand_dur = float(candidate["offset_s"]), float(candidate["dur_s"])
@@ -1432,6 +1458,29 @@ def main() -> None:
             t0, t1 = media["t0"], media["t1"]
     extract = f"{candidate['path']}:{t0:.2f}:{t1:.2f}"
     submit_now = media is not None and st.session_state.pop("submit_request", None) == extract
+    masked = "all" if everyone else ",".join(sorted(h.casefold() for h in hidden))
+    ikey = f"iv::{extract}::{me.casefold()}::{masked}"
+    # « Valider » : enregistré et extrait suivant tout de suite, sans redessiner celui-ci (un
+    # passage de page de moins). Seul le cas où il faut d'abord demander « Êtes-vous sûr ? »
+    # suit le chemin normal, qui affiche la fenêtre.
+    confirmed_early = st.session_state.get("confirmed_submit") == extract
+    tried = False  # envoi déjà tenté ici (et refusé : l'erreur est affichée une fois)
+    if (submit_now or confirmed_early) and not window_mode and ikey in st.session_state:
+        intervals = st.session_state[ikey]
+        doubts = []
+        if submit_now and me and confirm_on("valider"):
+            history_now = extract_history(con, candidate["recording_id"], t0, t1)
+            for h in history_now:
+                h["masked"] = shown is not None and h["who"] not in shown
+            doubts = _submit_doubts(intervals, history_now, me)
+        if not doubts:
+            st.session_state.pop("confirmed_submit", None)
+            comment = (st.session_state.get(_comment_key(form_key)) or "").strip() or None
+            channel = st.session_state.get(f"ch::{extract}", spectro_default)
+            if _save_extract(con, candidate, t0, t1, intervals, annotator, channel, comment):
+                _advance(con, queue, pos, nav_args, key, end)
+                st.rerun()
+            tried = True
     if media is not None:
         # Ses intervalles (son dernier envoi, sauf s'il se masque) et ceux des autres affichés.
         saved = extract_intervals(con, candidate["recording_id"], t0, t1, shown)
@@ -1454,8 +1503,6 @@ def main() -> None:
         mine = next((k for k in saved if k is not None and k.casefold() == me.casefold()), None)
         own = saved.pop(mine, []) if me else []
         others = {k or "(sans nom)": v for k, v in saved.items()}
-        masked = "all" if everyone else ",".join(sorted(h.casefold() for h in hidden))
-        ikey = f"iv::{extract}::{me.casefold()}::{masked}"
         if ikey not in st.session_state:
             # Intervalles tracés avant de s'identifier : repris à son nom, pas perdus.
             anon = f"iv::{extract}::::{masked}"
@@ -1513,7 +1560,7 @@ def main() -> None:
 
     if not window_mode:
         if media is not None:
-            clicked, comment = _comment_box(form_key, annotator)
+            clicked, comment = _comment_box(form_key, annotator, extract)
             confirmed = st.session_state.pop("confirmed_submit", None) == extract
             reasons = (
                 _submit_doubts(intervals, full_history, me)
@@ -1525,8 +1572,10 @@ def main() -> None:
             asked = st.session_state.get("confirm_submit")
             if asked and asked[0] == extract:
                 _confirm_submit_dialog(*asked)
-            elif (clicked or submit_now or confirmed) and _save_extract(
-                con, candidate, t0, t1, intervals, annotator, channel, comment
+            elif (
+                (clicked or submit_now or confirmed)
+                and not tried
+                and _save_extract(con, candidate, t0, t1, intervals, annotator, channel, comment)
             ):
                 _advance(con, queue, pos, nav_args, key, end)
                 st.rerun()
