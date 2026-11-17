@@ -10,6 +10,7 @@ dire de quel modèle vient un « à vérifier » remonté six mois plus tôt (§
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import tempfile
 from dataclasses import dataclass, field
@@ -613,6 +614,18 @@ def make_queue(
 # --- Annotation -------------------------------------------------------------------------------
 
 
+def _check_quality(quality: str | None) -> None:
+    """Qualité d'un label ou d'un intervalle : A, B, C, ou une qualité ajoutée dans le poste
+    (`annotation/etiquettes.py` : 1 à 8 lettres ou chiffres, D, A+…)."""
+    if quality is None or quality in QUALITIES:
+        return
+    if not re.fullmatch(r"[A-Za-z0-9+\-]{1,8}", str(quality)):
+        raise ValueError(
+            f"qualité inconnue : {quality!r} (attendues : {', '.join(QUALITIES)}, "
+            "ou 1 à 8 lettres ou chiffres)"
+        )
+
+
 def append_label(
     con: sqlite3.Connection,
     window_id: str,
@@ -626,8 +639,7 @@ def append_label(
     """Ajoute un label. Une correction est une nouvelle ligne, jamais une mise à jour (§13.7)."""
     if label not in LABELS:
         raise ValueError(f"label inconnu : {label!r} (attendus : {', '.join(LABELS)})")
-    if quality is not None and quality not in QUALITIES:
-        raise ValueError(f"qualité inconnue : {quality!r} (attendues : {', '.join(QUALITIES)})")
+    _check_quality(quality)
     if source not in SOURCES:
         raise ValueError(f"source inconnue : {source!r} (attendues : {', '.join(SOURCES)})")
     row = con.execute(
@@ -695,8 +707,7 @@ def append_span(
     for label in classes or ():
         if label not in LABELS and not label.startswith(CUSTOM_PREFIX):
             raise ValueError(f"classe inconnue : {label!r}")
-    if quality is not None and quality not in QUALITIES:
-        raise ValueError(f"qualité inconnue : {quality!r} (attendues : {', '.join(QUALITIES)})")
+    _check_quality(quality)
     if source not in SOURCES:
         raise ValueError(f"source inconnue : {source!r} (attendues : {', '.join(SOURCES)})")
     cleaned = []
@@ -704,10 +715,7 @@ def append_span(
         interval_quality = rest[0] if rest else None
         if label not in INTERVAL_LABELS and not label.startswith(CUSTOM_PREFIX):
             raise ValueError(f"label d'intervalle inconnu : {label!r}")
-        if interval_quality is not None and interval_quality not in QUALITIES:
-            raise ValueError(
-                f"qualité inconnue : {interval_quality!r} (attendues : {', '.join(QUALITIES)})"
-            )
+        _check_quality(interval_quality)
         i0, i1 = max(float(i0), start_s), min(float(i1), end_s)
         if i1 <= i0:
             raise ValueError(f"intervalle vide ou hors de l'extrait : {i0}–{i1} s")

@@ -40,13 +40,21 @@ base » |
 | Déplacer les frontières de la bande d'écoute | **Tirer le bord** de la bande (pointillé, \
 curseur ↕) |
 | Tracer un intervalle | **Clic gauche + glisser** sur le spectrogramme |
-| Choisir l'étiquette des prochains intervalles | Touches **1** à **4** du clavier, ou **clic** \
+| Choisir l'étiquette des prochains intervalles | Touches **1** à **9** du clavier, ou **clic** \
 sur une étiquette en haut (aucun intervalle sélectionné) |
+| Proposer une étiquette (espèce…) ou une qualité | **+** à côté de la liste : celles déjà \
+connues (retirées, ou vues dans les annotations) d'abord, ou un nom nouveau |
+| Retirer une étiquette ou une qualité de la liste | **−** puis **clic** sur celle à retirer (les \
+intervalles déjà posés la gardent ; le **+** la repropose) |
+| Régler le spectrogramme d'un micro | Filtre dynamique et contraste dans l'encadré du micro, \
+au-dessus du spectrogramme ; son bouton l'affiche |
 | Ajuster un intervalle | **Tirer son bord** (curseur ↔) |
 | Sélectionner un intervalle | **Clic** dessus, ou sur sa pastille sous le spectrogramme |
 | Modifier l'étiquette d'un intervalle | Une fois sélectionné, **clic** sur une étiquette en haut |
 | Supprimer un intervalle | Une fois sélectionné, touche **Suppr**, ou **clic** sur la petite \
 croix de sa pastille |
+| Valider l'annotation | Bouton **Valider** à droite du spectrogramme ou sous le commentaire, ou \
+**Ctrl + Entrée** |
 """
 
 INDEX = r"""<!doctype html>
@@ -76,11 +84,11 @@ INDEX = r"""<!doctype html>
     --line: rgba(20, 70, 50, .14); --line-fort: rgba(20, 70, 50, .26);
     --surface-2: rgba(20, 60, 45, .06); --surface-3: rgba(20, 60, 45, .12); --fond: #E3ECE6;
     --champ: #FFFFFF; --sel: #11201A; --anneau: rgba(215, 150, 20, .16); }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 10px 12px 12px; color: var(--ink); background: var(--fond);
          font: 12.5px "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
          -webkit-font-smoothing: antialiased; }
   .bar { display: flex; gap: 6px 9px; align-items: center; flex-wrap: wrap; padding: 2px 0 7px; }
-  .duo { display: flex; gap: 9px; align-items: center; }  /* filtre et contraste, inséparables */
   button, select, input { background: var(--champ); color: var(--ink); border-radius: 8px;
                           border: 1px solid var(--line-fort); padding: 3px 9px; font: inherit;
                           transition: color .2s, border-color .2s, box-shadow .2s; }
@@ -101,8 +109,46 @@ INDEX = r"""<!doctype html>
   .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted);
          text-transform: uppercase; margin-right: 2px; }
   .val { font-family: var(--mono); font-size: 11px; color: var(--ink); min-width: 3.2em; }
-  #contrastv { min-width: 1.2em; text-align: center; }
-  canvas { display: block; width: 100%; cursor: crosshair; outline: none; border-radius: 10px;
+  .contrastv { min-width: 1.2em; text-align: center; }
+  button.mini { padding: 1px 8px; border-radius: 999px; font-weight: 600; min-width: 26px; }
+  button.mini.on { border-color: var(--accent-2); color: var(--accent-2);
+                   box-shadow: 0 0 0 1px var(--accent-2) inset; }
+  /* Réglages du spectrogramme, un encadré par micro (moitié de la largeur chacun) : filtre
+     dynamique et contraste en haut, le bouton qui affiche ce micro en bas, contre la toile. */
+  .mics { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 10px;
+          margin: 2px 0 8px; }
+  .mic { display: grid; gap: 7px; padding: 8px 9px 9px; border: 1px solid var(--line);
+         border-radius: 12px; background: var(--surface-2); transition: border-color .2s; }
+  .mic.on { border-color: var(--accent); box-shadow: 0 0 18px -10px var(--accent); }
+  .mic-set { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
+             justify-content: center; }
+  .mic-set > span { display: inline-flex; gap: 5px; align-items: center; }
+  .mic-btn { width: 100%; padding: 5px 10px; font-weight: 600; color: var(--muted); }
+  .mic.on .mic-btn { background: linear-gradient(135deg, var(--accent), var(--accent-2));
+                     color: var(--accent-ink); border-color: transparent;
+                     box-shadow: 0 4px 16px -6px var(--accent-2); }
+  /* Toile et, à sa droite, « Valider » (sans descendre jusqu'au formulaire). */
+  .stage { display: flex; gap: 10px; align-items: stretch; }
+  #submit { flex: none; width: 92px; padding: 8px; border: 0; border-radius: 12px;
+            font-weight: 700; line-height: 1.3; white-space: pre-line;
+            background: linear-gradient(160deg, var(--accent), var(--accent-2));
+            color: var(--accent-ink); box-shadow: 0 6px 22px -8px var(--accent-2); }
+  #submit:hover:not(:disabled) { filter: brightness(1.08); }
+  /* Proposer une étiquette : celles déjà connues d'abord (retirées, vues dans les annotations),
+     puis un nom libre. */
+  .panel { display: grid; gap: 7px; padding: 8px 10px; margin: 0 0 8px; border-radius: 12px;
+           border: 1px dashed var(--line-fort); background: var(--surface-2); }
+  .panel .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .panel .hint { color: var(--muted); font-size: 11.5px; }
+  .types.removing #ivbtns button::after, .medailles.removing button[data-q]::after {
+    content: " ×"; font-weight: 700; }
+  /* Ce que les autres (ou soi-même) ont déjà dit de l'extrait, sans intervalle à montrer. */
+  #notes { display: grid; gap: 4px; margin-top: 6px; }
+  #notes div { padding: 5px 10px; border-left: 3px solid var(--gold); border-radius: 0 8px 8px 0;
+               background: linear-gradient(90deg, var(--anneau), transparent);
+               font-size: 12.5px; }
+  canvas { display: block; flex: 1 1 0; width: 0; min-width: 0; cursor: crosshair; outline: none;
+           border-radius: 10px;
            user-select: none; -webkit-user-select: none;
            box-shadow: 0 0 0 1px rgba(255, 210, 120, .14); transition: box-shadow .2s; }
   canvas:focus { box-shadow: 0 0 0 1px rgba(245, 165, 58, .7), 0 0 22px -8px var(--accent); }
@@ -169,23 +215,40 @@ INDEX = r"""<!doctype html>
 </style></head><body>
 <div class="bar">
   <span class="group types" id="ivbar"
-        title="Pleine : étiquette des prochains intervalles (touches 1 à 4).
+        title="Pleine : étiquette des prochains intervalles (touches 1 à 9).
 Cerclée : celle de l'intervalle sélectionné (un clic la change).">
     <span class="lbl">Étiquette</span><span class="pills" id="ivbtns"></span>
-    <button id="addlbl" title="Ajouter une étiquette (nom et couleur)">+</button>
-    <span id="newlbl" hidden>
-      <input id="newname" type="text" placeholder="Nouvelle étiquette" size="14">
-      <input id="newcolor" type="color" value="#B08CF2">
-      <button id="newok">Ajouter</button><button id="newno" title="Annuler">✕</button>
-    </span></span>
+    <button id="addlbl" class="mini"
+            title="Proposer une étiquette (déjà connue, ou nouvelle)">+</button>
+    <button id="rmlbl" class="mini" hidden title="Retirer des étiquettes de la liste : un clic sur
+ celle à retirer (le + la repropose)">−</button>
+  </span>
   <span class="group" id="qbar"
         title="Qualité du chant : de l'intervalle sélectionné, et des prochains">
-    <span class="lbl">Qualité</span><span class="seg medailles" id="qbtns"></span></span>
+    <span class="lbl">Qualité</span><span class="seg medailles" id="qbtns"></span>
+    <button id="addq" class="mini" hidden title="Ajouter une qualité (D…)">+</button>
+    <button id="rmq" class="mini" hidden
+            title="Retirer des qualités de la liste : un clic sur celle à retirer">−</button>
+    <span id="newq" hidden><input id="newqname" type="text" size="4" maxlength="8"
+      placeholder="D"> <button id="newqok">Ajouter</button><button id="newqno"
+      title="Annuler">✕</button></span>
+  </span>
   <span class="group">
     <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
     <label><input type="checkbox" id="follow"> Suivre</label>
   </span>
   <span id="status"></span>
+</div>
+<div class="panel" id="newlbl" hidden>
+  <div class="row" id="suggestrow"><span class="lbl">Déjà connues</span>
+    <span class="pills" id="suggest"></span></div>
+  <div class="row">
+    <input id="newname" type="text" list="knownnames" size="28"
+           placeholder="Nouvelle étiquette (nom d'espèce…)"><datalist id="knownnames"></datalist>
+    <input id="newcolor" type="color" value="#B08CF2">
+    <button id="newok">Ajouter</button><button id="newno" title="Annuler">✕</button>
+    <span class="hint" id="newhint"></span>
+  </div>
 </div>
 <div class="bar">
   <span class="group"><span class="lbl">Bande</span>
@@ -202,24 +265,13 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
   <span class="group"><span class="lbl">Volume</span>
     <input type="range" id="gain" min="0" max="30" step="1"> <span class="val" id="gainv"></span>
   </span>
-  <span class="duo">
-    <span class="group" title="Seuls les sons à moins de N dB des plus forts gardent une couleur">
-      <span class="lbl">Filtre dynamique</span>
-      <input type="range" id="range" min="30" max="90" step="10">
-      <span class="val" id="rangev"></span>
-    </span>
-    <span class="group" title="Assombrit les sons moyens (bruit de fond), garde les plus forts">
-      <span class="lbl">Contraste</span> <button id="cless">－</button>
-      <span class="val" id="contrastv"></span> <button id="cmore">＋</button></span>
-  </span>
 </div>
-<div class="bar">
-  <span class="group"><span class="lbl">Spectrogramme</span><span class="seg" id="chan"></span>
-  </span>
-</div>
-<canvas id="c" tabindex="0"></canvas>
+<div class="mics" id="mics"></div>
+<div class="stage"><canvas id="c" tabindex="0"></canvas>
+  <button id="submit" hidden></button></div>
 <div id="list"></div>
 <div id="others"></div>
+<div id="notes"></div>
 <div id="players"></div>
 <script>
 const MAGMA = __MAGMA__;
@@ -258,11 +310,60 @@ function showSettings() {
   $("lo").value = (S.band[0] / 1000).toFixed(1); $("hi").value = (S.band[1] / 1000).toFixed(1);
   $("bandonly").checked = !!S.bandOnly; $("slope").value = String(S.slope);
   $("gain").value = S.gain;
-  $("gainv").textContent = `+${S.gain} dB`; $("range").value = String(S.range);
-  $("rangev").textContent = `${S.range} dB`; $("contrastv").textContent = String(S.contrast);
-  $("cless").disabled = S.contrast <= 0; $("cmore").disabled = S.contrast >= 8;
-  $("chan").querySelectorAll("button")
-    .forEach(b => b.classList.toggle("on", +b.value === S.channel));
+  $("gainv").textContent = `+${S.gain} dB`;
+  [...$("mics").children].forEach((card, i) => {
+    const m = mic(i), q = c => card.querySelector(c);
+    q(".range").value = String(m.range); q(".rangev").textContent = `${m.range} dB`;
+    q(".contrastv").textContent = String(m.contrast);
+    q(".cless").disabled = m.contrast <= 0; q(".cmore").disabled = m.contrast >= 8;
+    card.classList.toggle("on", i === shownTrack());
+  });
+}
+// Filtre dynamique et contraste : propres à chaque micro (les deux n'ont pas le même gain) ;
+// un ancien réglage commun sert de départ aux deux.
+const MIC_DEFAULT = {range: 60, contrast: 4};
+function mic(i) {
+  S.mics = S.mics || [];
+  while (S.mics.length <= i) {
+    S.mics.push({range: S.range ?? MIC_DEFAULT.range,
+                 contrast: S.contrast ?? MIC_DEFAULT.contrast});
+  }
+  return S.mics[i];
+}
+function micCards() {  // un encadré par micro, refait quand les micros changent
+  const box = $("mics"), names = D.audios.map(a => a.name).join("|");
+  if (box.dataset.names === names) return;
+  box.dataset.names = names;
+  box.innerHTML = ""; box.style.setProperty("--n", Math.max(1, D.audios.length));
+  D.audios.forEach((a, i) => {
+    const card = document.createElement("div");
+    card.className = "mic";
+    card.innerHTML = `<div class="mic-set">
+      <span title="Seuls les sons à moins de N dB des plus forts gardent une couleur">
+        <span class="lbl">Filtre dynamique</span>
+        <input type="range" class="range" min="30" max="90" step="10">
+        <span class="val rangev"></span></span>
+      <span title="Assombrit les sons moyens (bruit de fond), garde les plus forts">
+        <span class="lbl">Contraste</span> <button class="cless">－</button>
+        <span class="val contrastv"></span> <button class="cmore">＋</button></span>
+      </div><button class="mic-btn" title="Afficher ce micro sur le spectrogramme"></button>`;
+    const q = c => card.querySelector(c);
+    q(".mic-btn").textContent = a.name;
+    q(".mic-btn").onclick = () => setChannel(i);
+    const changedMic = () => {
+      showSettings(); saveSettings();
+      if (i === shownTrack()) draw();
+      prepSoon();
+    };
+    q(".range").oninput = () => { mic(i).range = +q(".range").value; changedMic(); };
+    const contrast = c => { mic(i).contrast = Math.max(0, Math.min(8, c)); changedMic(); };
+    q(".cless").onclick = () => contrast(mic(i).contrast - 1);
+    q(".cmore").onclick = () => contrast(mic(i).contrast + 1);
+    card.addEventListener("mousedown", e => {
+      if (e.target.tagName === "BUTTON") e.preventDefault();
+    });
+    box.appendChild(card);
+  });
 }
 // Passe-haut et passe-bas de Butterworth d'ordre 2n, chacun fait de n biquads d'ordre 2 dont
 // les Q sont ceux des paires de pôles : −3 dB pile sur la frontière, puis 12 n dB par octave.
@@ -441,14 +542,6 @@ $("slope").onchange = () => {
 $("gain").oninput = () => {
   S.gain = +$("gain").value; showSettings(); applyAudio(); saveSettings();
 };
-$("range").oninput = () => {
-  S.range = +$("range").value; showSettings(); saveSettings(); draw(); prepSoon();
-};
-function setContrast(c) {
-  S.contrast = Math.max(0, Math.min(8, c)); showSettings(); saveSettings(); draw(); prepSoon();
-}
-$("cless").onclick = () => setContrast(S.contrast - 1);
-$("cmore").onclick = () => setContrast(S.contrast + 1);
 function setChannel(c) {
   S.channel = c; showSettings(); saveSettings(); draw(); decode(c); prepSoon();
 }
@@ -458,7 +551,13 @@ function setChannel(c) {
 // quand rien n'est sélectionné) et celle de l'intervalle sélectionné (un clic la change, sans
 // toucher à celle des prochains).
 const rgb = label => COLORS[label] || [200, 200, 200];
-const labelName = code => (D.labels.find(([c]) => c === code) || [code, code])[1];
+const labelName = code =>
+  (D.names && D.names[code]) || (D.labels.find(([c]) => c === code) || [code, code])[1];
+// Retrait d'étiquettes ou de qualités (« − ») : un clic sur l'une la retire de la liste.
+let removingLabels = false, removingQualities = false, actionNonce = 0;
+function action(type, data) {
+  emit({action: Object.assign({type, nonce: `${Date.now()}-${++actionNonce}`}, data)});
+}
 function showTypes() {
   const current = selected >= 0 ? intervals[selected].label : null;
   [...$("ivbtns").querySelectorAll("button")].forEach(b => {
@@ -471,16 +570,24 @@ function showTypes() {
 }
 function setNext(code) { newLabel = code; showTypes(); }  // prochains intervalles seulement
 function setType(code) {  // clic : l'intervalle sélectionné s'il y en a un, sinon les prochains
+  if (removingLabels) {
+    if (D.labels.length > 1) action("remove_label", {code});
+    return;
+  }
   if (selected < 0) setNext(code);
   else if (intervals[selected].label !== code) { intervals[selected].label = code; changed(); }
 }
 // Qualité : un intervalle a la sienne (un même extrait mêle chants nets et lointains).
 function showQualities() {
   const current = selected >= 0 ? intervals[selected].quality : newQuality;
-  [...$("qbar").querySelectorAll("button")]
+  [...$("qbtns").querySelectorAll("button")]
     .forEach(b => b.classList.toggle("on", (b.value || null) === current));
 }
 function setQuality(q) {  // qualité des prochains intervalles, et de l'intervalle sélectionné
+  if (removingQualities) {
+    if (q) action("remove_quality", {quality: q});
+    return;
+  }
   newQuality = q;
   if (selected >= 0 && intervals[selected].quality !== q) {
     intervals[selected].quality = q; changed();
@@ -493,28 +600,82 @@ function send(type, data) {
 }
 function setHeight() { send("streamlit:setFrameHeight", {height: document.body.scrollHeight}); }
 const round = t => Math.round(t * 100) / 100;
-function emit(addLabel) {
-  send("streamlit:setComponentValue", {dataType: "json", value: {
+// `extra` : {add_label} (nouvelle étiquette, lu aussi par le paquet d'écoute) ou {action} (une
+// demande au poste : étiquette proposée ou retirée, qualité, « Valider »), chacune avec son
+// `nonce` pour n'être traitée qu'une fois.
+function emit(extra) {
+  send("streamlit:setComponentValue", {dataType: "json", value: Object.assign({
     key: D.extract, ivkey: D.ivkey, channel: active,
     intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]),
-    add_label: addLabel || null,
-  }});
+    add_label: null, action: null,
+  }, extra || {})});
 }
 // Nouvelle étiquette : nom et couleur saisis ici, ajoutées à la liste par le poste (`nonce`
 // évite de la rajouter à chaque réaffichage).
 function showNewLabel(on) {
-  $("newlbl").hidden = !on; $("addlbl").hidden = on;
-  if (on) $("newname").focus(); else $("newname").value = "";
+  $("newlbl").hidden = !on; $("addlbl").classList.toggle("on", on);
+  if (on) { removingLabels = false; showRemoving(); suggestions(); $("newname").focus(); }
+  else { $("newname").value = ""; $("newhint").textContent = ""; }
   setHeight();
 }
-$("addlbl").onclick = () => showNewLabel(true);
+// Étiquettes déjà connues (retirées, ou vues dans les annotations) : proposées d'abord, pour ne
+// pas créer un second nom pour la même espèce.
+function suggestions() {
+  const list = D.suggestions || [];
+  $("suggestrow").hidden = !list.length;
+  $("suggest").innerHTML = ""; $("knownnames").innerHTML = "";
+  list.forEach(([code, name, color]) => {
+    const b = document.createElement("button");
+    b.textContent = name; b.title = `Reprendre « ${name} »`;
+    b.style.borderColor = color; b.style.background = `${color}26`;
+    b.onclick = () => { action("add_label", {code, name, color: null}); showNewLabel(false); };
+    $("suggest").appendChild(b);
+    const o = document.createElement("option"); o.value = name; $("knownnames").appendChild(o);
+  });
+}
+$("addlbl").onclick = () => showNewLabel($("newlbl").hidden);
 $("newno").onclick = () => showNewLabel(false);
 $("newok").onclick = () => {
   const name = $("newname").value.trim();
   if (!name) { $("newname").focus(); return; }
-  emit({name, color: $("newcolor").value, nonce: Date.now()});
+  const same = ([, n]) => n.toLowerCase() === name.toLowerCase();
+  if (D.labels.some(same)) {
+    $("newhint").textContent = `« ${name} » est déjà dans la liste.`; return;
+  }
+  const known = (D.suggestions || []).find(same);
+  const nonce = `${Date.now()}-${++actionNonce}`, color = $("newcolor").value;
+  emit({add_label: {name, color, nonce},
+        action: {type: "add_label", name, color, code: known ? known[0] : null, nonce}});
   showNewLabel(false);
 };
+function showRemoving() {
+  $("ivbar").classList.toggle("removing", removingLabels);
+  $("rmlbl").classList.toggle("on", removingLabels);
+  $("qbtns").classList.toggle("removing", removingQualities);
+  $("rmq").classList.toggle("on", removingQualities);
+}
+$("rmlbl").onclick = () => {
+  removingLabels = !removingLabels;
+  if (removingLabels) showNewLabel(false);
+  showRemoving();
+};
+$("rmq").onclick = () => { removingQualities = !removingQualities; showRemoving(); };
+function showNewQuality(on) {
+  $("newq").hidden = !on; $("addq").hidden = on || !D.manage;
+  if (on) $("newqname").focus(); else $("newqname").value = "";
+  setHeight();
+}
+$("addq").onclick = () => showNewQuality(true);
+$("newqno").onclick = () => showNewQuality(false);
+$("newqok").onclick = () => {
+  const q = $("newqname").value.trim();
+  if (!/^[A-Za-z0-9+\-]{1,8}$/.test(q)) { $("newqname").focus(); return; }
+  action("add_quality", {quality: q}); showNewQuality(false);
+};
+$("newqname").addEventListener("keydown", e => {
+  if (e.key === "Enter") $("newqok").click(); else if (e.key === "Escape") $("newqno").click();
+});
+$("submit").onclick = () => { if (D && D.submit && !D.submit.disabled) action("submit", {}); };
 $("newname").addEventListener("keydown", e => {
   if (e.key === "Enter") $("newok").click();
   else if (e.key === "Escape") $("newno").click();
@@ -530,24 +691,41 @@ function render(args) {
   if (S.band === undefined) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
   }
-  if (S.contrast === undefined) S.contrast = 4;
   if (![12, 24, 48, 96, "fft"].includes(S.slope)) S.slope = "fft";
+  D.audios.forEach((a, i) => mic(i));
   $("ivbar").style.display = D.interval_mode ? "" : "none";
   $("qbar").style.display = D.interval_mode ? "" : "none";
-  if (newLabel === null) {
+  // « − » des étiquettes, « + » et « − » des qualités : seulement là où la liste se garde
+  // (le poste ; pas le paquet d'écoute).
+  $("rmlbl").hidden = !D.manage; $("rmq").hidden = !D.manage;
+  if ($("newq").hidden) $("addq").hidden = !D.manage;
+  if (!D.manage) { removingLabels = false; removingQualities = false; }
+  removingLabels = removingLabels && D.labels.length > 1;
+  showRemoving();
+  // Qualités : reconstruites quand la liste change (qualité ajoutée ou retirée).
+  const qualitySig = JSON.stringify(D.qualities);
+  if (qualitySig !== $("qbtns").dataset.sig) {
+    $("qbtns").dataset.sig = qualitySig; $("qbtns").innerHTML = "";
     ["—", ...D.qualities].forEach((q, k) => {
       const b = document.createElement("button");
       b.value = k ? q : ""; b.textContent = q; b.onclick = () => setQuality(k ? q : null);
       if (k) { b.dataset.q = q; b.title = MEDALS[q] ? `${q}, ${MEDALS[q]}` : q; }
       $("qbtns").appendChild(b);
     });
-    newLabel = D.labels[0][0];
-    D.audios.forEach((a, i) => {
-      const b = document.createElement("button");
-      b.value = String(i); b.textContent = a.name; b.onclick = () => setChannel(i);
-      $("chan").appendChild(b);
-    });
+    if (newQuality && !D.qualities.includes(newQuality)) newQuality = null;
   }
+  if (newLabel === null) newLabel = D.labels[0][0];
+  micCards();
+  if (!$("newlbl").hidden) suggestions();
+  $("submit").hidden = !D.submit;
+  if (D.submit) {
+    $("submit").textContent = D.submit.label; $("submit").disabled = !!D.submit.disabled;
+    $("submit").title = D.submit.help || "Ctrl + Entrée";
+  }
+  $("notes").innerHTML = "";
+  (D.notes || []).forEach(t => {
+    const div = document.createElement("div"); div.textContent = t; $("notes").appendChild(div);
+  });
   // Étiquettes : reconstruites quand la liste ou les couleurs changent (étiquette ajoutée).
   Object.assign(COLORS, D.colors || {});
   const labelSig = JSON.stringify([D.labels, D.colors]);
@@ -693,8 +871,8 @@ async function prepareNext() {
   if (token !== prepToken) return;
   const v = {t0: a.start, t1: a.start + p.x.length / p.rate, f0: 0, f1: D.fview};
   const cols = Math.max(1, Math.round(W())), rows = Math.max(1, Math.round(PH()));
-  const n = fftSize(v, p.rate), key = specKeyOf(a.src, v, cols, rows, n);
-  if (!specCache.has(key)) remember(key, paint(p.x, p.rate, a.start, p.vmax, v, cols, rows, n));
+  const n = fftSize(v, p.rate), m = mic(ch), key = specKeyOf(a.src, v, cols, rows, n, m);
+  if (!specCache.has(key)) remember(key, paint(p.x, p.rate, a.start, p.vmax, v, cols, rows, n, m));
   const fk = fftWant();
   if (!fk) return;
   const q = await track(0);
@@ -773,21 +951,21 @@ function fftSize(v, rate) {
 }
 // Clé d'une image : la piste (son fichier), la vue (au centième, pour retrouver celle préparée
 // d'avance malgré les arrondis du décodage), la taille et les réglages.
-function specKeyOf(src, v, cols, rows, n) {
+function specKeyOf(src, v, cols, rows, n, m) {
   const t = [v.t0, v.t1, v.f0, v.f1].map(z => z.toFixed(2));
-  return [src, ...t, cols, rows, n, S.range, S.contrast].join();
+  return [src, ...t, cols, rows, n, m.range, m.contrast].join();
 }
 function remember(key, canvas) {
   specCache.delete(key); specCache.set(key, canvas);
   while (specCache.size > 6) specCache.delete(specCache.keys().next().value);
 }
 function renderSpectrogram(cols, rows) {
-  const ch = shownTrack(), a = D.audios[ch], n = fftSize(view, buffers.rate);
-  const key = specKeyOf(a.src, view, cols, rows, n);
+  const ch = shownTrack(), a = D.audios[ch], n = fftSize(view, buffers.rate), m = mic(ch);
+  const key = specKeyOf(a.src, view, cols, rows, n, m);
   if (key === specKey) return;
   specKey = key; specView = {...view};
   spec = specCache.get(key)
-    || paint(buffers[ch], buffers.rate, a.start, vmax[ch], view, cols, rows, n);
+    || paint(buffers[ch], buffers.rate, a.start, vmax[ch], view, cols, rows, n, m);
   remember(key, spec);
 }
 // Zone élargie (une demi-vue de plus de chaque côté), calculée en tâche de fond, par petits
@@ -803,8 +981,8 @@ function startWide() {
              f1: Math.min(fmax(), view.f1 + (view.f1 - view.f0) / 2)};
   const cols = Math.max(1, Math.round(W() * (v.t1 - v.t0) / (view.t1 - view.t0) / 2));
   const rows = Math.max(1, Math.round(PH() * (v.f1 - v.f0) / (view.f1 - view.f0) / 2));
-  const n = Math.min(fftSize(view, buffers.rate), 4096);
-  const key = specKeyOf(a.src, v, cols, rows, n);
+  const n = Math.min(fftSize(view, buffers.rate), 4096), m = mic(ch);
+  const key = specKeyOf(a.src, v, cols, rows, n, m);
   if (wide && wide.key === key) return;
   if (wide) clearTimeout(wide.timer);
   const out = document.createElement("canvas"); out.width = cols; out.height = rows;
@@ -817,22 +995,22 @@ function startWide() {
     const t = performance.now();
     while (job.order.length && performance.now() - t < 12) {
       const c0 = job.order.shift();
-      paintCols(out, x, rate, a.start, top, v, cols, rows, n, c0, Math.min(cols, c0 + step));
+      paintCols(out, x, rate, a.start, top, v, cols, rows, n, c0, Math.min(cols, c0 + step), m);
     }
     if (drag) draw();
     if (job.order.length) job.timer = setTimeout(work, 0);
   })();
 }
-function paint(x, rate, start, top, v, cols, rows, n) {
+function paint(x, rate, start, top, v, cols, rows, n, m) {
   const out = document.createElement("canvas"); out.width = cols; out.height = rows;
-  return paintCols(out, x, rate, start, top, v, cols, rows, n, 0, cols);
+  return paintCols(out, x, rate, start, top, v, cols, rows, n, 0, cols, m);
 }
-function paintCols(out, x, rate, start, top, v, cols, rows, n, c0, c1) {
+function paintCols(out, x, rate, start, top, v, cols, rows, n, c0, c1, m) {
   const sctx = out.getContext("2d"), image = sctx.createImageData(c1 - c0, rows), px = image.data;
-  const binHz = rate / n, range = S.range;
+  const binHz = rate / n, range = m.range;
   // Contraste : courbe en puissance sur l'échelle (0 = linéaire) ; le haut ne bouge pas, les
   // niveaux moyens (bruit de fond) s'assombrissent.
-  const gamma = 1 + 0.35 * S.contrast, lut = new Uint8Array(256);
+  const gamma = 1 + 0.35 * m.contrast, lut = new Uint8Array(256);
   for (let i = 0; i < 256; i++) lut[i] = Math.round(255 * Math.pow(i / 255, gamma));
   const binOf = new Float32Array(rows);
   for (let r = 0; r < rows; r++) {
@@ -1228,7 +1406,9 @@ document.querySelectorAll(".bar").forEach(bar => bar.addEventListener("mousedown
 $("home").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
 document.addEventListener("keydown", e => {
   if (["SELECT", "INPUT"].includes(e.target.tagName)) return;
-  if (e.code === "Space") {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault(); $("submit").click();
+  } else if (e.code === "Space") {
     e.preventDefault();
     const p = players[active]; if (p) (p.paused ? p.play() : p.pause());
   } else if (D && D.interval_mode && /^[1-9]$/.test(e.key) && D.labels[+e.key - 1]) {
@@ -1315,7 +1495,10 @@ def asset(data: bytes, suffix: str, name_key: str | None = None) -> str:
             reverse=True,
         )
         for stale in old[KEEP_ASSETS:]:
-            stale.unlink(missing_ok=True)
+            try:
+                stale.unlink(missing_ok=True)
+            except OSError:  # Windows : fichier encore ouvert (lecteur, serveur) ; au prochain
+                pass
     return f"assets/{name}"
 
 
@@ -1353,6 +1536,11 @@ def viewer_args(
     fview_hz: float = 10_000.0,
     height: int = 320,
     next_audios: list[tuple[str, str, float]] | None = None,
+    qualities: list[str] | None = None,
+    names: dict[str, str] | None = None,
+    suggestions: list[tuple[str, str, str]] | None = None,
+    submit: dict | None = None,
+    notes: list[str] | None = None,
 ) -> dict:
     """Arguments du composant. `audios` : (nom, chemin rendu par `asset`, début en s dans
     l'enregistrement), couvrant [t0, t1] ; `windows` : {t0, t1, label, current, candidate} ;
@@ -1363,7 +1551,13 @@ def viewer_args(
     {annotateur : intervalles}, ceux des autres, affichés sans pouvoir être modifiés ;
     `band_hz`, `channel` : réglages de départ, la première fois ;
     `next_audios` : comme `audios`, pour l'extrait suivant, que le navigateur prépare pendant
-    qu'on annote celui-ci (fichiers attendus s'ils ne sont pas encore écrits)."""
+    qu'on annote celui-ci (fichiers attendus s'ils ne sont pas encore écrits) ;
+    `qualities` : celles proposées (défaut : A, B, C) ; `names` : {code : nom} de toutes les
+    étiquettes connues, même retirées (pastilles des intervalles déjà posés) ; `suggestions` :
+    (code, nom, #RRGGBB) que le « + » propose avant un nom libre ; avec elles, les « − » et les
+    « + » des qualités (la liste se garde : `etiquettes.py`) ; `submit` : {label, disabled,
+    help} du bouton « Valider » à droite du spectrogramme (absent : pas de bouton) ; `notes` :
+    phrases sous le spectrogramme (ce que d'autres ont déjà dit de l'extrait sans intervalle)."""
     return {
         "t0": float(t0),
         "t1": float(t1),
@@ -1383,7 +1577,12 @@ def viewer_args(
         "others": [
             {"who": str(who), "intervals": _intervals(ivs)} for who, ivs in (others or {}).items()
         ],
-        "qualities": list(QUALITIES),
+        "qualities": list(qualities if qualities is not None else QUALITIES),
+        "names": {str(k): str(v) for k, v in (names or {}).items()},
+        "suggestions": [list(x) for x in suggestions] if suggestions is not None else None,
+        "manage": suggestions is not None,
+        "submit": submit,
+        "notes": [str(n) for n in notes or []],
         "interval_mode": bool(interval_mode),
         "channel": int(channel),
         "height": int(height),

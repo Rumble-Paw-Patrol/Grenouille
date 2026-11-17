@@ -330,14 +330,14 @@ def import_labels(
             typer.echo(f"Nouvel annotateur ajouté à la liste : {add_annotator(name)}")
     # Étiquettes ajoutées par un autre annotateur : seul leur code voyage (custom_crapaud), le
     # nom s'en déduit et la couleur est celle par défaut (à changer dans le poste).
-    from blanci.annotation.etiquettes import DEFAULT_COLOR, add_custom, is_custom, read_custom
+    from blanci.annotation.etiquettes import DEFAULT_COLOR, add_custom, is_custom, known_labels
 
     codes = {
         str(code)
         for path in folder.glob("*intervalles_annotes.csv")
         for code in pd.read_csv(path, usecols=["label"])["label"].dropna()
     }
-    for code in sorted(c for c in codes if is_custom(c) and c not in read_custom()):
+    for code in sorted(c for c in codes if is_custom(c) and c not in known_labels()):
         name = code.removeprefix("custom_").replace("_", " ").capitalize()
         code = add_custom(name, DEFAULT_COLOR)
         typer.echo(f"Nouvelle étiquette ajoutée à la liste : {name} ({code})")

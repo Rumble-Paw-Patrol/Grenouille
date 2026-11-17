@@ -10,20 +10,51 @@ sombre) ; le spectrogramme reste sombre dans les deux.
 L'image, le son et la grenouille sont ceux du tableau de bord (`documentation/tableau-de-bord/`,
 produits par `spectrogramme.py` et `grenouille.py`), recopiés à côté de la page quand ils
 changent ; sans eux, le bandeau garde son titre (sans `chant.mp3`, pas de bouton d'écoute).
+
+**En-tête d'un autre projet** (`save_header`, panneau « Projet » du poste) : titre, espèce,
+sous-titre et un chant (WAV, MP3, FLAC, OGG) avec sa bande de fréquences ; le spectrogramme
+est calculé ici, cadré sur la bande (pointillés), et le bouton d'écoute joue ce chant. La
+grenouille 8-bit est celle d'A. blanci : elle n'apparaît qu'avec l'en-tête d'origine. Le tout
+est rangé dans `annotations/entete/` (`entete.json`, `chant.wav`, `spectrogramme.png`).
 """
 
 from __future__ import annotations
 
+import hashlib
+import io
+import json
 import shutil
 import tempfile
 from pathlib import Path
 
 from blanci.annotation.style import FONTS
-from blanci.core.config import PROJECT_ROOT
+from blanci.core.config import PROJECT_ROOT, project_path
 
 BANDEAU_DIR = Path(tempfile.gettempdir()) / "blanci_bandeau"
 SOURCES = PROJECT_ROOT / "documentation" / "tableau-de-bord"
 FILES = ("spectrogramme.jpg", "chant.mp3", "grenouille.json")
+HEADER_DIR = project_path("annotations/entete")
+MAX_SONG_S = 30.0  # chant du bandeau : les 30 premières secondes au plus
+
+# En-tête d'origine : A. blanci, le chant et le spectrogramme du tableau de bord (3–6 kHz, bande
+# 4,4–5,5 kHz), la grenouille 8-bit.
+DEFAULT_HEADER = {
+    "title": "Poste d'annotation d'",
+    "species": "Anomaloglossus blanci",
+    "subtitle": "Écouter chaque extrait, tracer les chants sur le spectrogramme, les étiqueter.",
+    "image": "spectrogramme.jpg",
+    "sound": "chant.mp3",
+    "alt": "Spectrogramme de 18 s d'un chant d'A. blanci enregistré à Molokoi, de 3 à 6 kHz : "
+    "notes brèves et régulières vers 5 kHz",
+    "legend": "chant d'A. blanci enregistré à Molokoi le 26/02/2024, 18 s : notes de 0,09 s · "
+    "bande 4,4–5,5 kHz en pointillés",
+    "top_khz": 6.0,
+    "bottom_khz": 3.0,
+    "band_top": 16.7,
+    "band_height": 36.7,
+    "cycle_ms": 18000,
+    "sprite": True,
+}
 
 INDEX = r"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
@@ -138,6 +169,7 @@ INDEX = r"""<!doctype html>
     .ecouter .egaliseur i:nth-child(2) { animation-delay: -.3s; }
     .ecouter .egaliseur i:nth-child(3) { animation-delay: -.6s; }
     @keyframes egaliseur { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
+    .tete-lecture { animation-duration: var(--cycle, 18s); }
     @keyframes balayage { from { left: 0; } to { left: 100%; } }
     .bande > * { animation: leve .9s cubic-bezier(.2, .7, .2, 1) both; }
     .bande > :nth-child(2) { animation-delay: .08s; }
@@ -148,9 +180,9 @@ INDEX = r"""<!doctype html>
 </style></head><body>
 <header class="bande">
   <div class="texte">
-    <h1>Poste d'annotation d'<i>Anomaloglossus blanci</i></h1>
+    <h1 id="titre"></h1>
     <div class="accroche">
-      <p>Écouter chaque extrait, tracer les chants sur le spectrogramme, nommer les faux amis.</p>
+      <p id="soustitre"></p>
       <button type="button" class="ecouter" id="ecouter" aria-pressed="false" hidden>
         <span class="disque" aria-hidden="true"><svg class="lire" viewBox="0 0 16 16">
           <path d="M4.5 2.6v10.8L13.4 8z"/></svg><span class="egaliseur"><i></i><i></i><i></i>
@@ -159,17 +191,15 @@ INDEX = r"""<!doctype html>
       </button>
     </div>
   </div>
-  <div class="perchoir" aria-hidden="true"><canvas id="grenouille"></canvas></div>
+  <div class="perchoir" aria-hidden="true" hidden><canvas id="grenouille"></canvas></div>
   <div class="spectro">
-    <img src="spectrogramme.jpg" alt="Spectrogramme de 18 s d'un chant d'A. blanci enregistré
-      à Molokoi, de 3 à 6 kHz : notes brèves et régulières vers 5 kHz">
+    <img alt="">
     <span class="bande-f" aria-hidden="true"></span>
     <span class="tete-lecture" aria-hidden="true"></span>
-    <span class="axe" style="top: 6px" aria-hidden="true">6 kHz</span>
-    <span class="axe" style="bottom: 6px" aria-hidden="true">3 kHz</span>
+    <span class="axe" id="axe-haut" style="top: 6px" aria-hidden="true"></span>
+    <span class="axe" id="axe-bas" style="bottom: 6px" aria-hidden="true"></span>
   </div>
-  <div class="legende">chant d'A. blanci enregistré à Molokoi le 26/02/2024, 18 s : notes de
-    0,09 s · bande 4,4–5,5 kHz en pointillés</div>
+  <div class="legende"></div>
 </header>
 <script>
 const $ = s => document.querySelector(s);
@@ -199,8 +229,32 @@ function theme(t) {
   }
   if (base === "light" || base === "dark") document.documentElement.dataset.theme = base;
 }
+// Textes, image, son et grenouille : ceux que le poste passe (`DEFAULT_HEADER`, ou l'en-tête
+// du projet), posés à la première réception et quand ils changent.
+let entete = "";
+function poser(a) {
+  const sig = JSON.stringify(a || {});
+  if (!a || sig === entete) return;
+  entete = sig;
+  const h1 = $("#titre");
+  h1.textContent = a.title + (/['’]$/.test(a.title) || !a.title ? "" : " ");
+  const i = document.createElement("i"); i.textContent = a.species; h1.appendChild(i);
+  $("#soustitre").textContent = a.subtitle || "";
+  const img = $(".spectro img");
+  $(".spectro").hidden = !a.image; $(".legende").hidden = !a.image;
+  if (a.image) { img.src = a.image; img.alt = a.alt || ""; }
+  $(".legende").textContent = a.legend || "";
+  $("#axe-haut").textContent = `${a.top_khz} kHz`.replace(".", ",");
+  $("#axe-bas").textContent = `${a.bottom_khz} kHz`.replace(".", ",");
+  $(".bande-f").style.top = `${a.band_top}%`; $(".bande-f").style.height = `${a.band_height}%`;
+  document.documentElement.style.setProperty("--cycle", `${a.cycle_ms / 1000}s`);
+  ecouteur.charger(a.image ? a.sound : null, a.cycle_ms);
+  if (a.sprite) montrerGrenouille(); else $(".perchoir").hidden = true;
+}
 window.addEventListener("message", e => {
-  if (e.data && e.data.type === "streamlit:render") { theme(e.data.theme); setHeight(true); }
+  if (e.data && e.data.type === "streamlit:render") {
+    theme(e.data.theme); poser(e.data.args && e.data.args.header); setHeight(true);
+  }
 });
 send("streamlit:componentReady", {apiVersion: 1});
 
@@ -211,12 +265,22 @@ send("streamlit:componentReady", {apiVersion: 1});
 // (Web Audio : boucle sans blanc, position exacte, même sans requêtes partielles du serveur de
 // Streamlit). « Couper le son » rend la main au balayage, là où il en est.
 function ecoute(bouton, spectro) {
-  const tete = spectro.querySelector(".tete-lecture"), CYCLE = 18000;  // ms, durée du balayage
+  const tete = spectro.querySelector(".tete-lecture");
+  let CYCLE = 18000;  // ms, durée du balayage (celle du chant)
   let octets = null, ctx = null, tampon = null, source = null, gain = null, t0 = 0, depart = 0;
-  let occupe = false;
-  fetch("chant.mp3").then(r => (r.ok ? r.arrayBuffer() : null)).then(b => {
-    if (b && window.AudioContext && !spectro.hidden) { octets = b; bouton.hidden = false; }
-  }).catch(() => {});
+  let occupe = false, voulu = null;
+  function charger(src, cycle) {  // un autre chant : on coupe l'ancien, on lit le nouveau
+    if (src === voulu) return;
+    voulu = src; CYCLE = cycle || CYCLE;
+    if (source) couper();
+    octets = null; tampon = null; bouton.hidden = true;
+    if (!src) return;
+    fetch(src).then(r => (r.ok ? r.arrayBuffer() : null)).then(b => {
+      if (b && voulu === src && window.AudioContext && !spectro.hidden) {
+        octets = b; bouton.hidden = false;
+      }
+    }).catch(() => {});
+  }
   // le balayage de la feuille de style (absent si l'on a demandé moins d'animations)
   const balayage = () => tete.getAnimations().find(a => a.animationName === "balayage");
   const placer = f => {  // f : fraction de l'extrait
@@ -236,7 +300,8 @@ function ecoute(bouton, spectro) {
     requestAnimationFrame(suivre);
   }
   async function lancer() {
-    if (!ctx) { ctx = new AudioContext(); tampon = await ctx.decodeAudioData(octets); }
+    if (!ctx) ctx = new AudioContext();
+    if (!tampon) tampon = await ctx.decodeAudioData(octets.slice(0));
     await ctx.resume();
     const a = balayage();
     depart = a ? (((a.currentTime || 0) % CYCLE) / CYCLE) * tampon.duration : 0;
@@ -265,17 +330,24 @@ function ecoute(bouton, spectro) {
     occupe = true;
     try { await lancer(); } catch { bouton.hidden = true; } finally { occupe = false; }
   });
+  return {charger};
 }
-ecoute($("#ecouter"), $(".spectro"));
+const ecouteur = ecoute($("#ecouter"), $(".spectro"));
 
 // --- A. blanci en 8-bit -------------------------------------------------------------------
 // Le code du tableau de bord : sprite de grenouille.py (images codées par plages : « O12 » =
 // douze pixels de la couleur O), dans une toile de 32 pixels de plus en largeur et 8 en
 // hauteur, sur une mosaïque de tuiles ambrées de 2 × 2 qui scintillent. Elle respire (flanc),
 // sa gorge palpite, elle cligne, et de temps en temps elle baisse ou relève un peu la tête.
-fetch("grenouille.json").then(r => (r.ok ? r.json() : null)).then(G => {
-  if (G) grenouille(G); else $(".perchoir").hidden = true;
-}).catch(() => { $(".perchoir").hidden = true; });
+let grenouilleLancee = false;
+function montrerGrenouille() {
+  $(".perchoir").hidden = false;
+  if (grenouilleLancee) return;
+  grenouilleLancee = true;
+  fetch("grenouille.json").then(r => (r.ok ? r.json() : null)).then(G => {
+    if (G) grenouille(G); else $(".perchoir").hidden = true;
+  }).catch(() => { $(".perchoir").hidden = true; });
+}
 
 function grenouille(G) {
   const toile = $("#grenouille"), ctx = toile.getContext("2d");
@@ -373,14 +445,143 @@ def _prepare() -> Path:
     return BANDEAU_DIR
 
 
+def read_header(folder: Path | None = None) -> dict | None:
+    """En-tête du projet (`save_header`), ou None : celui d'origine."""
+    folder = folder or HEADER_DIR
+    try:
+        data = json.loads((folder / "entete.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and data.get("species") else None
+
+
+def header(folder: Path | None = None) -> dict:
+    """Arguments du bandeau : l'en-tête du projet s'il y en a un, sinon celui d'origine."""
+    return read_header(folder) or dict(DEFAULT_HEADER)
+
+
+def _khz(f: float) -> str:
+    return f"{f:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def save_header(
+    title: str,
+    species: str,
+    subtitle: str,
+    band_khz: tuple[float, float],
+    audio: bytes | None = None,
+    legend: str = "",
+    folder: Path | None = None,
+) -> dict:
+    """Écrit l'en-tête du projet : `audio` (un fichier WAV, MP3, FLAC ou OGG entier, ou None
+    pour garder le chant déjà enregistré) est ramené à ses `MAX_SONG_S` premières secondes, en
+    mono ; son spectrogramme est cadré sur la bande d'écoute `band_khz` (en pointillés, avec
+    autant de marge au-dessus et au-dessous que sa largeur). Renvoie les arguments du bandeau."""
+    import numpy as np
+    import soundfile as sf
+
+    folder = folder or HEADER_DIR
+    lo, hi = sorted(float(f) for f in band_khz)
+    if not species.strip():
+        raise ValueError("nom d'espèce vide")
+    if hi - lo < 0.05:
+        raise ValueError("bande d'écoute trop étroite : donner ses deux bornes en kHz")
+    folder.mkdir(parents=True, exist_ok=True)
+    song = folder / "chant.wav"
+    if audio is not None:
+        try:
+            x, sr = sf.read(io.BytesIO(audio), dtype="float32", always_2d=True)
+        except Exception as exc:  # format inconnu, fichier abîmé
+            raise ValueError(f"fichier audio illisible ({exc})") from exc
+        x = x[: int(MAX_SONG_S * sr)].mean(axis=1)
+        x = x / max(float(np.max(np.abs(x))), 1e-9) * 0.9
+        sf.write(song, x, sr, subtype="PCM_16")
+    if not song.is_file():
+        raise ValueError("choisir un enregistrement du chant (WAV, MP3, FLAC ou OGG)")
+    x, sr = sf.read(song, dtype="float32")
+    nyquist = sr / 2000
+    if lo >= nyquist:
+        raise ValueError(f"bande au-dessus de ce que l'enregistrement contient ({nyquist:g} kHz)")
+    hi = min(hi, nyquist)
+    width = hi - lo
+    f0, f1 = max(0.0, lo - width), min(nyquist, hi + width)
+    _spectrogram_png(x, sr, f0 * 1000, f1 * 1000, folder / "spectrogramme.png")
+    duration = len(x) / sr
+    data = {
+        "title": title.strip(),
+        "species": species.strip(),
+        "subtitle": subtitle.strip(),
+        "image": "spectrogramme.png",
+        "sound": "chant.wav",
+        "alt": f"Spectrogramme de {duration:.0f} s d'un chant de {species.strip()}, de "
+        f"{_khz(f0)} à {_khz(f1)} kHz",
+        "legend": (legend.strip() + " · " if legend.strip() else "")
+        + f"{species.strip()}, {duration:.0f} s · bande {_khz(lo)}–{_khz(hi)} kHz en pointillés",
+        "top_khz": round(f1, 2),
+        "bottom_khz": round(f0, 2),
+        "band_top": round((f1 - hi) / (f1 - f0) * 100, 2),
+        "band_height": round((hi - lo) / (f1 - f0) * 100, 2),
+        "cycle_ms": max(1000, round(duration * 1000)),
+        "sprite": False,
+        "band_khz": [lo, hi],
+    }
+    (folder / "entete.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return data
+
+
+def reset_header(folder: Path | None = None) -> None:
+    """Revient à l'en-tête d'origine (le chant enregistré est gardé pour plus tard)."""
+    (folder or HEADER_DIR).joinpath("entete.json").unlink(missing_ok=True)
+
+
+def _spectrogram_png(x, sr: int, f0: float, f1: float, out: Path) -> None:
+    """Spectrogramme en magma de [f0, f1] Hz, 60 dB sous le centile 99,5, au plus 1500
+    colonnes."""
+    import numpy as np
+    from matplotlib import colormaps
+    from matplotlib.image import imsave
+
+    n = 2048 if sr > 30000 else 1024
+    if len(x) < n:
+        x = np.pad(x, (0, n - len(x)))
+    hop = max(n // 4, (len(x) - n) // 1500 + 1)
+    frames = np.lib.stride_tricks.sliding_window_view(x, n)[::hop] * np.hanning(n)
+    power = np.abs(np.fft.rfft(frames, axis=1)) ** 2
+    freqs = np.fft.rfftfreq(n, 1 / sr)
+    keep = (freqs >= f0) & (freqs <= f1)
+    db = 10 * np.log10(power[:, keep].T + 1e-12)
+    top = np.percentile(db, 99.5)
+    level = np.clip((db - (top - 60)) / 60, 0, 1)
+    imsave(out, level[::-1], cmap=colormaps["magma"], vmin=0, vmax=1)
+
+
+def _publish(source: Path) -> str:
+    """Copie `source` à côté de la page sous un nom tiré de son contenu (le navigateur ne garde
+    pas l'ancienne image en cache) ; renvoie ce nom."""
+    data = source.read_bytes()
+    target = f"projet_{hashlib.sha1(data).hexdigest()[:12]}{source.suffix}"
+    if not (BANDEAU_DIR / target).is_file():
+        BANDEAU_DIR.mkdir(parents=True, exist_ok=True)
+        (BANDEAU_DIR / target).write_bytes(data)
+    return target
+
+
 _component = None
 
 
-def bandeau() -> None:
-    """Affiche le bandeau en haut de la page."""
+def bandeau() -> dict:
+    """Affiche le bandeau en haut de la page ; renvoie ses arguments (titre, espèce…)."""
     global _component
     if _component is None:
         import streamlit.components.v1 as components
 
         _component = components.declare_component("blanci_bandeau", path=str(_prepare()))
-    _component(key="bandeau", default=None)
+    args = header()
+    if not args.get("sprite"):  # en-tête du projet : ses fichiers, à côté de la page
+        for key in ("image", "sound"):
+            path = HEADER_DIR / str(args.get(key) or "")
+            args[key] = _publish(path) if args.get(key) and path.is_file() else None
+    _component(header=args, key="bandeau", default=None)
+    return args

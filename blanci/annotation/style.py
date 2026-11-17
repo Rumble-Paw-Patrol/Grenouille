@@ -326,7 +326,7 @@ html[data-gr-theme="light"] {
 }
 
 /* Marque (haut du panneau de gauche). */
-.gr-brand { padding: 0 2px 4px; }
+.gr-brand { padding: 0 2px; }
 .gr-brand b {
   font-family: var(--f-display); font-size: 20px; font-weight: 700; letter-spacing: -.02em;
   color: var(--ink); display: flex; align-items: center; gap: 10px;
@@ -360,12 +360,37 @@ html[data-gr-theme="light"] {
 [data-testid="stSidebar"] h2:not([data-testid="stExpander"] h2) {
   position: relative; font-family: var(--f-mono) !important; font-size: 11px !important;
   font-weight: 500 !important; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--accent) !important; padding: 18px 0 9px !important; margin: 0 !important;
+  color: var(--accent) !important; padding: 12px 0 8px !important; margin: 0 !important;
 }
 [data-testid="stSidebar"] h2:not([data-testid="stExpander"] h2)::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
   background: linear-gradient(90deg, var(--accent), var(--accent-2) 18%, var(--line) 42%,
     transparent);
+}
+
+/* Panneau de gauche resserré : la marque monte en haut, à hauteur du bouton qui replie le
+   panneau (posé en surimpression à droite), et le bas ne garde qu'une petite marge. La ligne
+   de la marque laisse la place de ce bouton. Le premier titre de section suit la marque sans
+   grand blanc. */
+[data-testid="stSidebarHeader"] {
+  height: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important;
+  position: relative; z-index: 3; overflow: visible !important;
+}
+[data-testid="stSidebarHeader"] [data-testid="stLogoSpacer"] { display: none !important; }
+[data-testid="stSidebarHeader"] [data-testid="stSidebarCollapseButton"] {
+  position: absolute; top: 16px; right: 10px;
+}
+[data-testid="stSidebarUserContent"] {
+  padding-top: 14px !important; padding-bottom: 18px !important;
+}
+.st-key-marque { gap: 10px !important; }
+.st-key-marque [data-testid="stLayoutWrapper"] { width: 100% !important; }
+.st-key-marque .gr-brand { padding-right: 40px; }
+/* Bloc « commentaire + Valider » : carte en verre dépoli, comme l'ancien formulaire. */
+.stMain [data-testid="stVerticalBlockBorderWrapper"]:has(input[aria-label="Commentaire"]) {
+  background: var(--surface) !important; border: 1px solid var(--line) !important;
+  border-radius: 14px !important; box-shadow: var(--ombre);
+  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
 
 /* Étiquettes des champs : chasse fixe, capitales espacées, comme les « champs » du tableau. */

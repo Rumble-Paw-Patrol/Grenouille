@@ -695,29 +695,35 @@ def extract_intervals(
 ) -> dict[str | None, list[tuple[float, float, str, str | None]]]:
     """Intervalles (début, fin, label, qualité) du dernier envoi de chaque annotateur sur
     l'extrait [start_s, end_s], à réafficher quand on y revient : {annotateur : intervalles},
-    dans l'ordre des envois (liste vide : extrait envoyé sans intervalle). `annotator` : ces
-    annotateurs seulement (`visible_annotators`)."""
+    dans l'ordre des envois (liste vide : extrait envoyé sans intervalle). Un envoi compte s'il
+    a les bornes de l'extrait ou s'il le contient (enregistrement entier annoté avant un
+    découpage en extraits plus courts, comme `test_v1` le 23/10) : ses intervalles sont alors
+    coupés aux bornes de l'extrait. `annotator` : ces annotateurs seulement
+    (`visible_annotators`)."""
     from blanci.inputs.dataset import annotator_filter
 
     condition, params = annotator_filter(annotator)
+    tol = 0.006
     latest = con.execute(
         "SELECT annotator, MAX(span_id) FROM spans WHERE recording_id = ? "
-        "AND ABS(start_s - ?) < 0.006 AND ABS(end_s - ?) < 0.006"
+        "AND start_s < ? + ? AND end_s > ? - ?"
         + (f" AND {condition}" if condition else "")
         + " GROUP BY annotator ORDER BY MAX(span_id)",
-        (recording_id, start_s, end_s, *params),
+        (recording_id, start_s, tol, end_s, tol, *params),
     ).fetchall()
-    return {
-        who: [
-            (float(a), float(b), str(c), q)
-            for a, b, c, q in con.execute(
-                "SELECT start_s, end_s, label, quality FROM intervals WHERE span_id = ? "
-                "ORDER BY start_s",
-                (span_id,),
-            )
-        ]
-        for who, span_id in latest
-    }
+    out: dict[str | None, list[tuple[float, float, str, str | None]]] = {}
+    for who, span_id in latest:
+        kept = []
+        for a, b, c, q in con.execute(
+            "SELECT start_s, end_s, label, quality FROM intervals WHERE span_id = ? "
+            "ORDER BY start_s",
+            (span_id,),
+        ):
+            a, b = max(float(a), start_s), min(float(b), end_s)
+            if b - a >= 0.01:
+                kept.append((round(a, 3), round(b, 3), str(c), q))
+        out[who] = kept
+    return out
 
 
 def extract_comments(
