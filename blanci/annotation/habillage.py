@@ -97,6 +97,10 @@ BRAISE_LIGHT = {
 
 # Identifiant (celui que gardent les préférences et que lisent les composants) → nom affiché.
 STYLES = {"braise": "Braise", "lagune": "Lagune", "ardoise": "Ardoise"}
+# Pastille de chaque style (boutons de l'en-tête).
+STYLE_ICONS = {"braise": "🔥", "lagune": "🌊", "ardoise": "🪨"}
+# Projet de départ : celui dont les fichiers sont ceux de `annotations/` (voir `projets.py`).
+DEFAULT_PROJECT = "defaut"
 
 _NO_AURA = {
     "aura-1": "rgba(0, 0, 0, 0)",
@@ -229,32 +233,54 @@ def prefs_path() -> Path:
     return Path(env) if env else Path.home() / ".blanci" / "poste.json"
 
 
-def read_prefs() -> dict[str, str | None]:
-    """{"theme": "light" | "dark" | None (celui du système), "style": identifiant}."""
+def _read_raw() -> dict:
     try:
         raw = json.loads(prefs_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        raw = {}
-    raw = raw if isinstance(raw, dict) else {}
-    theme, style = raw.get("theme"), raw.get("style")
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def read_prefs() -> dict[str, str | None]:
+    """{"theme": "light" | "dark" | None (celui du système), "projet": nom du projet actif,
+    "style": style du projet actif}. Chaque projet a son style (un projet = un préréglage)."""
+    raw = _read_raw()
+    theme = raw.get("theme")
+    project = raw.get("projet")
+    project = project if isinstance(project, str) and project else DEFAULT_PROJECT
+    styles = raw.get("styles") if isinstance(raw.get("styles"), dict) else {}
+    if raw.get("style") in STYLES:  # ancien fichier : un seul style, celui du projet de départ
+        styles = {DEFAULT_PROJECT: raw["style"], **styles}
+    style = styles.get(project)
     return {
         "theme": theme if theme in ("light", "dark") else None,
+        "projet": project,
         "style": style if style in STYLES else "braise",
     }
 
 
-def write_prefs(theme: str | None = None, style: str | None = None) -> None:
-    """Retient `theme` et/ou `style` (ce qui n'est pas donné reste comme avant). Un dossier en
+def write_prefs(
+    theme: str | None = None, style: str | None = None, projet: str | None = None
+) -> None:
+    """Retient `theme`, `projet` (le projet actif) et/ou `style` (celui du projet actif, après
+    changement de projet éventuel) ; ce qui n'est pas donné reste comme avant. Un dossier en
     lecture seule n'empêche pas d'annoter : le choix vaut alors pour la séance seulement."""
+    raw = _read_raw()
     prefs = read_prefs()
+    styles = raw.get("styles") if isinstance(raw.get("styles"), dict) else {}
+    if raw.get("style") in STYLES:
+        styles = {DEFAULT_PROJECT: raw["style"], **styles}
+    out = {"theme": raw.get("theme"), "projet": prefs["projet"], "styles": styles}
     if theme in ("light", "dark"):
-        prefs["theme"] = theme
+        out["theme"] = theme
+    if projet:
+        out["projet"] = projet
     if style in STYLES:
-        prefs["style"] = style
+        out["styles"][out["projet"]] = style
     try:
         path = prefs_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(prefs), encoding="utf-8")
+        path.write_text(json.dumps(out), encoding="utf-8")
     except OSError:
         pass
 
@@ -264,13 +290,14 @@ def next_style(style: str) -> str:
     return ids[(ids.index(style) + 1) % len(ids)] if style in ids else ids[0]
 
 
-def look() -> dict[str, str | None]:
-    """Ce que reçoivent les composants : mode choisi (ou None) et style, avec les variables de
-    couleur du style dans les deux modes (`vars`)."""
+def look() -> dict:
+    """Ce que reçoivent les composants : mode choisi (ou None), style actif, styles proposés
+    (`id`, `name`, `icon`) et variables de couleur du style dans les deux modes (`vars`)."""
     prefs = read_prefs()
     style = str(prefs["style"])
     return {
         "theme": prefs["theme"],
         "style": style,
+        "styles": [{"id": k, "name": v, "icon": STYLE_ICONS[k]} for k, v in STYLES.items()],
         "vars": {m: {k: palette(m, style)[k] for k in COMPONENT_KEYS} for m in ("dark", "light")},
     }

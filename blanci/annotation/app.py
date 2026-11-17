@@ -64,6 +64,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
+from blanci.annotation import projets
 from blanci.annotation.bandeau import (
     DEFAULT_HEADER,
     bandeau,
@@ -80,7 +81,7 @@ from blanci.annotation.etiquettes import (
     remove_quality,
     suggestions,
 )
-from blanci.annotation.habillage import STYLES, next_style, read_prefs, write_prefs
+from blanci.annotation.habillage import read_prefs, write_prefs
 from blanci.annotation.selection import NEEDS_ENCODER
 from blanci.annotation.style import BRAND, CHART_COLORS, LABEL_COLORS, UNHEARD_COLOR, css
 from blanci.annotation.viewer import HELP, asset, asset_src, viewer, viewer_args
@@ -879,45 +880,11 @@ def _take_buttons(others: dict[str, list], ikey_base: str, take_key: str) -> Non
         )
 
 
-def _toggle_theme() -> None:
-    """Bascule jour ↔ nuit. Sans choix encore fait, on part du thème que la page affiche."""
-    shown = read_prefs()["theme"] or getattr(getattr(st.context, "theme", None), "type", None)
-    write_prefs(theme="dark" if shown == "light" else "light")
-
-
-def _next_style() -> None:
-    write_prefs(style=next_style(str(read_prefs()["style"])))
-
-
-def _look_buttons() -> None:
-    """« Mode jour / nuit » et « Style » (Braise, Lagune, Ardoise : un clic passe au suivant) ;
-    le choix est gardé d'une séance à l'autre (`habillage.py`) et vaut aussi pour le
-    visualiseur et le bandeau."""
-    prefs = read_prefs()
-    mode = {"light": "jour", "dark": "nuit"}.get(str(prefs["theme"]), "selon le système")
-    left, right = st.columns(2)
-    left.button(
-        "Mode jour / nuit",
-        key="look_theme",
-        on_click=_toggle_theme,
-        width="stretch",
-        help=f"Actuellement : {mode}. Un clic bascule entre clair et sombre.",
-    )
-    right.button(
-        f"Style : {STYLES[str(prefs['style'])]}",
-        key="look_style",
-        on_click=_next_style,
-        width="stretch",
-        help="Un clic passe à l'habillage suivant.",
-    )
-
-
 def _masking_panel(names: list[str]) -> tuple[list[str], bool, bool]:
     """Cases « Masquer les annotations de » : une par annotateur de la liste, et « tout le
     monde » ; puis « Masquer les commentaires ». Renvoie (noms masqués, tout le monde,
     commentaires masqués). Les commentaires d'un annotateur masqué le sont aussi."""
     st.header("Affichage")
-    _look_buttons()
     st.markdown("**Masquer les annotations de**")
     everyone = st.checkbox(
         "Tout le monde",
@@ -1053,18 +1020,67 @@ def _notes(saved: dict, me: str, heard) -> list[str]:
     return notes
 
 
+def _project_input() -> None:
+    """Menu « Projet » : le projet actif (préréglage : en-tête, étiquettes, files d'écoute et
+    style) ; en choisir un autre recharge la page avec ses fichiers. « Nouveau projet… » en crée
+    un, qui part de l'en-tête et des étiquettes d'origine."""
+    if "project_added" in st.session_state:  # un menu ne se change qu'avant d'être affiché
+        st.session_state["project_pick"] = st.session_state.pop("project_added")
+    names = projets.list_projects()
+    active = str(read_prefs()["projet"])
+    if active not in names:
+        active = names[0]
+    if st.session_state.get("project_pick") not in (*names, _NEW_PROJECT):
+        st.session_state["project_pick"] = active
+    picked = st.selectbox(
+        "Projet",
+        [*names, _NEW_PROJECT],
+        key="project_pick",
+        format_func=lambda n: n if n == _NEW_PROJECT else projets.label(n),
+        on_change=_choose_project,
+    )
+    if picked == _NEW_PROJECT:
+        with st.form("new_project", border=False):
+            name = st.text_input("Nom du nouveau projet")
+            if st.form_submit_button("Créer"):
+                try:
+                    st.session_state["project_added"] = projets.create_project(name)
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    write_prefs(projet=st.session_state["project_added"])
+                    st.rerun()
+
+
+_NEW_PROJECT = "➕ Nouveau projet…"
+
+
+def _choose_project() -> None:
+    picked = st.session_state.get("project_pick")
+    if picked and picked != _NEW_PROJECT:
+        write_prefs(projet=picked)
+
+
 def main() -> None:
+    prefs = read_prefs()
+    queues_dir = projets.activate(str(prefs["projet"]))
     species = (read_header() or DEFAULT_HEADER)["species"]
     st.set_page_config(page_title=f"Annotation · {species}", page_icon="🐸", layout="wide")
-    prefs = read_prefs()
     st.markdown(NO_GREY + "\n" + css(prefs["theme"], prefs["style"]), unsafe_allow_html=True)
     if hasattr(st, "iframe"):  # `components.html` est retiré des Streamlit récents
         st.iframe(READONLY_MENUS, height=1)
     else:
         components.html(READONLY_MENUS, height=0)
-    bandeau()
+    choice = bandeau()  # boutons ronds de l'en-tête : mode jour / nuit, style
+    if choice and choice.get("jeton") != st.session_state.get("look_token"):
+        st.session_state["look_token"] = choice.get("jeton")
+        write_prefs(theme=choice.get("theme"), style=choice.get("style"))
+        st.rerun()
     config = _config_file()
     cfg, con = _setup(config)
+    if queues_dir is not None:  # les files d'écoute du projet, pas celles du projet de départ
+        queues_dir.mkdir(parents=True, exist_ok=True)
+        cfg = {**cfg, "paths": {**cfg["paths"], "queues": str(queues_dir)}}
     _apply_pending_queue()
     raw = config_path(cfg, "raw")
     extra = _recordings_root(cfg)
@@ -1087,7 +1103,12 @@ def main() -> None:
                 st.markdown(HELP)
         st.header("Session")
         names = read_annotators()
-        annotator = _annotator_input(names)
+        who_col, project_col = st.columns(2)
+        with who_col:
+            annotator = _annotator_input(names)
+        with project_col:
+            _project_input()
+        _header_panel()
         mode, chosen, encoder = _selection_panel(cfg, con)
         candidate_slot = st.container()
         st.header("Navigation")
@@ -1097,8 +1118,6 @@ def main() -> None:
         )
         hidden, everyone, no_comments = _masking_panel(names)
         _send_panel(annotator)
-        st.header("Projet")
-        _header_panel()
         # Rubrique « Méthode » masquée (annotation par fenêtres suspendue) : mettre
         # SHOW_METHOD à True pour la réafficher.
         window_mode, split_s = False, 3.0

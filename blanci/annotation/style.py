@@ -529,6 +529,12 @@ __VARS_LIGHT__
 _TEXT = (
     ".stApp, .stApp :is(p, li, label, span, h1, h2, h3, h4, td, th, summary,"
     " [data-testid='stMarkdownContainer'], [data-testid='stWidgetLabel']) { color: var(--ink); }"
+    # Champs : Streamlit les peint avec les couleurs de son thème, pas avec nos variables.
+    " .stApp :is([data-testid='stSelectbox'] .react-aria-ComboBox > div,"
+    " [data-testid='stTextInputRootElement'], [data-testid='stNumberInputContainer'],"
+    " [data-testid='stFileUploaderDropzone']) { background: var(--surface-solid);"
+    " border-color: var(--line-fort); }"
+    " .stApp :is(input, textarea, [role='option'], [role='listbox']) { color: var(--ink); }"
 )
 
 

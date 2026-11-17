@@ -63,22 +63,48 @@ INDEX = r"""<!doctype html>
 <style>
   /* Le bandeau du tableau de bord (modele.html), resserré pour laisser la place au poste. Pas
      de color-scheme sombre : différent de celui du cadre, il rendrait son fond opaque. */
-  :root { --ink: #E9F2EC; --muted: #93A89D; --mono: "JetBrains Mono", ui-monospace, Menlo,
-          monospace;
+  :root { --ink: #E9F2EC; --muted: #93A89D; --accent: #F5A53A;
+          --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
           --titre: linear-gradient(100deg, #FFFFFF 0%, #FFF3D6 40%, #FFD27A 70%, #F5A53A 100%);
           --titre-i: linear-gradient(100deg, #FFE08A, #F5A53A 45%, #E4573F 80%, #C0397A);
           --titre-ombre: drop-shadow(0 2px 10px rgba(4, 8, 7, .9)); }
   /* Thème clair (data-theme : celui que Streamlit passe au composant ; avant, le système). */
   @media (prefers-color-scheme: light) {
     html:not([data-theme="dark"]) {
-      --ink: #11201A; --muted: #55675E; --titre-ombre: none;
+      --ink: #11201A; --muted: #55675E; --accent: #B9530D; --titre-ombre: none;
       --titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
       --titre-i: linear-gradient(100deg, #A86F00, #B9530D 45%, #C2352A 80%, #8A1F5C); }
   }
   html[data-theme="light"] {
-    --ink: #11201A; --muted: #55675E; --titre-ombre: none;
+    --ink: #11201A; --muted: #55675E; --accent: #B9530D; --titre-ombre: none;
     --titre: linear-gradient(100deg, #11201A 0%, #3A2414 45%, #8A3A0C 75%, #B9530D 100%);
     --titre-i: linear-gradient(100deg, #A86F00, #B9530D 45%, #C2352A 80%, #8A1F5C); }
+  /* Boutons ronds de l'en-tête : mode jour / nuit, et style (celui qui est actif ; un clic
+     déploie les autres vers la droite). */
+  .outils { position: relative; z-index: 3; display: flex; align-items: center; gap: 10px; }
+  .rond { flex: none; width: 36px; height: 36px; padding: 0; border-radius: 50%; cursor: pointer;
+          display: grid; place-items: center; font-size: 17px; line-height: 1; color: var(--ink);
+          background: color-mix(in srgb, var(--ink) 9%, transparent);
+          border: 1px solid color-mix(in srgb, var(--ink) 28%, transparent);
+          transition: border-color .2s, box-shadow .2s, transform .15s; }
+  .rond:hover { border-color: var(--accent); box-shadow: 0 0 16px -4px var(--accent);
+                transform: translateY(-1px); }
+  .rond:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .styles { display: flex; align-items: center; }
+  .choix { display: flex; align-items: center; gap: 8px; overflow: hidden; max-width: 0;
+           opacity: 0; pointer-events: none; padding: 5px 0;
+           transition: max-width .35s cubic-bezier(.2, .7, .2, 1), opacity .25s, padding .35s; }
+  .styles.ouvert .choix { max-width: 320px; opacity: 1; pointer-events: auto;
+                          padding: 5px 5px 5px 10px; }
+  .choix .rond { transform: translateX(-26px); opacity: 0;
+                 transition: transform .35s cubic-bezier(.2, .7, .2, 1), opacity .3s,
+                             border-color .2s, box-shadow .2s; }
+  .styles.ouvert .choix .rond { transform: none; opacity: 1; }
+  .styles.ouvert .choix .rond:nth-child(2) { transition-delay: .05s; }
+  .styles.ouvert .choix .rond:nth-child(3) { transition-delay: .1s; }
+  .styles.ouvert .choix .rond:nth-child(4) { transition-delay: .15s; }
+  .rond[aria-expanded="true"] { border-color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { .choix, .choix .rond { transition: none; } }
   [hidden] { display: none !important; }
   html, body { margin: 0; background: transparent; }
   body { color: var(--ink); font: 15px/1.55 "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
@@ -181,6 +207,13 @@ INDEX = r"""<!doctype html>
 </style></head><body>
 <header class="bande">
   <div class="texte">
+    <div class="outils" id="outils">
+      <button type="button" class="rond" id="mode"></button>
+      <div class="styles" id="styles">
+        <button type="button" class="rond" id="style" aria-expanded="false"></button>
+        <div class="choix" id="choix"></div>
+      </div>
+    </div>
     <h1 id="titre"></h1>
     <div class="accroche">
       <p id="soustitre"></p>
@@ -264,6 +297,44 @@ function look(l) {
     if (l.style === "braise" && !l.theme) root.style.removeProperty(name);
     else root.style.setProperty(name, v);
   }
+  outils(l, mode);
+}
+// Boutons de l'en-tête. Un clic envoie son choix au poste (valeur du composant, avec un jeton
+// pour qu'un même choix refait plus tard compte de nouveau) : il l'écrit dans les préférences
+// et réaffiche la page.
+function choisir(choix) {
+  send("streamlit:setComponentValue", {dataType: "json",
+    value: Object.assign({jeton: Date.now() + "-" + Math.random()}, choix)});
+}
+let outilsSig = "";
+function outils(l, mode) {
+  const sig = JSON.stringify([mode, l.style, l.styles]);
+  if (sig === outilsSig) return;
+  outilsSig = sig;
+  const bMode = $("#mode"), jour = mode === "light";
+  bMode.textContent = jour ? "☀️" : "🌙";
+  const nom = jour ? "jour" : "nuit";
+  bMode.title = `mode : ${nom}`; bMode.setAttribute("aria-label", `mode : ${nom}`);
+  bMode.onclick = () => choisir({theme: jour ? "dark" : "light"});
+  const styles = l.styles || [], actif = styles.find(x => x.id === l.style) || styles[0];
+  const zone = $("#styles"), bStyle = $("#style"), choix = $("#choix");
+  zone.classList.remove("ouvert"); bStyle.setAttribute("aria-expanded", "false");
+  if (!actif) { zone.hidden = true; return; }
+  zone.hidden = false;
+  bStyle.textContent = actif.icon;
+  bStyle.title = `style : ${actif.name.toLowerCase()}`;
+  bStyle.setAttribute("aria-label", bStyle.title);
+  bStyle.onclick = () => {
+    const ouvert = zone.classList.toggle("ouvert");
+    bStyle.setAttribute("aria-expanded", String(ouvert));
+  };
+  choix.replaceChildren(...styles.filter(x => x.id !== actif.id).map(x => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "rond"; b.textContent = x.icon;
+    b.title = `style : ${x.name.toLowerCase()}`; b.setAttribute("aria-label", b.title);
+    b.onclick = () => { zone.classList.remove("ouvert"); choisir({style: x.id}); };
+    return b;
+  }));
 }
 window.addEventListener("message", e => {
   if (e.data && e.data.type === "streamlit:render") {
@@ -586,8 +657,9 @@ def _publish(source: Path) -> str:
 _component = None
 
 
-def bandeau() -> dict:
-    """Affiche le bandeau en haut de la page ; renvoie ses arguments (titre, espèce…)."""
+def bandeau() -> dict | None:
+    """Affiche le bandeau en haut de la page ; renvoie le dernier choix fait sur ses boutons ronds
+    (`{"theme": …}` ou `{"style": …}`, avec un `jeton` propre à chaque clic), ou None."""
     global _component
     if _component is None:
         import streamlit.components.v1 as components
@@ -598,5 +670,4 @@ def bandeau() -> dict:
         for key in ("image", "sound"):
             path = HEADER_DIR / str(args.get(key) or "")
             args[key] = _publish(path) if args.get(key) and path.is_file() else None
-    _component(header=args, look=look(), key="bandeau", default=None)
-    return args
+    return _component(header=args, look=look(), key="bandeau", default=None)
