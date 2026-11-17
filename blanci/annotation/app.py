@@ -92,6 +92,7 @@ from blanci.annotation.workbench import (
     INTERVAL_ANSWERS,
     add_annotator,
     extract_comments,
+    extract_history,
     extract_intervals,
     latest_labels,
     load_candidates,
@@ -593,8 +594,6 @@ def _viewer_fragment(args: dict, extract: str, ikey: str, ckey: str, interval_mo
                 st.error(str(exc))
             else:
                 st.rerun(scope="app")  # listes relues par `main`
-    if interval_mode:
-        st.caption(_interval_caption(st.session_state[ikey]))
 
 
 def _apply(request: dict) -> None:
@@ -709,15 +708,6 @@ def _answer_form(con, target, form_key, annotator, channel, qualities) -> bool:
     )
     _send_copy(con, annotator.strip())
     return True
-
-
-def _interval_caption(intervals) -> str:
-    if not intervals:
-        return "Aucun intervalle tracé : tout l'extrait sera négatif."
-    return f"{len(intervals)} intervalle(s) : " + " · ".join(
-        f"{a:.1f}–{b:.1f} s ({NAMES.get(c, c)}{f', qualité {q}' if q else ''})"
-        for a, b, c, q in sorted(((*i, None)[:4] for i in intervals), key=lambda t: t[:3])
-    )
 
 
 # Pendant qu'une case ou un menu relance le script, Streamlit grise toute la page (éléments
@@ -934,26 +924,12 @@ def _missing_recording(cfg, path: str) -> None:
         st.warning(f"Pas de {path} sous {folder}.")
 
 
-def _notes(saved: dict, me: str, heard) -> list[str]:
-    """Ce qui a déjà été dit de l'extrait sans intervalle à montrer : chaque envoi vide (de soi
-    ou d'un autre), ou une ancienne réponse par fenêtres."""
-    notes = []
-    for who, ivs in saved.items():
-        if ivs:
-            continue
-        if me and who is not None and who.casefold() == me.casefold():
-            notes.append(
-                "Votre dernier envoi sur cet extrait ne comptait aucun intervalle : rien noté."
-            )
-        else:
-            notes.append(
-                f"{who or '(sans nom)'} a écouté cet extrait et n'y a rien noté (aucun intervalle)."
-            )
+def _notes(saved: dict, heard) -> list[str]:
+    """Ce qui a déjà été dit de l'extrait hors des envois listés sous le spectrogramme : une
+    ancienne réponse par fenêtres. (Un envoi sans intervalle est dans la liste des envois.)"""
     if not saved and heard:
-        notes.append(
-            f"Déjà écouté, sans intervalle (réponse par fenêtres) : {NAMES.get(heard, heard)}."
-        )
-    return notes
+        return [f"Déjà écouté, sans intervalle (réponse par fenêtres) : {NAMES.get(heard, heard)}."]
+    return []
 
 
 def _project_fields(kind: str, active: str) -> None:
@@ -1312,7 +1288,8 @@ def main() -> None:
     if media is not None:
         # Ses intervalles (son dernier envoi, sauf s'il se masque) et ceux des autres affichés.
         saved = extract_intervals(con, candidate["recording_id"], t0, t1, shown)
-        notes = _notes(saved, me, heard)
+        notes = _notes(saved, heard)
+        history = extract_history(con, candidate["recording_id"], t0, t1, shown)
         comments = (
             [] if no_comments else extract_comments(con, candidate["recording_id"], t0, t1, shown)
         )
@@ -1365,6 +1342,7 @@ def main() -> None:
                     "help": "Valider l'annotation (Ctrl + Entrée)" if me else _NO_ANNOTATOR,
                 },
                 notes=notes,
+                history=history,
             ),
             extract,
             ikey,

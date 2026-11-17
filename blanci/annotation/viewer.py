@@ -163,7 +163,19 @@ INDEX = r"""<!doctype html>
                           background: currentColor; opacity: .5; }
   #players .playing span { color: var(--gold); }
   #players .playing span::before { opacity: 1; box-shadow: 0 0 8px currentColor; }
-  #list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; min-height: 4px; }
+  /* Intervalles : une ligne pour soi (« Vous », modifiable), puis une par envoi déjà fait sur
+     l'extrait, du plus ancien au plus récent ; liseré or et fondu à gauche. */
+  #list { margin-top: 8px; }
+  #others { display: grid; gap: 5px; margin-top: 5px; }
+  .ivrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 26px;
+           padding: 4px 10px; border-left: 3px solid var(--gold); border-radius: 0 8px 8px 0;
+           background: linear-gradient(90deg, var(--anneau), transparent); }
+  .ivrow .who { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
+                color: var(--muted); text-transform: uppercase; margin-right: 2px; }
+  .ivrow .who.me { color: var(--gold); }
+  .ivrow .when { font-family: var(--mono); font-size: 10px; color: var(--muted); opacity: .8;
+                 margin-right: 4px; }
+  .ivrow .none { font-size: 12.5px; color: var(--muted); font-style: italic; }
   .chip { border: 1px solid var(--line-fort); border-radius: 999px; padding: 2px 3px 2px 10px;
           font-size: 12px;
           display: flex; gap: 4px; align-items: center; cursor: pointer;
@@ -175,10 +187,6 @@ INDEX = r"""<!doctype html>
   .chip button:hover:not(:disabled) { color: #F07A63; box-shadow: none; }
   .chip .q { font-weight: 700; }
   /* Intervalles des autres annotateurs : en lecture seule, cerclés de tirets. */
-  #others { display: grid; gap: 5px; margin-top: 6px; }
-  #others div { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  #others .who { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
-                 color: var(--muted); text-transform: uppercase; }
   .chip.ro { border-style: dashed; padding-right: 10px; }
   .pills { display: flex; gap: 5px; flex-wrap: wrap; }
   /* Étiquettes : pleine = celle des prochains intervalles, cerclée (de blanc en sombre, de
@@ -687,7 +695,8 @@ function render(args) {
   const nextChanged = !D || JSON.stringify(args.next) !== JSON.stringify(D.next);
   // Autre annotateur, ou autres masqués : mêmes son et vue, autres intervalles.
   const ivChanged = !D || args.ivkey !== D.ivkey;
-  const othersChanged = !D || JSON.stringify(args.others) !== JSON.stringify(D.others);
+  const othersChanged = !D || JSON.stringify([args.others, args.history])
+    !== JSON.stringify([D.others, D.history]);
   D = args;
   if (S.band === undefined) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
@@ -1213,6 +1222,14 @@ function zoomFreq(factor, at) {
 function list() {
   const box = $("list");
   box.innerHTML = "";
+  box.className = "ivrow"; box.hidden = !D.interval_mode;
+  const me = document.createElement("span");
+  me.className = "who me"; me.textContent = "Vous :"; box.appendChild(me);
+  if (!intervals.length) {
+    const none = document.createElement("span");
+    none.className = "none"; none.textContent = "aucun intervalle (tout l'extrait sera négatif)";
+    box.appendChild(none);
+  }
   intervals.map((iv, i) => [iv, i]).sort((a, b) => a[0].t0 - b[0].t0).forEach(([iv, i]) => {
     const chip = document.createElement("span");
     chip.className = "chip" + (i === selected ? " sel" : "");
@@ -1242,33 +1259,44 @@ function list() {
   others();
   showTypes(); showQualities(); setHeight();
 }
-// Intervalles des autres annotateurs, une ligne chacun : un clic y amène la vue, rien ne
-// s'y modifie.
+// Envois déjà faits sur l'extrait, une ligne chacun du plus ancien au plus récent (soi compris,
+// et plusieurs fois la même personne si elle est repassée) : un clic sur une pastille y amène
+// la vue, rien ne s'y modifie. Sans historique (paquet d'écoute) : une ligne par annotateur.
 function others() {
   const box = $("others");
   box.innerHTML = "";
-  (D.others || []).forEach((o, k) => {
+  const rows = D.history
+    || (D.others || []).map((o, k) => ({who: o.who, date: "", intervals: o.intervals, k}));
+  rows.forEach(r => {
     const row = document.createElement("div"), who = document.createElement("span");
-    who.className = "who";
-    who.textContent = o.intervals.length ? o.who : `${o.who} : aucun intervalle`;
+    row.className = "ivrow";
+    who.className = "who"; who.textContent = `${r.who} :`;
     row.appendChild(who);
-    o.intervals.forEach(([t0, t1, l, q], j) => {
+    if (r.date) {
+      const when = document.createElement("span");
+      when.className = "when"; when.textContent = r.date; row.appendChild(when);
+    }
+    if (!r.intervals.length) {
+      const none = document.createElement("span");
+      none.className = "none"; none.textContent = "aucun intervalle"; row.appendChild(none);
+    }
+    r.intervals.forEach(([t0, t1, l, q], j) => {
       const chip = document.createElement("span");
       chip.className = "chip ro";
       chip.style.background = `rgba(${rgb(l)}, 0.10)`; chip.style.borderColor = `rgb(${rgb(l)})`;
-      chip.title = `Tracé par ${o.who} (lecture seule)`;
+      chip.title = `Tracé par ${r.who}${r.date ? ` le ${r.date}` : ""} (lecture seule)`;
       chip.append(`${t0.toFixed(1)}–${t1.toFixed(1)} s · ${labelName(l)}`);
       if (q) {
         const b = document.createElement("b");
         b.className = "q"; b.dataset.q = q; b.textContent = q; chip.append(" · ", b);
       }
       chip.onclick = () => {
-        selected = -1; otherSel = `${k}:${j}`;
+        selected = -1; otherSel = r.k >= 0 ? `${r.k}:${j}` : null;
         const span = view.t1 - view.t0;
         if (t1 < view.t0 || t0 > view.t1) {
           view.t0 = (t0 + t1) / 2 - span / 2; view.t1 = view.t0 + span; clampView();
         }
-        draw();
+        list(); draw();
       };
       row.appendChild(chip);
     });
@@ -1557,6 +1585,7 @@ def viewer_args(
     suggestions: list[tuple[str, str, str]] | None = None,
     submit: dict | None = None,
     notes: list[str] | None = None,
+    history: list[dict] | None = None,
 ) -> dict:
     """Arguments du composant. `audios` : (nom, chemin rendu par `asset`, début en s dans
     l'enregistrement), couvrant [t0, t1] ; `windows` : {t0, t1, label, current, candidate} ;
@@ -1573,7 +1602,14 @@ def viewer_args(
     (code, nom, #RRGGBB) que le « + » propose avant un nom libre ; avec elles, les « − » et les
     « + » des qualités (la liste se garde : `etiquettes.py`) ; `submit` : {label, disabled,
     help} du bouton « Valider » à droite du spectrogramme (absent : pas de bouton) ; `notes` :
-    phrases sous le spectrogramme (ce que d'autres ont déjà dit de l'extrait sans intervalle)."""
+    phrases sous le spectrogramme ; `history` : les envois déjà faits sur l'extrait, du plus
+    ancien au plus récent ({who, date, intervals}, `workbench.extract_history`), une ligne
+    chacun sous la sienne (« Vous »), en lecture seule ; sans lui, une ligne par annotateur de
+    `others`."""
+    names_of_others = [str(who) for who in (others or {})]
+    last = {}  # dernier envoi de chaque autre annotateur : celui dessiné sur le spectrogramme
+    for i, h in enumerate(history or []):
+        last[str(h["who"] or "(sans nom)")] = i
     return {
         "t0": float(t0),
         "t1": float(t1),
@@ -1599,6 +1635,21 @@ def viewer_args(
         "manage": suggestions is not None,
         "submit": submit,
         "notes": [str(n) for n in notes or []],
+        "history": None
+        if history is None
+        else [
+            {
+                "who": str(h["who"] or "(sans nom)"),
+                "date": str(h.get("date") or ""),
+                "intervals": _intervals(h["intervals"]),
+                # rang dans `others` si c'est l'envoi dessiné sur le spectrogramme, sinon -1
+                "k": names_of_others.index(str(h["who"] or "(sans nom)"))
+                if str(h["who"] or "(sans nom)") in names_of_others
+                and last[str(h["who"] or "(sans nom)")] == i
+                else -1,
+            }
+            for i, h in enumerate(history)
+        ],
         "interval_mode": bool(interval_mode),
         "channel": int(channel),
         "height": int(height),

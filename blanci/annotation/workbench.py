@@ -739,18 +739,56 @@ def extract_intervals(
         + " GROUP BY annotator ORDER BY MAX(span_id)",
         (recording_id, start_s, tol, end_s, tol, *params),
     ).fetchall()
-    out: dict[str | None, list[tuple[float, float, str, str | None]]] = {}
-    for who, span_id in latest:
-        kept = []
-        for a, b, c, q in con.execute(
-            "SELECT start_s, end_s, label, quality FROM intervals WHERE span_id = ? "
-            "ORDER BY start_s",
-            (span_id,),
-        ):
-            a, b = max(float(a), start_s), min(float(b), end_s)
-            if b - a >= 0.01:
-                kept.append((round(a, 3), round(b, 3), str(c), q))
-        out[who] = kept
+    return {who: _clipped(con, span_id, start_s, end_s) for who, span_id in latest}
+
+
+def _clipped(
+    con: sqlite3.Connection, span_id: int, start_s: float, end_s: float
+) -> list[tuple[float, float, str, str | None]]:
+    """Intervalles de l'envoi `span_id`, coupés aux bornes de l'extrait [start_s, end_s]."""
+    kept = []
+    for a, b, c, q in con.execute(
+        "SELECT start_s, end_s, label, quality FROM intervals WHERE span_id = ? ORDER BY start_s",
+        (span_id,),
+    ):
+        a, b = max(float(a), start_s), min(float(b), end_s)
+        if b - a >= 0.01:
+            kept.append((round(a, 3), round(b, 3), str(c), q))
+    return kept
+
+
+def extract_history(
+    con: sqlite3.Connection,
+    recording_id: str,
+    start_s: float,
+    end_s: float,
+    annotator: str | list[str | None] | None = None,
+) -> list[dict[str, Any]]:
+    """Tous les envois sur l'extrait [start_s, end_s], du plus ancien au plus récent : {who,
+    date (heure locale du poste, « 17/11/2026 11:17 »), intervals}. Mêmes envois que
+    `extract_intervals` (bornes de l'extrait, ou extrait plus long qui le contient), mais pas
+    seulement le dernier de chacun : un annotateur qui repasse apparaît une fois par passage."""
+    from datetime import datetime
+
+    from blanci.inputs.dataset import annotator_filter
+
+    condition, params = annotator_filter(annotator)
+    tol = 0.006
+    rows = con.execute(
+        "SELECT span_id, annotator, created_at FROM spans WHERE recording_id = ? "
+        "AND start_s < ? + ? AND end_s > ? - ?"
+        + (f" AND {condition}" if condition else "")
+        + " ORDER BY span_id",
+        (recording_id, start_s, tol, end_s, tol, *params),
+    ).fetchall()
+    out = []
+    for span_id, who, created in rows:
+        try:
+            date = datetime.fromisoformat(str(created).replace("Z", "+00:00")).astimezone()
+            when = date.strftime("%d/%m/%Y %H:%M")
+        except ValueError:
+            when = str(created or "")[:10]
+        out.append({"who": who, "date": when, "intervals": _clipped(con, span_id, start_s, end_s)})
     return out
 
 
