@@ -312,12 +312,38 @@ __VARS_LIGHT__
 [data-testid="stSidebar"] h2:not([data-testid="stExpander"] h2) {
   position: relative; font-family: var(--f-mono) !important; font-size: 11px !important;
   font-weight: 500 !important; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--accent) !important; padding: 12px 0 8px !important; margin: 0 !important;
+  color: var(--accent) !important; padding: var(--avant-section) 0 10px !important;
+  margin: 0 !important; line-height: 1.2 !important;
 }
 [data-testid="stSidebar"] h2:not([data-testid="stExpander"] h2)::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2) 18%, var(--line) 42%,
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2) 24%, var(--line) 56%,
     transparent);
+}
+/* Panneau de gauche : un seul écart entre deux éléments (`--pas`), quels qu'ils soient, et
+   `--pas` + `--avant-section` au-dessus d'un titre de section. Streamlit donne aux textes une
+   marge de 16 px qu'il reprend par une marge négative de leur cadre : un titre de section
+   (sans marge) mangeait ainsi l'écart qui le suit. */
+[data-testid="stSidebarUserContent"] { --pas: 12px; --avant-section: 16px; }
+[data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"] { gap: var(--pas) !important; }
+[data-testid="stSidebarUserContent"] [data-testid="stMarkdownContainer"] {
+  margin-bottom: 0 !important;
+}
+[data-testid="stSidebarUserContent"] [data-testid="stMarkdownContainer"] p:last-child {
+  margin-bottom: 0 !important;
+}
+[data-testid="stSidebarUserContent"] [data-testid="stMarkdownContainer"] p { line-height: 1.4; }
+[data-testid="stSidebarUserContent"] [data-testid="stCheckbox"] label { min-height: 0 !important; }
+[data-testid="stSidebarUserContent"] [data-testid="stCheckbox"] {
+  margin-top: 0 !important; min-height: 0 !important;
+}
+[data-testid="stSidebarUserContent"]
+  [data-testid="stWidgetLabel"]:not([data-testid="stCheckbox"] *) {
+  min-height: 0 !important; margin-bottom: 6px !important;
+}
+[data-testid="stSidebarUserContent"] [data-testid="stWidgetLabel"] p {
+  line-height: 1.25 !important;
 }
 
 /* Panneau de gauche resserré : la marque monte en haut, à hauteur du bouton qui replie le
@@ -335,7 +361,10 @@ __VARS_LIGHT__
 [data-testid="stSidebarUserContent"] {
   padding-top: 14px !important; padding-bottom: 18px !important;
 }
-.st-key-marque { gap: 10px !important; }
+/* Mode d'emploi à mi-chemin entre la marque et la première section (« Session »). */
+[data-testid="stSidebarUserContent"] .st-key-marque { gap: 18px !important; }
+[data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"]
+  > :is(.st-key-marque, :has(.st-key-marque)) + * h2 { padding-top: 6px !important; }
 .st-key-marque [data-testid="stLayoutWrapper"] { width: 100% !important; }
 .st-key-marque .gr-brand { padding-right: 40px; }
 /* Bloc « commentaire + Valider » : carte en verre dépoli, comme l'ancien formulaire. */
@@ -442,6 +471,42 @@ __VARS_LIGHT__
   box-shadow: var(--ombre-fenetre), 0 0 50px -24px var(--accent) !important;
 }
 .stApp button:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 3px; }
+/* « Extrait précédent » et « Extrait suivant » : chacun une moitié de la largeur, en forme de
+   flèche (pointe à gauche, pointe à droite) qu'on lit sans lire le texte ; la teinte monte vers
+   la pointe. */
+.stApp :is(.st-key-nav_prev, .st-key-nav_next) button {
+  width: 100%; min-height: 56px; border: 0 !important; border-radius: 14px !important;
+  font-family: var(--f-display) !important; color: var(--ink) !important;
+  transition: background .2s, color .2s, filter .2s !important; box-shadow: none !important;
+}
+.stApp :is(.st-key-nav_prev, .st-key-nav_next) button p {
+  font-family: var(--f-display) !important; font-size: 15px !important; font-weight: 500;
+  letter-spacing: -.005em; color: inherit !important;
+}
+.stApp .st-key-nav_prev button {
+  clip-path: polygon(34px 0, 100% 0, 100% 100%, 34px 100%, 0 50%);
+  border-radius: 0 14px 14px 0 !important; justify-content: flex-start !important;
+  padding-left: 52px !important;
+  background: linear-gradient(90deg, var(--gold-soft), var(--surface-2) 70%) !important;
+}
+.stApp .st-key-nav_next button {
+  clip-path: polygon(0 0, calc(100% - 34px) 0, 100% 50%, calc(100% - 34px) 100%, 0 100%);
+  border-radius: 14px 0 0 14px !important; justify-content: flex-end !important;
+  padding-right: 52px !important;
+  background: linear-gradient(270deg, var(--gold-soft), var(--surface-2) 70%) !important;
+}
+.stApp :is(.st-key-nav_prev, .st-key-nav_next) button:hover:not(:disabled) {
+  color: var(--accent-ink) !important; transform: none;
+}
+.stApp .st-key-nav_prev button:hover:not(:disabled) {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2) 80%) !important;
+}
+.stApp .st-key-nav_next button:hover:not(:disabled) {
+  background: linear-gradient(270deg, var(--accent), var(--accent-2) 80%) !important;
+}
+.stApp :is(.st-key-nav_prev, .st-key-nav_next) button:hover:not(:disabled) p {
+  color: var(--accent-ink) !important;
+}
 
 /* Cartes en verre dépoli : formulaire de réponse, rubriques repliables. */
 [data-testid="stForm"] {
@@ -535,6 +600,12 @@ _TEXT = (
     " [data-testid='stFileUploaderDropzone']) { background: var(--surface-solid);"
     " border-color: var(--line-fort); }"
     " .stApp :is(input, textarea, [role='option'], [role='listbox']) { color: var(--ink); }"
+    " .stApp :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }"
+    " .stApp [data-testid='stSelectbox'] .react-aria-ComboBox { color: var(--ink); }"
+    # Case non cochée : peinte par Streamlit aux couleurs de son thème (noire en mode jour quand
+    # le système est en sombre) ; grisée ici. Cochée, elle garde la couleur d'accent.
+    " .stApp [data-testid='stCheckbox'] label:not(:has(input:checked))"
+    " > div:not([data-testid]) { background: var(--surface-2); border-color: var(--line-fort); }"
 )
 
 

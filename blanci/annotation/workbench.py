@@ -15,6 +15,7 @@ elle n'existe pas. L'audio n'est que lu.
 
 from __future__ import annotations
 
+import functools
 import io
 import json
 import sqlite3
@@ -528,8 +529,8 @@ def read_clip(
 ) -> tuple[np.ndarray, int, float]:
     """(forme d'onde, f_e, début de l'extrait en s) : la fenêtre avec `context_s` de chaque côté.
 
-    Lecture partielle, jamais d'écriture. `channel` : 0 = micro 1 (gain 6 dB), 1 = micro 2
-    (gain 18 dB, plus fort, utile pour un chant lointain, DECISIONS n° 58).
+    Lecture partielle, jamais d'écriture. `channel` : 0 = micro 1, 1 = micro 2 (gains réglés
+    sur chaque enregistreur, le plus souvent 6 et 18 dB, parfois l'inverse : `mic_names`).
     """
     wav, sr, start = read_channels(raw_root, path, offset_s, dur_s, context_s)
     return wav[:, min(channel, wav.shape[1] - 1)], sr, start
@@ -629,8 +630,35 @@ def save_answer(
 
 
 INTERVAL_ANSWERS = tuple((label, name) for label, name in ANSWERS if label in INTERVAL_LABELS)
-# Les deux micros d'un enregistreur, sous ces noms dans le poste et dans le paquet d'écoute.
-CHANNELS = {0: "micro 1 (gain 6 dB)", 1: "micro 2 (gain 18 dB)"}
+# Les deux micros d'un enregistreur, sous ces noms quand le fichier ne dit pas leur gain.
+CHANNELS = {0: "micro 1", 1: "micro 2"}
+
+
+@functools.lru_cache(maxsize=256)
+def mic_names(path: str) -> tuple[str, ...]:
+    """Un nom par piste de l'enregistrement (deux au plus) : « micro 1 (gain 18 dB) », gain lu
+    dans l'en-tête GUANO des Song Meter (`WA|Song Meter|Audio settings`), car il n'est pas le
+    même d'un enregistreur à l'autre (piste 0 à 18 dB sur 21 points, DECISIONS n° 215) ;
+    « micro 1 » sans gain connu (autre enregistreur, FLAC) ; « micro » pour un fichier mono.
+    Ne lit que l'en-tête."""
+    from blanci.inputs.ingest import read_guano
+
+    try:
+        n = min(sf.info(path).channels, len(CHANNELS))
+        settings = json.loads(read_guano(Path(path)).get("WA|Song Meter|Audio settings", "[]"))
+    except (OSError, RuntimeError, ValueError):
+        return tuple(CHANNELS.values())
+    gains = [s.get("gain") if isinstance(s, dict) else None for s in settings]
+    if n == 1:
+        return ("micro" + (f" (gain {gains[0]:g} dB)" if gains and _number(gains[0]) else ""),)
+    return tuple(
+        CHANNELS[c] + (f" (gain {gains[c]:g} dB)" if c < len(gains) and _number(gains[c]) else "")
+        for c in range(n)
+    )
+
+
+def _number(x: Any) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
 
 
 def save_span(

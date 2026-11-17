@@ -87,7 +87,6 @@ from blanci.annotation.style import BRAND, CHART_COLORS, LABEL_COLORS, UNHEARD_C
 from blanci.annotation.viewer import HELP, asset, asset_src, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
-    CHANNELS,
     INTERVAL_ANSWERS,
     add_annotator,
     extract_comments,
@@ -96,6 +95,7 @@ from blanci.annotation.workbench import (
     load_candidates,
     local_time,
     local_times,
+    mic_names,
     next_position,
     ordered_classes,
     progress,
@@ -197,7 +197,7 @@ def _apply_pending_queue() -> None:
     pending = st.session_state.pop("pending_queue", None)
     if pending:
         st.session_state["mode"] = EXISTING
-        st.session_state["queue_path"] = pending
+        st.session_state["queue_path"] = st.session_state["queue_pick"] = pending
 
 
 # --- Panneau de gauche : sélection -------------------------------------------------------------
@@ -221,9 +221,22 @@ def _selection_panel(cfg, con) -> tuple[str, Path | None, str | None]:
         if not queues:
             st.warning("Aucune file d'écoute. En tirer une avec un autre mode.")
             return mode, None, encoder
-        wanted = st.session_state.get("queue_path")
-        index = next((i for i, q in enumerate(queues) if str(q) == wanted), 0)
-        chosen = st.selectbox("File d'écoute", queues, index=index, format_func=_queue_name)
+        # Menu à clé, et file retenue à part (`queue_path`) : sans clé, le menu revenait à la
+        # première file (la plus récente, « doutes ») dès qu'un autre menu relançait la page
+        # (changer de projet), et Streamlit oublie la valeur d'un menu qui n'est pas affiché.
+        paths = [str(q) for q in queues]
+        if st.session_state.get("queue_pick") not in paths:
+            wanted = st.session_state.get("queue_path")
+            st.session_state["queue_pick"] = wanted if wanted in paths else paths[0]
+        chosen = Path(
+            st.selectbox(
+                "File d'écoute",
+                paths,
+                key="queue_pick",
+                format_func=lambda p: _queue_name(Path(p)),
+            )
+        )
+        st.session_state["queue_path"] = str(chosen)
         readme = chosen.parent / "LISEZMOI.md"
         if readme.is_file():
             with st.expander("Informations sur cette file d'écoute"):
@@ -514,13 +527,16 @@ def _next_audios(full: str, offset_s: float, dur_s: float) -> list[tuple[str, st
     les écrive : le navigateur les guette et prépare l'extrait d'avance."""
     return [
         (name, asset_src(_media_key(full, offset_s, dur_s, c), ".wav"), max(0.0, offset_s))
-        for c, name in CHANNELS.items()
+        for c, name in enumerate(mic_names(full))
     ]
 
 
 def _build_media(full: str, offset_s: float, dur_s: float) -> dict:
+    """Une piste d'écoute par micro, nommée d'après son gain (`mic_names` : il change d'un
+    enregistreur à l'autre, et un fichier mono n'a qu'un micro)."""
     path = Path(full)
     wav, sr, start = read_channels(path.parent, path.name, offset_s, dur_s, 0.0)
+    names = mic_names(full)[: wav.shape[1]]
     return {
         "t0": start,
         "t1": start + len(wav) / sr,
@@ -528,13 +544,13 @@ def _build_media(full: str, offset_s: float, dur_s: float) -> dict:
             (
                 name,
                 asset(
-                    wav_bytes(wav[:, min(c, wav.shape[1] - 1)], sr),
+                    wav_bytes(wav[:, c], sr),
                     ".wav",
                     name_key=_media_key(full, offset_s, dur_s, c),
                 ),
                 start,
             )
-            for c, name in CHANNELS.items()
+            for c, name in enumerate(names)
         ],
     }
 
@@ -1389,20 +1405,25 @@ def main() -> None:
     else:
         why_before = "Rien à écouter avant celui-ci." if before == pos else None
         why_after = "Rien à écouter après celui-ci." if after == pos else None
-    nav_cols = st.columns(2)
+    # Chacun une moitié de la largeur, en forme de flèche (`style.py`, `nav_prev`, `nav_next`).
+    nav_cols = st.columns(2, gap="small")
     nav_cols[0].button(
-        "◀ Extrait précédent",
+        "Extrait précédent",
+        key="nav_prev",
         disabled=before == pos,
         on_click=_goto,
         args=(key, before),
         help=why_before,
+        use_container_width=True,
     )
     nav_cols[1].button(
-        "Extrait suivant ▶",
+        "Extrait suivant",
+        key="nav_next",
         disabled=after == pos,
         on_click=_goto,
         args=(key, after),
         help=why_after,
+        use_container_width=True,
     )
 
 

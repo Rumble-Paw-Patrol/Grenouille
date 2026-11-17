@@ -113,6 +113,7 @@ def build_package(
         extract_comments,
         extract_intervals,
         local_time,
+        mic_names,
         read_annotators,
     )
     from blanci.core.config import config_path
@@ -168,6 +169,7 @@ def build_package(
                 "local_time": local_time(rec["start_utc"], offset_h),
                 "offset_s": start,
                 "dur_s": dur,
+                "channels": list(mic_names(str(sources[rid]))),  # gain de chaque micro
                 "source": getattr(row, "source", None) or "plan",
                 "reason": getattr(row, "reason", None) or "",
                 # intervalles de l'encadrant, repris à l'envoi si rien n'est tracé (accord) ;
