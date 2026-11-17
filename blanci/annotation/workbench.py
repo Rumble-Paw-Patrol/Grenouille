@@ -764,7 +764,7 @@ def extract_history(
     end_s: float,
     annotator: str | list[str | None] | None = None,
 ) -> list[dict[str, Any]]:
-    """Tous les envois sur l'extrait [start_s, end_s], du plus ancien au plus récent : {who,
+    """Tous les envois sur l'extrait [start_s, end_s], du plus ancien au plus récent : {id, who,
     date (heure locale du poste, « 17/11/2026 11:17 »), intervals}. Mêmes envois que
     `extract_intervals` (bornes de l'extrait, ou extrait plus long qui le contient), mais pas
     seulement le dernier de chacun : un annotateur qui repasse apparaît une fois par passage."""
@@ -788,7 +788,14 @@ def extract_history(
             when = date.strftime("%d/%m/%Y %H:%M")
         except ValueError:
             when = str(created or "")[:10]
-        out.append({"who": who, "date": when, "intervals": _clipped(con, span_id, start_s, end_s)})
+        out.append(
+            {
+                "id": int(span_id),
+                "who": who,
+                "date": when,
+                "intervals": _clipped(con, span_id, start_s, end_s),
+            }
+        )
     return out
 
 

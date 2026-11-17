@@ -24,7 +24,10 @@ les étiquettes et les qualités dans le visualiseur ; tout se garde dans `annot
   envoi de chaque autre annotateur, en lecture seule (pointillés) ; un envoi sans intervalle
   est dit en toutes lettres sous le spectrogramme. Un envoi fait sur un extrait plus long qui
   contient celui-ci compte aussi (enregistrement entier annoté avant un découpage).
-  « Masquer les annotations de » cache ceux de certains (ou de tout le monde).
+  « Masquer les annotations de » cache ceux de certains (ou de tout le monde) : leurs envois
+  restent listés sous le spectrogramme, marqués « masqué », et leurs commentaires restent
+  (« Masquer les commentaires » à part). Sous le spectrogramme, un clic sur le nom et la date
+  d'un envoi le rend silencieux (plus dessiné), un autre le réaffiche.
 - **Écoute** : l'enregistrement entier sur un spectrogramme zoomable (`viewer.py` : molette,
   glisser, barre de lecture qui suit l'un ou l'autre micro), volume et bande d'écoute
   réglable ; filtre dynamique et contraste réglés micro par micro ; rien de cela ne touche
@@ -860,7 +863,9 @@ def _send_panel(annotator: str) -> None:
 def _masking_panel(names: list[str]) -> tuple[list[str], bool, bool]:
     """Cases « Masquer les annotations de » : une par annotateur de la liste, et « tout le
     monde » ; puis « Masquer les commentaires ». Renvoie (noms masqués, tout le monde,
-    commentaires masqués). Les commentaires d'un annotateur masqué le sont aussi."""
+    commentaires masqués). Masquer les annotations de quelqu'un ne masque pas ses commentaires,
+    qui ont leur propre case ; ses envois restent listés sous le spectrogramme, marqués
+    « masqué »."""
     st.header("Affichage")
     st.markdown("**Masquer les annotations de**")
     # Grille de deux colonnes, rangée par rangée (« Tout le monde » en tête) : les cases d'une
@@ -1289,10 +1294,14 @@ def main() -> None:
         # Ses intervalles (son dernier envoi, sauf s'il se masque) et ceux des autres affichés.
         saved = extract_intervals(con, candidate["recording_id"], t0, t1, shown)
         notes = _notes(saved, heard)
-        history = extract_history(con, candidate["recording_id"], t0, t1, shown)
-        comments = (
-            [] if no_comments else extract_comments(con, candidate["recording_id"], t0, t1, shown)
-        )
+        # Tous les envois, ceux des annotateurs masqués compris, marqués : la liste sous le
+        # spectrogramme dit qu'ils existent (un masquage oublié ne fait pas croire l'extrait
+        # jamais annoté), sans les dessiner.
+        history = [
+            dict(h, masked=shown is not None and h["who"] not in shown)
+            for h in extract_history(con, candidate["recording_id"], t0, t1)
+        ]
+        comments = [] if no_comments else extract_comments(con, candidate["recording_id"], t0, t1)
         mine = next((k for k in saved if k is not None and k.casefold() == me.casefold()), None)
         own = saved.pop(mine, []) if me else []
         others = {k or "(sans nom)": v for k, v in saved.items()}

@@ -176,6 +176,18 @@ INDEX = r"""<!doctype html>
   .ivrow .when { font-family: var(--mono); font-size: 10px; color: var(--muted); opacity: .8;
                  margin-right: 4px; }
   .ivrow .none { font-size: 12.5px; color: var(--muted); font-style: italic; }
+  /* Nom et date d'un envoi : bouton qui le rend silencieux (barré, ligne pâlie) ou le
+     réaffiche. Envoi d'un annotateur masqué : liseré en tirets, gris. */
+  .ivrow .head { display: inline-flex; gap: 6px; align-items: baseline; padding: 2px 6px;
+                 margin-left: -6px; border: 0; border-radius: 6px; background: transparent;
+                 color: inherit; font: inherit; }
+  .ivrow button.head { cursor: pointer; }
+  .ivrow button.head:hover { background: var(--anneau); box-shadow: none; }
+  .ivrow button.head:hover .who { color: var(--gold); }
+  .ivrow.silent { border-left-color: var(--line-fort); background: transparent; }
+  .ivrow.silent .head .who, .ivrow.silent .head .when { text-decoration: line-through; }
+  .ivrow.silent .chip { opacity: .4; }
+  .ivrow.masked { border-left: 3px dashed var(--muted); background: transparent; }
   .chip { border: 1px solid var(--line-fort); border-radius: 999px; padding: 2px 3px 2px 10px;
           font-size: 12px;
           display: flex; gap: 4px; align-items: center; cursor: pointer;
@@ -299,7 +311,19 @@ const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
 let raw = [], decoding = [];  // fichiers chargés, décodages lancés (`decode`)
 let view = null, intervals = [], selected = -1, vmax = [], loading = 0, newLabel = null;
-let otherSel = null;  // intervalle d'un autre annotateur mis en relief : "k:j"
+let otherSel = null;  // intervalle d'un envoi déjà fait mis en relief : "rang de l'envoi:j"
+// Envois rendus silencieux d'un clic sur leur nom (plus dessinés), par extrait.
+const muted = new Set();
+const muteKey = r => `${D.extract}|${r.id}`;
+// Envois déjà faits (historique, ou à défaut un par annotateur de `others`), avec leur rang
+// `idx` et `silent` : masqués dans le panneau de gauche, ou rendus silencieux.
+function histRows() {
+  return (D.history
+    || (D.others || []).map((o, k) => ({id: `o${k}`, who: o.who, date: "",
+                                        intervals: o.intervals})))
+    .map((r, idx) => ({...r, idx, silent: !!r.masked || muted.has(muteKey(r))}));
+}
+const drawnRows = () => histRows().filter(r => !r.silent);
 let newQuality = null;  // qualité des prochains intervalles (null : non dite)
 let spec = document.createElement("canvas"), specKey = "", specView = null;
 const specCache = new Map();  // clé → toile : dernières vues calculées (et celle préparée)
@@ -1128,12 +1152,13 @@ function draw() {
       ctx.fillStyle = "#FFE08A"; ctx.fillRect(x0, M.t + PH() - 3, x1 - x0, 3);
     }
   });
-  // Les autres annotateurs, sous les siens : comme les siens (voile, barre haute épaisse, bords
-  // latéraux), mais en tirets ; une bande nommée chacun en bas ; un clic en met un en relief.
-  (D.others || []).forEach((o, k) => {
+  // Les envois déjà faits, sous ses intervalles : comme les siens (voile, barre haute épaisse,
+  // bords latéraux), mais en tirets ; une bande nommée par envoi en bas ; un clic en met un en
+  // relief. Les envois masqués ou rendus silencieux ne sont pas dessinés.
+  drawnRows().forEach((o, k) => {
     const y = M.t + PH() - 3 - 13 * (k + 1);
     o.intervals.forEach(([t0, t1, l], j) => {
-      const x0 = xOf(t0), x1 = xOf(t1), c = rgb(l), on = otherSel === `${k}:${j}`;
+      const x0 = xOf(t0), x1 = xOf(t1), c = rgb(l), on = otherSel === `${o.idx}:${j}`;
       ctx.fillStyle = `rgba(${c}, ${on ? 0.32 : 0.20})`; ctx.fillRect(x0, M.t, x1 - x0, PH());
       ctx.setLineDash([8, 5]); ctx.strokeStyle = `rgba(${c}, 0.95)`; ctx.lineWidth = 5;
       ctx.beginPath(); ctx.moveTo(x0, M.t + 2.5); ctx.lineTo(x1, M.t + 2.5); ctx.stroke();
@@ -1260,27 +1285,45 @@ function list() {
   showTypes(); showQualities(); setHeight();
 }
 // Envois déjà faits sur l'extrait, une ligne chacun du plus ancien au plus récent (soi compris,
-// et plusieurs fois la même personne si elle est repassée) : un clic sur une pastille y amène
-// la vue, rien ne s'y modifie. Sans historique (paquet d'écoute) : une ligne par annotateur.
+// et plusieurs fois la même personne si elle est repassée). Un clic sur le nom et la date rend
+// l'envoi silencieux (plus dessiné), un autre le réaffiche ; un clic sur une pastille y amène la
+// vue ; rien ne s'y modifie. Un envoi d'un annotateur masqué dans le panneau de gauche reste
+// listé, marqué « masqué » : un extrait sans rien de dessiné n'est pas pris pour non annoté.
 function others() {
   const box = $("others");
   box.innerHTML = "";
-  const rows = D.history
-    || (D.others || []).map((o, k) => ({who: o.who, date: "", intervals: o.intervals, k}));
-  rows.forEach(r => {
-    const row = document.createElement("div"), who = document.createElement("span");
-    row.className = "ivrow";
-    who.className = "who"; who.textContent = `${r.who} :`;
-    row.appendChild(who);
-    if (r.date) {
-      const when = document.createElement("span");
-      when.className = "when"; when.textContent = r.date; row.appendChild(when);
+  histRows().forEach(r => {
+    const row = document.createElement("div");
+    row.className = "ivrow" + (r.masked ? " masked" : r.silent ? " silent" : "");
+    const head = document.createElement(r.masked ? "span" : "button");
+    head.className = "head";
+    head.innerHTML = '<span class="who"></span><span class="when"></span>';
+    head.querySelector(".who").textContent = `${r.who} :`;
+    head.querySelector(".when").textContent = r.date;
+    if (r.masked) {
+      head.title = "Annotateur coché dans « Masquer les annotations de » (panneau de gauche)";
+    } else {
+      head.title = r.silent ? "Envoi silencieux : cliquer pour le réafficher"
+                            : "Cliquer pour rendre cet envoi silencieux (plus dessiné)";
+      head.onclick = () => {
+        const key = muteKey(r);
+        if (muted.has(key)) muted.delete(key); else muted.add(key);
+        otherSel = null; list(); draw();
+      };
     }
-    if (!r.intervals.length) {
+    row.appendChild(head);
+    const say = text => {
       const none = document.createElement("span");
-      none.className = "none"; none.textContent = "aucun intervalle"; row.appendChild(none);
+      none.className = "none"; none.textContent = text; row.appendChild(none);
+    };
+    if (r.masked) {
+      const n = r.intervals.length;
+      say(`annotations masquées (${n ? `${n} intervalle${n > 1 ? "s" : ""}` : "aucun intervalle"})`
+          + " : décocher « Masquer les annotations de » pour les voir");
+    } else if (!r.intervals.length) {
+      say("aucun intervalle");
     }
-    r.intervals.forEach(([t0, t1, l, q], j) => {
+    if (!r.masked) r.intervals.forEach(([t0, t1, l, q], j) => {
       const chip = document.createElement("span");
       chip.className = "chip ro";
       chip.style.background = `rgba(${rgb(l)}, 0.10)`; chip.style.borderColor = `rgb(${rgb(l)})`;
@@ -1291,7 +1334,7 @@ function others() {
         b.className = "q"; b.dataset.q = q; b.textContent = q; chip.append(" · ", b);
       }
       chip.onclick = () => {
-        selected = -1; otherSel = r.k >= 0 ? `${r.k}:${j}` : null;
+        selected = -1; otherSel = r.silent ? null : `${r.idx}:${j}`;
         const span = view.t1 - view.t0;
         if (t1 < view.t0 || t0 > view.t1) {
           view.t0 = (t0 + t1) / 2 - span / 2; view.t1 = view.t0 + span; clampView();
@@ -1318,8 +1361,8 @@ function hit(x) {  // [indice, bord ("t0", "t1") ou null] de l'intervalle sous l
 }
 function otherAt(t) {  // "k:j" de l'intervalle d'un autre annotateur sous t, ou null
   let found = null;
-  (D.others || []).forEach((o, k) => o.intervals.forEach(([t0, t1], j) => {
-    if (t >= t0 && t <= t1) found = `${k}:${j}`;
+  drawnRows().forEach(o => o.intervals.forEach(([t0, t1], j) => {
+    if (t >= t0 && t <= t1) found = `${o.idx}:${j}`;
   }));
   return found;
 }
@@ -1603,13 +1646,11 @@ def viewer_args(
     « + » des qualités (la liste se garde : `etiquettes.py`) ; `submit` : {label, disabled,
     help} du bouton « Valider » à droite du spectrogramme (absent : pas de bouton) ; `notes` :
     phrases sous le spectrogramme ; `history` : les envois déjà faits sur l'extrait, du plus
-    ancien au plus récent ({who, date, intervals}, `workbench.extract_history`), une ligne
-    chacun sous la sienne (« Vous »), en lecture seule ; sans lui, une ligne par annotateur de
-    `others`."""
-    names_of_others = [str(who) for who in (others or {})]
-    last = {}  # dernier envoi de chaque autre annotateur : celui dessiné sur le spectrogramme
-    for i, h in enumerate(history or []):
-        last[str(h["who"] or "(sans nom)")] = i
+    ancien au plus récent ({id, who, date, intervals, masked}, `workbench.extract_history`),
+    une ligne chacun sous la sienne (« Vous »), en lecture seule, chacun dessiné sur le
+    spectrogramme sauf s'il est masqué (`masked` : son annotateur est coché dans « Masquer les
+    annotations de », la ligne le dit) ou rendu silencieux d'un clic sur son nom ; sans lui,
+    une ligne par annotateur de `others`."""
     return {
         "t0": float(t0),
         "t1": float(t1),
@@ -1639,14 +1680,11 @@ def viewer_args(
         if history is None
         else [
             {
+                "id": str(h.get("id", i)),
                 "who": str(h["who"] or "(sans nom)"),
                 "date": str(h.get("date") or ""),
                 "intervals": _intervals(h["intervals"]),
-                # rang dans `others` si c'est l'envoi dessiné sur le spectrogramme, sinon -1
-                "k": names_of_others.index(str(h["who"] or "(sans nom)"))
-                if str(h["who"] or "(sans nom)") in names_of_others
-                and last[str(h["who"] or "(sans nom)")] == i
-                else -1,
+                "masked": bool(h.get("masked")),
             }
             for i, h in enumerate(history)
         ],
