@@ -42,7 +42,7 @@ MAX_SONG_S = 30.0  # chant du bandeau : les 30 premières secondes au plus
 DEFAULT_HEADER = {
     "title": "Poste d'annotation d'",
     "species": "Anomaloglossus blanci",
-    "subtitle": "Écouter chaque extrait, tracer les chants sur le spectrogramme, les étiqueter.",
+    "subtitle": "",
     "image": "spectrogramme.jpg",
     "sound": "chant.mp3",
     "alt": "Spectrogramme de 18 s d'un chant d'A. blanci enregistré à Molokoi, de 3 à 6 kHz : "
@@ -128,12 +128,10 @@ INDEX = r"""<!doctype html>
          font-size: 1.12em; letter-spacing: 0; padding-right: .08em;
          background: var(--titre-i); -webkit-background-clip: text; background-clip: text;
          color: transparent; }
-  /* Sous-titre et bouton d'écoute côte à côte, à gauche de la grenouille (--perchoir : la
-     place qu'elle prend au bord droit, posée par son script) ; le bouton passe sous le
-     sous-titre quand la place manque. */
+  /* Le bouton d'écoute, sous le titre et à gauche de la grenouille (--perchoir : la place
+     qu'elle prend au bord droit, posée par son script). */
   .accroche { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
               max-width: calc(100% - var(--perchoir, 0px) - 16px); }
-  p { color: var(--muted); max-width: 62ch; flex: 1 1 300px; }
   .ecouter { flex: none; display: inline-flex; align-items: center; gap: 12px; height: 50px;
     padding: 0 22px 0 5px; border: 0; border-radius: 999px; cursor: pointer;
     font: 600 15px/1 "Hanken Grotesk", "Segoe UI", system-ui, sans-serif; letter-spacing: .01em;
@@ -217,7 +215,6 @@ INDEX = r"""<!doctype html>
     </div>
     <h1 id="titre"></h1>
     <div class="accroche">
-      <p id="soustitre"></p>
       <button type="button" class="ecouter" id="ecouter" aria-pressed="false" hidden>
         <span class="disque" aria-hidden="true"><svg class="lire" viewBox="0 0 16 16">
           <path d="M4.5 2.6v10.8L13.4 8z"/></svg><span class="egaliseur"><i></i><i></i><i></i>
@@ -274,7 +271,6 @@ function poser(a) {
   const h1 = $("#titre");
   h1.textContent = a.title + (/['’]$/.test(a.title) || !a.title ? "" : " ");
   const i = document.createElement("i"); i.textContent = a.species; h1.appendChild(i);
-  $("#soustitre").textContent = a.subtitle || "";
   const img = $(".spectro img");
   $(".spectro").hidden = !a.image; $(".legende").hidden = !a.image;
   if (a.image) { img.src = a.image; img.alt = a.alt || ""; }

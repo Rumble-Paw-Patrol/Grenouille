@@ -988,7 +988,7 @@ def _project_fields(kind: str, active: str) -> None:
         species = cols[1].text_input(
             "Espèce", value="" if new else base["species"], placeholder="Anomaloglossus blanci"
         )
-        subtitle = st.text_input("Sous-titre", value=base["subtitle"])
+        subtitle = base["subtitle"]  # plus affiché dans l'en-tête
         song = st.file_uploader(
             "Chant de l'espèce" + ("" if new else " (vide : garder celui du projet)"),
             type=["wav", "mp3", "flac", "ogg"],
@@ -1358,7 +1358,6 @@ def main() -> None:
         f"{candidate['offset_s']:.1f}–{candidate['offset_s'] + candidate['dur_s']:.1f} s · "
         f"{candidate.get('reason') or ''}"
         + (f" · score précédent {score:.2f}" if score == score and score is not None else "")
-        + (f" · déjà écouté : {NAMES.get(heard, heard)}" if heard else "")
     )
 
     media = None

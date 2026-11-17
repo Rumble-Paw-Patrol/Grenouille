@@ -115,6 +115,7 @@ INDEX = r"""<!doctype html>
   .val { font-family: var(--mono); font-size: 11px; color: var(--ink); min-width: 3.2em; }
   .contrastv { min-width: 1.2em; text-align: center; }
   button.mini { padding: 1px 8px; border-radius: 999px; font-weight: 600; min-width: 26px; }
+  #follow.on, #bandonly.on { border-color: var(--accent-2); color: var(--accent-2); }
   button.mini.on { border-color: var(--accent-2); color: var(--accent-2);
                    box-shadow: 0 0 0 1px var(--accent-2) inset; }
   /* Un encadré par micro (moitié de la largeur chacun) : filtre dynamique et contraste en
@@ -250,11 +251,6 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
       placeholder="D"> <button id="newqok">Ajouter</button><button id="newqno"
       title="Annuler">✕</button></span>
   </span>
-  <span class="group">
-    <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
-    <label><input type="checkbox" id="follow"> Suivre</label>
-  </span>
-  <span id="status"></span>
 </div>
 <div class="panel" id="newlbl" hidden>
   <div class="row" id="suggestrow"><span class="lbl">Déjà connues</span>
@@ -271,7 +267,8 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
   <span class="group"><span class="lbl">Bande</span>
     <input type="number" id="lo" min="0" max="24" step="0.1"> –
     <input type="number" id="hi" min="0" max="24" step="0.1"> kHz
-    <label><input type="checkbox" id="bandonly"> n'écouter qu'elle</label>
+    <button id="bandonly" aria-pressed="false"
+            title="Enfoncé : on n'entend que la bande, le reste est coupé">Bande seule</button>
     <select id="slope" title="Raideur du filtre hors de la bande : plus elle est forte, plus les
  sons hors bande sont coupés, mais plus le filtre « sonne » sur les claquements">
       <option value="12">12 dB/oct</option><option value="24">24 dB/oct</option>
@@ -279,9 +276,12 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
       <option value="fft" title="Coupure franche : rien hors de la bande, mais pré-écho et
  traînée à la fréquence des frontières sur les claquements">FFT (coupure franche)</option>
     </select></span>
-  <span class="group"><span class="lbl">Volume</span>
-    <input type="range" id="gain" min="0" max="30" step="1"> <span class="val" id="gainv"></span>
+  <span class="group">
+    <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
+    <button id="follow" aria-pressed="false"
+            title="La vue suit la tête de lecture pendant l'écoute">Suivre</button>
   </span>
+  <span id="status"></span>
 </div>
 <div class="mics" id="mics"></div>
 <div class="stage"><canvas id="c" tabindex="0"></canvas>
@@ -339,24 +339,25 @@ function saveSettings() {
 }
 function showSettings() {
   $("lo").value = (S.band[0] / 1000).toFixed(1); $("hi").value = (S.band[1] / 1000).toFixed(1);
-  $("bandonly").checked = !!S.bandOnly; $("slope").value = String(S.slope);
-  $("gain").value = S.gain;
-  $("gainv").textContent = `+${S.gain} dB`;
+  $("bandonly").classList.toggle("on", !!S.bandOnly);
+  $("bandonly").setAttribute("aria-pressed", String(!!S.bandOnly));
+  $("slope").value = String(S.slope);
   [...$("mics").children].forEach((card, i) => {
     const m = mic(i), q = c => card.querySelector(c);
+    q(".gain").value = m.gain; q(".gainv").textContent = `+${m.gain} dB`;
     q(".range").value = String(m.range); q(".rangev").textContent = `${m.range} dB`;
     q(".contrastv").textContent = String(m.contrast);
     q(".cless").disabled = m.contrast <= 0; q(".cmore").disabled = m.contrast >= 8;
     card.classList.toggle("on", i === shownTrack());
   });
 }
-// Filtre dynamique et contraste : propres à chaque micro (les deux n'ont pas le même gain) ;
+// Volume, filtre dynamique et contraste : propres à chaque micro (gains différents) ;
 // un ancien réglage commun sert de départ aux deux.
-const MIC_DEFAULT = {range: 60, contrast: 4};
+const MIC_DEFAULT = {gain: 0, range: 60, contrast: 4};
 function mic(i) {
   S.mics = S.mics || [];
   while (S.mics.length <= i) {
-    S.mics.push({range: S.range ?? MIC_DEFAULT.range,
+    S.mics.push({gain: S.gain ?? MIC_DEFAULT.gain, range: S.range ?? MIC_DEFAULT.range,
                  contrast: S.contrast ?? MIC_DEFAULT.contrast});
   }
   return S.mics[i];
@@ -370,6 +371,10 @@ function micCards() {  // un encadré par micro, refait quand les micros changen
     const card = document.createElement("div");
     card.className = "mic";
     card.innerHTML = `<div class="mic-set">
+      <span title="Gain manuel appliqué à l'écoute de ce micro">
+        <span class="lbl">Volume</span>
+        <input type="range" class="gain" min="0" max="30" step="1">
+        <span class="val gainv"></span></span>
       <span title="Seuls les sons à moins de N dB des plus forts gardent une couleur">
         <span class="lbl">Filtre dynamique</span>
         <input type="range" class="range" min="30" max="90" step="10">
@@ -387,6 +392,9 @@ function micCards() {  // un encadré par micro, refait quand les micros changen
       showSettings(); saveSettings();
       if (i === shownTrack()) draw();
       prepSoon();
+    };
+    q(".gain").oninput = () => {
+      mic(i).gain = +q(".gain").value; showSettings(); applyAudio(); saveSettings();
     };
     q(".range").oninput = () => { mic(i).range = +q(".range").value; changedMic(); };
     const contrast = c => { mic(i).contrast = Math.max(0, Math.min(8, c)); changedMic(); };
@@ -425,7 +433,7 @@ function applyAudio() {
     const hi = on ? Math.min(S.band[1], nyq * 0.99) : nyq * 0.99;
     g.hp.forEach(f => f.frequency.value = lo);
     g.lp.forEach(f => f.frequency.value = hi);
-    g.gain.gain.value = i === active ? Math.pow(10, S.gain / 20) : 0;
+    g.gain.gain.value = i === active ? Math.pow(10, mic(i).gain / 20) : 0;
   });
   clearTimeout(fftTimer);  // pas à chaque pas d'un glisser
   fftTimer = setTimeout(() => { applyFFT(); prepareNext(); }, 250);
@@ -433,7 +441,7 @@ function applyAudio() {
 
 // --- Mode FFT : tout l'extrait passe en fréquences, ce qui sort de la bande est mis à zéro, on
 // revient au signal et le lecteur bascule sur ce son, au même instant. Seule la piste écoutée
-// (`active`) est filtrée ; l'autre l'est quand on choisit son micro.
+// (`active`) est filtrée en premier, puis l'autre, d'avance et même hors du mode FFT.
 let fftTimer = null;
 function fftInPlace(re, im, inverse) {
   const n = re.length;
@@ -498,26 +506,39 @@ function swapSource(el, url, key) {
 }
 // Bande filtrée d'avance (mode FFT), case « n'écouter qu'elle » cochée ou non : la cocher
 // bascule aussitôt sur un son déjà calculé. `fftKey` : le son à faire jouer.
-const fftWant = () => S.slope === "fft" ? S.band.join("-") : "";
-const fftKey = () => S.bandOnly ? fftWant() : "";
+// Le son filtré se calcule toujours en arrière-plan, filtre FFT choisi ou non : d'abord pour la
+// piste écoutée, puis pour l'autre. Choisir « FFT » ou changer de micro bascule alors aussitôt.
+const fftWant = () => S.band.join("-");
+const fftKey = () => S.bandOnly && S.slope === "fft" ? fftWant() : "";
 const FILTERING = "filtrage FFT…";
 function filteringDone() {
-  if ($("status").textContent === FILTERING) $("status").textContent = "";
+  if ($("status").textContent === FILTERING && !players[active]?._busy) {
+    $("status").textContent = "";
+  }
 }
 function applyFFT() {
-  const key = fftKey(), want = fftWant(), i = active, el = players[i];
-  if (!el) return;
-  if (el._key !== key) {
+  const first = active;
+  fftTrack(first).then(() => {
+    if (active === first) players.forEach((_, i) => { if (i !== first) fftTrack(i); });
+  });
+}
+function fftTrack(i) {
+  const key = fftKey(), want = fftWant(), el = players[i];
+  if (!el) return Promise.resolve();
+  if (i === active && el._key !== key) {
     if (!key) swapSource(el, el._orig, "");
     else if (el._fft?.key === key) swapSource(el, el._fft.url, key);
   }
-  if (!want || el._key === want || el._fft?.key === want) return;
-  if (key) $("status").textContent = FILTERING;  // on l'attend pour écouter
-  if (el._busy === want) return;
-  if (!buffers[i]) { decode(i)?.then(applyFFT); return; }
+  if (el._key === want || el._fft?.key === want) return Promise.resolve();
+  if (key && i === active) $("status").textContent = FILTERING;  // on l'attend pour écouter
+  if (el._busy === want) return Promise.resolve();
+  if (!buffers[i]) {
+    const d = decode(i);
+    return d ? d.then(() => buffers[i] ? fftTrack(i) : undefined) : Promise.resolve();
+  }
   el._busy = want;
   const token = loading, rate = buffers.rate;
-  filtered(buffers[i], rate, Math.max(S.band[0], 1), S.band[1]).then(out => {
+  return filtered(buffers[i], rate, Math.max(S.band[0], 1), S.band[1]).then(out => {
     if (el._busy === want) el._busy = null;
     if (token !== loading) return;
     // Case décochée, autre bande, autre lecteur : le son filtré est gardé pour plus tard, mais
@@ -568,14 +589,11 @@ function setBand(lo, hi) {
 }
 $("lo").onchange = () => setBand(+$("lo").value * 1000, S.band[1]);
 $("hi").onchange = () => setBand(S.band[0], +$("hi").value * 1000);
-$("bandonly").onchange = () => {
-  S.bandOnly = $("bandonly").checked; applyAudio(); applyFFT(); saveSettings();
+$("bandonly").onclick = () => {
+  S.bandOnly = !S.bandOnly; showSettings(); applyAudio(); applyFFT(); saveSettings();
 };
 $("slope").onchange = () => {
   const v = $("slope").value; S.slope = v === "fft" ? v : +v; applyAudio(); saveSettings();
-};
-$("gain").oninput = () => {
-  S.gain = +$("gain").value; showSettings(); applyAudio(); saveSettings();
 };
 // Choisir un micro : son spectrogramme (même vue, même zoom) et son son ; la lecture continue,
 // le lecteur choisi est recalé sur l'autre s'ils ont dérivé.
@@ -1246,7 +1264,8 @@ function loop() {
   if (raf) return;
   const step = () => {
     const p = players[active], t = playheadTime();
-    if (t !== null && $("follow").checked && !drag && (t > view.t1 || t < view.t0)) {
+    const follow = $("follow").classList.contains("on");
+    if (t !== null && follow && !drag && (t > view.t1 || t < view.t0)) {
       const span = view.t1 - view.t0;
       view.t0 = t - 0.1 * span; view.t1 = view.t0 + span; clampView(); moved();
     } else draw();
@@ -1505,6 +1524,10 @@ canvas.addEventListener("dblclick", () => {
 document.querySelectorAll(".bar").forEach(bar => bar.addEventListener("mousedown", e => {
   if (e.target.tagName === "BUTTON") e.preventDefault();
 }));
+$("follow").onclick = () => {
+  const on = $("follow").classList.toggle("on");
+  $("follow").setAttribute("aria-pressed", String(on));
+};
 $("home").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
 document.addEventListener("keydown", e => {
   if (["SELECT", "INPUT"].includes(e.target.tagName)) return;
