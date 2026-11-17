@@ -1301,7 +1301,7 @@ function others() {
     head.querySelector(".who").textContent = `${r.who} :`;
     head.querySelector(".when").textContent = r.date;
     if (r.masked) {
-      head.title = "Annotateur coché dans « Masquer les annotations de » (panneau de gauche)";
+      head.title = "Annotateur choisi dans « Masquer les annotations de » (panneau de gauche)";
     } else {
       head.title = r.silent ? "Envoi silencieux : cliquer pour le réafficher"
                             : "Cliquer pour rendre cet envoi silencieux (plus dessiné)";
@@ -1316,10 +1316,8 @@ function others() {
       const none = document.createElement("span");
       none.className = "none"; none.textContent = text; row.appendChild(none);
     };
-    if (r.masked) {
-      const n = r.intervals.length;
-      say(`annotations masquées (${n ? `${n} intervalle${n > 1 ? "s" : ""}` : "aucun intervalle"})`
-          + " : décocher « Masquer les annotations de » pour les voir");
+    if (r.masked) {  // rien sur le contenu (vide ou pas) : ce serait le dévoiler
+      say("annotations masquées : décocher le bouton « Masquer les annotations »");
     } else if (!r.intervals.length) {
       say("aucun intervalle");
     }

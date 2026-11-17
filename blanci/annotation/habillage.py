@@ -270,7 +270,8 @@ def write_prefs(
     styles = raw.get("styles") if isinstance(raw.get("styles"), dict) else {}
     if raw.get("style") in STYLES:
         styles = {DEFAULT_PROJECT: raw["style"], **styles}
-    out = {"theme": raw.get("theme"), "projet": prefs["projet"], "styles": styles}
+    out = {k: v for k, v in raw.items() if k != "style"}  # le reste (`confirm_off`) est gardé
+    out |= {"theme": raw.get("theme"), "projet": prefs["projet"], "styles": styles}
     if theme in ("light", "dark"):
         out["theme"] = theme
     if projet:
@@ -281,6 +282,30 @@ def write_prefs(
         path = prefs_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(out), encoding="utf-8")
+    except OSError:
+        pass
+
+
+# Fenêtres « Êtes-vous sûr ? » du poste : « valider » (envoi qui diffère de ceux déjà faits),
+# « quitter » (extrait quitté sans valider ce qui y est tracé ou écrit).
+CONFIRMS = ("valider", "quitter")
+
+
+def confirm_on(name: str) -> bool:
+    """Vrai tant que « Ne plus afficher » n'a pas été coché dans la fenêtre `name`."""
+    off = _read_raw().get("sans_confirmation")
+    return not (isinstance(off, list) and name in off)
+
+
+def confirm_off(name: str) -> None:
+    """« Ne plus afficher » : la fenêtre `name` ne s'ouvre plus (retenu dans les préférences)."""
+    raw = _read_raw()
+    off = raw.get("sans_confirmation") if isinstance(raw.get("sans_confirmation"), list) else []
+    raw["sans_confirmation"] = sorted({*off, name})
+    try:
+        path = prefs_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(raw), encoding="utf-8")
     except OSError:
         pass
 

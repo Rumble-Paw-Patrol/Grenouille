@@ -15,9 +15,12 @@ les étiquettes et les qualités dans le visualiseur ; tout se garde dans `annot
 - **Navigation** : sous la file, la liste de ses extraits (numérotés dans la file entière,
   ✓ et label pour ceux déjà écoutés) ; on peut revenir sur n'importe lequel et le
   réécouter, une nouvelle réponse s'ajoute à l'ancienne (correction, jamais écrasée).
-  « Sauter les extraits que j'ai déjà écoutés » et « … écoutés par un collègue » : ◀ ▶ et la
-  validation vont au précédent ou au prochain extrait qui reste à écouter ; tout est écouté :
-  ◀ ▶ sont grisés (« Vous avez tout écouté »). Aucune case cochée : on va au voisin.
+  « Sauter les extraits déjà écoutés par » (Moi, Tout le monde, ou des annotateurs) : ◀ ▶ et
+  la validation vont au précédent ou au prochain extrait qui reste à écouter, quoi qu'on masque ;
+  tout est écouté : ◀ ▶ sont grisés. Personne de choisi : on va au voisin. Quitter un extrait
+  sans valider ce qu'on y a tracé ou écrit, ou valider des intervalles différents de ceux d'un
+  collègue (ou remplacer son propre envoi masqué), demande d'abord « Êtes-vous sûr ? » (oui,
+  non, ou oui et ne plus afficher, retenu dans ~/.blanci/poste.json).
 - **Annotateurs** : on se choisit dans le menu « Annotateur » (liste du projet,
   `annotations/annotateurs.txt`, où « Ajouter quelqu'un… » inscrit un nouveau venu). En
   rouvrant un extrait, on retrouve ses propres intervalles, modifiables, et ceux du dernier
@@ -25,9 +28,9 @@ les étiquettes et les qualités dans le visualiseur ; tout se garde dans `annot
   est dit en toutes lettres sous le spectrogramme. Un envoi fait sur un extrait plus long qui
   contient celui-ci compte aussi (enregistrement entier annoté avant un découpage).
   « Masquer les annotations de » cache ceux de certains (ou de tout le monde) : leurs envois
-  restent listés sous le spectrogramme, marqués « masqué », et leurs commentaires restent
-  (« Masquer les commentaires » à part). Sous le spectrogramme, un clic sur le nom et la date
-  d'un envoi le rend silencieux (plus dessiné), un autre le réaffiche.
+  restent listés sous le spectrogramme, marqués « annotations masquées », sans rien dire de leur
+  contenu ; « Masquer les commentaires de » est à part. Sous le spectrogramme, un clic sur le
+  nom et la date d'un envoi le rend silencieux (plus dessiné), un autre le réaffiche.
 - **Écoute** : l'enregistrement entier sur un spectrogramme zoomable (`viewer.py` : molette,
   glisser, barre de lecture qui suit l'un ou l'autre micro), volume et bande d'écoute
   réglable ; filtre dynamique et contraste réglés micro par micro ; rien de cela ne touche
@@ -86,7 +89,7 @@ from blanci.annotation.etiquettes import (
     remove_quality,
     suggestions,
 )
-from blanci.annotation.habillage import read_prefs, write_prefs
+from blanci.annotation.habillage import confirm_off, confirm_on, read_prefs, write_prefs
 from blanci.annotation.selection import NEEDS_ENCODER
 from blanci.annotation.style import BRAND, CHART_COLORS, LABEL_COLORS, UNHEARD_COLOR, css
 from blanci.annotation.viewer import HELP, asset, asset_src, viewer, viewer_args
@@ -417,45 +420,53 @@ def _goto(key: str, value: int) -> None:
     st.session_state[key] = value
 
 
+# Fenêtres ouvertes : gardées dans l'état de session tant qu'un de leurs boutons ou la croix ne
+# les ferme pas, et rouvertes à chaque exécution (sinon une exécution de toute la page, par un
+# autre widget, les fermerait sans réponse).
+def _closer(state_key: str):
+    return lambda: st.session_state.pop(state_key, None)
+
+
 def _follow(key: str, widget: str) -> None:
     st.session_state[key] = st.session_state[widget]
 
 
-def _colleagues(con, me: str, hidden: list[str], everyone: bool) -> list[str | None]:
-    """Les autres annotateurs affichés (tous sauf soi et les masqués), tels qu'écrits dans la
-    base ; None : les lignes sans annotateur (import)."""
-    shown = visible_annotators(con, hidden, everyone)
-    if shown is None:
-        shown = [
-            a
-            for (a,) in con.execute(
-                "SELECT DISTINCT annotator FROM labels UNION SELECT DISTINCT annotator FROM spans"
-            )
-        ]
-    return [a for a in shown if a is None or not me or a.casefold() != me.casefold()]
+EVERYONE, ME = "Tout le monde", "Moi"
 
 
-def _to_skip(con, queue, me: str, colleagues: list, skip_mine: bool, skip_others: bool):
-    """Extraits que ◀ ▶ et la validation sautent : écoutés par soi (`skip_mine`), par un
-    collègue (`skip_others`). Série de la file : le label entendu pour ceux à sauter, None pour
-    les autres (`next_position`)."""
-    skip = None
-    if skip_mine and me:
-        skip = progress(con, queue, [me])
-    if skip_others and colleagues:
-        theirs = progress(con, queue, colleagues)
-        skip = theirs if skip is None else skip.fillna(theirs)
-    if skip is None:  # rien à sauter
-        import pandas as pd
+def _stored_names(con, names: list[str]) -> list[str]:
+    """`names` tels qu'écrits dans la base (à la casse près), plus `names` eux-mêmes."""
+    wanted = {n.casefold() for n in names}
+    stored = con.execute(
+        "SELECT DISTINCT annotator FROM labels UNION SELECT DISTINCT annotator FROM spans"
+    )
+    return list(dict.fromkeys([*(a for (a,) in stored if a and a.casefold() in wanted), *names]))
 
-        skip = pd.Series([None] * len(queue), index=queue.index, dtype=object)
-    return skip
+
+def _skip_who(con, me: str, picked: list[str]) -> tuple[bool, list | None]:
+    """Menu « Sauter les extraits déjà écoutés par » : (on saute, annotateurs dont les écoutes
+    comptent ; None : tout le monde, les lignes sans annotateur comprises). « Moi » : l'annotateur
+    choisi (rien tant qu'il n'est pas choisi). Ne dépend pas de ce qui est masqué."""
+    if EVERYONE in picked:
+        return True, None
+    names = [me if p == ME else p for p in picked if p != ME or me]
+    return bool(names), _stored_names(con, names) if names else []
+
+
+def _to_skip(con, queue, skipping: bool, who: list | None):
+    """Extraits que ◀ ▶ et la validation sautent (`_skip_who`). Série de la file : le label
+    entendu pour ceux à sauter, None pour les autres (`next_position`)."""
+    if skipping:
+        return progress(con, queue, who)
+    import pandas as pd
+
+    return pd.Series([None] * len(queue), index=queue.index, dtype=object)
 
 
 def _advance(con, queue, pos, nav_args, key, end) -> None:
-    """Après une réponse : extrait suivant (qui reste à écouter si une case « Sauter… » est
-    cochée), ou fin de file si cette réponse vient d'écouter le dernier."""
-    skipping = nav_args[2] or nav_args[3]
+    """Après une réponse : extrait suivant (qui reste à écouter si « Sauter les extraits déjà
+    écoutés par » a des noms), ou fin de file si cette réponse vient d'écouter le dernier."""
+    skipping = nav_args[0]
     nav = _to_skip(con, queue, *nav_args)
     st.session_state[key] = next_position(nav, pos, skipping)
     st.session_state[end] = skipping and bool(nav.notna().all())
@@ -714,9 +725,11 @@ def _answer_form(con, target, form_key, annotator, channel, qualities) -> bool:
 
 
 # Pendant qu'une case ou un menu relance le script, Streamlit grise toute la page (éléments
-# « stale ») : on la laisse telle quelle, le visualiseur garde son état et l'audio.
+# « stale ») : on la laisse telle quelle, le visualiseur garde son état et l'audio. Seulement
+# l'élément marqué, pas ce qu'il contient : forcer aussi ses descendants rendait leur pleine
+# couleur aux boutons grisés (◀ ▶, « Valider ») le temps de chaque clic, qui clignotaient.
 NO_GREY = """<style>
-[data-stale="true"], [data-stale="true"] * { opacity: 1 !important; transition: none !important; }
+[data-stale="true"] { opacity: 1 !important; transition: none !important; }
 </style>"""
 
 
@@ -860,26 +873,26 @@ def _send_panel(annotator: str) -> None:
         os.startfile(SEND_FOLDER)
 
 
-def _masking_panel(names: list[str]) -> tuple[list[str], bool, bool]:
-    """Cases « Masquer les annotations de » : une par annotateur de la liste, et « tout le
-    monde » ; puis « Masquer les commentaires ». Renvoie (noms masqués, tout le monde,
-    commentaires masqués). Masquer les annotations de quelqu'un ne masque pas ses commentaires,
-    qui ont leur propre case ; ses envois restent listés sous le spectrogramme, marqués
-    « masqué »."""
+def _masking_panel(names: list[str]) -> tuple[list[str], bool, list[str], bool]:
+    """Menus « Masquer les annotations de » et « Masquer les commentaires de » : « Tout le
+    monde » ou des annotateurs de la liste. Renvoie (annotations : noms masqués, tout le monde ;
+    commentaires : noms masqués, tout le monde). Les deux sont indépendants ; les envois masqués
+    restent listés sous le spectrogramme, marqués « masqué ». Les noms choisis restent affichés
+    dans le menu : un masquage ne s'oublie pas."""
     st.header("Affichage")
-    st.markdown("**Masquer les annotations de**")
-    # Grille de deux colonnes, rangée par rangée (« Tout le monde » en tête) : les cases d'une
-    # rangée sont à la même hauteur, et aucune ne reste seule dans sa colonne.
-    everyone, hidden = False, []
-    items = [None, *names]  # None : « Tout le monde »
-    for row in range(0, len(items), 2):
-        for column, name in zip(st.columns(2), items[row : row + 2], strict=False):
-            if name is None:
-                everyone = column.checkbox("Tout le monde", key="hide_everyone")
-            elif column.checkbox(name, key=f"hide::{name}", disabled=everyone):
-                hidden.append(name)
-    no_comments = st.checkbox("Masquer les commentaires", key="hide_comments")
-    return hidden, everyone, no_comments
+    options = [EVERYONE, *names]
+    ivs = st.multiselect(
+        "Masquer les annotations de", options, key="hide_pick", placeholder="Personne"
+    )
+    notes = st.multiselect(
+        "Masquer les commentaires de", options, key="hide_comments_pick", placeholder="Personne"
+    )
+    return (
+        [n for n in ivs if n != EVERYONE],
+        EVERYONE in ivs,
+        [n for n in notes if n != EVERYONE],
+        EVERYONE in notes,
+    )
 
 
 def _comments_panel(comments: list[dict], t0: float, t1: float) -> None:
@@ -982,6 +995,7 @@ def _project_fields(kind: str, active: str) -> None:
         )
     if not new and current and st.button("Revenir à l'en-tête d'origine", use_container_width=True):
         reset_header(folder)
+        st.session_state.pop("project_dialog", None)
         st.rerun()
     if not sent:
         return
@@ -995,6 +1009,7 @@ def _project_fields(kind: str, active: str) -> None:
         (current or {}).get("legend_text", ""),
     )
     if not new and unchanged and (default or name.strip() == active):
+        st.session_state.pop("project_dialog", None)
         st.rerun()  # rien de changé : la fenêtre se ferme
     has_header = bool(species.strip() or song is not None or current) and not (
         not new and unchanged
@@ -1029,15 +1044,16 @@ def _project_fields(kind: str, active: str) -> None:
         return
     write_prefs(projet=target)
     st.session_state.pop("project_pick", None)
+    st.session_state.pop("project_dialog", None)
     st.rerun()
 
 
-@st.dialog("Nouveau projet", width="large")
+@st.dialog("Nouveau projet", width="large", on_dismiss=_closer("project_dialog"))
 def _new_project_dialog(active: str) -> None:
     _project_fields("new", active)
 
 
-@st.dialog("Modifier le projet", width="large")
+@st.dialog("Modifier le projet", width="large", on_dismiss=_closer("project_dialog"))
 def _edit_project_dialog(active: str) -> None:
     _project_fields("edit", active)
 
@@ -1067,7 +1083,7 @@ def _project_input() -> None:
         on_change=_choose_project,
         args=(active,),
     )
-    dialog = st.session_state.pop("project_dialog", None)
+    dialog = st.session_state.get("project_dialog")
     if dialog == "new":
         _new_project_dialog(active)
     elif dialog == "edit":
@@ -1085,6 +1101,103 @@ def _choose_project(active: str) -> None:
         st.session_state["project_pick"] = active
     elif picked:
         write_prefs(projet=picked)
+
+
+def _signature(intervals) -> list:
+    """Intervalles comparables d'un envoi à l'autre : bornes au dixième de seconde, étiquette."""
+    return sorted((round(float(i[0]), 1), round(float(i[1]), 1), str(i[2])) for i in intervals)
+
+
+def _submit_doubts(intervals, history: list[dict], me: str) -> list[str]:
+    """Raisons de demander « Êtes-vous sûr ? » avant d'envoyer `intervals` : le dernier envoi
+    d'un autre annotateur affiché est différent ; son propre envoi précédent est masqué (il sera
+    remplacé sans avoir été vu) ou avait des intervalles que celui-ci n'a plus. Rien n'est dit du
+    contenu d'un envoi masqué."""
+    latest: dict = {}
+    for h in history:
+        latest[h["who"]] = h
+    mine = _signature(intervals)
+
+    def is_me(who) -> bool:
+        return who is not None and who.casefold() == me.casefold()
+
+    differ = [
+        who or "(sans nom)"
+        for who, h in latest.items()
+        if not is_me(who) and not h["masked"] and _signature(h["intervals"]) != mine
+    ]
+    reasons = []
+    if differ:
+        reasons.append(
+            "Vos annotations diffèrent de celles de " + ", ".join(differ) + " sur cet extrait."
+        )
+    own = next((h for who, h in latest.items() if is_me(who)), None)
+    if own is not None and own["masked"]:
+        reasons.append(
+            f"Vous avez déjà envoyé cet extrait le {own['date']} ; cet envoi, masqué en ce "
+            "moment, sera remplacé par le nouveau."
+        )
+    elif own is not None and own["intervals"] and not intervals:
+        reasons.append(
+            f"Votre envoi du {own['date']} avait des intervalles ; celui-ci n'en a aucun : tout "
+            "l'extrait deviendra négatif."
+        )
+    return reasons
+
+
+def _answer_buttons(yes_label: str, no_label: str) -> tuple[bool, bool, bool]:
+    """Boutons d'une fenêtre « Êtes-vous sûr ? » : (oui, non, ne plus afficher). « Ne plus
+    afficher » vaut oui, et la fenêtre ne s'ouvrira plus (`confirm_off`)."""
+    yes, no = st.columns(2)
+    said_yes = yes.button(yes_label, type="primary", use_container_width=True)
+    said_no = no.button(no_label, use_container_width=True)
+    never = st.button(
+        "Oui, et ne plus afficher cette fenêtre",
+        type="tertiary",
+        help="Se rétablit en effaçant « sans_confirmation » de ~/.blanci/poste.json.",
+    )
+    return said_yes or never, said_no, never
+
+
+@st.dialog("Valider l'annotation ?", on_dismiss=_closer("confirm_submit"))
+def _confirm_submit_dialog(extract: str, reasons: list[str]) -> None:
+    for reason in reasons:
+        st.markdown(reason)
+    st.markdown("**Êtes-vous sûr ?**")
+    yes, no, never = _answer_buttons("Oui, valider", "Non")
+    if yes or no:
+        if never:
+            confirm_off("valider")
+        st.session_state.pop("confirm_submit", None)
+        if yes:
+            st.session_state["confirmed_submit"] = extract
+        st.rerun()
+
+
+def _leave(key: str, target: int, unsaved: bool, direction: str) -> None:
+    """Rappel de ◀ ▶ : on change d'extrait, sauf s'il reste à valider ce qu'on y a tracé ou
+    écrit (une fenêtre le demande d'abord, `_confirm_leave_dialog`)."""
+    if unsaved and confirm_on("quitter"):
+        st.session_state["confirm_leave"] = (key, target, direction)
+    else:
+        st.session_state[key] = target
+
+
+@st.dialog("Changer d'extrait ?", on_dismiss=_closer("confirm_leave"))
+def _confirm_leave_dialog(key: str, target: int, direction: str) -> None:
+    st.markdown(
+        "Vous n'avez pas validé vos annotations (intervalles, commentaire) sur cet extrait. "
+        f"**Êtes-vous sûr de passer à l'extrait {direction} ?**"
+    )
+    st.caption("Ce que vous avez tracé reste là si vous revenez sur cet extrait pendant la séance.")
+    yes, no, never = _answer_buttons(f"Oui, extrait {direction}", "Non, rester")
+    if yes or no:
+        if never:
+            confirm_off("quitter")
+        st.session_state.pop("confirm_leave", None)
+        if yes:
+            st.session_state[key] = target
+        st.rerun()
 
 
 def main() -> None:
@@ -1137,11 +1250,16 @@ def main() -> None:
         mode, chosen, encoder = _selection_panel(cfg, con)
         candidate_slot = st.container()
         st.header("Navigation")
-        skip_mine = st.checkbox("Sauter les extraits que j'ai déjà écoutés", True, key="skip_mine")
-        skip_others = st.checkbox(
-            "Sauter les extraits écoutés par un collègue", False, key="skip_others"
+        skip_pick = st.multiselect(
+            "Sauter les extraits déjà écoutés par",
+            [ME, EVERYONE, *names],
+            default=[ME],
+            key="skip_pick",
+            placeholder="Personne : ◀ ▶ vont au voisin",
+            help="« Moi » : l'annotateur choisi. Rien de choisi : ◀ ▶ et la validation vont à "
+            "l'extrait voisin.",
         )
-        hidden, everyone, no_comments = _masking_panel(names)
+        hidden, everyone, hidden_comments, no_comments = _masking_panel(names)
         _send_panel(annotator)
         # Rubrique « Méthode » masquée (annotation par fenêtres suspendue) : mettre
         # SHOW_METHOD à True pour la réafficher.
@@ -1184,8 +1302,8 @@ def main() -> None:
     n = len(queue)
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
     # Ce que ◀ ▶ et la validation sautent : ses écoutes, celles des collègues, ou rien.
-    nav_args = (me, _colleagues(con, me, hidden, everyone), skip_mine, skip_others)
-    skipping = skip_mine or skip_others
+    nav_args = _skip_who(con, me, skip_pick)
+    skipping = nav_args[0]
     nav = _to_skip(con, queue, *nav_args)
     all_heard = skipping and bool(nav.notna().all())
 
@@ -1273,6 +1391,9 @@ def main() -> None:
     window_labels = latest_labels(con, ids, shown) if window_mode else {}
 
     intervals: list = []
+    own: list = []  # son dernier envoi sur l'extrait (repris dans « Vous »)
+    full_history: list = []  # tous les envois sur l'extrait, masqués compris
+    comment = None
     channel = spectro_default
     form_key = f"span::{chosen}::{pos}"
     # Extrait écouté : l'enregistrement entier (n° 182), sauf pour une file tirée par plan,
@@ -1297,11 +1418,18 @@ def main() -> None:
         # Tous les envois, ceux des annotateurs masqués compris, marqués : la liste sous le
         # spectrogramme dit qu'ils existent (un masquage oublié ne fait pas croire l'extrait
         # jamais annoté), sans les dessiner.
-        history = [
-            dict(h, masked=shown is not None and h["who"] not in shown)
-            for h in extract_history(con, candidate["recording_id"], t0, t1)
-        ]
-        comments = [] if no_comments else extract_comments(con, candidate["recording_id"], t0, t1)
+        full_history = extract_history(con, candidate["recording_id"], t0, t1)
+        for h in full_history:
+            h["masked"] = shown is not None and h["who"] not in shown
+        # Le navigateur ne reçoit rien du contenu d'un envoi masqué.
+        history = [dict(h, intervals=[]) if h["masked"] else h for h in full_history]
+        comments = extract_comments(
+            con,
+            candidate["recording_id"],
+            t0,
+            t1,
+            visible_annotators(con, hidden_comments, no_comments),
+        )
         mine = next((k for k in saved if k is not None and k.casefold() == me.casefold()), None)
         own = saved.pop(mine, []) if me else []
         others = {k or "(sans nom)": v for k, v in saved.items()}
@@ -1365,7 +1493,18 @@ def main() -> None:
     if not window_mode:
         if media is not None:
             clicked, comment = _comment_box(form_key, annotator)
-            if (clicked or submit_now) and _save_extract(
+            confirmed = st.session_state.pop("confirmed_submit", None) == extract
+            reasons = (
+                _submit_doubts(intervals, full_history, me)
+                if (clicked or submit_now) and me and confirm_on("valider")
+                else []
+            )
+            if reasons:
+                st.session_state["confirm_submit"] = (extract, reasons)
+            asked = st.session_state.get("confirm_submit")
+            if asked and asked[0] == extract:
+                _confirm_submit_dialog(*asked)
+            elif (clicked or submit_now or confirmed) and _save_extract(
                 con, candidate, t0, t1, intervals, annotator, channel, comment
             ):
                 _advance(con, queue, pos, nav_args, key, end)
@@ -1411,22 +1550,27 @@ def main() -> None:
     # ◀ ▶ grisés quand il n'y a plus rien à écouter dans ce sens ; le survol dit pourquoi.
     if all_heard:
         why = (
-            "Vous avez tout écouté."
-            if skip_mine and not skip_others
-            else "Tous les extraits de la file sont déjà écoutés."
-        ) + " Décocher « Sauter… » pour parcourir la file."
+            "Tous les extraits de la file sont déjà écoutés par les personnes choisies dans "
+            "« Sauter les extraits déjà écoutés par ». Les retirer du menu pour parcourir la file."
+        )
         why_before = why_after = why
     else:
         why_before = "Rien à écouter avant celui-ci." if before == pos else None
         why_after = "Rien à écouter après celui-ci." if after == pos else None
     # Chacun une moitié de la largeur, en forme de flèche (`style.py`, `nav_prev`, `nav_next`).
+    # Quitter l'extrait sans valider ce qu'on y a tracé ou écrit : une fenêtre le demande.
+    unsaved = (
+        media is not None
+        and not window_mode
+        and (_signature(intervals) != _signature(own) or bool(comment))
+    )
     nav_cols = st.columns(2, gap="small")
     nav_cols[0].button(
         "Extrait précédent",
         key="nav_prev",
         disabled=before == pos,
-        on_click=_goto,
-        args=(key, before),
+        on_click=_leave,
+        args=(key, before, unsaved, "précédent"),
         help=why_before,
         use_container_width=True,
     )
@@ -1434,11 +1578,16 @@ def main() -> None:
         "Extrait suivant",
         key="nav_next",
         disabled=after == pos,
-        on_click=_goto,
-        args=(key, after),
+        on_click=_leave,
+        args=(key, after, unsaved, "suivant"),
         help=why_after,
         use_container_width=True,
     )
+    if leaving := st.session_state.get("confirm_leave"):
+        if leaving[0] == key:
+            _confirm_leave_dialog(*leaving)
+        else:  # autre file entre-temps
+            st.session_state.pop("confirm_leave", None)
 
 
 main()
