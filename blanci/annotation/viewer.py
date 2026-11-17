@@ -30,7 +30,10 @@ HELP = """\
 | Fonction | Geste |
 |---|---|
 | Placer le lecteur à un instant précis | **Clic** sur le spectrogramme (sans glisser), ou clic \
-sur la piste audio |
+sur la piste audio d'un micro |
+| Changer de micro (spectrogramme et son) | **Clic** sur son bouton, au-dessus du \
+spectrogramme : le zoom et la lecture continuent, les deux micros jouent ensemble et seul \
+celui choisi s'entend |
 | Lecture / pause | **Barre d'espace** |
 | Zoom en temps autour du curseur | **Molette** |
 | Zoom en fréquence autour du curseur | **Maj + molette** |
@@ -48,7 +51,7 @@ connues (retirées, ou vues dans les annotations) d'abord, ou un nom nouveau |
 | Retirer une étiquette ou une qualité de la liste | **−** puis **clic** sur celle à retirer (les \
 intervalles déjà posés la gardent ; le **+** la repropose) |
 | Régler le spectrogramme d'un micro | Filtre dynamique et contraste dans l'encadré du micro, \
-au-dessus du spectrogramme ; son bouton l'affiche |
+au-dessus du spectrogramme |
 | Ajuster un intervalle | **Tirer son bord** (curseur ↔) |
 | Sélectionner un intervalle | **Clic** dessus, ou sur sa pastille sous le spectrogramme |
 | Modifier l'étiquette d'un intervalle | Une fois sélectionné, **clic** sur une étiquette en haut |
@@ -114,8 +117,8 @@ INDEX = r"""<!doctype html>
   button.mini { padding: 1px 8px; border-radius: 999px; font-weight: 600; min-width: 26px; }
   button.mini.on { border-color: var(--accent-2); color: var(--accent-2);
                    box-shadow: 0 0 0 1px var(--accent-2) inset; }
-  /* Réglages du spectrogramme, un encadré par micro (moitié de la largeur chacun) : filtre
-     dynamique et contraste en haut, le bouton qui affiche ce micro en bas, contre la toile. */
+  /* Un encadré par micro (moitié de la largeur chacun) : filtre dynamique et contraste en
+     haut, son lecteur, puis le bouton qui l'affiche et le fait entendre, contre la toile. */
   .mics { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 10px;
           margin: 2px 0 8px; }
   .mic { display: grid; gap: 7px; padding: 8px 9px 9px; border: 1px solid var(--line);
@@ -124,6 +127,8 @@ INDEX = r"""<!doctype html>
   .mic-set { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
              justify-content: center; }
   .mic-set > span { display: inline-flex; gap: 5px; align-items: center; }
+  .mic-audio audio { display: block; width: 100%; height: 32px; }
+  .mic:not(.on) .mic-audio { opacity: .55; }
   .mic-btn { width: 100%; padding: 5px 10px; font-weight: 600; color: var(--muted); }
   .mic.on .mic-btn { background: linear-gradient(135deg, var(--accent), var(--accent-2));
                      color: var(--accent-ink); border-color: transparent;
@@ -154,15 +159,6 @@ INDEX = r"""<!doctype html>
            box-shadow: 0 0 0 1px rgba(255, 210, 120, .14); transition: box-shadow .2s; }
   canvas:focus { box-shadow: 0 0 0 1px rgba(245, 165, 58, .7), 0 0 22px -8px var(--accent); }
   #status { color: var(--muted); margin-left: auto; font-family: var(--mono); font-size: 11px; }
-  #players { display: flex; gap: 12px; margin-top: 8px; }
-  #players div { flex: 1; display: grid; gap: 3px; }
-  #players audio { width: 100%; height: 32px; }
-  #players span { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
-                  color: var(--muted); display: inline-flex; align-items: center; gap: 7px; }
-  #players span::before { content: ""; width: 7px; height: 7px; border-radius: 50%;
-                          background: currentColor; opacity: .5; }
-  #players .playing span { color: var(--gold); }
-  #players .playing span::before { opacity: 1; box-shadow: 0 0 8px currentColor; }
   /* Intervalles : une ligne pour soi (« Vous », modifiable), puis une par envoi déjà fait sur
      l'extrait, du plus ancien au plus récent ; liseré or et fondu à gauche. */
   #list { margin-top: 8px; }
@@ -293,7 +289,6 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
 <div id="list"></div>
 <div id="others"></div>
 <div id="notes"></div>
-<div id="players"></div>
 <script>
 const MAGMA = __MAGMA__;
 const canvas = document.getElementById("c");
@@ -382,7 +377,9 @@ function micCards() {  // un encadré par micro, refait quand les micros changen
       <span title="Assombrit les sons moyens (bruit de fond), garde les plus forts">
         <span class="lbl">Contraste</span> <button class="cless">－</button>
         <span class="val contrastv"></span> <button class="cmore">＋</button></span>
-      </div><button class="mic-btn" title="Afficher ce micro sur le spectrogramme"></button>`;
+      </div><div class="mic-audio"></div>
+      <button class="mic-btn" title="Afficher ce micro sur le spectrogramme et l'écouter (la
+ vue et la lecture continuent ; l'autre micro joue en silence)"></button>`;
     const q = c => card.querySelector(c);
     q(".mic-btn").textContent = a.name;
     q(".mic-btn").onclick = () => setChannel(i);
@@ -418,15 +415,17 @@ function wire(g) {
   g.lp = qs.map(Q => new BiquadFilterNode(actx, {type: "lowpass", Q}));
   [g.source, ...g.hp, ...g.lp, g.gain].reduce((a, b) => (a.connect(b), b));
 }
+// Les deux micros jouent ensemble ; seul celui affiché (`active`) s'entend, l'autre a un gain
+// nul : changer de micro bascule le son sans couper la lecture.
 function applyAudio() {
-  graphs.forEach(g => {
+  graphs.forEach((g, i) => {
     if (g.hp.length !== stages()) wire(g);
     const nyq = actx.sampleRate / 2, on = S.bandOnly && S.slope !== "fft";
     const lo = on ? Math.max(S.band[0], 10) : 10;
     const hi = on ? Math.min(S.band[1], nyq * 0.99) : nyq * 0.99;
     g.hp.forEach(f => f.frequency.value = lo);
     g.lp.forEach(f => f.frequency.value = hi);
-    g.gain.gain.value = Math.pow(10, S.gain / 20);
+    g.gain.gain.value = i === active ? Math.pow(10, S.gain / 20) : 0;
   });
   clearTimeout(fftTimer);  // pas à chaque pas d'un glisser
   fftTimer = setTimeout(() => { applyFFT(); prepareNext(); }, 250);
@@ -434,7 +433,7 @@ function applyAudio() {
 
 // --- Mode FFT : tout l'extrait passe en fréquences, ce qui sort de la bande est mis à zéro, on
 // revient au signal et le lecteur bascule sur ce son, au même instant. Seule la piste écoutée
-// (`active`) est filtrée ; une autre l'est quand on la lance.
+// (`active`) est filtrée ; l'autre l'est quand on choisit son micro.
 let fftTimer = null;
 function fftInPlace(re, im, inverse) {
   const n = re.length;
@@ -578,9 +577,22 @@ $("slope").onchange = () => {
 $("gain").oninput = () => {
   S.gain = +$("gain").value; showSettings(); applyAudio(); saveSettings();
 };
+// Choisir un micro : son spectrogramme (même vue, même zoom) et son son ; la lecture continue,
+// le lecteur choisi est recalé sur l'autre s'ils ont dérivé.
 function setChannel(c) {
-  S.channel = c; showSettings(); saveSettings(); draw(); decode(c); prepSoon();
+  S.channel = c; saveSettings();
+  const prev = players[active];
+  if (players.length && active !== shownTrack()) {
+    active = shownTrack();
+    const p = players[active];
+    if (prev && p && Math.abs(p.currentTime - prev.currentTime) > SYNC) {
+      p.currentTime = prev.currentTime;
+    }
+    applyAudio(); applyFFT(); emit();
+  }
+  showSettings(); draw(); decode(shownTrack()); prepSoon();
 }
+const SYNC = 0.03;  // écart (s) au-delà duquel un lecteur est recalé sur l'autre
 
 // --- Étiquette des intervalles : un bouton par étiquette, toujours visibles ---------------
 // Deux choses distinctes : l'étiquette des prochains intervalles (touches 1 à 4, ou un clic
@@ -641,7 +653,7 @@ const round = t => Math.round(t * 100) / 100;
 // `nonce` pour n'être traitée qu'une fois.
 function emit(extra) {
   send("streamlit:setComponentValue", {dataType: "json", value: Object.assign({
-    key: D.extract, ivkey: D.ivkey, channel: active,
+    key: D.extract, ivkey: D.ivkey, channel: shownTrack(),
     intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]),
     add_label: null, action: null,
   }, extra || {})});
@@ -809,8 +821,9 @@ async function load() {
   players.forEach(p => {
     p.pause(); URL.revokeObjectURL(p._orig); if (p._fft) URL.revokeObjectURL(p._fft.url);
   });
-  const box = $("players");
-  box.innerHTML = ""; players = []; graphs = []; active = 0; raw = []; decoding = [];
+  const slots = [...$("mics").querySelectorAll(".mic-audio")];
+  slots.forEach(s => { s.innerHTML = ""; });
+  players = []; graphs = []; active = shownTrack(); raw = []; decoding = [];
   prepToken++;  // la préparation en cours visait cet extrait ou un autre : on reprend ce qu'elle a
   given = {};
   for (const [src, p] of Object.entries(ahead)) {
@@ -824,9 +837,9 @@ async function load() {
     given[a.src]?.raw || fetch(a.src).then(r => r.arrayBuffer())));
   if (token !== loading) return;
   raw = data;
+  // Un lecteur par micro, dans son encadré ; lancer, arrêter ou déplacer l'un fait de même
+  // avec l'autre. Lancer un micro à la main le choisit (`_auto` : lancé par l'autre).
   D.audios.forEach((a, i) => {
-    const div = document.createElement("div");
-    div.innerHTML = `<span>${a.name}</span>`;
     const el = document.createElement("audio");
     el.controls = true; el.preload = "auto";
     // `a.type` : FLAC dans le paquet d'écoute en page web (`annotation/web/poste.html`).
@@ -837,14 +850,25 @@ async function load() {
     g.gain.connect(actx.destination); wire(g); graphs.push(g);
     el.addEventListener("play", () => {
       if (actx.state !== "running") actx.resume();
-      players.forEach((p, j) => { if (j !== i) p.pause(); });
-      if (active !== i) { active = i; emit(); applyFFT(); }
-      mark(); loop();
+      const auto = el._auto; el._auto = false;
+      if (!auto && i !== active) setChannel(i);
+      players.forEach(p => {
+        if (p === el || !p.paused) return;
+        if (Math.abs(p.currentTime - el.currentTime) > SYNC) p.currentTime = el.currentTime;
+        p._auto = true; p.play().catch(() => { p._auto = false; });
+      });
+      loop();
     });
-    el.addEventListener("seeked", draw);
-    div.appendChild(el); box.appendChild(div); players.push(el);
+    el.addEventListener("pause", () => players.forEach(p => { if (!p.paused) p.pause(); }));
+    el.addEventListener("seeked", () => {
+      players.forEach(p => {
+        if (Math.abs(p.currentTime - el.currentTime) > SYNC) p.currentTime = el.currentTime;
+      });
+      draw();
+    });
+    (slots[i] || slots[0]).appendChild(el); players.push(el);
   });
-  applyAudio(); mark(); setHeight();
+  applyAudio(); setHeight();
   await decode(shownTrack());
   if (token !== loading) return;
   $("status").textContent = "";
@@ -874,7 +898,7 @@ async function decodeTrack(data) {
 // --- Extrait suivant, préparé pendant qu'on annote celui-ci ---------------------------------
 // Python donne les fichiers du suivant (`D.next`) avant de les avoir écrits : on les guette,
 // puis on les charge, on décode la piste affichée, on calcule son niveau de référence et son
-// spectrogramme à la vue d'ouverture et, en mode FFT, le son filtré du premier lecteur.
+// spectrogramme à la vue d'ouverture et, en mode FFT, son son filtré.
 // `load`, `decode` et `renderSpectrogram` reprennent tout cela à l'ouverture.
 let ahead = {}, given = {}, prepToken = 0, prepTimer = null;
 const idle = () => new Promise(ok => (window.requestIdleCallback || setTimeout)(() => ok()));
@@ -912,15 +936,12 @@ async function prepareNext() {
   if (!specCache.has(key)) remember(key, paint(p.x, p.rate, a.start, p.vmax, v, cols, rows, n, m));
   const fk = fftWant();
   if (!fk) return;
-  const q = await track(0);
+  const q = p;  // le son filtré : celui du micro affiché, le seul qu'on entend
   if (token !== prepToken || q.fft?.key === fk) return;
   const y = await filtered(q.x, q.rate, Math.max(S.band[0], 1), S.band[1]);
-  if (token !== prepToken || !ahead[next[0].src]) return;
+  if (token !== prepToken || !ahead[a.src]) return;
   if (q.fft) URL.revokeObjectURL(q.fft.url);
   q.fft = {key: fk, url: wavURL(y, q.rate)};
-}
-function mark() {
-  [...$("players").children].forEach((d, j) => d.classList.toggle("playing", j === active));
 }
 
 // --- Spectrogramme calculé à la résolution de la vue --------------------------------------
