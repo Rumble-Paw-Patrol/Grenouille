@@ -20,3 +20,4 @@ Un tirage est reproductible : mêmes graine, même base, mêmes exclusions, mêm
 Le tirage vit dans `blanci/annotation/verification.py`.
 
 - `entete_wav.py` : affiche les blocs bruts d'un fichier WAV de Song Meter (`fmt `, `data`, GUANO), en lecture seule ; sert à la diapo 5 de la présentation n° 4.
+- `chiffres_presentation_4.py` : rejoue les chiffres de la présentation n° 4 sur la base du jour, chacun par une fonction de `blanci/exploration/inventaire.py`, et écrit `documentation/prez/chiffres_presentation_4.md` (chiffre annoncé, chiffre recalculé, fonction, statut, empreinte de la base, commit). Lecture seule de la base ; lit aussi `paths.reports/pistes/echantillon_pistes.csv` et `paths.reports/ingest_duplicates_*.csv` s'ils sont lisibles, sinon dit lesquels manquent.
