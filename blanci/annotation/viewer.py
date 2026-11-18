@@ -52,7 +52,10 @@ connues (retirées, ou vues dans les annotations) d'abord, ou un nom nouveau |
 intervalles déjà posés la gardent ; le **+** la repropose) |
 | Régler le spectrogramme d'un micro | Filtre dynamique et contraste dans l'encadré du micro, \
 au-dessus du spectrogramme |
-| Ajuster un intervalle | **Tirer son bord** (curseur ↔) |
+| Ajuster un intervalle | **Tirer son bord** (curseur ↔) ; les pointillés gris à l'intérieur de \
+chaque bord sont les zones tampons (0,07 s au début, 0,2 s à la fin) |
+| Deux notes dans le même train ? | Bouton **±3 s** : deux pointillés gris à 3 s \
+de part et d'autre du curseur |
 | Sélectionner un intervalle | **Clic** dessus, ou sur sa pastille sous le spectrogramme |
 | Modifier l'étiquette d'un intervalle | Une fois sélectionné, **clic** sur une étiquette en haut |
 | Supprimer un intervalle | Une fois sélectionné, touche **Suppr**, ou **clic** sur la petite \
@@ -292,6 +295,9 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
     <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
     <button id="follow" class="toggle" aria-pressed="false"
             title="La vue suit la tête de lecture pendant l'écoute">Suivre</button>
+    <button id="gap3" class="toggle" aria-pressed="false"
+            title="Allumé : deux pointillés gris à 3 s de part et d'autre du curseur. Deux notes
+ à moins de 3 s : même intervalle ; à plus de 3 s : on clôt puis on en ouvre un autre">±3 s</button>
   </span>
   <span id="status"></span>
 </div>
@@ -303,6 +309,10 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
 <div id="notes"></div>
 <script>
 const MAGMA = __MAGMA__;
+// Zones tampons d'un intervalle (dataset.INTERVAL_START_S / INTERVAL_END_S) : une fenêtre
+// d'apprentissage dont la part commune avec l'intervalle est plus courte est un « bord », écartée.
+const EDGE_START = __EDGE_START__, EDGE_END = __EDGE_END__, GAP_S = 3;
+let hoverT = null;
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const M = {l: 44, r: 8, t: 8, b: 24};
@@ -1255,6 +1265,31 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(x0, M.t); ctx.lineTo(x0, M.t + PH());
     ctx.moveTo(x1, M.t); ctx.lineTo(x1, M.t + PH()); ctx.stroke();
   });
+  // Zones tampons au bord de chaque intervalle tracé : pointillé gris à l'intérieur (début :
+  // 0,07 s après t0 ; fin : 0,2 s avant t1, au plus la moitié de l'intervalle), zone voilée.
+  if (D.interval_mode) {
+    ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+    shown.forEach(iv => {
+      const half = (iv.t1 - iv.t0) / 2;
+      [[iv.t0, iv.t0 + Math.min(EDGE_START, half)], [iv.t1 - Math.min(EDGE_END, half), iv.t1]]
+        .forEach(([a, b]) => {
+          const xa = xOf(a), xb = xOf(b);
+          ctx.fillStyle = "rgba(200, 200, 200, 0.18)"; ctx.fillRect(xa, M.t, xb - xa, PH());
+          ctx.strokeStyle = "rgba(210, 210, 210, 0.85)";
+          ctx.beginPath(); ctx.moveTo(xa, M.t); ctx.lineTo(xa, M.t + PH());
+          ctx.moveTo(xb, M.t); ctx.lineTo(xb, M.t + PH()); ctx.stroke();
+        });
+    });
+    ctx.setLineDash([]);
+  }
+  if ($("gap3").classList.contains("on") && hoverT !== null) {
+    ctx.setLineDash([2, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(225, 225, 225, 0.9)";
+    [hoverT - GAP_S, hoverT + GAP_S].forEach(t => {
+      const x = xOf(t);
+      ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, M.t + PH()); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+  }
   ctx.setLineDash([5, 4]); ctx.strokeStyle = BAND; ctx.lineWidth = 1.2;
   S.band.forEach(f => {
     const y = yOf(f); ctx.beginPath(); ctx.moveTo(M.l, y); ctx.lineTo(M.l + W(), y); ctx.stroke();
@@ -1475,14 +1510,20 @@ canvas.addEventListener("mousedown", e => {
   drag = {mode, right, x: e.clientX, y: e.clientY, view: {...view}, moved: false, t, t2: t, i,
           edge, line};
 });
+const gapOn = () => $("gap3").classList.contains("on");
+canvas.addEventListener("mouseleave", () => { hoverT = null; if (gapOn() && D && view) draw(); });
 canvas.addEventListener("mousemove", e => {
-  if (drag || !D) return;
+  if (!D) return;
+  hoverT = tOf(localX(e));
+  if (gapOn() && view && !drag) draw();
+  if (drag) return;
   const x = localX(e), y = localY(e);
   canvas.style.cursor = bandLine(y) >= 0 ? "ns-resize"
     : D.interval_mode && hit(x)[1] ? "ew-resize" : "crosshair";
 });
 window.addEventListener("mousemove", e => {
   if (!drag) return;
+  if (view) hoverT = tOf(localX(e));
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
   if (!drag.moved) return;
@@ -1559,6 +1600,11 @@ $("follow").onclick = () => {
   const on = $("follow").classList.toggle("on");
   $("follow").setAttribute("aria-pressed", String(on));
 };
+$("gap3").onclick = () => {
+  const on = $("gap3").classList.toggle("on");
+  $("gap3").setAttribute("aria-pressed", String(on));
+  if (D && view) draw();
+};
 $("home").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
 document.addEventListener("keydown", e => {
   if (["SELECT", "INPUT"].includes(e.target.tagName)) return;
@@ -1620,11 +1666,15 @@ send("streamlit:componentReady", {apiVersion: 1});
 def _page() -> str:
     from matplotlib import colormaps
 
+    from blanci.inputs.dataset import INTERVAL_END_S, INTERVAL_START_S
+
     magma = [[round(255 * c) for c in colormaps["magma"](i / 255)[:3]] for i in range(256)]
     colors = {k: [int(v[i : i + 2], 16) for i in (1, 3, 5)] for k, v in LABEL_COLORS.items()}
     return (
         INDEX.replace("__MAGMA__", json.dumps(magma))
         .replace("__COLORS__", json.dumps(colors))
+        .replace("__EDGE_START__", json.dumps(INTERVAL_START_S))
+        .replace("__EDGE_END__", json.dumps(INTERVAL_END_S))
         .replace("__FONTS__", FONTS)
     )
 
