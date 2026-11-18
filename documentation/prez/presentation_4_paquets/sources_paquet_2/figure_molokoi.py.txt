@@ -1,0 +1,40 @@
+import json, sqlite3, sys
+import numpy as np, pandas as pd, soundfile as sf
+import matplotlib; matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from scipy.signal import spectrogram
+OUT = sys.argv[1]
+ROOT = "D:/audio/R3_2024-04_avril/Molokoi 11042024/"
+con = sqlite3.connect("file:C:/Users/ll34272/base_blanci/blanci.sqlite?mode=ro", uri=True)
+df = pd.read_sql_query("SELECT path, mic_id, qc_flags FROM recordings WHERE site='Molokoi' AND mic_id IN ('SMA14636','SMA14163') AND path LIKE '%20240403_%'", con)
+df["db"] = df.qc_flags.map(lambda s: json.loads(s).get("indices", {}).get("rms_dbfs"))
+df["T"] = pd.to_datetime(df.path.str.extract(r"_(\d{8}_\d{6})\.wav$")[0], format="%Y%m%d_%H%M%S")
+r = df[df.mic_id == "SMA14163"].set_index("T").db.sort_index()
+a = df[df.mic_id == "SMA14636"].set_index("T").db.sort_index()
+win = slice("2024-04-03 08:00", "2024-04-03 15:00")
+
+fig = plt.figure(figsize=(14, 11))
+gs = fig.add_gridspec(3, 2, height_ratios=[1.1, 1, 1], hspace=0.45, wspace=0.15)
+for k, (titre, aa) in enumerate([("SMA14636 à l'heure du nom de fichier (corrigée)", a),
+                                 ("SMA14636 à l'heure du GUANO (avant correction)", a.shift(freq="1h"))]):
+    ax = fig.add_subplot(gs[0, k])
+    ax.plot(r[win].index, r[win].values, "o-", color="#1f77b4", label="SMA14163 (voisin, horloge saine)")
+    ax.plot(aa[win].index, aa[win].values, "s--", color="#d62728", label="SMA14636")
+    ax.axvline(pd.Timestamp("2024-04-03 11:00"), color="grey", lw=0.8, ls=":")
+    ax.set_title(titre, fontsize=11); ax.set_ylabel("niveau (dBFS, piste 0)")
+    ax.set_ylim(-56, -20); ax.grid(alpha=0.3)
+    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%H:%M"))
+    ax.set_xlabel("heure de Guyane, 03/04/2024"); ax.legend(fontsize=8, loc="upper right")
+files = [("SM F_SMA14163/Data/SMA14163_20240403_103000.wav", "SMA14163, 10 h 30"),
+         ("SM F_SMA14163/Data/SMA14163_20240403_110000.wav", "SMA14163, 11 h 00"),
+         ("SM E_SMA14636/Data/SMA14636_20240403_103000.wav", "SMA14636, fichier « 10 h 30 »"),
+         ("SM E_SMA14636/Data/SMA14636_20240403_110000.wav", "SMA14636, fichier « 11 h 00 »")]
+for i, (p, t) in enumerate(files):
+    x, sr = sf.read(ROOT + p, dtype="float32", always_2d=True)
+    f, tt, S = spectrogram(x[:, 0], sr, nperseg=1024, noverlap=512)
+    ax = fig.add_subplot(gs[1 + i // 2, i % 2])
+    ax.pcolormesh(tt, f / 1000, 10 * np.log10(S + 1e-14), shading="auto", vmin=-130, vmax=-60, cmap="magma")
+    ax.set_ylim(0, 12); ax.set_title(t, fontsize=11)
+    ax.set_ylabel("kHz"); ax.set_xlabel("s")
+fig.suptitle("Molokoï, 03/04/2024 : le même événement fort entendu par les deux micros", fontsize=13)
+fig.savefig(OUT, dpi=110, bbox_inches="tight")

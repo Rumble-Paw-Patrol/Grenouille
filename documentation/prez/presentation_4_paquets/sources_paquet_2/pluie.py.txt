@@ -1,0 +1,32 @@
+import json, sqlite3, pandas as pd
+con = sqlite3.connect("file:C:/Users/ll34272/base_blanci/blanci.sqlite?mode=ro", uri=True)
+df = pd.read_sql_query("SELECT path, mic_id, start_utc, duration_s, qc_flags FROM recordings WHERE site='Molokoi' AND mic_id IN ('SMA14636','SMA14163')", con)
+f = df.qc_flags.map(json.loads)
+df["db"] = f.map(lambda q: q.get("indices", {}).get("rms_dbfs"))
+df["hf"] = f.map(lambda q: q.get("indices", {}).get("hf_ratio"))
+df["T"] = pd.to_datetime(df.path.str.extract(r"_(\d{8}_\d{6})\.\w+$")[0], format="%Y%m%d_%H%M%S")
+df = df[(df["T"] >= "2024-02-20 16:30") & (df["T"] < "2024-04-11 11:30")]
+print(df.groupby("mic_id").agg(n=("T","size"), db_ok=("db","count")))
+print(df[df.mic_id=="SMA14163"].path.str.rsplit("/",n=1).str[0].unique())
+a = df[df.mic_id=="SMA14636"].set_index("T")
+r = df[df.mic_id=="SMA14163"].set_index("T")
+h = pd.Timedelta(minutes=30)
+rows=[]
+for T in r.index:
+    need=[T-h, T, T+h, T+2*h, T-2*h]
+    if not all(t in r.index for t in need) or not all(t in a.index for t in [T-h, T]): continue
+    jr = r.db[T]-r.db[T-h]; ja = a.db[T]-a.db[T-h]
+    # sous l'heure GUANO, a(T) est placé à T+1h : saut de ref à T+1h ?
+    jr_g = r.db[T+2*h]-r.db[T+h]
+    rows.append((T, jr, ja, jr_g, r.db[T-h], r.db[T], a.db[T-h], a.db[T], r.hf[T-h], r.hf[T], a.hf[T-h], a.hf[T]))
+R = pd.DataFrame(rows, columns="T jr ja jr_g r0 r1 a0 a1 rhf0 rhf1 ahf0 ahf1".split())
+R["score"] = R[["jr","ja"]].min(axis=1) - R.jr_g.abs()
+pd.set_option("display.width",250)
+print(R.sort_values("score", ascending=False).head(12).round(2).to_string())
+for day in ["2024-04-03", "2024-03-02"]:
+    print("\n", day, "par heure du nom")
+    s = pd.DataFrame({"ref_SMA14163": r.db, "SMA14636": a.db}).loc[day]
+    s["SMA14636_heure_GUANO"] = a.db.shift(freq="1h").reindex(s.index)
+    print(s.between_time("09:00","14:00").round(1).to_string())
+for T in ["2024-04-03 10:30","2024-04-03 11:00"]:
+    print(r.loc[T,"path"]); print(a.loc[T,"path"])

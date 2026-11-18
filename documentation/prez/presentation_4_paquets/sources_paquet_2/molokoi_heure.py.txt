@@ -1,0 +1,45 @@
+"""Molokoi, avril 2024 : l'heure GUANO de SMA14636 contre l'autre micro du site (SMA14163).
+Corrélation du niveau (rms piste 0) des deux micros, enregistrement par enregistrement, en
+décalant SMA14636 de -3 h à +3 h. Base en lecture seule."""
+
+import json
+import sqlite3
+
+import numpy as np
+import pandas as pd
+
+con = sqlite3.connect("file:C:/Users/ll34272/base_blanci/blanci.sqlite?mode=ro", uri=True)
+df = pd.read_sql_query(
+    "SELECT path, mic_id, start_utc, qc_flags FROM recordings "
+    "WHERE site = 'Molokoi' AND mic_id IN ('SMA14636', 'SMA14163') AND duration_s > 119",
+    con,
+)
+df["t"] = pd.to_datetime(df["start_utc"], utc=True)
+f = df["qc_flags"].map(json.loads)
+df["db"] = f.map(lambda q: q.get("indices", {}).get("rms_dbfs"))
+df["hf"] = f.map(lambda q: q.get("indices", {}).get("hf_ratio"))
+df["clock_off"] = f.map(lambda q: bool(q.get("clock_off")))
+df["releve"] = df["path"].str.extract(r"/([^/]*relev[^/]*)/")[0]
+print(df.groupby(["releve", "mic_id"]).agg(n=("t", "size"), clock=("clock_off", "sum"),
+                                           debut=("t", "min"), fin=("t", "max")).to_string())
+
+ref = df[df["mic_id"] == "SMA14163"].set_index("t")
+for releve, g in df[df["mic_id"] == "SMA14636"].groupby("releve"):
+    out = []
+    for lag_min in range(-180, 181, 30):
+        moved = g.assign(t=g["t"] + pd.Timedelta(minutes=lag_min)).set_index("t")
+        j = moved[["db", "hf"]].join(ref[["db", "hf"]], rsuffix="_ref", how="inner").dropna()
+        if len(j) > 50:
+            out.append((lag_min, len(j), j["db"].corr(j["db_ref"]), j["hf"].corr(j["hf_ref"])))
+    print(f"\n{releve} : SMA14636 décalé de x min contre SMA14163 (même instant UTC)")
+    for lag, n, c_db, c_hf in out:
+        print(f"  {lag:+5d} min : {n:5d} paires, corr. niveau {c_db:.3f}, corr. hf {c_hf:.3f}")
+
+# Heure locale (UTC-3) du premier enregistrement de la journée, selon chaque source
+g = df[(df["mic_id"] == "SMA14636") & df["clock_off"]]
+local = (g["t"] - pd.Timedelta(hours=3)).dt
+print("\nSMA14636 signalés : heures locales d'après le GUANO :",
+      sorted(local.strftime("%H:%M").unique())[:3], "…",
+      sorted(local.strftime("%H:%M").unique())[-2:])
+named = g["path"].str.extract(r"_(\d{8})_(\d{4})\d{2}\.wav$")[1]
+print("d'après le nom :", sorted(named.unique())[:3], "…", sorted(named.unique())[-2:])

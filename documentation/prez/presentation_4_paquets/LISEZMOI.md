@@ -1,12 +1,12 @@
 # Présentation n° 4 en cinq paquets
 
-La présentation n° 4 (inventaire et contrôle qualité, v2, 26 diapos) est revue paquet par paquet, une session par paquet, pour la réunion du **20 novembre 2026**. Les paquets ont été découpés le 18/11 dans `../presentation_4_inventaire_qc_v2.pptx` (version avec les retouches à la main de Léonard), par `../scripts/decouper_pptx.py`. Le fichier complet n'est plus modifié par les sessions : chacune ne touche que son paquet.
+La présentation n° 4 (inventaire et contrôle qualité, v2, 26 diapos) est revue paquet par paquet, une session par paquet, pour la réunion du **20 novembre 2026**. Les paquets ont été découpés le 18/11 dans `../presentation_4_inventaire_qc_v2.pptx` (version avec les retouches à la main de Léonard ; les paquets 2 à 5 redécoupés à 11 h 33, après ses retouches des diapos 7 et 11), par `../scripts/decouper_pptx.py`. Le fichier complet n'est plus modifié par les sessions : chacune ne touche que son paquet.
 
 | Paquet | Diapos | Fichier | État |
 |---|---|---|---|
 | 1 | 1 à 5, plus 5 bis | `presentation_4_inventaire_qc_v2_paquet_1_diapos_01-05.pptx` | corrigé le 18/11, à relire par Léonard |
-| 2 | 6 à 10 | `…_paquet_2_diapos_06-10.pptx` | consignes données, à faire |
-| 3 | 11 à 15 | `…_paquet_3_diapos_11-15.pptx` | consignes à dicter |
+| 2 | 6 à 11 (la 11 passe avant la 10) | `…_paquet_2_diapos_06-11.pptx` | plan écrit (`plan_paquet_2.md`), à faire |
+| 3 | 12 à 15 | `…_paquet_3_diapos_12-15.pptx` | consignes à dicter |
 | 4 | 16 à 20 | `…_paquet_4_diapos_16-20.pptx` | consignes à dicter |
 | 5 | 21 à 26 (26 = références) | `…_paquet_5_diapos_21-26.pptx` | consignes à dicter |
 
@@ -31,10 +31,10 @@ La présentation n° 4 (inventaire et contrôle qualité, v2, 26 diapos) est rev
 - Diapo 5 : trois cartes, le fichier brut dans un terminal (vraie commande : `../scripts/entete_wav.py`, sortie GUANO réelle lue le 05/11 dans le notebook 05), la ligne de `recordings`, ce que l'inventaire en tire (même enregistreur 2LA04185 partout).
 - Diapo 5 bis (nouvelle) : vue de la table `recordings` (vraies lignes, dessinées par `presentation_4_figures.py`, pas une capture d'écran d'un logiciel) et chemin de la base.
 
-## Paquet 2 : consignes de Léonard
+## Paquet 2
 
-Dans `../prompt-et-passation_notion7_mise_a_jour_prez.md`, du paragraphe « Slide numéro 6 » à « Slide 10 », puis le paragraphe sur les chiffres et le visuel. En bref : diapo 6 en barres verticales, couleurs du réglage reprises de l'observation, dire comment l'écart est mesuré ; diapo 7, graphique de droite fait comme celui de gauche, réécrire « Tenu · 99,7 % … » ; diapo 8 consacrée à la règle actuelle, l'ancienne part dans les difficultés rencontrées ; diapo 9 remplacée par la figure des deux micros de Molokoï (corrélation avant et après correction, spectrogrammes où la pluie montre le décalage d'une heure) ; diapo 10 en deux encadrés pareils (hors relevé, durée anormale), puis une diapo de changement de partie (inventaire → contrôle qualité) et un sommaire détaillé des contrôles ; les doublons passent dans le contrôle qualité. La passation « notion 7 » du même fichier donne les diapos à toucher pour BlanciNet (10, 18, 22, 23, 24).
+Voir `plan_paquet_2.md` : ordre cible (6, 7, 9, changement de partie, sommaire du contrôle qualité, 11, 10, 8), consignes de Léonard recopiées, et la figure de Molokoï retrouvée dans `sources_paquet_2/`.
 
 ## Paquets 3 à 5
 
-Consignes à dicter par Léonard. Déjà connu : la passation « notion 7 » (diapos 18, 22, 23, 24) et le recomptage des écartés.
+Consignes à dicter par Léonard. Déjà connu : la passation « notion 7 » (diapos 18, 22, 23, 24), le recomptage des écartés, et pour le paquet 5 la partie « Difficultés rencontrées », alimentée par la section « Pour le paquet 5 » de `plan_paquet_2.md`. Paquet 3 : la diapo 12 montre le dictionnaire `qc_flags` de 2LA04185 ; la diapo 11 (paquet 2) montre désormais une ligne avec un drapeau, éviter le doublon.
