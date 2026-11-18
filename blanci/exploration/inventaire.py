@@ -1926,4 +1926,9 @@ def presentation_4_numbers(
     stale = stale_flags(load_recordings(con, cfg, datasets=None), cfg).set_index("flag")
     add(_number("—", "drapeaux d'inventaire périmés en base (à recalculer par blanci flag)", 0,
                 int(stale["differ"].sum()), "stale_flags(load_recordings(con, cfg, None), cfg)"))
+    from blanci.inputs.qc import positive_recordings
+
+    prot = protected_positives(rec, positive_recordings(con))
+    add(_number("11", "enregistrements où A. blanci a été entendu, écartés (règle : aucun)", 0,
+                prot["excluded"], "protected_positives(rec, positive_recordings(con))"))
     return pd.DataFrame(out)

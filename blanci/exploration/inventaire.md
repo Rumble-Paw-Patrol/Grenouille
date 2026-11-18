@@ -2,7 +2,11 @@
 
 Fiche écrite le 18/11/2026 avec le module (commit qui ajoute ces deux fichiers). Pour savoir si elle est périmée : `git log --oneline -- blanci/exploration/inventaire.py` ; un commit plus récent que celui de cette fiche veut dire qu'il faut la relire.
 
-Les résultats cités sont ceux de la base du 18/11/2026 : `blanci.sqlite`, schéma v5, 96 349 lignes dans `recordings`, empreinte de l'inventaire `92b0ecc4b7569d7b`, des drapeaux `f19991208922aecf` (`database_fingerprint`). Une base d'une autre empreinte peut donner d'autres chiffres : c'est attendu, et l'empreinte dit laquelle des deux bases on a.
+Les résultats cités sont ceux de la base du 18/11/2026 : `blanci.sqlite`, schéma v5, 96 349 lignes dans `recordings`, empreinte de l'inventaire `92b0ecc4b7569d7b` (`database_fingerprint`). Deux états des drapeaux ont été mesurés ce jour-là :
+- **avant correction**, empreinte des drapeaux `f19991208922aecf` ;
+- **après correction (vers 18 h)**, empreinte `c78479120a36fe7b` : `keep` posé sur le positif écarté (`qc.keep_flags`), puis `blanci flag`, après une sauvegarde de `start_utc` et `qc_flags` dans `base_blanci/sauvegarde_start_utc_qc_flags_20261118.csv`.
+
+Quand un chiffre a changé avec la correction, la fiche donne les deux valeurs. Une base d'une autre empreinte peut donner d'autres chiffres : c'est attendu, et l'empreinte dit laquelle des bases on a.
 
 ## Pourquoi ce module
 
@@ -206,7 +210,11 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Entrée : un échantillon, `paths.raw`, `audio.renamed`. Sortie : l'échantillon plus `found` et les champs de `parse_guano_fields`.
 - Règle : le fichier est cherché par `core.locate.locate` ; seul le bloc `guan` est lu.
 - Limite : **exige le disque**. Si aucun fichier n'est trouvé, `FileNotFoundError` ; `locate` cherche aussi dans les racines déjà trouvées pendant la session.
-- Prez n° 4 : diapo 6. Résultat : un fichier par point (164) lu sur F: le 18/11/2026, tous trouvés, en 5 s. Ce qu'on peut dire : sur ce tirage, tous les champs lus par `parse_guano_fields` sont présents, en 48 kHz, fuseau « -3:00 », 2 min, et les gains redonnent 143 / 21. Ce qu'on ne peut pas dire : la même chose pour les fichiers que le tirage n'a pas lus.
+- Prez n° 4 : diapos 6 et 9. Résultats du 18/11/2026 :
+  - un fichier par point (164), lu sur F:, tous trouvés, en 5 s ;
+  - un fichier par micro et par jour de 2023 (2 234), lu sur E: (disque BLANCI_2023-24), tous trouvés ;
+  - les 9 459 fichiers de Molokoï SMA14636, lus sur E: en 164 s.
+- Ce qu'on peut dire : sur ces tirages, tous les champs lus par `parse_guano_fields` sont présents, en 48 kHz et 2 min. Les gains redonnent 143 / 21, et tout 2023 est en 6 / 18 dB. Le fuseau est « -3:00 » partout, sauf 51 fichiers de SMA14636 en « -4:00 ». Ce qu'on ne peut pas dire : la même chose pour les fichiers que les tirages n'ont pas lus.
 
 #### `header_field_summary(headers, fields=None)` — [inventaire.py:720](inventaire.py#L720)
 
@@ -245,7 +253,10 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Question : de combien l'en-tête d'un fichier s'écarte-t-il de son nom, et sous quel fuseau ?
 - Entrée : `read_headers` (ou l'échantillon des pistes, colonne `guano_timestamp` lue par `parse_guano_timestamp`), `recorder.filename_utc_offset_h`. Sortie : heure du nom, heure de l'en-tête, écart, fuseau.
 - Règle : nom en heure locale ; en-tête avec son fuseau. Limite : ne voit que les fichiers lus.
-- Prez n° 4 : diapo 9. Résultat : dans l'échantillon des pistes, 3 556 en-têtes en « -3:00 » et 51 en « -4:00 », tous de Molokoï SMA14636, tous à +60 min ; le tirage d'un fichier par point du 18/11 n'en a aucun. Ce qu'on peut dire : l'heure d'avance de SMA14636 se relit dans les en-têtes, et c'est le seul micro concerné dans l'échantillon. Ce qu'on ne peut pas dire : la date exacte du début et de la fin (l'échantillon a un fichier par jour ; les bornes de `recorder.clock_corrections` viennent du nom des fichiers).
+- Prez n° 4 : diapo 9. Résultat :
+  - dans l'échantillon des pistes, 3 556 en-têtes en « -3:00 » et 51 en « -4:00 », tous de Molokoï SMA14636, tous à +60 min ;
+  - sur les 9 459 fichiers de SMA14636 lus sur E: le 18/11 (`clock_summary`), exactement 1 521 sont en « -4:00 », à +60 min, du 20/02/2024 16 h 30 au 11/04/2024 11 h 30. Avant et après, ils sont en « -3:00 » à 0 min, sauf un test du 28/07/2023 écrit en UTC. Tous les enregistrements `clock_corrected` sont à +60 min, aucun autre ne l'est.
+- Ce qu'on peut dire : les bornes de `recorder.clock_corrections` sont exactes à l'enregistrement près, et l'avance d'une heure (`header_shift_h` de `clock_lag_correlation`) est mesurée sur tous les fichiers, pas supposée. Ce qu'on ne peut pas dire : pourquoi l'horloge a changé de fuseau à la relève du 20/02 et l'a retrouvé à celle du 11/04 (réglage à la relève, probablement ; non vérifié).
 
 #### `clock_summary(offsets, tolerance_min)` — [inventaire.py:853](inventaire.py#L853)
 
@@ -267,7 +278,7 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Question : à quel décalage le niveau sonore du micro douteux se superpose-t-il à celui d'un voisin sain ?
 - Entrée : `load_recordings` (RMS de la piste 0 rangé par `blanci qc`), micro douteux, micro de référence, site, décalages, avance de l'en-tête sur le nom (+1 h). Sortie : décalage, corrélation de Pearson, créneaux communs.
 - Règle : reprend `molokoi_niveaux()` (`presentation_4_figures.py`) et le § 6 du notebook 05 ; résidu = RMS − médiane du même micro à la même heure (cycle jour-nuit retiré).
-- Limite : une seule paire et une seule période ; `header_shift_h` est fourni, pas mesuré (l'heure d'en-tête n'est plus en base) ; Pearson pèse surtout les orages.
+- Limite : une seule paire et une seule période ; `header_shift_h` est fourni, car l'heure d'en-tête n'est plus en base (il a été mesuré sur le disque : +60 min pour les 1 521, voir `clock_offsets`) ; Pearson pèse surtout les orages.
 - Prez n° 4 : diapo 9. Résultat : 0,566 à −1 h, 0,342 sans décalage, maximum à −1 h, 1 521 créneaux communs à −1 h. Ce qu'on peut dire : les quatre chiffres de la diapo 9 tiennent. Ce qu'on ne peut pas dire : qu'une autre paire de micros donnerait la même conclusion (une seule a été mesurée).
 
 ## 6. Position
@@ -302,7 +313,7 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Entrée : `load_recordings`, `mic_days`, `qc`. Sortie : une ligne par point : dernier enregistrement, complétude du dernier jour, durée du dernier fichier, `cut_at_end`, dernier jour du site, `stops_early`.
 - Règle : sans champ de batterie dans le GUANO, l'arrêt en fin de batterie se lit indirectement (fin anticipée de plus d'un jour, dernier jour partiel, dernier fichier coupé).
 - Limite : un indice, pas une preuve ; une carte pleine ou un retrait donnent la même signature.
-- Prez n° 4 : diapo 10 (« coupés en fin de batterie »). Résultat : 3 points s'arrêtent avant leur site : Molokoï SMA14157 (21/11/2023, à midi, dernier jour à moitié), Kaw SMA14079 (28/08/2024, dernier jour complet : un retrait plutôt qu'une panne) et PatawaOuest SMA14826 (01/01/2026) ; 20 points ont un dernier fichier coupé. Ce qu'on peut dire : SMA14157 a la signature d'une panne (arrêt en milieu de journée, une semaine après la pose). Ce qu'on ne peut pas dire : que c'est la batterie.
+- Prez n° 4 : diapo 10 (« coupés en fin de batterie »). Résultat : 3 points s'arrêtent avant leur site : Molokoï SMA14157 (21/11/2023, à midi, dernier jour à moitié), Kaw SMA14079 (28/08/2024, dernier jour complet : un retrait plutôt qu'une panne) et PatawaOuest SMA14826 (01/01/2026) ; 20 points ont un dernier fichier coupé. Sur E:, le fichier suivant de SMA14157 (`SMA14157_20231121_123000.wav`) existe mais n'est pas en base : 262 144 octets (exactement 256 Kio), illisible, sans en-tête GUANO (`base_vs_disk`). C'est un fichier commencé et jamais refermé. Ce qu'on peut dire : SMA14157 s'est arrêté en pleine écriture, une semaine après la pose, ce qui est la signature d'une coupure d'alimentation. Ce qu'on ne peut pas dire : que c'est la batterie plutôt qu'un autre défaut d'alimentation.
 
 ## 8. Durées et tailles
 
@@ -327,7 +338,7 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Entrée : un échantillon, `paths.raw`, `audio.renamed`. Sortie : trouvé, taille, attendue, écart, `is_empty`, `size_off`.
 - Règle : `expected_size`, taille lue par `stat` ; tolérance de 64 Kio, choix de lecture.
 - Limite : **exige le disque** ; un en-tête qui annonce la durée tronquée ne se voit pas.
-- Prez n° 4 : aucune. Résultat : un fichier par point de 2026 (156), lu sur F: le 18/11 : aucun vide, aucun hors tolérance, et 1 142 à 1 146 octets de plus que la formule partout (le bloc GUANO). Ce qu'on peut dire : sur ce tirage, aucun fichier tronqué. Ce qu'on ne peut pas dire : la même chose pour 2023 (disque de la phénologie incomplet sur F:) ni pour les fichiers non tirés.
+- Prez n° 4 : aucune. Résultat du 18/11 : un fichier par point de 2026 (156, sur F:) et un par micro et par jour de 2023 (2 234, sur E:). Aucun n'est vide ni hors tolérance ; partout, 1 142 à 1 146 octets de plus que la formule (le bloc GUANO). Ce qu'on peut dire : sur ces tirages, aucun fichier tronqué. Ce qu'on ne peut pas dire : la même chose pour les fichiers non tirés (le seul tronqué trouvé, SMA14157 le 21/11/2023, n'est pas en base, voir `series_ends`).
 
 ## 9. Doublons et rapports d'inventaire
 
@@ -389,7 +400,7 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
   - piste 1 retenue seule : 46 (38 gardés, 8 écartés) ;
   - candidat isolé sur la piste 0 sans piste retenue : 268 (263 gardés) ;
   - candidat isolé sur la piste 1 seule : 4 ;
-  - 175 sans indices, tous écartés et jamais contrôlés : les 173 de durée anormale et 2 fichiers de 2 min hors relevé.
+  - 175 sans indices, jamais contrôlés : les 173 de durée anormale et 2 fichiers de 2 min hors relevé. Tous étaient écartés ; après la correction, 174 le sont (le positif de Mataroni est gardé).
 - Ce qu'on peut dire : 399, 407, 85 et 268 tiennent. Ce qu'on ne peut pas dire : « une quarantaine » de pistes 1 seules ; c'est 46.
 
 ## 11. Drapeaux
@@ -405,13 +416,14 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Question : combien sont écartés, pour quelle cause, combien portent chaque drapeau ?
 - Entrée : `load_recordings`. Sortie : écartés, gardés, gardés grâce à `keep`, drapeaux levés, causes.
 - Règle : `qc.is_excluded`, comme partout dans la chaîne. Limite : compte ce qui est rangé.
-- Prez n° 4 : diapos 9 ter, 11, 24. Résultat :
+- Prez n° 4 : diapos 9 ter, 11, 24. Résultat avant correction :
   - 681 écartés, 95 629 gardés, 19 gardés grâce à `keep` ;
-  - causes : étouffé par le calcul 399, étouffé confirmé 107 (soit 506 pour le son étouffé), durée seule 86, durée et hors relevé 87, hors relevé seul 2 ;
+  - causes : étouffé par le calcul 399, étouffé confirmé 107 (soit 506 pour le son étouffé), durée seule 86, durée et hors relevé 87 (un drapeau périmé), hors relevé seul 2 ;
   - drapeaux levés : `clock_off` 78, `clock_corrected` 1 521, `rain` 13, `silent` 0.
-- Ce qu'on peut dire : 681, 506, 399, 173 et 2 tiennent. Ce qu'on ne peut pas dire :
-  - « 86 hors relevé aussi de durée anormale » sur la base telle qu'elle est : c'est 87, à cause d'un drapeau périmé (voir `stale_flags`) ;
-  - « 95 611 sur 96 292 » (diapo 24) : c'est 95 629 sur 96 310 depuis l'inventaire du relevé 7.
+- Résultat après correction : 680 écartés, 95 630 gardés, 20 grâce à `keep`. Causes : 399 + 107 = 506 étouffés, 86 durée seule, 86 durée et hors relevé (soit 172 pour la durée), 2 hors relevé seul.
+- Ce qu'on peut dire : 506, 399, 86 et 2 tiennent. Ce qu'on ne peut pas dire :
+  - « 681 » et « 173 pour la durée » : depuis la correction, c'est 680 et 172 (le positif de Mataroni est gardé) ;
+  - « 95 611 sur 96 292 » (diapo 24) : c'est 95 630 sur 96 310 (relevé 7, puis correction).
 
 #### `campaign_blocks(rec, cfg_qc)` — [inventaire.py:1364](inventaire.py#L1364)
 
@@ -435,7 +447,7 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Entrée : `load_recordings` (tous les jeux), configuration. Sortie : une ligne par drapeau : rangés, recalculés, différents.
 - Règle : `qc.metadata_flags`, la fonction même de `blanci flag`, sur une copie ; rien n'est écrit.
 - Limite : les drapeaux audio ne se recalculent pas ici.
-- Prez n° 4 : diapos 9 ter et 10. Résultat : `duration_off` et `clock_off` à jour ; `off_campaign` diffère pour 1 enregistrement (Kaw 2023, `f670702208cbfa39`, 18 s), rangé hors relevé alors que la règle actuelle ne l'y met plus. Ce qu'on peut dire : la base a un drapeau périmé, que `blanci flag` corrigerait ; c'est lui qui fait 87 au lieu de 86. Ce qu'on ne peut pas dire : depuis quand.
+- Prez n° 4 : diapos 9 ter et 10. Résultat avant correction : `duration_off` et `clock_off` à jour ; `off_campaign` diffère pour 1 enregistrement (Kaw 2023, `f670702208cbfa39`, 18 s), rangé hors relevé alors que la règle actuelle ne l'y met plus. C'est lui qui faisait 87 au lieu de 86. Après `blanci flag` (18/11, vers 18 h) : aucun drapeau d'inventaire périmé. Ce qu'on peut dire : la fonction a trouvé l'écart, et `blanci flag` l'a résorbé. Ce qu'on ne peut pas dire : depuis quand ce drapeau était périmé.
 
 ## 12. Base et disque
 
@@ -452,11 +464,14 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Entrée : `load_recordings`, `disk_inventory`, `audio.renamed`. Sortie : une ligne par chemin, avec son statut.
 - Règle : chemin cherché sous son nom et sous chaque dossier renommé (`core.locate.variants`).
 - Limite : un « fichier sans ligne » peut être un doublon, un illisible, un relevé non inventorié ou un dossier hors corpus.
-- Prez n° 4 : diapo 9 (« ce que l'inventaire ne voit pas »). Résultat (F:, 18/11) :
-  - 29 764 lignes de la base retrouvées (29 746 sous un dossier renommé, 18 sous leur chemin : le relevé 7) ;
-  - 66 546 absentes, toutes de la phénologie 2023-2024, dont F: n'a qu'une copie partielle ;
-  - 1 650 fichiers sans ligne : 1 631 dans `data/` (hors corpus) et 19 dans `audio/`, qui sont des illisibles des rapports d'inventaire (7 à CDR, 8 à Patawa, 4 à Mataroni).
-- Ce qu'on peut dire : pour 2025-2026, tout fichier audio lisible de F: est en base. Ce qu'on ne peut pas dire : la même chose pour 2023-2024 sans le disque de la phénologie (D:).
+- Prez n° 4 : diapo 9 (« ce que l'inventaire ne voit pas »). Résultat (18/11) :
+  - **Sur F:** (BLANCI_2025-26) : 29 764 lignes de la base retrouvées (29 746 sous un dossier renommé, 18 sous leur chemin : le relevé 7) ; 66 546 lignes de 2023-2024 absentes, car F: n'en a qu'une copie partielle ; 1 650 fichiers sans ligne : 1 631 dans `data/` (hors corpus) et 19 dans `audio/`, des illisibles des rapports d'inventaire (7 à CDR, 8 à Patawa, 4 à Mataroni).
+  - **Sur E:** (BLANCI_2023-24, 66 823 fichiers parcourus en 44 s) : les 66 779 lignes de 2023 et les 39 des jeux `2018` et `reference`, toutes retrouvées. 5 fichiers sans ligne :
+    - les 2 illisibles du rapport d'inventaire ;
+    - le doublon de chant dirigé déjà vérifié (`Anomaloglossus blanci_Dec 2021_BV.WAV`) ;
+    - un chant dirigé de 2 min du 05/12/2023 7 h 30, renommé et jamais inventorié (`Anomaloglossus blanci_Trésor_déc2023.wav`) ;
+    - le fichier tronqué de SMA14157 (21/11/2023 12 h 30, 256 Kio, illisible), absent des rapports d'erreurs gardés.
+- Ce qu'on peut dire : pour les deux jeux, toute ligne de la base a son fichier, et tout fichier audio de terrain lisible est en base. Ce qu'on ne peut pas dire : rien sur les cartes jamais copiées sur ces disques.
 
 ## 13. Annotations et scores
 
@@ -497,14 +512,14 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Question : parmi les écartés, lesquels un détecteur signale-t-il ?
 - Entrée : `load_recordings`, `recording_detections`. Sortie : les écartés détectés, avec leur cause.
 - Règle : reprend le § 1 du notebook 06. Limite : on ne voit que ce que le détecteur a scoré.
-- Prez n° 4 : aucune (notebook 06). Résultat : 108 écartés ont une détection, 19 à 0,5 ou plus. Ce qu'on peut dire : ces chiffres du notebook 06 tiennent.
+- Prez n° 4 : aucune (notebook 06). Résultat : 108 écartés avec une détection, dont 19 à 0,5 ou plus, avant correction ; 107 et 18 depuis que le positif de Mataroni (score 0,97) est gardé. Ce qu'on peut dire : les chiffres du notebook 06 tenaient, et le changement s'explique en entier par la correction.
 
 #### `protected_positives(rec, positives)` — [inventaire.py:1613](inventaire.py#L1613)
 
 - Question : un enregistrement où A. blanci a été entendu est-il écarté ?
 - Entrée : `load_recordings`, `qc.positive_recordings(con)`. Sortie : positifs, positifs portant un drapeau écartant, positifs écartés.
 - Règle : `qc.is_excluded`. Limite : ne protège que ce qui a été écouté.
-- Prez n° 4 : diapo 11 (« un enregistrement où A. blanci a été entendu n'est jamais écarté »). Résultat : 160 positifs dans les jeux 2023 et 2026, **dont 1 écarté** : Mataroni SMA13417, 06/01/2026 11 h 30, 104 s (`9e453c33941c80ce`), celui de la diapo 10, écouté le 12/11 avec A. blanci de 0 à 67 s. Il porte `confirmed_duration_off` (confirmation en bloc) et pas `keep`. Ce qu'on peut dire : la règle de la diapo 11 est fausse sur la base d'aujourd'hui pour cet enregistrement. Ce qu'on ne peut pas dire : qu'il n'y en a pas d'autres parmi les écartés jamais écoutés.
+- Prez n° 4 : diapo 11 (« un enregistrement où A. blanci a été entendu n'est jamais écarté »). Résultat : 160 positifs dans les jeux 2023 et 2026. Avant correction, **1 était écarté** : Mataroni SMA13417, 06/01/2026 11 h 30, 104 s (`9e453c33941c80ce`), celui de la diapo 10, écouté le 12/11 avec A. blanci de 0 à 67 s. Il portait `confirmed_duration_off` (confirmation en bloc) et pas `keep`. Le 18/11, `keep` lui a été posé (`qc.keep_flags`) : aucun positif écarté depuis, et cette vérification fait partie du rejeu de la présentation. Ce qu'on peut dire : la règle de la diapo 11 tient de nouveau. Ce qu'on ne peut pas dire : qu'il n'y a pas de chant parmi les écartés jamais écoutés.
 
 ## 14. Comparaisons
 
@@ -542,22 +557,24 @@ Ce qu'on peut dire : 2023 donne la durée (un an, 8 points), 2026 la diversité 
 - Sortie : une ligne par chiffre : diapo, chiffre, annoncé, recalculé, fonction, statut.
 - Règle : chaque valeur vient d'une fonction de ce module ; aucune n'est recopiée des notes orateur.
 - Limite : ce qui demande l'audio ou les files d'écoute n'y est pas (voir la section 16).
-- Script : `scripts/verification/chiffres_presentation_4.py`. Résultat du 18/11/2026 : 67 chiffres, dont 58 « ok », 6 « différents » et 3 sans chiffre annoncé.
+- Script : `scripts/verification/chiffres_presentation_4.py`. Résultat du 18/11/2026 :
+  - avant correction : 67 chiffres, dont 58 « ok », 6 « différents » et 3 sans chiffre annoncé ;
+  - après correction : 68 chiffres (le contrôle « aucun positif écarté » est ajouté), dont 57 « ok », 8 « différents » et 3 sans chiffre annoncé. Les différences nouvelles (680, 172, 107, 18) viennent toutes de la correction.
 
 ## 16. Chiffres de la présentation n° 4 : ce qui se rejoue, ce qui ne se rejoue pas
 
-**Rejouables par une fonction, et justes sur la base du 18/11/2026** : diapo 3 (96 310 ; 3 207 h ; 164 points ; 95 enregistreurs ; 4 lieux ; 74 007 ; 22 289), diapo 4 (25 enregistrements des 30-31/12), diapo 5 bis (6,7 Go), diapo 6 (143 ; 21 ; 18 2MA et 3 SMA ; 3 607 ; 164), diapo 7 (3 137 ; 3 128 ; 99,7 % ; 9 ; 2 217 et 99,8 % ; 920 et 99,5 % ; 54 jours ; 5 jours ; 5 micros le 10/02), diapo 9 (1 521 ; 0,57 ; 0,34 ; −1 h), diapos 9 ter et 11 (681 ; 506 ; 399 ; 173 ; 2), diapo 10 (238 blocs ; 74 ; 106 ; 20 ; 88 ; 173 = 125 + 34 + 14 ; 8 349 ; 3 coupés à 0,5 ou plus ; 26 enregistrements de 20 micros), diapo 8 (3 673, depuis le rapport), diapo 17 (399 ; 407 ; 85 ; 268), diapo 19 (452), diapo 20 (5 points à plus de 6 dB).
+**Rejouables par une fonction, et justes sur la base du 18/11/2026 avant correction** (après correction, 681, 173, 108 et 19 deviennent 680, 172, 107 et 18 ; 86 et la règle de la diapo 11 redeviennent justes) : diapo 3 (96 310 ; 3 207 h ; 164 points ; 95 enregistreurs ; 4 lieux ; 74 007 ; 22 289), diapo 4 (25 enregistrements des 30-31/12), diapo 5 bis (6,7 Go), diapo 6 (143 ; 21 ; 18 2MA et 3 SMA ; 3 607 ; 164), diapo 7 (3 137 ; 3 128 ; 99,7 % ; 9 ; 2 217 et 99,8 % ; 920 et 99,5 % ; 54 jours ; 5 jours ; 5 micros le 10/02), diapo 9 (1 521 ; 0,57 ; 0,34 ; −1 h), diapos 9 ter et 11 (681 ; 506 ; 399 ; 173 ; 2), diapo 10 (238 blocs ; 74 ; 106 ; 20 ; 88 ; 173 = 125 + 34 + 14 ; 8 349 ; 3 coupés à 0,5 ou plus ; 26 enregistrements de 20 micros), diapo 8 (3 673, depuis le rapport), diapo 17 (399 ; 407 ; 85 ; 268), diapo 19 (452), diapo 20 (5 points à plus de 6 dB).
 
 **Rejouables, mais différents** :
 - diapo 4 : « 25 enregistrements de 12 micros » ; c'est 19 micros (`near_campaign_orphans`) ;
 - diapo 6 : « un par micro et par jour, soit 3 607 » ; 3 607 = 3 466 par jour + 141 bascules (`sample_recordings`) ;
-- diapo 9 ter : « 86 hors relevé aussi de durée » ; 87 en base, à cause d'un drapeau périmé (`stale_flags`) ;
+- diapo 9 ter : « 86 hors relevé aussi de durée » valait 87 en base à cause d'un drapeau périmé (`stale_flags`), et de nouveau 86 après `blanci flag` ; « 681 écartés » et « 173 pour la durée » valent 680 et 172 depuis la correction ;
 - diapo 17 : « une quarantaine » de pistes 1 seules ; 46 (`track_flags_summary`) ;
-- diapo 24 : « 95 611 sur 96 292 » ; 95 629 sur 96 310 depuis l'inventaire du relevé 7 (`flag_counts`) ;
-- diapo 11 : « jamais écarté s'il a été entendu » ; un positif est écarté (`protected_positives`).
+- diapo 24 : « 95 611 sur 96 292 » ; 95 629 sur 96 310 depuis l'inventaire du relevé 7, puis 95 630 après la correction (`flag_counts`) ;
+- diapo 11 : « jamais écarté s'il a été entendu » ; un positif était écarté (`protected_positives`), et ne l'est plus depuis la correction du 18/11.
 
 **Pas encore rejouables par ce module** :
-- diapo 9, les spectrogrammes : ils demandent les fichiers de Molokoï du 03/04/2024 (`fig_molokoi_spectros`) ;
+- diapo 9, les spectrogrammes : ce sont des images, pas des chiffres. `fig_molokoi_spectros` (`presentation_4_figures.py`) les refait depuis les fichiers du 03/04/2024, présents sur E: ; il faut lui passer `racine=Path("E:/audio/R3_2024-04_avril/Molokoi 11042024")`, car son chemin par défaut est D: ;
 - diapo 8, la vérification des 3 673 par le contenu : elle demande le disque d'origine (Biophonia) ;
 - diapo 13, les ~5 600 morceaux de Welch : c'est un calcul, pas un comptage ;
 - diapo 15 (761 et 1 563 pistes selon le seuil) : `blanci qc-calibrate` et le notebook 06 ;
@@ -571,9 +588,12 @@ Les chiffres du contrôle qualité qui viennent du notebook 06 sont rejouables e
 
 ## 17. Écarts relevés
 
-1. **Un enregistrement entendu positif est écarté** : Mataroni SMA13417, 06/01/2026 11 h 30 (`9e453c33941c80ce`). Il porte `confirmed_duration_off` et pas `keep`. Il faudrait poser `keep` (`qc.keep_flags`, depuis la chaîne, pas d'ici).
-2. **Un drapeau `off_campaign` périmé** : Kaw 2023, `f670702208cbfa39`. `blanci flag` le recalculerait.
+1. **Un enregistrement entendu positif était écarté** : Mataroni SMA13417, 06/01/2026 11 h 30 (`9e453c33941c80ce`), avec `confirmed_duration_off` et sans `keep`. **Corrigé le 18/11/2026** : `keep` posé par `qc.keep_flags`, après sauvegarde des drapeaux.
+2. **Un drapeau `off_campaign` était périmé** : Kaw 2023, `f670702208cbfa39`. **Corrigé le 18/11/2026** par `blanci flag`.
 3. **Les longitudes des enregistreurs 2MA n'ont pas de signe** (52,29 au lieu de −52,29). Et beaucoup de positions sont à quelques kilomètres de Cayenne, quel que soit le site (`mic_positions`). Le GPS de l'en-tête ne peut donc pas vérifier le site, ce qui rend caduc le « critère qui manque » de la diapo 21 tant qu'on n'a pas les coordonnées de pose.
 4. **La piste 1 n'est en base que pour 1 404 enregistrements**. L'écart entre pistes se mesure sur l'échantillon des pistes, pas sur la base.
 5. **Deux totaux circulent dans la présentation** (96 310 et 96 292), et les notebooks 05 et 06 affichent encore 96 292. Leurs sorties datent d'avant l'inventaire du relevé 7.
 6. **PatawaOuest SMA14826** : 14 enregistrements, aucun programme lisible, 11 gardés hors des créneaux. Il est arrêté le 01/01/2026, trois jours avant la relève.
+7. **Deux fichiers de E: ne sont pas en base sans être dans un rapport d'erreurs** :
+   - le dernier fichier de SMA14157 (21/11/2023 12 h 30), tronqué à 256 Kio : l'arrêt du micro en pleine écriture ;
+   - un chant dirigé de 2 min du 05/12/2023 (`Anomaloglossus blanci_Trésor_déc2023.wav`), jamais inventorié, à verser dans le jeu `reference` si c'est voulu.
