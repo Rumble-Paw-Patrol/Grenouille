@@ -28,7 +28,7 @@ La présentation n° 4 (inventaire et contrôle qualité, v2, 26 diapos) est rev
 - Diapo 1 : sous-titre « Inventaire du corpus · contrôle qualité · difficultés rencontrées : … », date du 20 novembre 2026.
 - Diapo 3 : encadré « Comment l'inventaire est fait » retiré ; à sa place, les enregistrements par programme (5 h → 19 h 30, 30 par jour : suivi 2023-24, CDR, presque tout Patawa Ouest ; 6 h → 18 h 30, 26 par jour : Mataroni, presque tout RNRT et Patawa Est). À gauche, les relevés empilés sur leur site.
 - Diapo 4 : calendrier à axe coupé, relevés sur la ligne de leur site. Vu en passant : 25 enregistrements de 12 micros les 30 et 31/12/2025 dans le relevé de Mataroni, six jours avant la pose, non marqués hors relevé (trou de 6 jours, la règle en demande plus de 7) ; à vérifier, à signaler au paquet 2 (diapo 10).
-- Diapo 5 : trois cartes, le fichier brut dans un terminal (vraie commande : `../scripts/entete_wav.py`, sortie GUANO réelle lue le 05/11 dans le notebook 05), la ligne de `recordings`, ce que l'inventaire en tire (même enregistreur 2LA04185 partout).
+- Diapo 5 : trois cartes, le fichier brut dans un terminal (vraie commande : `scripts/verification/entete_wav.py`, sortie GUANO réelle lue le 05/11 dans le notebook 05), la ligne de `recordings`, ce que l'inventaire en tire (même enregistreur 2LA04185 partout).
 - Diapo 5 bis (nouvelle) : vue de la table `recordings` (vraies lignes, dessinées par `presentation_4_figures.py`, pas une capture d'écran d'un logiciel) et chemin de la base.
 
 ## Paquet 2

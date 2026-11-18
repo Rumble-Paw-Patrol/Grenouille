@@ -2,7 +2,7 @@
 (pistes, fréquence), `data` (le son, donc la durée) et `guan` (en-tête GUANO, texte brut).
 Sert à la diapo 5 de la présentation n° 4 (le fichier avant l'inventaire). Lecture seule.
 
-    uv run python documentation/prez/scripts/entete_wav.py FICHIER.wav
+    uv run python scripts/verification/entete_wav.py FICHIER.wav
 """
 
 from __future__ import annotations

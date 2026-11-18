@@ -18,3 +18,5 @@ uv run blanci paquet verif_1 --file verif_1 --message "..."
 Un tirage est reproductible : mêmes graine, même base, mêmes exclusions, mêmes extraits. Ne pas réexporter ni réannoter entre le tirage et l'envoi.
 
 Le tirage vit dans `blanci/annotation/verification.py`.
+
+- `entete_wav.py` : affiche les blocs bruts d'un fichier WAV de Song Meter (`fmt `, `data`, GUANO), en lecture seule ; sert à la diapo 5 de la présentation n° 4.

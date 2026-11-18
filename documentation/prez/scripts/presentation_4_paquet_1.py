@@ -241,10 +241,11 @@ def ligne(*morceaux):
 
 
 lignes = [
-    ligne(("$ ", TERM_PROMPT), ("cd \"", TERM_TXT), ("RELEVE 1 CDR", TERM_HI), (" - 21-27 décembre 2025/2LA04185/Data\"", TERM_TXT)),
-    ligne(("$ ", TERM_PROMPT), ("ls 2LA04185_20251225_050000.wav", TERM_TXT)),
+    ligne(("cd F:\\audio\\", TERM_TXT), ("R1_2025-12_CDR", TERM_HI), ("\\2LA04185\\Data", TERM_TXT)),
+    ligne(("ls 2LA04185_20251225_050000.wav", TERM_TXT)),
     ligne(("2LA04185_20251225_050000.wav", TERM_HI)),
-    ligne(("$ ", TERM_PROMPT), ("uv run python entete_wav.py 2LA04185_20251225_050000.wav", TERM_TXT)),
+    ligne(("uv run python C:\\Users\\ll34272\\Grenouille\\scripts\\verification\\entete_wav.py `", TERM_TXT)),
+    ligne(("    ", TERM_PROMPT), ("2LA04185_20251225_050000.wav", TERM_TXT)),
     ligne(("[fmt ] ", TERM_DIM), ("2 pistes · 48000 Hz", TERM_HI)),
     ligne(("[data] ", TERM_DIM), ("5760000 échantillons par piste = 120.0 s", TERM_HI)),
     ligne(("[guan] ", TERM_DIM), ("GUANO|Version: 1.0", TERM_TXT)),
