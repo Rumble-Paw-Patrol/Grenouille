@@ -696,7 +696,32 @@ const round = t => Math.round(t * 100) / 100;
 // `extra` : {add_label} (nouvelle étiquette, lu aussi par le paquet d'écoute) ou {action} (une
 // demande au poste : étiquette proposée ou retirée, qualité, « Valider »), chacune avec son
 // `nonce` pour n'être traitée qu'une fois.
+// Copie de sauvegarde des intervalles dans le navigateur (par extrait et annotateur) : un
+// « Actualiser le cadre », un F5 ou un plantage ne perd plus le travail en cours. Effacée à
+// l'envoi ; les 30 plus récentes seulement.
+const BACKUP = "blanci-viewer-work";
+const backupKey = () => `${D.extract}|${D.ivkey}`;
+function backupRead() {
+  try { return JSON.parse(store.getItem(BACKUP)) || {}; } catch (e) { return {}; }
+}
+function backupWrite(all) {
+  try {
+    const keep = Object.entries(all).sort((a, b) => b[1].t - a[1].t).slice(0, 30);
+    store.setItem(BACKUP, JSON.stringify(Object.fromEntries(keep)));
+  } catch (e) {}
+}
+function backupSave(list) {
+  const all = backupRead(); all[backupKey()] = {t: Date.now(), iv: list}; backupWrite(all);
+}
+function backupClear() {
+  const all = backupRead(); delete all[backupKey()]; backupWrite(all);
+}
 function emit(extra) {
+  const list = intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]);
+  if (D.interval_mode) {
+    if (extra && extra.action && extra.action.type === "submit") backupClear();
+    else backupSave(list);
+  }
   send("streamlit:setComponentValue", {dataType: "json", value: Object.assign({
     key: D.extract, ivkey: D.ivkey, channel: shownTrack(),
     intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]),
@@ -841,6 +866,13 @@ function render(args) {
     view = {t0: D.t0, t1: D.t1, f0: 0, f1: D.fview};
     intervals = (D.intervals || [])
       .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
+    // Travail non envoyé retrouvé dans le navigateur (cadre actualisé, page rechargée).
+    const saved = D.interval_mode ? backupRead()[backupKey()] : null;
+    const same = saved && JSON.stringify(saved.iv) === JSON.stringify(D.intervals || []);
+    if (saved && !same) {
+      intervals = saved.iv.map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
+      setTimeout(() => emit(), 0);  // le poste reprend aussi ces intervalles
+    }
     selected = -1; otherSel = null; vmax = []; specKey = ""; ownHidden = false;
     specView = null; settling = false; buffers = [];
     if (wide) clearTimeout(wide.timer);
