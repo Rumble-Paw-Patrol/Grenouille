@@ -5,7 +5,7 @@ La présentation n° 4 (inventaire et contrôle qualité, v2, 26 diapos) est rev
 | Paquet | Diapos | Fichier | État |
 |---|---|---|---|
 | 1 | 1 à 5, plus 5 bis | `presentation_4_inventaire_qc_v2_paquet_1_diapos_01-05.pptx` | corrigé le 18/11, à relire par Léonard |
-| 2 | 6 à 11 (la 11 passe avant la 10) | `…_paquet_2_diapos_06-11.pptx` | plan écrit (`plan_paquet_2.md`), à faire |
+| 2 | 6, 7, 9, 9 bis, 9 ter, 11, 10, 8 | `…_paquet_2_diapos_06-11.pptx` | fait le 18/11 (`../scripts/presentation_4_paquet_2.py`), à relire par Léonard |
 | 3 | 12 à 15 | `…_paquet_3_diapos_12-15.pptx` | consignes à dicter |
 | 4 | 16 à 20 | `…_paquet_4_diapos_16-20.pptx` | consignes à dicter |
 | 5 | 21 à 26 (26 = références) | `…_paquet_5_diapos_21-26.pptx` | consignes à dicter |

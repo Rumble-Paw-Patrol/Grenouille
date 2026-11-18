@@ -1,4 +1,4 @@
-"""Figures de la présentation n° 4 (inventaire et contrôle qualité), diapos 3, 4 et 5 bis.
+"""Figures de la présentation n° 4 (inventaire et contrôle qualité), diapos 3 à 7, 9 et 11.
 
 Lit la base locale en lecture seule (`paths.db` de la config utilisateur) et écrit dans
 `documentation/prez/figures/inventaire_qc/` :
@@ -9,7 +9,17 @@ Lit la base locale en lecture seule (`paths.db` de la config utilisateur) et éc
 - `inv_programmes.png` (diapo 3, droite) : enregistrements selon le programme du micro
   (5 h → 19 h 30 ou 6 h → 18 h 30), lu dans les données comme dans le notebook 05 (§ 4) ;
 - `inv_calendrier.png` (diapo 4) : un trait par jour enregistré, axe coupé entre les deux jeux ;
-- `inv_base.png` (diapo 5 bis) : vraies lignes de la table recordings, vue d'explorateur.
+- `inv_base.png` (diapo 5 bis) : vraies lignes de la table recordings, vue d'explorateur ;
+- `inv_gains_reglage.png`, `inv_gains_mesure.png` (diapo 6) : gain réglé (barres) et écart de niveau
+  mesuré entre les deux pistes (histogramme), mêmes couleurs ; l'histogramme se refait depuis
+  `paths.reports/pistes/echantillon_pistes.csv`, sinon il est découpé dans `inv_gains.png` ;
+- `inv_completude_p2.png` (diapo 7) : complétude du programme, 2023-2024 par station et 2025-2026
+  par site, même tracé ;
+- `mol_niveaux.png`, `mol_spectro_1..4.png` (diapo 9) : niveau des deux micros de Molokoï le
+  03/04/2024 à l'heure du nom et à celle de l'en-tête, avec la corrélation ; spectrogrammes lus
+  sur le disque BLANCI_2023-24 s'il est branché, sinon découpés dans
+  `sources_paquet_2/molokoi_03avril.png` ;
+- `qc_ligne_drapeau.png` (diapo 11) : une vraie ligne de la base qui porte un drapeau.
 
 Chaque figure est dessinée à la taille de sa place sur la diapo : 1 pt de police = 1 pt affiché.
 
@@ -18,13 +28,17 @@ Chaque figure est dessinée à la taille de sa place sur la diapo : 1 pt de poli
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import yaml
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
@@ -34,6 +48,9 @@ from blanci.inputs.qc import parse_flags  # noqa: E402
 
 FIG = ROOT / "documentation" / "prez" / "figures" / "inventaire_qc"
 VERT, OR, INK, MUTED, GRID, SAGE = "#2A7F72", "#E9B44C", "#1B2A24", "#5B6B63", "#E4EEE8", "#A7BFB2"
+# Couleurs du notebook 05 (gains, complétude, horloge) : le réglage et l'observation les partagent.
+G_VERT, G_ORANGE, ROUGE = "#2E8B57", "#D9822B", "#C8553D"
+SOURCES = ROOT / "documentation" / "prez" / "presentation_4_paquets" / "sources_paquet_2"
 NOMS = {"Tresor": "Trésor", "Molokoi": "Molokoï", "PatawaEst": "Patawa Est",
         "PatawaOuest": "Patawa Ouest"}
 
@@ -278,6 +295,315 @@ def fig_base() -> None:
     fig.savefig(FIG / "inv_base.png", dpi=200)
     plt.close(fig)
 
+# --------------------------------------------------------------------------- diapo 6 : gains
+# Points par réglage lus dans la dernière exécution du notebook 05 avec les disques (3 607
+# enregistrements, 164 points). Le gain vit dans l'en-tête GUANO des WAV, pas dans la base : sans
+# `echantillon_pistes.csv` (disque F:), on ne peut pas le recompter ici.
+GAINS_NOTEBOOK = {"6 / 18 dB": 143, "18 / 6 dB": 21}
+
+
+def fig_gains() -> str:
+    """Diapo 6 : à gauche le réglage (barres verticales), à droite l'écart mesuré, mêmes couleurs.
+    Renvoie « csv » si tout vient de l'échantillon des deux pistes, « partiel » sinon."""
+    cfg = load_config(default_user_config())
+    csv = config_path(cfg, "reports") / "pistes" / "echantillon_pistes.csv"
+    S = None
+    if csv.is_file():
+        S = pd.read_csv(csv)
+        if "erreur" in S:
+            S = S[S["erreur"].isna()]
+        S = S.dropna(subset=["gain_0", "gain_1", "level_diff_db"]).copy()
+        S["config"] = [f"{int(a)} / {int(b)} dB" for a, b in zip(S.gain_0, S.gain_1, strict=True)]
+        S["ecart_reglage"] = S.gain_0 - S.gain_1
+        points = S.groupby(["dataset", "site", "mic_id"]).config.first().value_counts().to_dict()
+    else:
+        points = GAINS_NOTEBOOK
+    couleur = {"6 / 18 dB": G_VERT, "18 / 6 dB": G_ORANGE}
+    ecart = {"6 / 18 dB": "−12 dB", "18 / 6 dB": "+12 dB"}
+    fig, ax = plt.subplots(figsize=(5.48, 3.35))
+    for x, cle in enumerate(couleur):
+        v = points[cle]
+        ax.bar(x, v, color=couleur[cle], alpha=0.85, width=0.62)
+        ax.text(x, v + 2, str(v), ha="center", va="bottom", fontsize=14, color=INK,
+                fontweight="bold")
+        ax.text(x, v / 2 if v > 60 else v + 38, f"écart réglé\n{ecart[cle]}", ha="center",
+                va="center", fontsize=12, color="white" if v > 60 else INK)
+    ax.set_xticks(range(2), list(couleur), fontsize=13, color=INK)
+    ax.tick_params(axis="x", length=0)
+    ax.set_ylim(0, 172)
+    ax.set_ylabel("points (site, micro)")
+    ax.grid(axis="x", visible=False)
+    ax.set_title("Réglage : gain piste 0 / piste 1", loc="left", fontsize=13, color=INK,
+                 fontweight="bold", pad=10)
+    fig.tight_layout()
+    fig.savefig(FIG / "inv_gains_reglage.png", dpi=200)
+    plt.close(fig)
+
+    if S is not None:
+        fig, ax = plt.subplots(figsize=(6.45, 3.35))
+        bins = np.arange(-30, 30.5, 1)
+        for cle in couleur:
+            g = S[S.config == cle]
+            ax.hist(g.level_diff_db, bins=bins, color=couleur[cle], alpha=0.85,
+                    label=f"réglage {ecart[cle]} ({len(g)} enr.)")
+            ax.axvline(g.ecart_reglage.iloc[0], color=couleur[cle], lw=1, ls="--")
+        ax.set_xlabel("niveau piste 0 − niveau piste 1, mesuré (dB)")
+        ax.set_ylabel("enregistrements")
+        ax.legend(frameon=False, fontsize=11)
+        ax.set_title("Observation : écart mesuré (tirets : écart réglé)", loc="left", fontsize=13,
+                     color=INK, fontweight="bold", pad=10)
+        fig.tight_layout()
+        fig.savefig(FIG / "inv_gains_mesure.png", dpi=200)
+        plt.close(fig)
+        return "csv"
+    # Sans l'échantillon : l'histogramme du notebook 05 (déjà vert et orange), découpé à droite.
+    ancien = Image.open(FIG / "inv_gains.png")
+    ancien.crop((831, 0, ancien.width, ancien.height)).save(FIG / "inv_gains_mesure.png")
+    return "partiel"
+
+
+# --------------------------------------------------------------------------- diapo 7 : complétude
+def jours_micros(rec: pd.DataFrame) -> pd.DataFrame:
+    """Un jour-micro : enregistrements de durée normale reçus, programme attendu (créneaux présents
+    sur au moins la moitié des jours intérieurs du point), complétude, bord (pose ou relève)."""
+    ok = rec[rec.campagne & rec.normal].assign(slot=lambda x: x.local.dt.strftime("%H:%M"))
+    days = ok.groupby(["dataset", "site", "mic_id", "day"]).agg(
+        n=("recording_id", "size"), slots=("slot", frozenset)).reset_index()
+    bord = days.groupby(["dataset", "site", "mic_id"]).day.transform
+    days["bord"] = (days.day == bord("min")) | (days.day == bord("max"))
+    prog = {}
+    for key, g in days[~days.bord].groupby(["dataset", "site", "mic_id"]):
+        freq = pd.Series([s for x in g.slots for s in x]).value_counts() / len(g)
+        prog[key] = len(freq[freq >= 0.5])
+    days["attendu"] = [prog.get(k, np.nan) or np.nan
+                       for k in zip(days.dataset, days.site, days.mic_id, strict=True)]
+    days["completude"] = days.n / days.attendu
+    return days
+
+
+def fig_completude(rec: pd.DataFrame) -> dict:
+    """Diapo 7, 12,13 × 3,2 po : à gauche 2023-2024 par station (comme dans le notebook 05, § 4),
+    à droite 2025-2026 par site, même tracé : un carré par jour, vert = part du programme reçue,
+    rouge = micro sans aucun enregistrement entre la pose et la relève."""
+    cfg = load_config(default_user_config())
+    days = jours_micros(rec)
+    inner = days[~days.bord]
+    station = {(site, mic): f"{site}/{st}" for site, sts in cfg["plan"]["stations_2023"].items()
+               for st, mics in sts.items() for mic in mics}
+    inverse = {v: k for k, v in NOMS.items()}  # « Trésor » (rec) → « Tresor » (config)
+    d23 = days[days.dataset == "2023"].assign(station=lambda x: [
+        station.get((inverse.get(a, a), b), f"{a}/?")
+        for a, b in zip(x.site, x.mic_id, strict=True)])
+    stations = sorted(d23.station.unique())
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(12.13, 3.2),
+                                 gridspec_kw={"width_ratios": [2.2, 1.1]})
+    for y, st in enumerate(stations):
+        g = d23[d23.station == st]
+        a1.scatter(g.day, [y] * len(g), c=g.completude.clip(0, 1), cmap="Greens", vmin=0, vmax=1,
+                   s=9, marker="s", linewidths=0)
+        vides = pd.date_range(g.day.min(), g.day.max(), freq="D").difference(g.day.unique())
+        a1.scatter(vides, [y] * len(vides), color="#C0492F", s=9, marker="s", linewidths=0)
+        for mic, gm in g.groupby("mic_id"):
+            a1.text(gm.day.min(), y + 0.3, mic, fontsize=10, color=MUTED)
+    a1.set_yticks(range(len(stations)), stations, fontsize=12, color=INK)
+    a1.set_ylim(-0.6, len(stations) - 0.1)
+    a1.xaxis.set_major_locator(mdates.MonthLocator(bymonth=[1, 4, 7, 10]))
+    a1.xaxis.set_major_formatter(mdates.DateFormatter("%m/%Y"))
+    a1.tick_params(axis="x", labelsize=11)
+    a1.set_title("Phénologie 2023-2024, par station", loc="left", fontsize=13, color=INK,
+                 fontweight="bold", pad=18)
+    a1.text(0, 1.03, "un carré par jour : vert, part du programme reçue ; rouge, rien",
+            fontsize=11, color=MUTED, transform=a1.transAxes, va="bottom")
+    a1.grid(axis="y", visible=False)
+
+    d26 = days[days.dataset == "2026"]
+    sites = list(d26.groupby("site").day.min().sort_values().index)  # chronologique, bas → haut
+    trou = {}
+    for (site, mic), g in d26.groupby(["site", "mic_id"]):
+        vides = pd.date_range(g.day.min(), g.day.max(), freq="D").difference(g.day.unique())
+        for v in vides:
+            trou.setdefault((site, v), []).append(mic)
+    cmap = plt.get_cmap("Greens")
+    for y, site in enumerate(sites):
+        g = d26[d26.site == site].groupby("day").completude.mean().clip(0, 1)
+        a2.broken_barh([(d, pd.Timedelta(days=1)) for d in g.index], (y - 0.3, 0.6),
+                       color=[cmap(v) for v in g.values])
+        n = d26[d26.site == site].mic_id.nunique()
+        tard = g.index.min() > pd.Timestamp("2026-02-15")
+        a2.text(g.index.max() + pd.Timedelta(days=1) if tard else g.index.min(), y + 0.36,
+                f"{site} · {n} micros", fontsize=10, color=MUTED, ha="right" if tard else "left")
+    for (site, jour), mics in trou.items():
+        y = sites.index(site)
+        a2.broken_barh([(jour, pd.Timedelta(days=1))], (y - 0.3, 0.6), color="#C0492F")
+        a2.text(d26[d26.site == site].day.max() + pd.Timedelta(days=3), y,
+                f"{len(mics)} micros sans rien", fontsize=10.5, color="#C0492F", va="center")
+    a2.set_yticks(range(len(sites)), [])
+    a2.set_ylim(-0.75, len(sites) - 0.1)
+    a2.set_xlim(pd.Timestamp("2025-12-15"), pd.Timestamp("2026-03-24"))
+    a2.xaxis.set_major_locator(mdates.MonthLocator())
+    a2.xaxis.set_major_formatter(mdates.DateFormatter("%m/%Y"))
+    a2.tick_params(axis="x", labelsize=11)
+    a2.set_title("Relevés 2025-2026, par site", loc="left", fontsize=13, color=INK,
+                 fontweight="bold", pad=18)
+    a2.text(0, 1.03, "vert : part reçue (moyenne des micros)", fontsize=11, color=MUTED,
+            transform=a2.transAxes, va="bottom")
+    a2.grid(axis="y", visible=False)
+    a2.spines["left"].set_visible(False)
+    a2.tick_params(axis="y", length=0)
+    fig.subplots_adjust(left=0.065, right=0.99, top=0.82, bottom=0.11, wspace=0.07)
+    fig.savefig(FIG / "inv_completude_p2.png", dpi=200)
+    plt.close(fig)
+    return {"jours_micros": len(inner), "complets": float((inner.completude >= 1).mean()),
+            "partiels": int(((inner.completude < 1) & (inner.completude > 0)).sum())}
+
+
+# --------------------------------------------------------------------------- diapo 9 : Molokoï
+def molokoi_niveaux() -> tuple[pd.DataFrame, dict[float, float]]:
+    """Niveau (RMS de la piste 0) des enregistrements de Molokoï, avec l'heure de l'en-tête GUANO
+    avant correction (`t_entete`), et la corrélation de SMA14636 corrigé avec SMA14163 selon le
+    décalage appliqué (profil journalier retiré, comme dans le notebook 05, § 6)."""
+    cfg = load_config(default_user_config())
+    con = sqlite3.connect(f"file:{config_path(cfg, 'db').as_posix()}?mode=ro", uri=True)
+    mol = pd.read_sql_query(
+        "SELECT mic_id, start_utc, qc_flags FROM recordings WHERE site = 'Molokoi'", con)
+    con.close()
+    fl = mol.qc_flags.map(parse_flags)
+    mol["rms"] = fl.map(lambda f: f.get("indices", {}).get("rms_dbfs"))
+    mol["corrige"] = fl.map(lambda f: bool(f.get("clock_corrected")))
+    mol["t"] = pd.to_datetime(mol.start_utc, utc=True).dt.tz_convert(None)
+    mol["local"] = mol.t + pd.Timedelta(hours=cfg["recorder"]["filename_utc_offset_h"])
+    mol = mol.dropna(subset=["rms"]).copy()
+    # La correction a reculé ces enregistrements d'une heure : l'en-tête dit une heure de plus.
+    mol["t_entete"] = mol.t + pd.to_timedelta(mol.corrige.astype(int), unit="h")
+    mol["local_entete"] = mol.local + pd.to_timedelta(mol.corrige.astype(int), unit="h")
+    mol["resid"] = mol.rms - mol.groupby(["mic_id", mol.local.dt.hour]).rms.transform("median")
+    a = mol[mol.corrige].set_index("t_entete").resid
+    b = mol[mol.mic_id == "SMA14163"].set_index("t").resid
+    r = {}
+    for lag in np.arange(-3, 3.25, 0.5):
+        decale = a.copy()
+        decale.index = decale.index + pd.Timedelta(hours=lag)
+        j = pd.concat([decale.rename("a"), b.rename("b")], axis=1, join="inner").dropna()
+        r[float(lag)] = float(j.a.corr(j.b))
+    return mol, r
+
+
+def fig_molokoi_niveaux() -> dict:
+    """Diapo 9, haut : les deux micros voisins le 03/04/2024, à l'heure du nom (corrigée) et à
+    celle de l'en-tête GUANO, avec la corrélation sur les 1 521 enregistrements corrigés."""
+    mol, r = molokoi_niveaux()
+    jour = (pd.Timestamp("2024-04-03 08:00"), pd.Timestamp("2024-04-03 15:00"))
+    sain = mol[mol.mic_id == "SMA14163"].set_index("local").rms.sort_index()
+    sourd = mol[mol.mic_id == "SMA14636"]
+    cas = [("À l'heure du nom de fichier (corrigée)", sourd.set_index("local").rms.sort_index(),
+            r[-1.0]),
+           ("À l'heure de l'en-tête GUANO (avant correction)",
+            sourd.set_index("local_entete").rms.sort_index(), r[0.0])]
+    fig, axes = plt.subplots(1, 2, figsize=(12.13, 2.45), sharey=True)
+    for ax, (titre, serie, corr) in zip(axes, cas, strict=True):
+        ax.plot(sain[jour[0]:jour[1]].index, sain[jour[0]:jour[1]].values, "o-", color=VERT, ms=5,
+                lw=1.8, label="SMA14163 (voisin, horloge saine)")
+        ax.plot(serie[jour[0]:jour[1]].index, serie[jour[0]:jour[1]].values, "s--", color=ROUGE,
+                ms=5, lw=1.8, label="SMA14636")
+        ax.axvline(pd.Timestamp("2024-04-03 11:00"), color=MUTED, lw=0.9, ls=":")
+        ax.set_title(titre, loc="left", fontsize=13, color=INK, fontweight="bold", pad=6)
+        ax.text(0.015, 0.96, f"corrélation {corr:.2f}".replace(".", ","), transform=ax.transAxes,
+                ha="left", va="top", fontsize=13, color=INK, fontweight="bold",
+                bbox={"boxstyle": "round,pad=0.3", "fc": "white", "ec": SAGE})
+        ax.set_ylim(-70, -12)
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax.tick_params(axis="x", labelsize=10.5)
+        ax.tick_params(axis="y", labelsize=11)
+        ax.set_xlabel("heure de Guyane, 03/04/2024", fontsize=11)
+    axes[0].set_ylabel("niveau (dBFS, piste 0)", fontsize=11)
+    axes[0].legend(frameon=False, fontsize=10.5, loc="lower center", ncol=2, columnspacing=1.2,
+                   handlelength=1.6)
+    fig.tight_layout()
+    fig.savefig(FIG / "mol_niveaux.png", dpi=200)
+    plt.close(fig)
+    return {"corr_nom": r[-1.0], "corr_entete": r[0.0], "meilleur": max(r, key=r.get)}
+
+
+SPECTRO = [("SMA14163", "SM F_SMA14163/Data/SMA14163_20240403_103000.wav", (75, 493)),
+           ("SMA14163", "SM F_SMA14163/Data/SMA14163_20240403_110000.wav", (713, 493)),
+           ("SMA14636", "SM E_SMA14636/Data/SMA14636_20240403_103000.wav", (75, 831)),
+           ("SMA14636", "SM E_SMA14636/Data/SMA14636_20240403_110000.wav", (713, 831))]
+
+
+def fig_molokoi_spectros(racine: Path | None = None) -> str:
+    """Diapo 9, bas : les 4 spectrogrammes (0-12 kHz, 2 min, piste 0). Lus sur le disque si
+    `racine` (dossier « Molokoi 11042024 » du disque BLANCI_2023-24) existe ; sinon découpés dans
+    la figure du 06/11 (`sources_paquet_2/molokoi_03avril.png`, panneaux de 558 × 234 px)."""
+    racine = racine or Path("D:/audio/R3_2024-04_avril/Molokoi 11042024")
+    if racine.is_dir():
+        import soundfile as sf
+        from scipy.signal import spectrogram
+        for i, (_, chemin, _) in enumerate(SPECTRO, 1):
+            x, sr = sf.read(racine / chemin, dtype="float32", always_2d=True)
+            f, tt, S = spectrogram(x[:, 0], sr, nperseg=1024, noverlap=512)
+            fig = plt.figure(figsize=(2.95, 1.24))
+            ax = fig.add_axes([0, 0, 1, 1])
+            ax.pcolormesh(tt, f / 1000, 10 * np.log10(S + 1e-14), shading="auto", vmin=-130,
+                          vmax=-60, cmap="magma")
+            ax.set_ylim(0, 12)
+            ax.axis("off")
+            fig.savefig(FIG / f"mol_spectro_{i}.png", dpi=200)
+            plt.close(fig)
+        return "disque"
+    source = Image.open(SOURCES / "molokoi_03avril.png").convert("RGB")
+    for i, (_, _, (x, y)) in enumerate(SPECTRO, 1):
+        source.crop((x, y, x + 558, y + 234)).save(FIG / f"mol_spectro_{i}.png")
+    return "png d'origine"
+
+
+# --------------------------------------------------------------------------- diapo 11 : une ligne
+def fig_ligne_drapeau() -> None:
+    """Diapo 11 : une vraie ligne de la table recordings qui porte un drapeau (Mataroni SMA13417,
+    06/01/2026, 104 s : `duration_off`), dessinée comme `fig_base`, `qc_flags` en entier."""
+    cfg = load_config(default_user_config())
+    con = sqlite3.connect(f"file:{config_path(cfg, 'db').as_posix()}?mode=ro", uri=True)
+    cols = ["recording_id", "site", "mic_id", "start_utc", "duration_s", "qc_flags"]
+    ligne = con.execute(f"SELECT {', '.join(cols)} FROM recordings WHERE recording_id = ?",
+                        ("9e453c33941c80ce",)).fetchone()
+    n = con.execute("SELECT COUNT(*) FROM recordings").fetchone()[0]
+    con.close()
+    assert ligne[4] == 104.0 and json.loads(ligne[5]).get("duration_off") is True, ligne
+    morceaux, cur = [], ""
+    for mot in json.dumps(json.loads(ligne[5])).split(", "):
+        if cur and len(cur) + len(mot) > 58:
+            morceaux.append(cur + ",")
+            cur = mot
+        else:
+            cur = f"{cur}, {mot}" if cur else mot
+    morceaux.append(cur)
+    larg = {"recording_id": 1.65, "site": 1.0, "mic_id": 1.1, "start_utc": 2.1, "duration_s": 1.1}
+    L, H = 12.13, 1.55
+    fig = plt.figure(figsize=(L, H))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, L)
+    ax.set_ylim(H, 0)
+    ax.axis("off")
+    police = {"family": "Consolas", "size": 11}
+    ax.add_patch(plt.Rectangle((0, 0), L, 0.34, color="#E9ECEF"))
+    ax.text(0.12, 0.17, f"blanci.sqlite  ›  Parcourir les données  ›  Table : recordings   "
+            f"({milliers(n)} lignes)", va="center", fontsize=11, color=INK, fontweight="bold")
+    ax.add_patch(plt.Rectangle((0, 0.34), L, 0.34, color="#F6F7F8", ec="#C9CED3", lw=0.6))
+    ax.add_patch(plt.Rectangle((0, 0.68), L, H - 0.68, color="#FFF3CD", zorder=0))
+    x = 0.12
+    for c, v in zip(cols, ligne, strict=True):
+        ax.text(x, 0.51, c, va="center", fontdict={**police, "weight": "bold"}, color=INK)
+        ax.plot([x - 0.08, x - 0.08], [0.34, H], color="#D5D9DD", lw=0.6)
+        if c == "qc_flags":
+            for k, m in enumerate(morceaux):
+                ax.text(x, 0.88 + 0.25 * k, m, va="center", fontdict=police, color=INK)
+        else:
+            ax.text(x, 0.88, str(v), va="center", fontdict=police, color=INK)
+        x += larg.get(c, 0)
+    ax.add_patch(plt.Rectangle((0, 0), L, H, fill=False, ec="#C9CED3", lw=1))
+    fig.savefig(FIG / "qc_ligne_drapeau.png", dpi=200)
+    plt.close(fig)
+
 
 def main() -> None:
     fig_base()
@@ -289,6 +615,11 @@ def main() -> None:
     fig_sites(rec)
     fig_programmes(rec)
     fig_calendrier(rec)
+    print("gains :", fig_gains())
+    print("complétude :", fig_completude(rec))
+    print("horloge de Molokoï :", fig_molokoi_niveaux())
+    print("spectrogrammes :", fig_molokoi_spectros())
+    fig_ligne_drapeau()
 
 
 if __name__ == "__main__":
