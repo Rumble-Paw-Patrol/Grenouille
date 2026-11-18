@@ -1,8 +1,8 @@
 # Chiffres de la présentation n° 4, rejoués
 
-Rejoué le 18/11/2026 à 18 h 00 par `uv run python scripts/verification/chiffres_presentation_4.py`, code au commit `b51e7f6`. Chaque chiffre vient de la fonction citée, dans `blanci/exploration/inventaire.py` (fiches : `blanci/exploration/inventaire.md`).
+Rejoué le 18/11/2026 à 18 h 39 par `uv run python scripts/verification/chiffres_presentation_4.py`, code au commit `6af73ad`. Chaque chiffre vient de la fonction citée, dans `blanci/exploration/inventaire.py` (fiches : `blanci/exploration/inventaire.md`).
 
-Base : `blanci.sqlite`, schéma v5, 96 349 lignes dans `recordings`, empreinte de l'inventaire `92b0ecc4b7569d7b`, des drapeaux `f19991208922aecf`, dernier extrait écouté le 2026-11-17T21:50:45Z. Même empreinte = même base : les chiffres doivent être les mêmes.
+Base : `blanci.sqlite`, schéma v5, 96 349 lignes dans `recordings`, empreinte de l'inventaire `92b0ecc4b7569d7b`, des drapeaux `c78479120a36fe7b`, dernier extrait écouté le 2026-11-17T21:50:45Z. Même empreinte = même base : les chiffres doivent être les mêmes.
 
 Rapports lus : `pistes/echantillon_pistes.csv`, `ingest_duplicates_2026_Mataroni.csv`. Absents : aucun.
 
@@ -46,14 +46,14 @@ Rapports lus : `pistes/echantillon_pistes.csv`, `ingest_duplicates_2026_Mataroni
 | 9 | corrélation sans décalage | 0,34 | 0,342 | ok | `clock_lag_correlation(...)` |
 | 9 | décalage de corrélation maximale (h) | -1 | -1 | ok | `clock_lag_correlation(...)` |
 | 9 | créneaux communs à −1 h | 1 521 | 1 521 | ok | `clock_lag_correlation(...)` |
-| 9 ter | écartés | 681 | 681 | ok | `flag_counts(rec)['excluded']` |
-| 24 | encodables (diapo : 95 611 sur 96 292) | 95 611 | 95 629 | différent | `flag_counts(rec)['kept']` |
+| 9 ter | écartés | 681 | 680 | différent | `flag_counts(rec)['excluded']` |
+| 24 | encodables (diapo : 95 611 sur 96 292) | 95 611 | 95 630 | différent | `flag_counts(rec)['kept']` |
 | 24 | inventaire du bilan (diapo : 96 292) | 96 292 | 96 310 | différent | `flag_counts(rec)['recordings']` |
 | 9 ter | écartés pour son étouffé | 506 | 506 | ok | `flag_counts(rec)['causes']` |
 | 9 ter | dont étouffé par le calcul (deux pistes) | 399 | 399 | ok | `flag_counts(rec)['causes']` |
-| 9 ter | écartés pour la durée | 173 | 173 | ok | `flag_counts(rec)['causes']` |
+| 9 ter | écartés pour la durée | 173 | 172 | différent | `flag_counts(rec)['causes']` |
 | 9 ter | hors relevé seul | 2 | 2 | ok | `flag_counts(rec)['causes']` |
-| 9 ter | hors relevé et durée | 86 | 87 | différent | `flag_counts(rec)['causes']` |
+| 9 ter | hors relevé et durée | 86 | 86 | ok | `flag_counts(rec)['causes']` |
 | 10 | blocs | 238 | 238 | ok | `campaign_blocks(rec, cfg['qc'])` |
 | 10 | petits blocs (hors relevé) | 74 | 74 | ok | `campaign_blocks(...)` |
 | 10 | enregistrements hors relevé (levés) | 106 | 106 | ok | `campaign_blocks(...)` |
@@ -65,8 +65,8 @@ Rapports lus : `pistes/echantillon_pistes.csv`, `ingest_duplicates_2026_Mataroni
 | 10 | dont longs (> 121 s) | 14 | 14 | ok | `duration_classes(...)` |
 | 10 | enregistrements 2026 scorés par BlanciNet | 8 349 | 8 349 | ok | `recording_detections(con, 'blancinet')` |
 | 10 | coupés (30 à 119 s) à score BlanciNet ≥ 0,5 | 3 | 3 | ok | `duration_classes(...) ⋈ recording_detections(con, 'blancinet')` |
-| nb 06 | écartés avec une détection BlanciNet | 108 | 108 | ok | `excluded_with_detections(rec, recording_detections(con, 'blancinet'))` |
-| nb 06 | dont score ≥ 0,5 | 19 | 19 | ok | `excluded_with_detections(...)` |
+| nb 06 | écartés avec une détection BlanciNet | 108 | 107 | différent | `excluded_with_detections(rec, recording_detections(con, 'blancinet'))` |
+| nb 06 | dont score ≥ 0,5 | 19 | 18 | différent | `excluded_with_detections(...)` |
 | 8 | doublons écartés à l'inventaire (rapport) | 3 673 | 3 673 | ok | `duplicate_report_summary(ingest_duplicates_*.csv)` |
 | 17 | deux pistes retenues, écartés | 399 | 399 | ok | `track_flags_summary(rec, qc)` |
 | 17 | piste 0 retenue seule, gardés (encodés sur la piste 1) | 407 | 407 | ok | `track_flags_summary(...)` |
@@ -74,4 +74,5 @@ Rapports lus : `pistes/echantillon_pistes.csv`, `ingest_duplicates_2026_Mataroni
 | 17 | piste 1 retenue seule (notes : « une quarantaine ») | 40 | 46 | différent | `track_flags_summary(...)` |
 | 17 | candidats isolés de la piste 0 (aucune piste retenue) | 268 | 268 | ok | `track_flags_summary(...)` |
 | 19 | écartés portés par les six points les plus touchés (tous à CDR) | 452 | 452 | ok | `counts_by(rec[rec.excluded], ['site', 'mic_id'])` |
-| — | drapeaux d'inventaire périmés en base (à recalculer par blanci flag) | 0 | 1 | différent | `stale_flags(load_recordings(con, cfg, None), cfg)` |
+| — | drapeaux d'inventaire périmés en base (à recalculer par blanci flag) | 0 | 0 | ok | `stale_flags(load_recordings(con, cfg, None), cfg)` |
+| 11 | enregistrements où A. blanci a été entendu, écartés (règle : aucun) | 0 | 0 | ok | `protected_positives(rec, positive_recordings(con))` |
