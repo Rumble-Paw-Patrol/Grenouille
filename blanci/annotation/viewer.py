@@ -53,7 +53,8 @@ intervalles déjà posés la gardent ; le **+** la repropose) |
 | Régler le spectrogramme d'un micro | Filtre dynamique et contraste dans l'encadré du micro, \
 au-dessus du spectrogramme |
 | Ajuster un intervalle | **Tirer son bord** (curseur ↔) ; les pointillés gris à l'intérieur de \
-chaque bord sont les zones tampons (0,07 s au début, 0,2 s à la fin) |
+chaque bord sont les zones tampons (0,07 s au début, 0,2 s à la fin) ; le bouton **Zones \
+tampons** les affiche ou les cache (réglage retenu), sans rien changer à l'apprentissage |
 | Deux notes dans le même train ? | Bouton **±3 s** : deux pointillés gris à 3 s \
 de part et d'autre du curseur |
 | Sélectionner un intervalle | **Clic** dessus, ou sur sa pastille sous le spectrogramme |
@@ -303,6 +304,10 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
     <button id="gap3" class="toggle" aria-pressed="false"
             title="Allumé : deux pointillés gris à 3 s de part et d'autre du curseur. Deux notes
  à moins de 3 s : même intervalle ; à plus de 3 s : on clôt puis on en ouvre un autre">±3 s</button>
+    <button id="edges" class="toggle on" aria-pressed="true"
+            title="Allumé : les pointillés gris et la zone voilée aux bords de chaque intervalle
+ (zones tampons écartées de l'apprentissage). Éteint : on ne les trace plus, rien ne change
+ pour l'apprentissage">Zones tampons</button>
   </span>
   <span id="status"></span>
 </div>
@@ -371,6 +376,8 @@ function showSettings() {
   $("lo").value = (S.band[0] / 1000).toFixed(1); $("hi").value = (S.band[1] / 1000).toFixed(1);
   $("bandonly").classList.toggle("on", !!S.bandOnly);
   $("bandonly").setAttribute("aria-pressed", String(!!S.bandOnly));
+  $("edges").classList.toggle("on", S.edges !== false);  // allumé tant qu'on ne l'a pas éteint
+  $("edges").setAttribute("aria-pressed", String(S.edges !== false));
   $("slope").value = String(S.slope);
   [...$("mics").children].forEach((card, i) => {
     const m = mic(i), q = c => card.querySelector(c);
@@ -834,6 +841,7 @@ function render(args) {
   D.audios.forEach((a, i) => mic(i));
   $("ivbar").style.display = D.interval_mode ? "" : "none";
   $("qbar").style.display = D.interval_mode ? "" : "none";
+  $("edges").hidden = !D.interval_mode;
   // « − » des étiquettes, « + » et « − » des qualités : seulement là où la liste se garde
   // (le poste ; pas le paquet d'écoute).
   $("rmlbl").hidden = !D.manage; $("rmq").hidden = !D.manage;
@@ -1319,7 +1327,7 @@ function draw() {
   });
   // Zones tampons au bord de chaque intervalle tracé : pointillé gris à l'intérieur (début :
   // 0,07 s après t0 ; fin : 0,2 s avant t1, au plus la moitié de l'intervalle), zone voilée.
-  if (D.interval_mode) {
+  if (D.interval_mode && S.edges !== false) {
     ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
     shown.forEach(iv => {
       const half = (iv.t1 - iv.t0) / 2;
@@ -1655,6 +1663,11 @@ $("follow").onclick = () => {
 $("gap3").onclick = () => {
   const on = $("gap3").classList.toggle("on");
   $("gap3").setAttribute("aria-pressed", String(on));
+  if (D && view) draw();
+};
+$("edges").onclick = () => {
+  S.edges = S.edges === false;  // allumé <-> éteint ; retenu d'un extrait à l'autre
+  saveSettings(); showSettings();
   if (D && view) draw();
 };
 $("home").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
