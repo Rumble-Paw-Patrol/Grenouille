@@ -633,7 +633,8 @@ def fig_recap_criteres() -> None:
     """Paquet 5, bilan du contrôle qualité, 12,13 × 3,5 po. Chiffres de la base au 18/11/2026
     (jeux 2023 et 2026, 96 310 enregistrements) : 680 écartés = 506 son étouffé (399 par le calcul,
     107 à l'écoute) + 172 durée anormale (dont 86 aussi hors relevé) + 2 hors relevé seul.
-    Les doublons (3 673 copies) et les 2 fichiers illisibles ne sont jamais entrés dans la base.
+    Les doublons (3 673 copies) et les 26 fichiers illisibles (rapports d'erreurs de l'inventaire,
+    comptés le 18/11) ne sont jamais entrés dans la base.
     À droite, ce qui est mesuré sans rien écarter de plus : micro sourd 1 871 (Kaw D, encodés sur
     la piste sourde), durées coupées 34 (déjà dans les durées anormales), bascules 11 (CDR)."""
     ecartent = [("Son étouffé", 506, ROUGE, "dont 399 par le calcul, 107 à l'écoute"),
@@ -641,7 +642,7 @@ def fig_recap_criteres() -> None:
                 ("Hors relevé, seul", 2, ROUGE, None),
                 ("Silence", 0, ROUGE, None),
                 ("Doublons", None, ROUGE, "3 673 copies, jamais inventoriées"),
-                ("Fichiers illisibles", None, ROUGE, "2, jamais inventoriés")]
+                ("Fichiers illisibles", None, ROUGE, "26, jamais inventoriés")]
     mesures = [("Micro sourd (Kaw D, 2024)", 1871, G_ORANGE, "enr. encodés sur la piste sourde"),
                ("Durées coupées\n(programme interrompu)", 34, G_ORANGE, "dans les 172"),
                ("Bascule en plein enregistrement", 11, G_ORANGE, "à CDR"),

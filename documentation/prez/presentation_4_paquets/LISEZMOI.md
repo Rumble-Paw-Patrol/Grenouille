@@ -38,3 +38,12 @@ Voir `plan_paquet_2.md` : ordre cible (6, 7, 9, changement de partie, sommaire d
 ## Paquets 3 à 5
 
 Consignes à dicter par Léonard. Déjà connu : la passation « notion 7 » (diapos 18, 22, 23, 24), le recomptage des écartés, et pour le paquet 5 la partie « Difficultés rencontrées », alimentée par la section « Pour le paquet 5 » de `plan_paquet_2.md`. Paquet 3 : la diapo 12 montre le dictionnaire `qc_flags` de 2LA04185 ; la diapo 11 (paquet 2) montre désormais une ligne avec un drapeau, éviter le doublon.
+
+## Version v4_ultimate (19/11)
+
+`../presentation_4_inventaire_qc_v4_ultimate.pptx` est la v3_fusion remise en page par `../scripts/presentation_4_v4_ultimate.py`, qui lit la v3 sans la modifier : les deux fichiers restent côte à côte pour la comparaison.
+
+- **Code cité** : une pastille « CODE » en haut à droite de chaque diapo qui montre un résultat, avec le nom du fichier seul (`ingest.py`, `qc.py`, `inventaire.py`), sans chemin ni nom de fonction.
+- **Encarts** : plus aucun fond vert foncé à texte jaune ; cartes claires au même gabarit partout, marges de 0,60 po, contenu de 1,75 à 6,92 po.
+- **Graphiques du notebook 06** (diapos 7, 15 à 17, 19, 20) : titre et légende retirés de l'image et réécrits dans la diapo en Calibri ; images retouchées dans `../figures/inventaire_qc/v4/`. La diapo 18 est redessinée en formes PowerPoint, avec les valeurs de la figure de la v3.
+- **Chiffres** : ceux de `../chiffres_presentation_4.md` (rejeu du 18/11) et de `passation_inventaire.md` ; rien n'a été rejoué le 19/11 (la base n'est pas dans le dépôt).
