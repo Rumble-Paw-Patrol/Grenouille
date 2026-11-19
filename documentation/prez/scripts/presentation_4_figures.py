@@ -189,7 +189,10 @@ def fig_programmes(rec: pd.DataFrame) -> None:
 
 
 def fig_calendrier(rec: pd.DataFrame) -> None:
-    jours = rec[rec.campagne].groupby(["lieu", "dataset", "site"]).day.unique()
+    # Jours où le programme a tourné (fichiers de 120 s) : les tests de réglage des 30 et
+    # 31/12/2025, faits au bureau à moins de 7 jours de la pose du 06/01, ne sont pas hors
+    # relevé et dessinaient un faux bloc de Mataroni avant un faux trou.
+    jours = rec[rec.campagne & rec.normal].groupby(["lieu", "dataset", "site"]).day.unique()
     ordre = ["Mataroni", "Molokoï", "Trésor", "Kaw"]
     fenetres = [(pd.Timestamp("2023-10-15"), pd.Timestamp("2024-12-15")),
                 (pd.Timestamp("2025-12-12"), pd.Timestamp("2026-03-12"))]

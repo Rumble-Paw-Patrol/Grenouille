@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Points d'écoute</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root { --ink:#1B2A24; --muted:#5B6B63; --teal:#2A7F72; --gold:#C8901E; --grey:#7A7F7C;
+          --bg:#F7F9F7; --card:#FFFFFF; --line:#DDE5E0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#E6ECE8; --muted:#A4B2AA; --bg:#151A18; --card:#1E2522; --line:#33403A; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui, "Segoe UI", sans-serif; color:var(--ink);
+         background:var(--bg); display:grid; grid-template-columns:minmax(0,1fr) 360px;
+         height:100vh; }
+  #carte { height:100vh; }
+  aside { overflow:auto; padding:16px; border-left:1px solid var(--line); background:var(--card); }
+  h1 { font-size:17px; margin:0 0 6px; }
+  h2 { font-size:13px; margin:18px 0 6px; text-transform:uppercase; letter-spacing:.04em;
+       color:var(--muted); }
+  p { margin:6px 0; }
+  table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+  td, th { padding:3px 6px; border-bottom:1px solid var(--line); text-align:left; }
+  td.n, th.n { text-align:right; }
+  .pastille { display:inline-block; width:10px; height:10px; border-radius:50%;
+              margin-right:6px; vertical-align:middle; }
+  .carre { border-radius:2px; }
+  .alerte { background:color-mix(in srgb, var(--gold) 14%, transparent);
+            border-left:3px solid var(--gold); padding:8px 10px; margin:10px 0; }
+  details { margin:4px 0; } summary { cursor:pointer; }
+  .liste { color:var(--muted); font-size:12px; }
+  @media (max-width: 760px) {
+    body { grid-template-columns:1fr; grid-template-rows:60vh auto; height:auto; }
+    #carte { height:60vh; } aside { border-left:0; border-top:1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div id="carte"></div>
+<aside>
+  <h1>Points d'écoute : ce que dit le GPS des en-têtes</h1>
+  <p><span class="pastille" style="background:var(--teal)"></span>pose 2023-2024 (position propre au site)<br>
+     <span class="pastille" style="background:var(--gold)"></span>pose 2025-2026 (position propre au site)<br>
+     <span class="pastille carre" style="background:var(--grey)"></span>lieu de réglage : position partagée par des micros de plusieurs sites</p>
+  <div class="alerte" id="alerte"></div>
+  <h2>Points avec une position de pose</h2>
+  <table id="bilan"><thead><tr><th>Jeu</th><th>Site</th><th class="n">Points</th><th class="n">Avec pose</th></tr></thead><tbody></tbody></table>
+  <h2>Lieux de réglage</h2>
+  <div id="lieux"></div>
+  <h2>Points sans position de pose</h2>
+  <p class="liste">Coordonnées à demander à l'équipe de terrain (fiches de pose, GPX).</p>
+  <div id="sans"></div>
+</aside>
+<script>
+const D = /*DONNEES*/null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const carte = L.map("carte");
+const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { maxZoom: 19, attribution: "© OpenStreetMap" });
+const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  { maxZoom: 19, attribution: "Esri World Imagery" });
+osm.addTo(carte);
+const poses = L.layerGroup().addTo(carte), reglages = L.layerGroup().addTo(carte);
+L.control.layers({ "Plan": osm, "Satellite": sat },
+  { "Poses": poses, "Lieux de réglage": reglages }).addTo(carte);
+const bornes = [];
+for (const m of D.marques) {
+  const c = m.jeu === "2023" ? css("--teal") : css("--gold");
+  L.circleMarker([m.lat, m.lon], { radius: 7, color: "#fff", weight: 1.5, fillColor: c, fillOpacity: .95 })
+    .bindPopup(`<b>${m.site} ${m.jeu} · ${m.micro}</b>${m.nom ? " (" + m.nom + ")" : ""}<br>
+      ${m.lat.toFixed(5)} ; ${m.lon.toFixed(5)}<br>
+      ${m.n} enregistrements du ${m.debut} au ${m.fin}<br>
+      position lue sur ${m.fichiers} fichiers de l'échantillon (${m.premier} → ${m.dernier})`)
+    .bindTooltip(`${m.site} · ${m.micro}`).addTo(poses);
+  bornes.push([m.lat, m.lon]);
+}
+for (const l of D.lieux) {
+  L.marker([l.lat, l.lon], { icon: L.divIcon({ className: "", iconSize: [14, 14],
+      html: `<div style="width:14px;height:14px;background:${css("--grey")};border:2px solid #fff;border-radius:2px"></div>` }) })
+    .bindPopup(`<b>Lieu de réglage</b><br>${l.lat.toFixed(4)} ; ${l.lon.toFixed(4)}<br>
+      ${l.points} points, ${l.fichiers} fichiers (${l.premier} → ${l.dernier})<br>${l.sites.join("<br>")}`)
+    .addTo(reglages);
+  bornes.push([l.lat, l.lon]);
+}
+carte.setView([4.72, -52.25], 10);
+addEventListener("load", () => { carte.invalidateSize(); carte.fitBounds(bornes, { padding: [30, 30] }); });
+
+const tot = D.bilan.reduce((a, b) => a + b.points, 0), avec = D.bilan.reduce((a, b) => a + b.terrain, 0);
+document.getElementById("alerte").innerHTML =
+  `<b>${avec} points sur ${tot}</b> ont une position qui peut être celle de la pose. Les autres
+   n'ont gardé que la position lue au réglage (bureau à Cayenne, maison de la réserve Trésor) :
+   le Song Meter Mini ne refait pas de point GPS sur le terrain.`;
+document.querySelector("#bilan tbody").innerHTML = D.bilan.map(b =>
+  `<tr><td>${b.dataset}</td><td>${b.site}</td><td class="n">${b.points}</td><td class="n">${b.terrain}</td></tr>`).join("");
+document.getElementById("lieux").innerHTML = D.lieux.map(l =>
+  `<details><summary>${l.lat.toFixed(3)} ; ${l.lon.toFixed(3)} · ${l.points} points</summary>
+   <div class="liste">${l.sites.join(" · ")}</div></details>`).join("");
+const parSite = {};
+for (const s of D.sans) (parSite[`${s.site} ${s.dataset}`] ??= []).push(s.nom ? `${s.mic_id} (${s.nom})` : s.mic_id);
+document.getElementById("sans").innerHTML = Object.entries(parSite).map(([k, v]) =>
+  `<details><summary>${k} · ${v.length}</summary><div class="liste">${v.join(", ")}</div></details>`).join("");
+</script>
+</body>
+</html>

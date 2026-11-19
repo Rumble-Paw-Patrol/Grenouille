@@ -1005,6 +1005,39 @@ def position_outliers(positions: pd.DataFrame, max_km: float) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=[*POINT, "site_lat", "site_lon", "distance_km", "outlier"])
 
 
+def gps_places(headers: pd.DataFrame, decimals: int = 3) -> pd.DataFrame:
+    """Les lieux où les enregistreurs ont pris leur position : terrain ou lieu de réglage ?
+
+    Question : la position de l'en-tête est-elle celle de la pose ? Entrée : `read_headers`, ou
+    l'échantillon des pistes (colonnes `lat`, `lon`). Sortie : une ligne par point et par lieu :
+    `place_lat`, `place_lon` (lieu arrondi), `lat`, `lon` (médianes des fichiers du lieu),
+    `files`, `first`, `last` (`start_utc`), `sites` (nombre de sites qui ont un point à ce
+    lieu), `setup` (lieu de réglage).
+    Règle : longitude forcée négative (les 2MA l'écrivent sans signe) ; positions arrondies à
+    `decimals` décimales (3 ≈ 110 m) ; un lieu où des points de deux sites ou plus ont pris leur
+    position ne peut pas être une pose (les sites sont à des dizaines de km) : c'est un lieu de
+    réglage (bureau, maison de réserve), où l'enregistreur a gardé la dernière position lue.
+    Limite : un lieu propre à un seul site n'est pas pour autant une pose prouvée ; deux poses à
+    moins de 110 m l'une de l'autre et à des sites différents sont impossibles ici, mais un lieu
+    de réglage utilisé par un seul site passe pour du terrain.
+    """
+    df = headers[headers["found"]] if "found" in headers else headers
+    df = df[df["lat"].notna() & df["lon"].notna() & ~((df["lat"] == 0) & (df["lon"] == 0))]
+    df = df.assign(lon=-df["lon"].abs(), place_lat=df["lat"].round(decimals),
+                   place_lon=(-df["lon"].abs()).round(decimals))
+    cols = [*POINT, "place_lat", "place_lon", "lat", "lon", "files", "first", "last", "sites",
+            "setup"]
+    if df.empty:
+        return pd.DataFrame(columns=cols)
+    places = df.groupby([*POINT, "place_lat", "place_lon"]).agg(
+        lat=("lat", "median"), lon=("lon", "median"), files=("lat", "size"),
+        first=("start_utc", "min"), last=("start_utc", "max")).reset_index()
+    sites = df.groupby(["place_lat", "place_lon"])["site"].nunique().rename("sites")
+    places = places.join(sites, on=["place_lat", "place_lon"])
+    places["setup"] = places["sites"] >= 2
+    return places[cols]
+
+
 # =============================================================================================
 # 7. Température et fin de série
 # =============================================================================================

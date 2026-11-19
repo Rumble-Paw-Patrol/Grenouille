@@ -28,7 +28,7 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 3. [Noms et arborescence](#3-noms-et-arborescence) : `filename_conformity`, `homonyms`, `mic_folders`
 4. [En-têtes GUANO](#4-en-têtes-guano) : `parse_guano_fields`, `sample_recordings`, `read_headers`, `header_field_summary`, `header_outliers`, `gain_settings`
 5. [Horloge](#5-horloge) : `name_start_offsets`, `clock_offsets`, `clock_summary`, `clock_corrected_counts`, `clock_lag_correlation`
-6. [Position](#6-position) : `mic_positions`, `position_outliers`
+6. [Position](#6-position) : `mic_positions`, `position_outliers`, `gps_places`
 7. [Température et fin de série](#7-température-et-fin-de-série) : `temperature_series`, `series_ends`
 8. [Durées et tailles](#8-durées-et-tailles) : `duration_classes`, `expected_size`, `file_size_check`
 9. [Doublons et rapports d'inventaire](#9-doublons-et-rapports-dinventaire) : `duplicate_report_summary`, `duplicate_verification_summary`, `content_duplicates`, `ingest_errors_summary`
@@ -297,6 +297,14 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 - Règle : la configuration n'a pas de coordonnées de site, donc le centre est celui des autres micros. `max_km` est absent de toute configuration : il est choisi à l'appel, et il faut le dire.
 - Limite : si la moitié des micros d'un site est mal placée, le centre est faux.
 - Prez n° 4 : diapo 21. Résultat (à 2 km) : 58 points sur 164 sont loin du centre de leur site. Les enregistreurs 2MA écrivent la longitude **sans signe moins** (52,29 au lieu de −52,29), ce qui les met à 11 568 km. Ce qu'on peut dire : en l'état, le GPS de l'en-tête ne peut pas servir à vérifier le site. Ce qu'on ne peut pas dire : quels points sont vraiment mal rangés ; il faudrait des coordonnées de pose du terrain.
+
+#### `gps_places(headers, decimals=3)` — [inventaire.py:1008](inventaire.py#L1008)
+
+- Question : la position de l'en-tête est-elle celle de la pose, ou celle du lieu où l'enregistreur a été réglé ?
+- Entrée : `read_headers` ou l'échantillon des pistes. Sortie : une ligne par point et par lieu : position, fichiers, premier et dernier fichier, nombre de sites qui ont un point à ce lieu, `setup`.
+- Règle : longitude remise en négatif (2MA) ; positions arrondies à 3 décimales (≈ 110 m) ; un lieu partagé par des points de deux sites ou plus est un lieu de réglage (les sites sont à des dizaines de km les uns des autres).
+- Limite : un lieu propre à un seul site n'est pas une pose prouvée ; un lieu de réglage qui n'a servi qu'à un site passe pour du terrain.
+- Résultat (échantillon des pistes, 19/11/2026) : 7 points sur 164 ont une position propre à leur site, tous de 2023 (Kaw 2 sur 3, Molokoï 3, Trésor 2) ; les 156 points de 2026 n'ont que des lieux de réglage (8 lieux : autour de Cayenne et Rémire, vers Matoury, maison de la réserve Trésor). Carte : `scripts/verification/carte_points.py`. Ce qu'on peut dire : le GPS de l'en-tête ne situe aucun point de 2026. Ce qu'on ne peut pas dire : où ils sont ; il faut les coordonnées de pose du terrain.
 
 ## 7. Température et fin de série
 
