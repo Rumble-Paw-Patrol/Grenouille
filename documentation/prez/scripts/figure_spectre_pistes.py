@@ -9,12 +9,14 @@ différence ; un micro qui faiblit, s'étouffe ou crépite d'un seul côté la f
 - à gauche : les 164 points classés par leur pire épisode de deux semaines (médiane glissante
   sur 14 jours de l'écart de plus grand module entre 1 et 12 kHz), ±6 dB en tirets, les points
   au-delà nommés ;
-- au milieu : d(f) des points au-delà du seuil pendant cet épisode, bande par bande, rangés par
-  l'écart moyen sur 1-12 kHz (le pire écart en étiquette) ;
-- à droite : d(f) de Kaw D (SMA14079) avant, pendant et après sa perte du 23/05 au 23/07/2024.
+- à droite : d(f) des points au-delà du seuil pendant cet épisode, bande par bande, rangés par
+  l'écart moyen sur 1-12 kHz (le pire écart en étiquette).
+
+Le profil de Kaw D avant, pendant et après sa perte (`spectral_gap_profile`) n'est plus tracé :
+la diapo 20 montrait déjà la perte dans le temps.
 
 Chaque chiffre sort de `blanci/exploration/inventaire.py` (`spectral_gaps`,
-`spectral_gap_by_point`, `spectral_gap_profile`), sur les mesures de
+`spectral_gap_by_point`), sur les mesures de
 `scripts/controle_qualite/spectre_pistes.py` (`paths.reports/pistes/spectre_pistes.csv`) et
 l'échantillon des pistes (`echantillon_pistes.csv`, gains lus dans l'en-tête de chaque fichier).
 
@@ -41,21 +43,16 @@ sys.path.insert(0, str(ROOT))
 from blanci.core.config import config_path, default_user_config, load_config  # noqa: E402
 from blanci.exploration.inventaire import (  # noqa: E402
     spectral_gap_by_point,
-    spectral_gap_profile,
     spectral_gaps,
     third_octave_bands,
 )
 
 FIG = ROOT / "documentation" / "prez" / "figures" / "inventaire_qc"
 INK, MUTED, GRID, SAGE = "#1B2A24", "#5B6B63", "#E4EEE8", "#A7BFB2"
-ROUGE, VERT, OR = "#C8553D", "#2A7F72", "#E9B44C"
+ROUGE, VERT = "#C8553D", "#2A7F72"
 NOMS = {"Tresor": "Trésor", "Molokoi": "Molokoï", "PatawaEst": "Patawa Est",
         "PatawaOuest": "Patawa Ouest"}
 SEUIL = 6.0  # dB, comme la diapo 20 : la moitié de l'écart réglé de 12 dB
-KAW_D = {"dataset": "2023", "site": "Kaw", "mic_id": "SMA14079"}
-PERIODES = {"avant (23/04 – 22/05)": ("2024-04-23", "2024-05-22"),
-            "pendant (23/05 – 23/07)": ("2024-05-23", "2024-07-23"),
-            "après (24/07 – 23/08)": ("2024-07-24", "2024-08-23")}
 # Divergente : rouge = piste 0 plus faible que réglé, vert = plus forte, gris clair au milieu.
 DIVERGE = LinearSegmentedColormap.from_list("ecart", [ROUGE, "#F3F1EC", VERT])
 
@@ -85,7 +82,7 @@ def titre(ax, texte: str, sous_titre: str, pad: float = 50) -> None:
     ax.text(0, 1.015, sous_titre, transform=ax.transAxes, fontsize=13, color=MUTED, va="bottom")
 
 
-def figure(gaps: pd.DataFrame, pts: pd.DataFrame, out: Path) -> None:
+def figure(pts: pd.DataFrame, out: Path) -> None:
     bands = third_octave_bands(100, 20000)
     cols = [f"d_{n}" for n in bands["name"]]
     pts = pts.reset_index(drop=True).assign(rang=lambda d: np.arange(len(d)))
@@ -96,9 +93,9 @@ def figure(gaps: pd.DataFrame, pts: pd.DataFrame, out: Path) -> None:
                 .sort_values("moyen"))
     n, k = len(pts), len(suspects)
 
-    fig = plt.figure(figsize=(22, max(8.5, 2.2 + 0.24 * k)))
-    # colonnes : classement, place des noms de lignes, carte, échelle, marge, Kaw D
-    grid = fig.add_gridspec(1, 6, width_ratios=[0.85, 0.66, 1.2, 0.035, 0.3, 0.95], wspace=0.08)
+    fig = plt.figure(figsize=(17, max(8.5, 2.2 + 0.24 * k)))
+    # colonnes : classement, place des noms de lignes, carte, échelle
+    grid = fig.add_gridspec(1, 4, width_ratios=[0.85, 0.66, 1.2, 0.035], wspace=0.08)
 
     # 1. Classement des points, sans nom : les noms sont sur les lignes de la carte
     ax = fig.add_subplot(grid[0])
@@ -145,25 +142,6 @@ def figure(gaps: pd.DataFrame, pts: pd.DataFrame, out: Path) -> None:
     cb.set_label("dB", color=MUTED)
     cb.outline.set_visible(False)
 
-    # 3. Kaw D avant, pendant, après
-    ax = fig.add_subplot(grid[5])
-    prof = spectral_gap_profile(gaps, PERIODES, **KAW_D)
-    for (r, c) in zip(prof.itertuples(), (VERT, ROUGE, OR), strict=True):
-        ax.plot(bands["centre"], [getattr(r, k) for k in cols], color=c, lw=2.5,
-                label=f"{r.period}, {r.days} jours")
-    ax.set_xscale("log")
-    ax.set_xticks([100, 1000, 10000], ["0,1", "1", "10"])
-    ax.set_ylim(-29, 9)
-    ax.axhline(0, color=INK, lw=0.9)
-    for s in (-SEUIL, SEUIL):
-        ax.axhline(s, color=MUTED, lw=1, ls="--")
-    ax.axvspan(12500 * 2 ** (-1 / 6), 25000, color=GRID, alpha=0.7, lw=0)
-    ax.text(15500, -27.5, "bruit propre\ndes deux pistes", fontsize=11, color=MUTED, ha="center")
-    ax.set_xlabel("fréquence (kHz)")
-    ax.set_ylabel("d(f), médiane des jours (dB)")
-    ax.legend(frameon=False, fontsize=13, loc="center", bbox_to_anchor=(0.45, 0.42))
-    titre(ax, "Kaw D SMA14079 en 2024", "piste 0 sourde de 25 dB,\nde 250 Hz à 10 kHz")
-
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
@@ -177,7 +155,7 @@ def main() -> None:
     pts = spectral_gap_by_point(gaps)
     pts.to_csv(config_path(cfg, "reports") / "pistes" / "spectre_pistes_points.csv", index=False)
     FIG.mkdir(parents=True, exist_ok=True)
-    figure(gaps, pts, FIG / "qc_spectre_pistes.png")
+    figure(pts, FIG / "qc_spectre_pistes.png")
     print(f"{len(gaps)} enregistrements, {len(pts)} points ; au-delà de ±{SEUIL:.0f} dB :")
     show = ["dataset", "site", "mic_id", "extreme_db", "episode_start", "episode_end", "days"]
     print(pts[pts.extreme_db.abs() > SEUIL][show].to_string(index=False))
