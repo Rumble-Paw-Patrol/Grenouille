@@ -60,8 +60,8 @@ de part et d'autre du curseur |
 | Modifier l'étiquette d'un intervalle | Une fois sélectionné, **clic** sur une étiquette en haut |
 | Supprimer un intervalle | Une fois sélectionné, touche **Suppr**, ou **clic** sur la petite \
 croix de sa pastille |
-| Valider l'annotation | Bouton **Valider** à droite du spectrogramme ou sous le commentaire, ou \
-**Ctrl + Entrée** |
+| Valider l'annotation | Bouton **Valider** à droite du spectrogramme, ou **Ctrl + Entrée** \
+(le commentaire facultatif se tape dans la zone de texte sous le spectrogramme) |
 """
 
 INDEX = r"""<!doctype html>
@@ -155,6 +155,10 @@ INDEX = r"""<!doctype html>
             background: linear-gradient(160deg, var(--accent), var(--accent-2));
             color: var(--accent-ink); box-shadow: 0 6px 22px -8px var(--accent-2); }
   #submit:hover:not(:disabled) { filter: brightness(1.08); }
+  /* Commentaire facultatif : sous la toile, dans le même encadré. */
+  #commentbox { margin-top: 8px; }
+  #comment { box-sizing: border-box; width: 100%; padding: 7px 10px; border-radius: 10px; }
+  #comment::placeholder { color: var(--muted); opacity: .85; }
   /* Proposer une étiquette : celles déjà connues d'abord (retirées, vues dans les annotations),
      puis un nom libre. */
   .panel { display: grid; gap: 7px; padding: 8px 10px; margin: 0 0 8px; border-radius: 12px;
@@ -304,6 +308,9 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
 <div class="mics" id="mics"></div>
 <div class="stage"><canvas id="c" tabindex="0"></canvas>
   <button id="submit" hidden></button></div>
+<div id="commentbox" hidden>
+  <input type="text" id="comment" maxlength="1000" autocomplete="off"
+         placeholder="Commentaire facultatif : ce qui mérite d'être dit"></div>
 <div id="list"></div>
 <div id="others"></div>
 <div id="notes"></div>
@@ -724,6 +731,7 @@ function emit(extra) {
   }
   send("streamlit:setComponentValue", {dataType: "json", value: Object.assign({
     key: D.extract, ivkey: D.ivkey, channel: shownTrack(),
+    comment: $("comment").value, reset: D.reset,
     intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]),
     add_label: null, action: null,
   }, extra || {})});
@@ -798,6 +806,8 @@ $("newname").addEventListener("keydown", e => {
   if (e.key === "Enter") $("newok").click();
   else if (e.key === "Escape") $("newno").click();
 });
+// Commentaire : transmis au poste en sortant du champ ou sur Entrée, et avec « Valider ».
+$("comment").addEventListener("change", () => { if (D) emit(); });
 
 function render(args) {
   const fresh = !D || args.extract !== D.extract;
@@ -806,7 +816,10 @@ function render(args) {
   const ivChanged = !D || args.ivkey !== D.ivkey;
   const othersChanged = !D || JSON.stringify([args.others, args.history])
     !== JSON.stringify([D.others, D.history]);
+  // Zone de commentaire vidée pour un autre extrait, ou après une validation.
+  if (fresh || args.reset !== D.reset) $("comment").value = "";
   D = args;
+  $("commentbox").hidden = !(D.interval_mode && D.reset != null);
   if (S.band === undefined) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
   }
@@ -1639,8 +1652,12 @@ $("gap3").onclick = () => {
 };
 $("home").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
 document.addEventListener("keydown", e => {
-  if (["SELECT", "INPUT"].includes(e.target.tagName)) return;
-  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+  // Dans la zone de commentaire, seul Ctrl + Entrée (valider) garde son effet.
+  const ctrlEnter = e.key === "Enter" && (e.ctrlKey || e.metaKey);
+  if (e.target.id === "comment" ? !ctrlEnter : ["SELECT", "INPUT"].includes(e.target.tagName)) {
+    return;
+  }
+  if (ctrlEnter) {
     e.preventDefault(); $("submit").click();
   } else if (e.code === "Space") {
     e.preventDefault();
@@ -1795,6 +1812,7 @@ def viewer_args(
     submit: dict | None = None,
     notes: list[str] | None = None,
     history: list[dict] | None = None,
+    comment_reset: int | None = None,
 ) -> dict:
     """Arguments du composant. `audios` : (nom, chemin rendu par `asset`, début en s dans
     l'enregistrement), couvrant [t0, t1] ; `windows` : {t0, t1, label, current, candidate} ;
@@ -1817,7 +1835,9 @@ def viewer_args(
     une ligne chacun sous la sienne (« Vous »), en lecture seule, chacun dessiné sur le
     spectrogramme sauf s'il est masqué (`masked` : son annotateur est coché dans « Masquer les
     annotations de », la ligne le dit) ou rendu silencieux d'un clic sur son nom ; sans lui,
-    une ligne par annotateur de `others`."""
+    une ligne par annotateur de `others` ; `comment_reset` : compteur de validations, qui
+    affiche la zone de commentaire facultatif sous le spectrogramme (absent : pas de zone) et la
+    vide quand il change ; la valeur renvoyée porte `comment` et ce `reset`."""
     return {
         "t0": float(t0),
         "t1": float(t1),
@@ -1842,6 +1862,7 @@ def viewer_args(
         "suggestions": [list(x) for x in suggestions] if suggestions is not None else None,
         "manage": suggestions is not None,
         "submit": submit,
+        "reset": comment_reset,
         "notes": [str(n) for n in notes or []],
         "history": None
         if history is None

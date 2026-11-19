@@ -376,12 +376,6 @@ __VARS_LIGHT__
   > :is(.st-key-marque, :has(.st-key-marque)) + * h2 { padding-top: 6px !important; }
 .st-key-marque [data-testid="stLayoutWrapper"] { width: 100% !important; }
 .st-key-marque .gr-brand { padding-right: 40px; }
-/* Bloc « commentaire + Valider » : carte en verre dépoli, comme l'ancien formulaire. */
-.stMain [data-testid="stVerticalBlockBorderWrapper"]:has(input[aria-label="Commentaire"]) {
-  background: var(--surface) !important; border: 1px solid var(--line) !important;
-  border-radius: 14px !important; box-shadow: var(--ombre);
-  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
-}
 
 /* Étiquettes des champs : chasse fixe, capitales espacées, comme les « champs » du tableau. */
 [data-testid="stWidgetLabel"] p {

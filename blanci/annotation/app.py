@@ -42,9 +42,10 @@ les étiquettes et les qualités dans le visualiseur ; tout se garde dans `annot
   candidat ; on les annote une à une sans quitter l'enregistrement (suspendu).
 - **Qualité** : en intervalles, chaque intervalle a la sienne (barre au-dessus du
   spectrogramme) ; en fenêtres, une qualité pour la fenêtre.
-- **Validation** : commentaire facultatif, puis « Valider l'annotation » (sous le commentaire,
-  à droite du spectrogramme, ou Ctrl + Entrée) : la réponse est ajoutée (jamais écrasée), copiée
-  dans le dossier des annotations validées, et l'extrait suivant s'affiche.
+- **Validation** : commentaire facultatif (zone de texte sous le spectrogramme, dans l'encadré
+  du visualiseur), puis « Valider » (à droite du spectrogramme, ou Ctrl + Entrée) : la réponse
+  est ajoutée (jamais écrasée), copiée dans le dossier des annotations validées, et l'extrait
+  suivant s'affiche.
 - **Groupes** : une file tirée par groupes montre, groupe par groupe, ce qui a été entendu ; un
   groupe homogène s'étiquette en entier d'un clic (source « bulk »).
 - **Habillage** : celui du tableau de bord (`style.py`, bandeau dans `bandeau.py`), clair ou
@@ -605,14 +606,20 @@ _fragment = getattr(st, "fragment", lambda f: f)
 
 
 @_fragment
-def _viewer_fragment(args: dict, extract: str, ikey: str, ckey: str, interval_mode: bool):
+def _viewer_fragment(
+    args: dict, extract: str, ikey: str, ckey: str, interval_mode: bool, cmkey: str = ""
+):
     """Visualiseur et liste des intervalles : tracer, ajuster ou effacer un intervalle ne
     réaffiche que ce fragment, pas toute la page. `ikey` : intervalles de qui annote, avec
-    ceux qu'il masque (une valeur renvoyée pour un autre réglage est ignorée)."""
+    ceux qu'il masque (une valeur renvoyée pour un autre réglage est ignorée) ; `cmkey` : où
+    ranger le commentaire tapé dans la zone de texte du visualiseur."""
     value = viewer(args)
     if value and value.get("key") == extract and value.get("ivkey") == ikey:
         st.session_state[ikey] = value["intervals"]
         st.session_state[ckey] = int(value.get("channel", 0))
+        # Commentaire d'avant la dernière validation (même extrait resté à l'écran) : ignoré.
+        if cmkey and value.get("reset") == st.session_state.get("validated", 0):
+            st.session_state[cmkey] = value.get("comment") or ""
         request = value.get("action")
         if request and st.session_state.get("last_action_nonce") != request.get("nonce"):
             st.session_state["last_action_nonce"] = request.get("nonce")
@@ -651,7 +658,6 @@ def _classes(form_key: str, answers) -> list[str]:
 
 # Le bouton de validation reste grisé sans annotateur.
 _NO_ANNOTATOR = "Choisir l'annotateur dans le panneau de gauche."
-VALIDATE = "Valider l'annotation ▶"
 
 
 def _details(qualities: list[str], with_quality: bool = True) -> tuple[str | None, str | None]:
@@ -664,34 +670,6 @@ def _details(qualities: list[str], with_quality: bool = True) -> tuple[str | Non
 
 def _comment_key(form_key: str) -> str:
     return f"comment::{form_key}::{st.session_state.get('validated', 0)}"
-
-
-def _request_submit(extract: str) -> None:
-    """Rappel de « Valider l'annotation » : l'envoi se fait au début du passage suivant, avant
-    de redessiner l'extrait (`main`), comme pour « Valider » à droite du spectrogramme."""
-    st.session_state["submit_request"] = extract
-
-
-def _comment_box(form_key: str, annotator: str, extract: str) -> tuple[bool, str | None]:
-    """Commentaire facultatif et « Valider l'annotation », côte à côte, sous le spectrogramme.
-    Hors formulaire : « Valider » à droite du spectrogramme prend aussi le commentaire tapé.
-    Renvoie (bouton cliqué, commentaire)."""
-    comment_key = _comment_key(form_key)
-    with st.container(border=True):
-        cols = st.columns([5, 2], vertical_alignment="bottom")
-        comment = cols[0].text_input(
-            "Commentaire", key=comment_key, placeholder="Facultatif : ce qui mérite d'être dit"
-        )
-        clicked = cols[1].button(
-            VALIDATE,
-            type="primary",
-            use_container_width=True,
-            disabled=not annotator.strip(),
-            help=None if annotator.strip() else _NO_ANNOTATOR,
-            on_click=_request_submit,
-            args=(extract,),
-        )
-    return clicked, (comment or "").strip() or None
 
 
 def _save_extract(con, candidate, t0, t1, intervals, annotator, channel, comment) -> bool:
@@ -1206,9 +1184,11 @@ def _confirm_submit_dialog(extract: str, reasons: list[str]) -> None:
         st.rerun()
 
 
-def _leave(key: str, target: int, unsaved: bool, direction: str) -> None:
+def _leave(key: str, target: int, unsaved: bool, direction: str, cmkey: str = "") -> None:
     """Rappel de ◀ ▶ : on change d'extrait, sauf s'il reste à valider ce qu'on y a tracé ou
-    écrit (une fenêtre le demande d'abord, `_confirm_leave_dialog`)."""
+    écrit (une fenêtre le demande d'abord, `_confirm_leave_dialog`). `cmkey` : le commentaire,
+    relu ici car le visualiseur le renvoie sans redessiner les boutons ◀ ▶."""
+    unsaved = unsaved or bool(cmkey and (st.session_state.get(cmkey) or "").strip())
     if unsaved and confirm_on("quitter"):
         st.session_state["confirm_leave"] = (key, target, direction)
     else:
@@ -1548,23 +1528,26 @@ def main() -> None:
                 },
                 notes=notes,
                 history=history,
+                comment_reset=None if window_mode else st.session_state.get("validated", 0),
             ),
             extract,
             ikey,
             ckey,
             not window_mode,
+            _comment_key(form_key),
         )
         _comments_panel(comments, t0, t1)
         intervals = st.session_state[ikey]
         channel = st.session_state[ckey]
+        # Commentaire tapé dans la zone de texte du visualiseur.
+        comment = (st.session_state.get(_comment_key(form_key)) or "").strip() or None
 
     if not window_mode:
         if media is not None:
-            clicked, comment = _comment_box(form_key, annotator, extract)
             confirmed = st.session_state.pop("confirmed_submit", None) == extract
             reasons = (
                 _submit_doubts(intervals, full_history, me)
-                if (clicked or submit_now) and me and confirm_on("valider")
+                if submit_now and me and confirm_on("valider")
                 else []
             )
             if reasons:
@@ -1573,7 +1556,7 @@ def main() -> None:
             if asked and asked[0] == extract:
                 _confirm_submit_dialog(*asked)
             elif (
-                (clicked or submit_now or confirmed)
+                (submit_now or confirmed)
                 and not tried
                 and _save_extract(con, candidate, t0, t1, intervals, annotator, channel, comment)
             ):
@@ -1634,13 +1617,14 @@ def main() -> None:
         and not window_mode
         and (_signature(intervals) != _signature(own) or bool(comment))
     )
+    live_comment = _comment_key(form_key) if media is not None and not window_mode else ""
     nav_cols = st.columns(2, gap="small")
     nav_cols[0].button(
         "Extrait précédent",
         key="nav_prev",
         disabled=before == pos,
         on_click=_leave,
-        args=(key, before, unsaved, "précédent"),
+        args=(key, before, unsaved, "précédent", live_comment),
         help=why_before,
         use_container_width=True,
     )
@@ -1649,7 +1633,7 @@ def main() -> None:
         key="nav_next",
         disabled=after == pos,
         on_click=_leave,
-        args=(key, after, unsaved, "suivant"),
+        args=(key, after, unsaved, "suivant", live_comment),
         help=why_after,
         use_container_width=True,
     )
