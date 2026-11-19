@@ -10,4 +10,33 @@ Get-Content <depot>\rapports\embed_<encodeur>.log -Tail 3
 
 arrêter l'encodage :
 
-Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*encode_modele.ps1*' -or $_.Name -eq 'blanci.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*encode_modele.ps1*' -or $_.CommandLine -like '*encode_pistes.ps1*' -or $_.Name -eq 'blanci.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+
+File « bonnes pistes » (perch_v2, birdnet, birdnet_v3 sur les trois groupes, puis audioprotopnet sur tout le corpus)
+-------------------------------------------------------------------------------------------------------------------
+
+Les deux disques branchés (BLANCI_2023-24 et BLANCI_2025-26, F:), depuis <depot> :
+
+1. les listes et les chiffres (lecture seule) :
+
+uv run python scripts/encodage/file_pistes.py
+
+   -> rapports\encodage_pistes\LISEZMOI.md, <modèle>_pistes.csv (les trois groupes), <modèle>.csv (tout ce qui manque au stock)
+
+2. voir ce qui serait retiré des stocks (rien n'est retiré) :
+
+uv run blanci pistes --encoder birdnet,birdnet_v3,audioprotopnet
+uv run blanci pistes --encoder perch_v2 --embeddings data/embeddings
+
+3. retirer (partitions réécrites d'un bloc ; la table windows n'est pas touchée) :
+
+uv run blanci pistes --encoder birdnet,birdnet_v3,audioprotopnet --apply
+uv run blanci pistes --encoder perch_v2 --embeddings data/embeddings --apply
+
+4. lancer la file :
+
+Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','<depot>\scripts\encodage\encode_pistes.ps1'
+
+   reprendre à un modèle (ce qui est fait est sauté) : ajouter '-Depuis','birdnet_v3'
+   voir où ça en est : Get-Content <depot>\rapports\encodage.log -Tail 5

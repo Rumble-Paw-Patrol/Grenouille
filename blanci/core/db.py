@@ -146,6 +146,16 @@ MIGRATIONS = [
     """
     ALTER TABLE intervals ADD COLUMN quality TEXT;
     """,
+    # 6 — piste lue pour chaque enregistrement d'un stock d'embeddings (`embedding/channels.py`) :
+    # une règle de piste changée (micro sourd, gain inversé, son étouffé) se juge contre elle.
+    """
+    CREATE TABLE stock_channels (
+        encoder_id   TEXT NOT NULL,          -- identifiant du stock (models.model_id)
+        recording_id TEXT NOT NULL,
+        channel      TEXT NOT NULL,          -- 0, 1 ou mean ; 0 pour un fichier mono
+        PRIMARY KEY (encoder_id, recording_id)
+    );
+    """,
 ]
 
 

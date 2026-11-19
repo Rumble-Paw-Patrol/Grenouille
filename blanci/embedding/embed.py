@@ -32,6 +32,13 @@ from blanci.core.ahead import ahead as read_ahead
 from blanci.core.audio import cut_windows, load_audio, resample
 from blanci.core.db import utc_now, window_id_for
 from blanci.core.locate import mounted_disks, variants
+from blanci.embedding.channels import (
+    MUFFLED_0_CHANNEL,
+    channel_key,
+    channel_rules,
+    check_stock_channels,
+    recording_channel,
+)
 from blanci.embedding.encoders.base import Encoder, stock_id
 from blanci.embedding.grid import hop_for_overlap, overlap_of, window_grid
 from blanci.embedding.store import GATED, EmbeddingStore
@@ -121,6 +128,7 @@ class _Audio:
     windows: list | None = None  # grille de l'enregistrement
     cut: np.ndarray | None = None  # ses fenêtres, prêtes pour l'encodeur...
     rate: int = 0  # ...et leur fréquence d'échantillonnage
+    channel: int | str = 0  # piste lue (`recording_channel`)
 
 
 RESAMPLE_MODES = ("recording", "window")
@@ -210,6 +218,7 @@ def embed_recordings(
     ahead: int = 2,
     resample: str = "recording",
     renamed: dict[str, str] | None = None,
+    rules: list[dict[str, Any]] | None = None,
 ) -> EmbedReport:
     """Encode les enregistrements. Avec `qc_thresholds`, l'audio lu sert aussi au contrôle
     audio de chaque enregistrement qui ne l'a pas encore eu (`blanci qc` le fait d'avance) ;
@@ -229,6 +238,11 @@ def embed_recordings(
     en amont est refusé (`check_stock_identity`) : la reprise y ajouterait des embeddings qui
     ne se comparent pas aux siens (DECISIONS n° 143).
 
+    `rules` (`audio.channel_rules`) : piste lue par micro et par période (`recording_channel`),
+    rangée pour chaque enregistrement encodé (table `stock_channels`). Un stock qui contient des
+    enregistrements encodés sur une autre piste que celle de la règle est refusé
+    (`channels.check_stock_channels`) : la reprise les sauterait ; `blanci pistes` les retire.
+
     `ahead` : enregistrements lus et contrôlés d'avance par le fil de lecture (0 : aucun).
     `resample` : voir `resample_mode` ; rangé avec le stock, qui refuse d'en changer.
     `renamed` (`audio.renamed`) : l'audio est cherché sous `raw_root` puis sur les disques branchés,
@@ -239,10 +253,12 @@ def embed_recordings(
     else:
         gates = None
     mode = resample_mode(encoder, resample)
-    identity = stock_identity(encoder, channel, mode, gates)
+    rules = channel_rules(rules)
+    identity = stock_identity(encoder, channel, mode, gates, rules)
     check_stock_identity(con, eid, identity)
-    protected = positive_recordings(con) if qc_thresholds is not None else set()
     store = EmbeddingStore(store_root, eid)
+    check_stock_channels(con, store, channel, rules)
+    protected = positive_recordings(con) if qc_thresholds is not None else set()
     window_s = round(encoder.window_s, 2)
     hop_s = hop_for_overlap(window_s, overlap)
     report = EmbedReport(eid)
@@ -271,11 +287,12 @@ def embed_recordings(
     def prepare(rec: Any) -> _Audio:
         """Fil de lecture : ce qui se calcule sur le signal sans la base ni l'encodeur."""
         known = parse_flags(rec.qc_flags)
+        read = recording_channel(known, channel, rec._asdict(), rules)
         try:
-            wav, sr = load_audio(find(rec.path), recording_channel(known, channel))
+            wav, sr = load_audio(find(rec.path), read)
         except Exception:  # fichier illisible : déjà signalé à l'inventaire
             return _Audio(failed=True)
-        audio = _Audio(wav, sr)
+        audio = _Audio(wav, sr, channel=read)
         if qc_thresholds is not None and "indices" not in known:
             # `muffled_0` n'est qu'un candidat ici, sur la seule piste encodée : le son étouffé
             # est jugé par `blanci qc` (deux pistes, règle des suites), pas pendant l'encodage.
@@ -344,6 +361,11 @@ def embed_recordings(
             _store_logits(
                 con, encoder, report.encoder_id, [i for i, p in zip(ids, passed, strict=True) if p]
             )
+            con.execute(  # piste lue, jugée à la reprise contre la règle (`check_stock_channels`)
+                "INSERT OR REPLACE INTO stock_channels (encoder_id, recording_id, channel) "
+                "VALUES (?, ?, ?)",
+                (eid, rec.recording_id, channel_key(audio.channel, getattr(rec, "channels", 2))),
+            )
             # Commit tout de suite : le verrou d'écriture n'est gardé que le temps des insertions,
             # le poste d'annotation peut écrire pendant un encodage. Sans risque à la reprise,
             # guidée par le stock, et les insertions sont idempotentes.
@@ -375,25 +397,15 @@ def embed_recordings(
     if report.qc_checked:  # son étouffé : candidats rangés, jugés par suites (n° 194, 203)
         apply_audio_flags(con, qc_thresholds)
     report.wall_s = perf_counter() - began
-    register_encoder(con, encoder, hop_s, report, channel, gates, mode)
+    register_encoder(con, encoder, hop_s, report, channel, gates, mode, rules)
     return report
 
 
 # Réglage d'un stock rangé avant que ce réglage n'existe : la valeur d'alors.
 LEGACY_IDENTITY = {"resample": "window", "openvino_precision": "f32"}
-
-
-# Piste 0 étouffée et piste 1 valable (`muffled_0` sans `muffled_1`, DECISIONS n° 203) :
-# l'enregistrement est encodé sur la piste 1, quel que soit le canal du stock.
-MUFFLED_0_CHANNEL = 1
-
-
-def recording_channel(flags: dict[str, Any], channel: int | str) -> int | str:
-    """Canal lu pour un enregistrement : la piste 1 si la piste 0 est étouffée et pas la 1,
-    sinon `channel`. Un fichier mono est lu tel quel quel que soit le canal (`load_audio`)."""
-    if flags.get("muffled_0") and not flags.get("muffled_1"):
-        return MUFFLED_0_CHANNEL
-    return channel
+# Réglages de piste jugés enregistrement par enregistrement (`channels.check_stock_channels`) :
+# une règle changée ne compte que pour les enregistrements qu'elle touche.
+PER_RECORDING_KEYS = ("muffled_0_channel", "channel_rules")
 
 
 def stock_identity(
@@ -401,9 +413,11 @@ def stock_identity(
     channel: int | str,
     resample: str = "window",
     gates: Upstream | None = None,
+    rules: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Réglages qui font qu'un embedding se compare aux autres de son stock sans être dans son
-    nom : le canal lu (et la piste de repli des enregistrements à la piste 0 étouffée, n° 203),
+    nom : le canal lu (et la piste de repli des enregistrements à la piste 0 étouffée, n° 203,
+    et les règles de piste par micro et par période, `channels.channel_rules`),
     la durée de fenêtre (`window_s`, réglable pour avex), le checkpoint
     (bacpipe `birdmae_base`), la précision OpenVINO, les transformations en amont avec tous
     leurs réglages, le rééchantillonnage (`resample_mode`), les réglages `signal` des portes
@@ -413,6 +427,7 @@ def stock_identity(
     identity: dict[str, Any] = {
         "channel": channel,
         "muffled_0_channel": MUFFLED_0_CHANNEL,
+        "channel_rules": channel_rules(rules),
         "resample": resample,
         "window_s": encoder.window_s,
     }
@@ -434,7 +449,8 @@ def stock_identity(
 def check_stock_identity(con: sqlite3.Connection, eid: str, identity: dict[str, Any]) -> None:
     """ValueError si le stock `eid` a été encodé avec d'autres réglages (`stock_identity`). Un
     réglage absent de la base (stock d'avant ce contrôle) vaut `LEGACY_IDENTITY`, sinon n'est
-    pas comparé."""
+    pas comparé. Les réglages de piste (`PER_RECORDING_KEYS`) ne sont pas comparés ici, mais
+    pour chaque enregistrement du stock (`channels.check_stock_channels`)."""
     row = con.execute(
         "SELECT params_json FROM models WHERE model_id = ? AND kind = 'encoder'", (eid,)
     ).fetchone()
@@ -442,6 +458,8 @@ def check_stock_identity(con: sqlite3.Connection, eid: str, identity: dict[str, 
         return
     stored = json.loads(row[0] or "{}")
     for key, value in identity.items():
+        if key in PER_RECORDING_KEYS:
+            continue
         known = stored.get(key, LEGACY_IDENTITY.get(key))
         if known is not None and known != value:
             raise ValueError(
@@ -515,8 +533,9 @@ def register_encoder(
     channel: int | str = "mean",
     gates: Upstream | None = None,
     resample: str = "window",
+    rules: list[dict[str, Any]] | None = None,
 ) -> None:
-    identity = stock_identity(encoder, channel, resample, gates)
+    identity = stock_identity(encoder, channel, resample, gates, rules)
     params: dict[str, Any] = {
         **_static_params(encoder, hop_s, identity, gates),
         "last_run": asdict(report)

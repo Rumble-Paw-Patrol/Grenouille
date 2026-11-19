@@ -469,11 +469,25 @@ def embed(
             "dans signal_processing.upstream, si signal_processing.position contient upstream."
         ),
     ] = None,
+    recordings_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--recordings",
+            help="CSV à colonne recording_id : n'encoder que ces enregistrements (parmi ceux "
+            "que gardent les drapeaux), ex. une file de `scripts/encodage/file_pistes.py`.",
+        ),
+    ] = None,
+    embeddings: Annotated[
+        Path | None,
+        typer.Option(help="Dossier des stocks (défaut : paths.embeddings)."),
+    ] = None,
 ) -> None:
     """Extraction des embeddings → stock Parquet. Reprenable : ce qui est fait est sauté.
 
     Avec le contrôle audio (défaut), un enregistrement jamais contrôlé l'est sur l'audio déjà
     lu ; silencieux ou au son étouffé, il n'est pas encodé (sauf s'il contient un positif).
+    La piste lue suit `audio.channel` et `audio.channel_rules` ; un stock qui contient des
+    enregistrements encodés sur une autre piste que celle de la règle est refusé (`blanci pistes`).
     """
     cfg = _cfg(ctx)
     if batch:  # l'option l'emporte sur le lot de la config, global ou propre au modèle
@@ -496,6 +510,13 @@ def embed(
         recordings = recordings[recordings["recording_id"].isin(wanted["recording_id"])]
     elif subset is not None:
         raise typer.BadParameter("attendu : benchmark", param_hint="--subset")
+    if recordings_file is not None:
+        wanted = set(pd.read_csv(recordings_file, dtype=str)["recording_id"])
+        recordings = recordings[recordings["recording_id"].isin(wanted)]
+        typer.echo(
+            f"{recordings_file.name} : {len(wanted)} enregistrements, {len(recordings)} gardés "
+            "par les drapeaux et les filtres"
+        )
     if recordings.empty:
         typer.echo("aucun enregistrement retenu par ces filtres")
         raise typer.Exit(1)
@@ -512,13 +533,14 @@ def embed(
         model,
         recordings,
         config_path(cfg, "raw"),
-        config_path(cfg, "embeddings"),
+        embeddings or config_path(cfg, "embeddings"),
         overlap=overlap,
         channel=cfg["audio"]["channel"],
         qc_thresholds=cfg["qc"] if check_qc else None,
         gates=chain,
         resample=cfg["encoders"].get("resample", "recording"),
         renamed=cfg["audio"].get("renamed"),
+        rules=cfg["audio"].get("channel_rules"),
     )
     if report.qc_checked:
         typer.echo(
@@ -532,6 +554,87 @@ def embed(
         f"{report.errors} illisibles ; {report.windows} fenêtres, "
         f"{report.windows_per_s:.1f} fenêtres/s (×{report.realtime_factor:.0f} temps réel)"
     )
+
+
+def _stock_dir(root: Path, name: str) -> Path:
+    """Dossier du stock : `name` tel quel (« birdnet-bacpipe1.3.5 ») ou le seul stock
+    `<name>-<version>` de l'encodeur, sans chevauchement ni portes (« birdnet »)."""
+    if (Path(root) / name).is_dir():
+        return Path(root) / name
+    found = [
+        d
+        for d in sorted(Path(root).glob(f"{name}-*"))
+        if d.is_dir() and "@" not in d.name and "+" not in d.name
+    ]
+    if len(found) != 1:
+        names = ", ".join(d.name for d in found) or "aucun"
+        raise typer.BadParameter(f"{name} : stock introuvable sous {root} ({names})")
+    return found[0]
+
+
+@app.command()
+def pistes(
+    ctx: typer.Context,
+    encoder: Annotated[
+        str, typer.Option(help="Stocks, ex. « birdnet,birdnet_v3 » ou « perch_v2-bacpipe1.3.5 ».")
+    ],
+    embeddings: Annotated[
+        Path | None, typer.Option(help="Dossier des stocks (défaut : paths.embeddings).")
+    ] = None,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Retirer (sans cette option : montrer seulement).")
+    ] = False,
+) -> None:
+    """Enregistrements d'un stock encodés sur une autre piste que celle de la règle.
+
+    La piste de la règle : `audio.channel`, `audio.channel_rules` (micro sourd, gain inversé),
+    puis le repli du son étouffé (n° 203). Sans `--apply`, montre par partition ce qui serait
+    retiré et écrit la liste sous paths.reports/pistes/. Avec `--apply`, retire ces fenêtres du
+    stock (partition réécrite d'un bloc) : la reprise de `blanci embed` les réencode. La table
+    windows n'est pas touchée (même fenêtre pour toute piste, labels attachés).
+    """
+    from blanci.embedding.channels import channel_plan, channel_rules, drop_recordings
+    from blanci.embedding.store import EmbeddingStore
+
+    cfg = _cfg(ctx)
+    con = connect(config_path(cfg, "db"))
+    root = embeddings or config_path(cfg, "embeddings")
+    rules = channel_rules(cfg["audio"].get("channel_rules"))
+    out_dir = config_path(cfg, "reports") / "pistes"
+    for name in _split(encoder):
+        directory = _stock_dir(root, name)
+        store = EmbeddingStore(root, directory.name)
+        plan = channel_plan(con, store, cfg["audio"]["channel"], rules)
+        stale = plan[plan["stale"]]
+        typer.echo(
+            f"{store.encoder_id} ({directory}) : {plan['recording_id'].nunique()} enregistrements, "
+            f"{len(stale)} à retirer ({int(stale['windows'].sum())} fenêtres)"
+        )
+        if stale.empty:
+            continue
+        by = stale.groupby(["encoded", "expected"]).size()
+        for (was, now), n in by.items():
+            typer.echo(f"  piste {was} → piste {now} : {n} enregistrements")
+        parts = stale.groupby(["dataset", "site", "month"]).agg(
+            recordings=("recording_id", "nunique"), windows=("windows", "sum")
+        )
+        for (dataset, site, month), row in parts.iterrows():
+            typer.echo(
+                f"  {dataset}/{site}/{month}.parquet : {row.recordings} enregistrements, "
+                f"{row.windows} fenêtres"
+            )
+        out_dir.mkdir(parents=True, exist_ok=True)
+        listing = out_dir / f"{store.encoder_id}.csv"
+        stale.drop(columns=["stale"]).to_csv(listing, index=False)
+        typer.echo(f"  liste : {listing}")
+        if apply:
+            done = drop_recordings(con, store, stale)
+            typer.echo(
+                f"  retiré : {int(done['windows'].sum())} fenêtres de "
+                f"{int(done['recordings'].sum())} enregistrements, {len(done)} partitions"
+            )
+    if not apply:
+        typer.echo("rien n'a été retiré (--apply pour retirer)")
 
 
 @app.command()
