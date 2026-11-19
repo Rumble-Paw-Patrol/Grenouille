@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -282,34 +283,73 @@ def check_stock_channels(
 # --- Retrait ----------------------------------------------------------------------------------
 
 
+def archive_store(store: EmbeddingStore, day: str) -> EmbeddingStore:
+    """Où vont les fenêtres retirées d'un stock : `<racine>/_mis_de_cote/<stock>_pistes_<jour>`,
+    un stock comme un autre (mêmes partitions, `EmbeddingStore.load`), hors des stocks que lisent
+    `embed`, les têtes et `blanci pistes`. Sert à comparer les scores sur les anciens et les
+    nouveaux embeddings."""
+    return EmbeddingStore(Path(store.root) / "_mis_de_cote", f"{store.encoder_id}_pistes_{day}")
+
+
 def drop_from_partition(
-    store: EmbeddingStore, dataset: str, site: str, month: str, recording_ids: Iterable[str]
+    store: EmbeddingStore,
+    dataset: str,
+    site: str,
+    month: str,
+    recording_ids: Iterable[str],
+    keep: EmbeddingStore | None = None,
 ) -> int:
     """Retire d'une partition les fenêtres de ces enregistrements ; rend le nombre retiré.
 
     Les morceaux d'un passage interrompu sont d'abord fondus (`consolidate`). La partition est
     recopiée groupe de lignes par groupe de lignes, sans être chargée, dans un fichier
     temporaire qui la remplace d'un coup : interrompu, le retrait laisse la partition entière.
-    Une partition vidée est supprimée."""
+    Une partition vidée est supprimée. Avec `keep`, les fenêtres retirées vont d'abord dans la
+    même partition de ce stock (`archive_store`), écrite en entier avant que la partition
+    d'origine ne soit remplacée ; un retrait refait après une coupure les y remet sans doublon
+    (`consolidate` garde la dernière écriture d'une fenêtre)."""
     path = store.consolidate(dataset, site, month)
     wanted = pa.array(sorted(set(recording_ids)), type=pa.string())
     if not path.exists() or not len(wanted):
         return 0
     tmp = path.with_suffix(".parquet.tmp")
+    kept_tmp = None
+    if keep is not None:
+        target = keep.partition_path(dataset, site, month)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        kept_tmp = target.with_suffix(".parquet.tmp")
     removed = kept = 0
     with pq.ParquetFile(path) as source:
-        with pq.ParquetWriter(tmp, source.schema_arrow, **WRITE_OPTIONS) as writer:
+        schema = source.schema_arrow
+        writer = pq.ParquetWriter(tmp, schema, **WRITE_OPTIONS)
+        archive = pq.ParquetWriter(kept_tmp, schema, **WRITE_OPTIONS) if kept_tmp else None
+        try:
             for group in range(source.num_row_groups):
                 table = source.read_row_group(group)
                 ids = table.column("recording_id")
                 if pa.types.is_dictionary(ids.type):
                     ids = ids.cast(pa.string())
                 drop = pc.is_in(ids, value_set=wanted)
-                removed += int(pc.sum(drop).as_py() or 0)
+                n = int(pc.sum(drop).as_py() or 0)
+                if n and archive is not None:
+                    archive.write_table(table.filter(drop))
+                removed += n
                 table = table.filter(pc.invert(drop))
                 kept += table.num_rows
                 if table.num_rows:
                     writer.write_table(table)
+        finally:
+            writer.close()
+            if archive is not None:
+                archive.close()
+    if kept_tmp is not None:
+        if removed:
+            parts = keep.part_paths(dataset, site, month)
+            number = int(parts[-1].stem.split(PART_MARK)[1]) + 1 if parts else 1
+            kept_tmp.replace(target.with_name(f"{month}{PART_MARK}{number:06d}.parquet"))
+            keep.consolidate(dataset, site, month)
+        else:
+            kept_tmp.unlink()
     if not removed:
         tmp.unlink()
     elif not kept:
@@ -321,15 +361,28 @@ def drop_from_partition(
 
 
 def drop_recordings(
-    con: sqlite3.Connection, store: EmbeddingStore, plan: pd.DataFrame
+    con: sqlite3.Connection,
+    store: EmbeddingStore,
+    plan: pd.DataFrame,
+    keep: EmbeddingStore | None = None,
 ) -> pd.DataFrame:
     """Retire du stock les enregistrements du plan (colonnes `recording_id`, `dataset`, `site`,
-    `month`), partition par partition, puis leur piste rangée (`stock_channels`). La table
-    `windows` n'est pas touchée : ses lignes ne dépendent pas de la piste, servent aux autres
-    stocks de même grille et portent les labels. Rend, par partition, les fenêtres retirées."""
+    `month`), partition par partition, puis leur piste rangée (`stock_channels`). Avec `keep`
+    (`archive_store`), les fenêtres retirées y sont gardées, et le plan à côté (`retrait.csv` :
+    piste encodée et piste de la règle de chaque enregistrement). La table `windows` n'est pas
+    touchée : ses lignes ne dépendent pas de la piste, servent aux autres stocks de même grille
+    et portent les labels. Rend, par partition, les fenêtres retirées."""
+    if keep is not None and len(plan):
+        keep.directory.mkdir(parents=True, exist_ok=True)
+        listing = keep.directory / "retrait.csv"
+        old = pd.read_csv(listing, dtype=str) if listing.exists() else pd.DataFrame()
+        new = plan.drop(columns=["stale"], errors="ignore").astype(str)
+        pd.concat([old, new], ignore_index=True).drop_duplicates(
+            "recording_id", keep="last"
+        ).to_csv(listing, index=False)
     rows = []
     for (dataset, site, month), part in plan.groupby(["dataset", "site", "month"]):
-        removed = drop_from_partition(store, dataset, site, month, part["recording_id"])
+        removed = drop_from_partition(store, dataset, site, month, part["recording_id"], keep)
         rows.append((dataset, site, month, part["recording_id"].nunique(), removed))
     con.executemany(
         "DELETE FROM stock_channels WHERE encoder_id = ? AND recording_id = ?",

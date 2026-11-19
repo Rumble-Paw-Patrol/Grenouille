@@ -590,10 +590,20 @@ def pistes(
     La piste de la règle : `audio.channel`, `audio.channel_rules` (micro sourd, gain inversé),
     puis le repli du son étouffé (n° 203). Sans `--apply`, montre par partition ce qui serait
     retiré et écrit la liste sous paths.reports/pistes/. Avec `--apply`, retire ces fenêtres du
-    stock (partition réécrite d'un bloc) : la reprise de `blanci embed` les réencode. La table
-    windows n'est pas touchée (même fenêtre pour toute piste, labels attachés).
+    stock (partition réécrite d'un bloc) : la reprise de `blanci embed` les réencode. Les
+    fenêtres retirées sont gardées dans <stocks>/_mis_de_cote/<stock>_pistes_<aaaammjj>/ (mêmes
+    partitions, avec retrait.csv), pour comparer les scores sur les anciens et les nouveaux
+    embeddings. La table windows n'est pas touchée (même fenêtre pour toute piste, labels
+    attachés).
     """
-    from blanci.embedding.channels import channel_plan, channel_rules, drop_recordings
+    from datetime import date
+
+    from blanci.embedding.channels import (
+        archive_store,
+        channel_plan,
+        channel_rules,
+        drop_recordings,
+    )
     from blanci.embedding.store import EmbeddingStore
 
     cfg = _cfg(ctx)
@@ -628,10 +638,12 @@ def pistes(
         stale.drop(columns=["stale"]).to_csv(listing, index=False)
         typer.echo(f"  liste : {listing}")
         if apply:
-            done = drop_recordings(con, store, stale)
+            keep = archive_store(store, f"{date.today():%Y%m%d}")
+            done = drop_recordings(con, store, stale, keep)
             typer.echo(
                 f"  retiré : {int(done['windows'].sum())} fenêtres de "
-                f"{int(done['recordings'].sum())} enregistrements, {len(done)} partitions"
+                f"{int(done['recordings'].sum())} enregistrements, {len(done)} partitions ; "
+                f"gardées dans {keep.directory}"
             )
     if not apply:
         typer.echo("rien n'a été retiré (--apply pour retirer)")

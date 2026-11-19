@@ -2,12 +2,12 @@
 
 Fiche vérifiée le 10/11/2026 sur le commit `9473508` du dépôt public (`git log -1 --format=%h`), arbre de travail sans modification dans ce dossier ; mise à jour le 19/11/2026 pour `channels.py` (piste par micro et par période) et ce qu'il change dans `embed.py`. Pour savoir si elle est périmée : `git diff --stat 9473508 -- blanci/embedding` ; une sortie vide veut dire que le code de ce dossier n'a pas bougé.
 
-`embedding/` est l'étape 2 : 6 fichiers, 1 282 lignes, plus le sous-dossier `encoders/` (10 fichiers, 1 129 lignes), qui a sa propre fiche : [`encoders/FONCTIONS.md`](encoders/FONCTIONS.md). Ce dossier choisit les enregistrements à encoder, les découpe en fenêtres, les passe dans un encodeur gelé, range les vecteurs (embeddings) dans des fichiers Parquet, et sait y chercher les fenêtres qui ressemblent à un exemple.
+`embedding/` est l'étape 2 : 6 fichiers, 1 335 lignes, plus le sous-dossier `encoders/` (10 fichiers, 1 129 lignes), qui a sa propre fiche : [`encoders/FONCTIONS.md`](encoders/FONCTIONS.md). Ce dossier choisit les enregistrements à encoder, les découpe en fenêtres, les passe dans un encodeur gelé, range les vecteurs (embeddings) dans des fichiers Parquet, et sait y chercher les fenêtres qui ressemblent à un exemple.
 
 | Fichier | Lignes | Rôle |
 |---|---|---|
 | [`embed.py`](embed.py) | 551 | l'encodage : enregistrements → fenêtres → encodeur → stock ; identité d'un stock |
-| [`channels.py`](channels.py) | 339 | la piste lue pour chaque enregistrement (règles par micro et par période, repli du son étouffé), et le retrait d'un stock de ce qui est encodé sur une autre |
+| [`channels.py`](channels.py) | 392 | la piste lue pour chaque enregistrement (règles par micro et par période, repli du son étouffé), et le retrait d'un stock de ce qui est encodé sur une autre |
 | [`grid.py`](grid.py) | 88 | la grille de fenêtres d'un enregistrement (décalages, pas, chevauchement) |
 | [`store.py`](store.py) | 220 | le stock d'embeddings : fichiers Parquet par encodeur, jeu, site et mois |
 | [`index.py`](index.py) | 76 | la recherche par similarité cosinus dans un stock |
@@ -22,7 +22,7 @@ Lecture : `a → b` veut dire « `a` appelle `b` » ; un point-virgule sépare l
 - **Pour chaque partition (jeu, site, mois)** : `EmbeddingStore.consolidate` ; `EmbeddingStore.read_meta` ; `core/ahead.ahead` → `prepare` (dans le fil de lecture) → `inputs/qc.parse_flags` ; `find` → `core/locate.variants` ; `channels.recording_channel` → `rule_channel` → `matching_rule` ; `core/audio.load_audio` ; `inputs/qc.qc_indices`, `qc_flags`, `is_excluded` ; `window_grid` ; `encoder_windows` → `core/audio.resample`, `cut_windows`.
 - **Pour chaque enregistrement lu, dans le fil principal** : `inputs/qc.merge_audio_flags` ; avec des portes : `signal_processing.load_onsets`, `recording_onsets`, `gate_values`, `Upstream.passes` ; `encoder.embed` ; `core/db.window_id_for` ; `_store_logits` ; la piste lue dans `stock_channels` (`channels.channel_key`) ; tous les 50 enregistrements `_flush` → `EmbeddingStore.append` → `_table`, `_write_atomic`. En fin de partition : `_flush` ; `EmbeddingStore.consolidate`.
 - **À la fin du passage** : `inputs/qc.apply_audio_flags` (si un contrôle audio a eu lieu) ; `register_encoder` → `stock_identity`, `_static_params`, `_add_totals`.
-- **`blanci pistes`** : `cli.pistes` → `cli._stock_dir` ; `channels.channel_rules` ; `channel_plan` ; avec `--apply` : `drop_recordings` → `drop_from_partition` → `EmbeddingStore.consolidate`.
+- **`blanci pistes`** : `cli.pistes` → `cli._stock_dir` ; `channels.channel_rules` ; `channel_plan` ; avec `--apply` : `archive_store` ; `drop_recordings` → `drop_from_partition` → `EmbeddingStore.consolidate` (stock et stock mis de côté).
 - **`scripts/encodage/file_pistes.py`** (la file « bonnes pistes ») : `channel_plan`, `expected_channels`, `matching_rule`, `select_recordings`, `window_grid`, sur une base ouverte en lecture seule.
 - **`blanci tokens`** : `cli.tokens` → `overlap_from_cfg` ; `encoders.get_encoder` ; `service.compute_tokens` → `encoders/base.stock_id` ; `service.store_for` → `EmbeddingStore` ; `inputs/dataset.embedded_training_set` → `EmbeddingStore.load` → `fragments`, `read` ; `encoder_windows` ; `encoder.embed_tokens`. Les jetons eux-mêmes sont rangés par `heads/attentive.TokenStore`, pas par ce dossier.
 - **`blanci qc`** et **`blanci onsets`** : `cli.qc_command` et `cli.onsets` → `select_recordings` seulement (la liste des enregistrements à lire) ; rien d'autre de ce dossier.
@@ -39,7 +39,7 @@ Passe les enregistrements dans un encodeur et range le résultat. Lit : la table
 
 #### `select_recordings(con, dataset=None, site=None, peak_hours=None, utc_offset_h=-3, exclude_flags=EXCLUDING_FLAGS)` — [embed.py:86](embed.py#L86)
 
-- Quand : pour dresser la liste des enregistrements d'une commande qui lit l'audio ou tire des candidats : [`cli.embed`](../cli.py#L433), [`cli.qc_command`](../cli.py#L211), [`cli.onsets`](../cli.py#L1024), [`cli.anuraset_campaign`](../cli.py#L1760), `annotation/selection.phenology_candidates`, `annotation/workbench.random_candidates` et `recording_candidates`, `anuraset/encodage/encoder.py`, `documentation/tableau-de-bord/construire.encodage` ; et dans 23 fonctions de tests.
+- Quand : pour dresser la liste des enregistrements d'une commande qui lit l'audio ou tire des candidats : [`cli.embed`](../cli.py#L433), [`cli.qc_command`](../cli.py#L211), [`cli.onsets`](../cli.py#L1139), [`cli.anuraset_campaign`](../cli.py#L1772), `annotation/selection.phenology_candidates`, `annotation/workbench.random_candidates` et `recording_candidates`, `anuraset/encodage/encoder.py`, `documentation/tableau-de-bord/construire.encodage` ; et dans 23 fonctions de tests.
 - Reçoit : la connexion et des filtres facultatifs. Renvoie : un tableau pandas, une ligne par enregistrement retenu, toutes les colonnes de `recordings`, trié par chemin.
 - Fait : 1. lit toute la table `recordings` ; 2. garde le jeu demandé (égalité stricte) et le site demandé (sans tenir compte de la casse) ; 3. avec `peak_hours`, garde les enregistrements dont l'heure locale (`start_utc` + `utc_offset_h`) tombe dans une des plages `[début, fin[` ; 4. retire ceux qu'un des drapeaux `exclude_flags` écarte (`is_excluded`, qui laisse passer un enregistrement marqué `keep`), sauf ceux où A. blanci a été entendu (`positive_recordings`).
 - Détails : `cli.embed` passe `recorder.filename_utc_offset_h` (−3, la Guyane) et, avec `--peak-hours`, `peak_hours_local` (7–9 h et 15–17 h dans `config/default.yaml`). `cli.qc_command` retire `muffled` des drapeaux qui écartent, pour relire les enregistrements déjà jugés étouffés. `exclude_flags=()` ne retire rien (AnuraSet).
@@ -47,7 +47,7 @@ Passe les enregistrements dans un encodeur et range le résultat. Lit : la table
 
 #### `embed_recordings(con, encoder, recordings, raw_root, store_root, overlap=0.5, flush_every=50, progress_every=100, channel="mean", qc_thresholds=None, gates=None, ahead=2, resample="recording", renamed=None, rules=None)` — [embed.py:206](embed.py#L206)
 
-- Quand : c'est le cœur de `blanci embed` ([`cli.embed`](../cli.py#L433)) ; aussi [`cli.anuraset_campaign`](../cli.py#L1760) et `anuraset/encodage/encoder.py` ; 32 fonctions de tests.
+- Quand : c'est le cœur de `blanci embed` ([`cli.embed`](../cli.py#L433)) ; aussi [`cli.anuraset_campaign`](../cli.py#L1772) et `anuraset/encodage/encoder.py` ; 32 fonctions de tests.
 - Reçoit : la connexion, l'encodeur (rendu par `get_encoder`), le tableau de `select_recordings`, `paths.raw`, `paths.embeddings`, le chevauchement, le canal (`audio.channel`), les seuils du contrôle audio (`cfg["qc"]`, ou `None` pour ne pas contrôler), les portes du traitement du signal en amont, le mode de rééchantillonnage (`encoders.resample`), la table des dossiers renommés (`audio.renamed`), les règles de piste (`audio.channel_rules`). Renvoie : un `EmbedReport`.
 - Fait, avant la boucle : 1. calcule le nom du stock : `stock_id(encoder, overlap)`, suivi de `+<étiquette des portes>` si des portes sont actives (sinon `gates` est mis à `None`) ; 2. refuse de continuer si ce stock existe déjà avec d'autres réglages (`check_stock_identity`), ou s'il contient des enregistrements encodés sur une autre piste que celle de la règle (`channels.check_stock_channels`, qui range au passage la piste des enregistrements encodés avant la table `stock_channels`) ; 3. range l'identité du stock dans `models` tout de suite (`_register_identity`) ; 4. dresse une fois la liste des racines où chercher l'audio : `raw_root`, puis les disques de `_local_disks`.
 - Fait, pour chaque groupe (jeu, site, mois) : 5. fond dans le fichier de la partition les morceaux laissés par un passage interrompu (`consolidate`) et lit les `recording_id` déjà présents ; ceux-là sont sautés (`skipped`) ; 6. lit les autres en avance dans un fil à part (`core.ahead`, `prepare` ci-dessous) ; 7. un fichier illisible compte dans `errors` et n'arrête pas le passage, sauf si le dernier disque qui a donné un fichier n'existe plus : `RuntimeError` « n'est plus accessible ; relancer » ; 8. si le contrôle audio a été fait au passage, range ses drapeaux (`merge_audio_flags`) et saute l'enregistrement s'il est écarté et sans positif (`qc_excluded`) ; 9. avec des portes, calcule leurs valeurs par fenêtre (débuts de notes relus de la table `onsets`, sinon recalculés sans être rangés) et marque les fenêtres arrêtées ; 10. appelle `encoder.embed` sur les seules fenêtres qui passent ; une fenêtre arrêtée garde un embedding nul ; 11. écrit les fenêtres dans `windows`, les logits éventuels dans `scores` (`_store_logits`), la piste lue dans `stock_channels`, et valide tout de suite ; 12. garde les lignes en mémoire et les écrit dans un morceau du stock tous les `flush_every` enregistrements (`_flush`) ; 13. en fin de groupe, écrit le reste et fond les morceaux (`consolidate`).
@@ -111,59 +111,60 @@ Passe les enregistrements dans un encodeur et range le résultat. Lit : la table
 
 La piste par défaut est `audio.channel` (0 : le micro réglé à 6 dB). Une règle de `audio.channel_rules` la change pour un micro (et, s'ils sont dits, un jeu, un site, une période) ; puis le repli du son étouffé prend l'autre piste si celle-ci est étouffée et pas l'autre (DECISIONS n° 203). Chaque stock range la piste lue de chaque enregistrement (table `stock_channels`, migration 6 de `core/db.py`) ; `embed` refuse un stock qui contient des enregistrements encodés sur une autre piste que celle de la règle, et `blanci pistes` les retire.
 
-#### `channel_rules(raw)` — [channels.py:47](channels.py#L47)
+#### `channel_rules(raw)` — [channels.py:48](channels.py#L48)
 
 - Quand : au début de `embed_recordings`, dans `stock_identity`, dans `cli.pistes` et `file_pistes.py`.
-- Reçoit : la liste `audio.channel_rules` (ou `None`). Renvoie : les règles sous une forme fixe : `mic_id` en liste triée, `dataset` et `site` en texte, `from` et `to` en UTC au format de `start_utc` (`_utc` ([channels.py:39](channels.py#L39)) : une heure sans fuseau est lue en UTC), `reason` retirée. Une clé inconnue, une piste autre que 0 ou 1, un `from` qui ne précède pas `to` lèvent `ValueError`.
+- Reçoit : la liste `audio.channel_rules` (ou `None`). Renvoie : les règles sous une forme fixe : `mic_id` en liste triée, `dataset` et `site` en texte, `from` et `to` en UTC au format de `start_utc` (`_utc` ([channels.py:40](channels.py#L40)) : une heure sans fuseau est lue en UTC), `reason` retirée. Une clé inconnue, une piste autre que 0 ou 1, un `from` qui ne précède pas `to` lèvent `ValueError`.
 - Pourquoi : c'est cette forme qui entre dans l'identité du stock ; la fonction est idempotente (une règle relue de la base garde sa forme), et un commentaire changé (`reason`) ne change pas l'identité.
 
-#### `matching_rule(rec, rules)` — [channels.py:77](channels.py#L77)
+#### `matching_rule(rec, rules)` — [channels.py:78](channels.py#L78)
 
 - Renvoie : le rang de la première règle qui s'applique à l'enregistrement, `None` sinon. Une règle s'applique si `mic_id` est dans sa liste, si `dataset` et `site` (quand la règle les dit) sont ceux de l'enregistrement, et si le début est dans [`from`, `to`[ ; un enregistrement sans date n'est pas touché par une règle datée.
-- `rule_channel(rec, rules, default)` ([channels.py:95](channels.py#L95)) : la piste de cette règle, ou `default`.
+- `rule_channel(rec, rules, default)` ([channels.py:96](channels.py#L96)) : la piste de cette règle, ou `default`.
 
-#### `recording_channel(flags, channel, rec=None, rules=None, fallback=True)` — [channels.py:103](channels.py#L103)
+#### `recording_channel(flags, channel, rec=None, rules=None, fallback=True)` — [channels.py:104](channels.py#L104)
 
 - Quand : dans `prepare` (`embed_recordings`), pour chaque enregistrement ; via `expected_channels` et `legacy_channels`.
-- Renvoie : la piste de la règle (sinon `channel`), puis, avec `fallback`, l'autre piste si celle-ci est étouffée seule : piste 0 étouffée et pas la 1 → `MUFFLED_0_CHANNEL` ([channels.py:35](channels.py#L35)), c'est-à-dire 1 ; piste 1 choisie, étouffée et pas la 0 → 0. Avec `channel="mean"`, seul le premier cas joue (comme avant les règles).
+- Renvoie : la piste de la règle (sinon `channel`), puis, avec `fallback`, l'autre piste si celle-ci est étouffée seule : piste 0 étouffée et pas la 1 → `MUFFLED_0_CHANNEL` ([channels.py:36](channels.py#L36)), c'est-à-dire 1 ; piste 1 choisie, étouffée et pas la 0 → 0. Avec `channel="mean"`, seul le premier cas joue (comme avant les règles).
 - Pourquoi : un enregistrement dont seule la piste lue est étouffée reste dans le corpus et s'encode sur l'autre (n° 203) ; un micro sourd (Kaw D SMA14079, 2024) ou réglé à 18 dB sur la piste 0 (21 points de Patawa Est et RNRT) se lit sur la piste 1.
 
-#### `channel_key(channel, channels=2)` — [channels.py:122](channels.py#L122)
+#### `channel_key(channel, channels=2)` — [channels.py:123](channels.py#L123)
 
 - Renvoie : la piste telle que rangée dans `stock_channels` : « 0 », « 1 » ou « mean » ; « 0 » pour un fichier mono (`recordings.channels` = 1), qui n'a qu'une piste quel que soit le canal demandé.
 
-#### `expected_channels(recordings, channel, rules)` et `legacy_channels(recordings, stored, channel)` — [channels.py:145](channels.py#L145), [channels.py:152](channels.py#L152)
+#### `expected_channels(recordings, channel, rules)` et `legacy_channels(recordings, stored, channel)` — [channels.py:146](channels.py#L146), [channels.py:153](channels.py#L153)
 
 - Renvoient : une piste par enregistrement (index : `recording_id`), passée par `channel_key`. `expected_channels` : la piste de la règle d'aujourd'hui, repli compris. `legacy_channels` : la piste qu'a lue un enregistrement encodé avant la table `stock_channels`, d'après les réglages rangés avec son stock : son canal, ses règles (aucune avant leur création), le repli du son étouffé seulement si `muffled_0_channel` est rangé (depuis le n° 203).
 - Limite : les drapeaux sont ceux d'aujourd'hui ; un `muffled_0` posé après l'encodage d'un enregistrement ancien n'est pas vu. Une fois sa piste rangée (`check_stock_channels`), un drapeau changé se juge contre elle.
-- `_channels_of(recordings, channel, rules, fallback)` ([channels.py:132](channels.py#L132)) : le calcul commun.
+- `_channels_of(recordings, channel, rules, fallback)` ([channels.py:133](channels.py#L133)) : le calcul commun.
 
-#### `stock_contents(store)` — [channels.py:169](channels.py#L169)
+#### `stock_contents(store)` — [channels.py:170](channels.py#L170)
 
 - Renvoie : les enregistrements du stock et leurs fenêtres, partition par partition (morceaux d'un passage interrompu compris) : `recording_id`, `dataset`, `site`, `month`, `windows`. Ne lit que la colonne `recording_id`.
 
-#### `recorded_channels(con, encoder_id)` et `record_channels(con, encoder_id, channels, replace=True)` — [channels.py:185](channels.py#L185), [channels.py:197](channels.py#L197)
+#### `recorded_channels(con, encoder_id)` et `record_channels(con, encoder_id, channels, replace=True)` — [channels.py:186](channels.py#L186), [channels.py:198](channels.py#L198)
 
 - Lisent et écrivent la table `stock_channels`. `recorded_channels` rend une série vide si la table n'existe pas (base ouverte en lecture seule d'avant la migration 6, comme dans `file_pistes.py`). `replace=False` garde une piste déjà rangée.
 
-#### `channel_plan(con, store, channel, rules, contents=None)` — [channels.py:216](channels.py#L216)
+#### `channel_plan(con, store, channel, rules, contents=None)` — [channels.py:217](channels.py#L217)
 
 - Quand : dans `check_stock_channels`, `cli.pistes` et `file_pistes.py`.
 - Renvoie : une ligne par (enregistrement, partition) du stock : `encoded` (la piste rangée, sinon `legacy_channels`), `expected` (`expected_channels`), `recorded`, `stale` (les deux diffèrent), avec le micro, la date et les fenêtres. Un enregistrement du stock absent de `recordings` est laissé de côté.
-- `_stored_identity(con, encoder_id)` ([channels.py:209](channels.py#L209)) : `params_json` du stock, `{}` s'il n'est pas rangé.
+- `_stored_identity(con, encoder_id)` ([channels.py:210](channels.py#L210)) : `params_json` du stock, `{}` s'il n'est pas rangé.
 
-#### `check_stock_channels(con, store, channel, rules, command="blanci pistes")` — [channels.py:251](channels.py#L251)
+#### `check_stock_channels(con, store, channel, rules, command="blanci pistes")` — [channels.py:252](channels.py#L252)
 
 - Quand : au début de `embed_recordings`, après `check_stock_identity`.
 - Fait : `ValueError` si le plan a des lignes `stale` (le message dit combien, de quelle piste à quelle piste, combien de fenêtres, et la commande à lancer) ; sinon range la piste des enregistrements encodés avant la table (`record_channels`, sans remplacer). Rend le plan.
 - Pourquoi : la reprise saute un enregistrement déjà présent dans le stock ; sans ce refus, un stock garderait des embeddings d'une piste et en recevrait de l'autre.
 
-#### `drop_recordings(con, store, plan)` — [channels.py:323](channels.py#L323)
+#### `drop_recordings(con, store, plan, keep=None)` — [channels.py:363](channels.py#L363)
 
-- Quand : `blanci pistes --apply`, sur les lignes `stale` du plan.
-- Fait : pour chaque partition, `drop_from_partition` ; puis efface la piste rangée de ces enregistrements dans `stock_channels`. Rend, par partition, les enregistrements et fenêtres retirés.
+- Quand : `blanci pistes --apply`, sur les lignes `stale` du plan, avec `keep = archive_store(...)`.
+- Fait : avec `keep`, ajoute le plan à `retrait.csv` dans le stock mis de côté (piste encodée et piste de la règle de chaque enregistrement ; un enregistrement retiré deux fois n'y est qu'une fois) ; pour chaque partition, `drop_from_partition` ; puis efface la piste rangée de ces enregistrements dans `stock_channels`. Rend, par partition, les enregistrements et fenêtres retirés.
 - Ce qui n'est pas touché : la table `windows`. Ses lignes ne dépendent pas de la piste, servent aux autres stocks de même grille et portent les labels ; la reprise de `embed` les réinsère à l'identique (`INSERT OR IGNORE`). Les scores déjà calculés sur ces fenêtres (table `scores`) ne sont pas touchés non plus.
-- `drop_from_partition(store, dataset, site, month, recording_ids)` ([channels.py:285](channels.py#L285)) : fond d'abord les morceaux (`consolidate`), recopie la partition groupe de lignes par groupe de lignes sans les fenêtres retirées dans un fichier temporaire qui la remplace d'un coup (interrompue, la partition reste entière) ; une partition vidée est supprimée. Rend le nombre de fenêtres retirées.
+- `drop_from_partition(store, dataset, site, month, recording_ids, keep=None)` ([channels.py:294](channels.py#L294)) : fond d'abord les morceaux (`consolidate`), recopie la partition groupe de lignes par groupe de lignes sans les fenêtres retirées dans un fichier temporaire ; avec `keep`, les fenêtres retirées sont écrites en même temps dans un morceau de la même partition du stock mis de côté, fondu (`consolidate`) avant que la partition d'origine ne soit remplacée d'un coup. Interrompu, le retrait laisse la partition entière ; refait, il ne double rien (la dernière écriture d'une fenêtre l'emporte). Une partition vidée est supprimée. Rend le nombre de fenêtres retirées.
+- `archive_store(store, day)` ([channels.py:286](channels.py#L286)) : le stock mis de côté, `<racine des stocks>/_mis_de_cote/<stock>_pistes_<jour>`. Pourquoi : garder les anciens embeddings pour comparer les scores avant et après le changement de piste (Léonard, 19/11/2026) ; hors des dossiers que lisent `embed`, les têtes et `blanci pistes`, il se lit comme un stock (`EmbeddingStore(<racine>/_mis_de_cote, <nom>).load()`).
 
 ## `grid.py` : la grille de fenêtres
 
@@ -171,7 +172,7 @@ Des calculs seulement : ne lit et n'écrit rien. Une fenêtre est un couple `(d�
 
 #### `window_grid(duration_s, window_s, hop_s, tol_s=0.05)` — [grid.py:50](grid.py#L50)
 
-- Quand : chaque fois qu'il faut les fenêtres d'un enregistrement : à l'encodage (`prepare`, `embed_recordings`), et dans 9 fonctions hors de ce dossier : [`cli.check_grid`](../cli.py#L399), [`cli._echo_grid`](../cli.py#L714), `service.estimate_prevalence`, `annotation/selection.phenology_candidates`, `annotation/workbench.random_candidates`, `evaluation/qc_calibration._span_grid`, `exploration/explore.recording_windows` et `paired_for_recording`, `heads/baselines.evaluation_windows`.
+- Quand : chaque fois qu'il faut les fenêtres d'un enregistrement : à l'encodage (`prepare`, `embed_recordings`), et dans 9 fonctions hors de ce dossier : [`cli.check_grid`](../cli.py#L399), [`cli._echo_grid`](../cli.py#L829), `service.estimate_prevalence`, `annotation/selection.phenology_candidates`, `annotation/workbench.random_candidates`, `evaluation/qc_calibration._span_grid`, `exploration/explore.recording_windows` et `paired_for_recording`, `heads/baselines.evaluation_windows`.
 - Reçoit : la durée de l'enregistrement, la durée de fenêtre, le pas. Renvoie : la liste des fenêtres.
 - Fait : 1. refuse une durée ou un pas nuls ou négatifs, un pas plus grand que la fenêtre (« la grille aurait des trous »), un pas qui n'est pas un multiple de 0,01 s ; 2. un enregistrement plus court qu'une fenêtre (à `tol_s` près) donne une seule fenêtre à 0 s ; 3. sinon une fenêtre tous les `hop_s`, tant qu'elle ne dépasse pas la fin de plus de `tol_s` (5 centièmes : l'encodeur complétera par des zéros) ; 4. si la fin n'est pas couverte, une dernière fenêtre est collée à la fin (décalage arrondi au centième inférieur).
 - Exemple vérifié sur la formule : 120 s, fenêtre de 5 s, pas de 2,5 s → 47 fenêtres.
@@ -179,18 +180,18 @@ Des calculs seulement : ne lit et n'écrit rien. Une fenêtre est un couple `(d�
 
 #### `hop_for_overlap(window_s, overlap)` — [grid.py:17](grid.py#L17)
 
-- Quand : pour passer du chevauchement demandé au pas : `embed_recordings`, [`cli._echo_grid`](../cli.py#L714), `exploration/explore.recording_windows`.
+- Quand : pour passer du chevauchement demandé au pas : `embed_recordings`, [`cli._echo_grid`](../cli.py#L829), `exploration/explore.recording_windows`.
 - Renvoie : `fenêtre × (1 − chevauchement)`, arrondi au centième, jamais moins de 0,01 s. Un chevauchement négatif ou au-dessus de `MAX_OVERLAP` (0,99, [grid.py:14](grid.py#L14)) lève `ValueError`.
 - Détail (docstring) : à cause de l'arrondi, le chevauchement réel peut différer un peu du demandé ; à 0 % une note à cheval sur deux fenêtres est coupée, à 99 % il y a 50 fois plus de fenêtres qu'à 50 %.
 
 #### `overlap_of(window_s, hop_s)` — [grid.py:31](grid.py#L31)
 
-- Quand : pour afficher ou ranger le chevauchement réel : [`cli._echo_grid`](../cli.py#L714) et `embed._static_params`.
+- Quand : pour afficher ou ranger le chevauchement réel : [`cli._echo_grid`](../cli.py#L829) et `embed._static_params`.
 - Renvoie : `1 − pas ÷ fenêtre`.
 
 #### `overlap_from_cfg(cfg)` — [grid.py:36](grid.py#L36)
 
-- Quand : quand la commande n'a pas reçu `--overlap` : [`cli.embed`](../cli.py#L433), [`cli.tokens`](../cli.py#L1529), [`cli.anuraset_campaign`](../cli.py#L1760), `evaluation/throughput.measure_by_name`, `anuraset/encodage/encoder.py`.
+- Quand : quand la commande n'a pas reçu `--overlap` : [`cli.embed`](../cli.py#L433), [`cli.tokens`](../cli.py#L1644), [`cli.anuraset_campaign`](../cli.py#L1772), `evaluation/throughput.measure_by_name`, `anuraset/encodage/encoder.py`.
 - Renvoie : `1 − encoders.grid_hop_ratio` si cet ancien réglage est fixé ; sinon `encoders.overlap` ; sinon `DEFAULT_OVERLAP` (0,5, [grid.py:13](grid.py#L13)).
 - Pourquoi (docstring) : `encoders.overlap` est toujours défini dans `config/default.yaml` ; sans cette priorité, un `grid_hop_ratio` mis dans une configuration locale ne serait jamais lu.
 
