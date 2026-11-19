@@ -395,62 +395,86 @@ def fig_completude(rec: pd.DataFrame) -> dict:
         station.get((inverse.get(a, a), b), f"{a}/?")
         for a, b in zip(x.site, x.mic_id, strict=True)])
     stations = sorted(d23.station.unique())
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(12.13, 3.2),
-                                 gridspec_kw={"width_ratios": [2.2, 1.1]})
+    rouge, cm = "#C0492F", plt.get_cmap("Greens")
+    h1, h2 = 0.15, 0.127  # même épaisseur à l'écran (5 et 6 lignes sur la même hauteur)
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(12.13, 5.0),
+                                 gridspec_kw={"width_ratios": [1.7, 1]})
+
+    def trous(vides):
+        """Séries de jours vides consécutifs : [(premier, dernier), ...]."""
+        runs, debut, prec = [], None, None
+        for d in vides:
+            if prec is None or d - prec > pd.Timedelta(days=1):
+                if debut is not None:
+                    runs.append((debut, prec))
+                debut = d
+            prec = d
+        if debut is not None:
+            runs.append((debut, prec))
+        return runs
+
     for y, st in enumerate(stations):
         g = d23[d23.station == st]
-        a1.scatter(g.day, [y] * len(g), c=g.completude.clip(0, 1), cmap="Greens", vmin=0, vmax=1,
-                   s=9, marker="s", linewidths=0)
+        jours = g.groupby("day").completude.mean().clip(0, 1)
+        a1.broken_barh([(d, pd.Timedelta(days=1)) for d in jours.index], (y - h1 / 2, h1),
+                       color=[cm(v) for v in jours.values])
         vides = pd.date_range(g.day.min(), g.day.max(), freq="D").difference(g.day.unique())
-        a1.scatter(vides, [y] * len(vides), color="#C0492F", s=9, marker="s", linewidths=0)
+        a1.broken_barh([(d, pd.Timedelta(days=1)) for d in vides], (y - h1 / 2, h1), color=rouge)
         for mic, gm in g.groupby("mic_id"):
-            a1.text(gm.day.min(), y + 0.3, mic, fontsize=10, color=MUTED)
+            a1.text(gm.day.min(), y + 0.2, mic, fontsize=10, color=MUTED)
+        for d0, d1 in trous(vides):
+            n = (d1 - d0).days + 1
+            tard = d0 > pd.Timestamp("2024-06-01")  # texte aligné à droite pour ne pas déborder
+            a1.text(d1 + pd.Timedelta(days=1) if tard else d0, y - 0.2,
+                    f"aucun enregistrement du {d0:%d/%m} au {d1:%d/%m} ({n} j)",
+                    fontsize=10.5, color=rouge, va="top", ha="right" if tard else "left")
     a1.set_yticks(range(len(stations)), stations, fontsize=12, color=INK)
-    a1.set_ylim(-0.6, len(stations) - 0.1)
+    a1.set_ylim(-0.6, len(stations) - 0.3)
     a1.xaxis.set_major_locator(mdates.MonthLocator(bymonth=[1, 4, 7, 10]))
     a1.xaxis.set_major_formatter(mdates.DateFormatter("%m/%Y"))
     a1.tick_params(axis="x", labelsize=11)
     a1.set_title("Phénologie 2023-2024, par station", loc="left", fontsize=13, color=INK,
-                 fontweight="bold", pad=18)
+                 fontweight="bold", pad=26)
     a1.text(0, 1.03, "un carré par jour : vert, part du programme reçue ; rouge, rien",
             fontsize=11, color=MUTED, transform=a1.transAxes, va="bottom")
     a1.grid(axis="y", visible=False)
 
     d26 = days[days.dataset == "2026"]
     sites = list(d26.groupby("site").day.min().sort_values().index)  # chronologique, bas → haut
-    trou = {}
-    for (site, mic), g in d26.groupby(["site", "mic_id"]):
-        vides = pd.date_range(g.day.min(), g.day.max(), freq="D").difference(g.day.unique())
-        for v in vides:
-            trou.setdefault((site, v), []).append(mic)
-    cmap = plt.get_cmap("Greens")
     for y, site in enumerate(sites):
-        g = d26[d26.site == site].groupby("day").completude.mean().clip(0, 1)
-        a2.broken_barh([(d, pd.Timedelta(days=1)) for d in g.index], (y - 0.3, 0.6),
-                       color=[cmap(v) for v in g.values])
-        n = d26[d26.site == site].mic_id.nunique()
-        tard = g.index.min() > pd.Timestamp("2026-02-15")
-        a2.text(g.index.max() + pd.Timedelta(days=1) if tard else g.index.min(), y + 0.36,
-                f"{site} · {n} micros", fontsize=10, color=MUTED, ha="right" if tard else "left")
-    for (site, jour), mics in trou.items():
-        y = sites.index(site)
-        a2.broken_barh([(jour, pd.Timedelta(days=1))], (y - 0.3, 0.6), color="#C0492F")
-        a2.text(d26[d26.site == site].day.max() + pd.Timedelta(days=3), y,
-                f"{len(mics)} micros sans rien", fontsize=10.5, color="#C0492F", va="center")
-    a2.set_yticks(range(len(sites)), [])
-    a2.set_ylim(-0.75, len(sites) - 0.1)
-    a2.set_xlim(pd.Timestamp("2025-12-15"), pd.Timestamp("2026-03-24"))
-    a2.xaxis.set_major_locator(mdates.MonthLocator())
-    a2.xaxis.set_major_formatter(mdates.DateFormatter("%m/%Y"))
+        gs = d26[d26.site == site]
+        pose = gs.day.min()
+        moy = gs.groupby("day").completude.mean().clip(0, 1)
+        a2.broken_barh([(d, 1) for d in (moy.index - pose).days], (y - h2 / 2, h2),
+                       color=[cm(v) for v in moy.values])
+        a2.text(0, y + 0.2, f"{site} · {gs.mic_id.nunique()} micros · pose le {pose:%d/%m}",
+                fontsize=10, color=MUTED)
+        manque = {}  # jour → micros sans aucun enregistrement entre la pose et la relève
+        for mic, gm in gs.groupby("mic_id"):
+            vides = pd.date_range(gm.day.min(), gm.day.max(), freq="D").difference(gm.day.unique())
+            for v in vides:
+                manque.setdefault(v, []).append(mic)
+        for v, mics in manque.items():
+            a2.broken_barh([((v - pose).days, 1)], (y - h2 / 2, h2), color=rouge)
+            a2.text((v - pose).days, y - 0.2, f"{len(mics)} micros sur {gs.mic_id.nunique()} sans "
+                    f"rien le {v:%d/%m}", fontsize=10.5, color=rouge, va="top")
+    a2.set_yticks(range(len(sites)), sites, fontsize=12, color=INK)
+    a2.set_ylim(-0.6, len(sites) - 0.3)
+    a2.set_xlim(-0.5, 13)
+    a2.set_xlabel("jours depuis la pose", fontsize=11)
     a2.tick_params(axis="x", labelsize=11)
     a2.set_title("Relevés 2025-2026, par site", loc="left", fontsize=13, color=INK,
-                 fontweight="bold", pad=18)
-    a2.text(0, 1.03, "vert : part reçue (moyenne des micros)", fontsize=11, color=MUTED,
-            transform=a2.transAxes, va="bottom")
+                 fontweight="bold", pad=26)
+    a2.text(0, 1.03, "un carré par jour : vert, part reçue ; rouge, rien",
+            fontsize=11, color=MUTED, transform=a2.transAxes, va="bottom")
     a2.grid(axis="y", visible=False)
-    a2.spines["left"].set_visible(False)
-    a2.tick_params(axis="y", length=0)
-    fig.subplots_adjust(left=0.065, right=0.99, top=0.82, bottom=0.11, wspace=0.07)
+    from matplotlib.patches import Patch
+    fig.legend(handles=[Patch(color=cm(1.0), label="programme complet (100 %)"),
+                        Patch(color=cm(0.45), label="partiel : jour de pose ou de relève"),
+                        Patch(color=rouge, label="aucun enregistrement ce jour-là")],
+               loc="lower center", ncol=3, frameon=False, fontsize=11, handlelength=1.6,
+               columnspacing=2.5, bbox_to_anchor=(0.5, 0.0))
+    fig.subplots_adjust(left=0.065, right=0.99, top=0.84, bottom=0.2, wspace=0.2)
     fig.savefig(FIG / "inv_completude_p2.png", dpi=200)
     plt.close(fig)
     return {"jours_micros": len(inner), "complets": float((inner.completude >= 1).mean()),
@@ -605,6 +629,69 @@ def fig_ligne_drapeau() -> None:
     plt.close(fig)
 
 
+def fig_recap_criteres() -> None:
+    """Paquet 5, bilan du contrôle qualité, 12,13 × 3,5 po. Chiffres de la base au 18/11/2026
+    (jeux 2023 et 2026, 96 310 enregistrements) : 680 écartés = 506 son étouffé (399 par le calcul,
+    107 à l'écoute) + 172 durée anormale (dont 86 aussi hors relevé) + 2 hors relevé seul.
+    Les doublons (3 673 copies) et les 2 fichiers illisibles ne sont jamais entrés dans la base.
+    À droite, ce qui est mesuré sans rien écarter de plus : micro sourd 1 871 (Kaw D, encodés sur
+    la piste sourde), durées coupées 34 (déjà dans les durées anormales), bascules 11 (CDR)."""
+    ecartent = [("Son étouffé", 506, ROUGE, "dont 399 par le calcul, 107 à l'écoute"),
+                ("Durée anormale", 172, ROUGE, "dont 86 aussi hors relevé"),
+                ("Hors relevé, seul", 2, ROUGE, None),
+                ("Silence", 0, ROUGE, None),
+                ("Doublons", None, ROUGE, "3 673 copies, jamais inventoriées"),
+                ("Fichiers illisibles", None, ROUGE, "2, jamais inventoriés")]
+    mesures = [("Micro sourd (Kaw D, 2024)", 1871, G_ORANGE, "enr. encodés sur la piste sourde"),
+               ("Durées coupées\n(programme interrompu)", 34, G_ORANGE, "dans les 172"),
+               ("Bascule en plein enregistrement", 11, G_ORANGE, "à CDR"),
+               ("Clics et parasites", None, G_ORANGE, "indices non concluants (insectes)"),
+               ("Trous numériques\n(échantillons figés)", None, G_ORANGE,
+                "aucun sur 3 607 mesurés")]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(12.13, 3.5),
+                                 gridspec_kw={"width_ratios": [1.25, 1]})
+
+    def panneau(ax, lignes, xmax, titre, sous_titre):
+        n = len(lignes)
+        for y, (_nom, v, c, note) in enumerate(lignes):
+            pos = n - 1 - y
+            if v is None:
+                ax.text(xmax * 0.012, pos, note, va="center", fontsize=11, color=MUTED,
+                        style="italic")
+                continue
+            if v == 0:
+                ax.text(xmax * 0.012, pos, "aucun aujourd'hui", va="center", fontsize=11,
+                        color=MUTED, style="italic")
+                continue
+            coupe = v > xmax
+            dedans = coupe or v > xmax * 0.6
+            ax.barh(pos, min(v, xmax * 0.97), height=0.62, color=c)
+            if dedans:
+                if coupe:
+                    ax.plot([xmax * 0.9, xmax * 0.93], [pos - 0.34, pos + 0.34], color="white",
+                            lw=3)
+                texte = f"{v:,}".replace(",", " ") + (f"  {note}" if note else "")
+                ax.text(xmax * 0.03, pos, texte, va="center", fontsize=11.5, color="white",
+                        fontweight="bold")
+            else:
+                ax.text(v + xmax * 0.012, pos, f"{v}" + (f"  {note}" if note else ""),
+                        va="center", fontsize=11.5, color=INK, fontweight="bold")
+        ax.set_yticks(range(n), [ligne[0] for ligne in lignes][::-1], fontsize=12, color=INK)
+        ax.set_ylim(-0.6, n - 0.4)
+        ax.set_xlim(0, xmax)
+        ax.tick_params(axis="x", labelsize=10)
+        ax.set_title(titre, loc="left", fontsize=13, color=INK, fontweight="bold", pad=22)
+        ax.text(0, 1.03, sous_titre, fontsize=11, color=MUTED, transform=ax.transAxes, va="bottom")
+        ax.grid(axis="y", visible=False)
+
+    panneau(a1, ecartent, 600, "Les 680 écartés, par critère",
+            "506 + 172 + 2 = 680 enregistrements")
+    panneau(a2, mesures, 60, "Mesuré, à décider", "enregistrements ; barre coupée")
+    fig.subplots_adjust(left=0.2, right=0.985, top=0.8, bottom=0.1, wspace=0.62)
+    fig.savefig(FIG / "qc_recap_criteres.png", dpi=200)
+    plt.close(fig)
+
+
 def main() -> None:
     fig_base()
     rec = charger()
@@ -620,6 +707,7 @@ def main() -> None:
     print("horloge de Molokoï :", fig_molokoi_niveaux())
     print("spectrogrammes :", fig_molokoi_spectros())
     fig_ligne_drapeau()
+    fig_recap_criteres()
 
 
 if __name__ == "__main__":

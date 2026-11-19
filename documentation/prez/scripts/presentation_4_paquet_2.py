@@ -487,18 +487,18 @@ def boite(x, titre, code, gros, petit, blocs, renvoi):
 
 
 garde += boite(0.6, "HORS RELEVÉ", "off_campaign", "88 écartés", "106 levés, dont 18 gardés après écoute", [
-    ("Ce que c'est", "un enregistrement isolé de la série de son micro : un test d'avant la pose, ou un reste de carte SD d'un autre lieu."),
-    ("Comment c'est calculé", "pour chaque (jeu, site, micro), on trie les dates et on coupe la série à chaque trou de plus de 7 jours. Chaque morceau est un bloc ; le plus gros est le relevé, les autres sont hors relevé. Le seuil de 7 jours est choisi à la main (qc.campaign_gap_days) : on n'a pas les dates de pose."),
-    ("Combien", "238 blocs, dont 74 petits ; 106 enregistrements, dont 20 seulement de 2 min. 86 des 88 écartés sont aussi de durée anormale : des tests."),
-    ("Écarte à tort", "un micro reposé au même site après plus de 7 jours d'arrêt : 18 enregistrements du relevé 7 de Mataroni (2LA03595, 19/05/2026), écoutés puis gardés."),
-    ("Laisse passer", "un test fait moins de 7 jours avant la pose : 26 enregistrements de 20 micros, les 30 et 31/12/2025, rangés dans le relevé de Mataroni six jours avant la pose ; tous de durée anormale, donc écartés quand même."),
+    ("Ce que c'est", "un fichier isolé de la série de son micro : test d'avant la pose, ou reste d'une carte SD d'ailleurs."),
+    ("Comment c'est calculé", "séries triées par date, coupées à chaque trou de plus de 7 jours (seuil choisi à la main) ; le plus gros bloc est le relevé, les autres sont hors relevé."),
+    ("Combien", "106 enregistrements ; 86 des 88 écartés sont aussi de durée anormale : des tests."),
+    ("Écarte à tort", "un micro reposé après plus de 7 jours : 18 enregistrements de Mataroni (2LA03595, 19/05/2026), écoutés puis gardés."),
+    ("Laisse passer", "un test à moins de 7 jours de la pose : 26 enregistrements des 30-31/12/2025, écartés quand même par la durée."),
 ], "→ voir Difficultés rencontrées")
 garde += boite(6.75, "DURÉE ANORMALE", "duration_off", "173 écartés", "125 tests, 34 coupés, 14 manuels", [
-    ("Ce que c'est", "un fichier qui ne dure pas 120 s à 1 s près (2 min : le programme des Song Meter) : test à la pose, déclenchement manuel, ou enregistrement du programme coupé."),
-    ("Comment c'est calculé", "la durée du WAV est lue dans l'en-tête (échantillons ÷ fréquence), sans lire le son. Tolérance d'une seconde (qc.duration_tolerance_s), choisie à la main."),
-    ("Combien", "173 fichiers : 125 de moins de 30 s (tests), 34 de 30 à 119 s, 14 de plus de 2 min (enregistrements manuels, jusqu'à 14 min). Tous écartés."),
-    ("Écarte à tort", "les 34 enregistrements du programme coupés, qui sont du vrai terrain. Mataroni, SMA13417, 6/01/2026, 104 s : A. blanci y chante (BlanciNet 0,97, écouté le 12/11). Seuls 3 des 34 ont une détection de BlanciNet ≥ 0,5, dont une fausse alerte possible : un score seul ne tranche pas."),
-    ("Laisse passer", "rien de plus : un fichier de 120 s est gardé, même s'il est vide ou étouffé (c'est le travail des contrôles suivants)."),
+    ("Ce que c'est", "un fichier qui ne dure pas 120 s à 1 s près : test, déclenchement manuel, ou enregistrement du programme coupé."),
+    ("Comment c'est calculé", "durée lue dans l'en-tête du WAV, sans lire le son ; tolérance d'1 s choisie à la main."),
+    ("Combien", "125 de moins de 30 s (tests), 34 de 30 à 119 s, 14 de plus de 2 min (manuels, jusqu'à 14 min)."),
+    ("Écarte à tort", "les 34 coupés, du vrai terrain : Mataroni SMA13417, 104 s, A. blanci y chante (BlanciNet 0,97, écouté le 12/11)."),
+    ("Laisse passer", "rien : un fichier de 120 s vide ou étouffé reste gardé (contrôles suivants)."),
 ], "→ voir Difficultés rencontrées")
 parts["ppt/slides/slide10.xml"] = remplacer_arbre(s10, garde).encode("utf-8")
 TITRES[10] = "Hors relevé et durée anormale : des tests, et du vrai terrain coupé"
@@ -531,7 +531,7 @@ garde.append(T(ids(), 0.85, 5.03, 5.6, 1.8, [PP([("Combien · à revérifier", 1
                                              PP([("3 673 copies, chacune avec son original dans le relevé de CDR. Les copies écartées ne sont plus que sur le disque d'origine (Biophonia) : la vérification par le contenu (scripts/controle_qualite/verifier_doublons.py) attend qu'il soit branché. Sur les deux disques du stage, aucun nom n'est répété en 2025-2026, et un seul en 2023-2024 (même contenu).", 12.5, INK, False)])], nom="diapo 8, combien"))
 garde += carte(ids, 6.75, 4.95, 5.98, 1.95, barre=GOLD_DARK)
 garde.append(T(ids(), 7.0, 5.03, 5.6, 1.8, [PP([("Pourquoi ces tests · limite", 13, GOLD_DARK, True)], after=4),
-                                            PP([("Une comparaison exacte, sans seuil ni statistique : deux fichiers de même nom, même longueur, même numéro de série, même heure d'en-tête et même première seconde sont, en pratique, le même enregistrement. Limite : un fichier renommé à la main n'est pas vu, la règle ne compare que des fichiers du même nom.", 12.5, INK, False)])], nom="diapo 8, limite"))
+                                            PP([("Une comparaison exacte, sans seuil ni statistique : deux fichiers de même nom, même longueur, même numéro de série, même heure d'en-tête et même première seconde sont, en pratique, le même enregistrement. Limite : un fichier renommé à la main n'est pas vu, la règle ne compare que des fichiers du même nom. Un test par fonction de hachage du contenu, qui ne dépend pas du nom, est déjà programmé : il reste à le lancer.", 12.5, INK, False)])], nom="diapo 8, limite"))
 parts["ppt/slides/slide8.xml"] = remplacer_arbre(s8, garde).encode("utf-8")
 TITRES[8] = "Doublons : un fichier n'est un doublon que si le nom et le contenu concordent"
 NOTES[8] = ("Les doublons. Quand on rapporte une carte SD d'un relevé, elle contient souvent encore les fichiers du relevé d'avant. À l'inventaire de Mataroni, 3 673 fichiers étaient en fait des fichiers de CDR. Si on les gardait, ils compteraient deux fois, et sous deux sites : le contrôle écarte la copie et garde l'original. La place de cette diapo est ici, dans le contrôle qualité : c'est une décision d'écarter, pas une description de ce qu'on a.\n\n"
