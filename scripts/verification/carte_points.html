@@ -58,8 +58,10 @@
 const D = /*DONNEES*/null;
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const carte = L.map("carte");
-const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  { maxZoom: 19, attribution: "© OpenStreetMap" });
+// Pas les tuiles d'openstreetmap.org : elles refusent (403) une page ouverte depuis le disque,
+// sans en-tête Referer. Les fonds Esri n'en demandent pas.
+const osm = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+  { maxZoom: 19, attribution: "Esri World Topo Map" });
 const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   { maxZoom: 19, attribution: "Esri World Imagery" });
 osm.addTo(carte);
