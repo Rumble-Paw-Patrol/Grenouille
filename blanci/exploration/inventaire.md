@@ -32,7 +32,7 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 7. [Température et fin de série](#7-température-et-fin-de-série) : `temperature_series`, `series_ends`
 8. [Durées et tailles](#8-durées-et-tailles) : `duration_classes`, `expected_size`, `file_size_check`
 9. [Doublons et rapports d'inventaire](#9-doublons-et-rapports-dinventaire) : `duplicate_report_summary`, `duplicate_verification_summary`, `content_duplicates`, `ingest_errors_summary`
-10. [Pistes](#10-pistes) : `track_levels`, `track_gap_by_point`, `track_flags_summary`
+10. [Pistes](#10-pistes) : `track_levels`, `track_gap_by_point`, `track_flags_summary`, `third_octave_bands`, `band_levels`, `track_band_levels`, `spectral_gaps`, `spectral_gap_by_point`, `spectral_gap_profile`
 11. [Drapeaux](#11-drapeaux) : `exclusion_cause`, `flag_counts`, `campaign_blocks`, `near_campaign_orphans`, `stale_flags`
 12. [Base et disque](#12-base-et-disque) : `disk_inventory`, `base_vs_disk`
 13. [Annotations et scores](#13-annotations-et-scores) : `listened_recordings`, `annotation_coverage_by`, `score_coverage`, `recording_detections`, `excluded_with_detections`, `protected_positives`
@@ -410,6 +410,40 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
   - candidat isolé sur la piste 1 seule : 4 ;
   - 175 sans indices, jamais contrôlés : les 173 de durée anormale et 2 fichiers de 2 min hors relevé. Tous étaient écartés ; après la correction, 174 le sont (le positif de Mataroni est gardé).
 - Ce qu'on peut dire : 399, 407, 85 et 268 tiennent. Ce qu'on ne peut pas dire : « une quarantaine » de pistes 1 seules ; c'est 46.
+
+### Écart de spectre entre pistes (ajouté le 19/11/2026)
+
+Les deux micros d'un enregistreur entendent la même scène : bande par bande, leur écart ne dépend que du gain réglé. La différence annule le paysage sonore et fait sortir un micro qui faiblit, s'étouffe ou crépite d'un seul côté. Mesures : `scripts/controle_qualite/spectre_pistes.py` (3 607 enregistrements de l'échantillon des pistes, 0 erreur, `paths.reports/pistes/spectre_pistes.csv`) ; figure : `documentation/prez/scripts/figure_spectre_pistes.py` (`qc_spectre_pistes.png`).
+
+#### `third_octave_bands(fmin=100, fmax=20000)` — [inventaire.py:1346](inventaire.py#L1346)
+
+- Question : dans quelles bandes ranger un spectre ? Sortie : 24 bandes, noms nominaux 100 → 20 000 Hz.
+- Règle : IEC 61260-1:2014, base 2 (centres 1000 · 2^(k/3), bornes à ±1/6 d'octave). Limite : sous 200 Hz, une à trois raies de Welch par bande.
+
+#### `band_levels(freqs, psd, bands)` — [inventaire.py:1366](inventaire.py#L1366) et `track_band_levels(wav, sr, bands)` — [inventaire.py:1384](inventaire.py#L1384)
+
+- Question : combien d'énergie dans chaque tiers d'octave, piste par piste ?
+- Règle : comme `qc.qc_indices` (moyenne retirée, Welch de `qc._welch`, 2 048 points, 2 min entières), puis somme des raies de chaque bande, en dB. Testé sur un sinus : a²/2 dans sa bande, à 0,1 dB près.
+- Limite : spectre moyen sur 2 min, un défaut de quelques secondes s'y dilue.
+
+#### `spectral_gaps(levels, sample, utc_offset_h)` — [inventaire.py:1405](inventaire.py#L1405)
+
+- Question : bande par bande, la piste 0 entend-elle comme la piste 1, au gain près ?
+- Règle : d(f) = L0 − L1 − (gain 0 − gain 1), gains lus dans l'en-tête de chaque fichier (`echantillon_pistes.csv`).
+- Limite : deux pistes étouffées ensemble ont d ≈ 0 (la règle du son étouffé reste en parallèle) ; une bande où la scène est sous le bruit propre de l'enregistreur compare deux bruits de fond, pas deux micros (Kaw D : d ≈ 0 au-dessus de 12 kHz pendant sa perte de 25 dB).
+
+#### `spectral_gap_by_point(gaps, fmin=1000, fmax=12000, window_days=14, min_days=7)` — [inventaire.py:1446](inventaire.py#L1446)
+
+- Question : quel point a eu, au moins une semaine, un micro qui n'entendait plus comme l'autre, et à quelle fréquence ?
+- Règle : chaque jour (motif « jour »), l'écart de plus grand module entre 1 et 12 kHz (11 bandes, signé) ; médiane glissante sur 14 jours (au moins 7 jours lus, ou tous ceux du point) ; on garde la fenêtre de plus grand module. Un mauvais jour isolé (orage, chœur près d'un micro) ne la déplace pas ; une perte de deux mois, si (ce que la médiane de `track_gap_by_point` ne voyait pas).
+- Limite : le maximum de 11 bandes n'est jamais 0 : sur les 164 points, la médiane du module vaut 4,4 dB. Le seuil de ±6 dB, repris de la diapo 20 (écart RMS global), est donc serré : 40 points le dépassent. Un seuil tiré de la distribution (médiane + 3 MAD, 10,2 dB) en garde 14 ; il reste à choisir, à l'écoute. Une panne de moins d'une semaine passe ; les points de 2026 (6 à 12 jours) n'ont qu'une ou deux fenêtres.
+- Résultat (base du 19/11/2026, échantillon des pistes) : 40 points sur 164 au-delà de ±6 dB (21 piste 0 trop faible, 19 trop forte) ; 6 des 8 points de 2023 (séries d'un an : plus de fenêtres, donc un pire épisode plus extrême). Les cinq points de la diapo 20 ressortent : Kaw D SMA14079 (−27 dB, à partir du 24/05/2024), SMA14636 (CDR +16, Patawa Ouest +18, et Molokoï −10), Molokoï SMA14157 (+28), RNRT 2MA08067 (−12), Mataroni 2LA05191 (−10). Nouveaux au-delà de 10 dB : Mataroni 2LA04513 (−26), CDR 2LA03021 (−19), Molokoï SMA14163 (−13, mai 2024), Patawa Ouest 2MA01489 et 2MA07942 (−12), Mataroni 2LA04522 (+11), CDR 2LA04118 (+12), Patawa Ouest 2MA10139 (+19), CDR 2LA05206 (+25).
+
+#### `spectral_gap_profile(gaps, periods, **point)` — [inventaire.py:1495](inventaire.py#L1495)
+
+- Question : à quelle fréquence un micro a-t-il perdu, et l'a-t-il retrouvé ?
+- Règle : médiane par bande sur les jours de chaque période. Résultat : Kaw D SMA14079, du 23/05 au 23/07/2024 (62 jours), d ≈ −25 dB de 250 Hz à 10 kHz ; avant (30 jours) et après (31 jours), entre −5 et +5 dB.
+- Limite : les bornes viennent de la lecture de la série, pas d'une date de panne connue.
 
 ## 11. Drapeaux
 

@@ -1338,6 +1338,183 @@ def track_flags_summary(rec: pd.DataFrame, cfg_qc: dict[str, Any]) -> pd.DataFra
         .rename("recordings").reset_index()
 
 
+# Tiers d'octave en base 2 (IEC 61260-1:2014) : centres exacts 1000 · 2^(k/3), bornes à
+# centre · 2^(±1/6) ; noms nominaux 100, 125, 160… 20 000 Hz.
+_NOMINAL = (100, 125, 160, 200, 250, 315, 400, 500, 630, 800)
+
+
+def third_octave_bands(fmin: float = 100.0, fmax: float = 20000.0) -> pd.DataFrame:
+    """Les bandes de tiers d'octave entre deux fréquences.
+
+    Question : dans quelles bandes ranger un spectre pour comparer deux pistes ? Entrée : bornes
+    nominales (Hz). Sortie : une ligne par bande : `name` (nominal, entier, 100 → 20 000),
+    `centre`, `low`, `high` (Hz).
+    Règle : IEC 61260-1:2014, base 2 : centres 1000 · 2^(k/3), bornes à centre · 2^(±1/6) ; une
+    bande par tiers d'octave, la largeur croît avec la fréquence comme la résolution de
+    l'oreille et des encodeurs (mel). 100 Hz – 20 kHz : 24 bandes.
+    Limite : avec la densité de Welch de `qc` (2 048 points à 48 kHz, 23,4 Hz par raie), les
+    bandes sous 200 Hz ne contiennent qu'une à trois raies.
+    """
+    k0, k1 = round(3 * np.log2(fmin / 1000)), round(3 * np.log2(fmax / 1000))
+    k = np.arange(k0, k1 + 1)
+    centre = 1000 * 2.0 ** (k / 3)
+    name = [_NOMINAL[(i + 10) % 10] * 10 ** ((i + 10) // 10) for i in k]
+    return pd.DataFrame({"name": name, "centre": centre, "low": centre * 2 ** (-1 / 6),
+                         "high": centre * 2 ** (1 / 6)})
+
+
+def band_levels(freqs: np.ndarray, psd: np.ndarray, bands: pd.DataFrame) -> np.ndarray:
+    """Le niveau d'un spectre dans chaque bande, en dB (puissance, dBFS² si `psd` est en FS²/Hz).
+
+    Question : combien d'énergie dans chaque tiers d'octave ? Entrée : densité spectrale
+    (`qc._welch`), `third_octave_bands`. Sortie : un niveau par bande, 10 log10(Σ densité ×
+    pas), NaN pour une bande sans raie (au-delà de Nyquist) ou sans énergie.
+    Règle : somme des raies dont la fréquence tombe dans [low, high[ : la puissance de la bande.
+    Limite : une raie au bord compte entière dans une seule bande (pas de partage).
+    """
+    df = float(freqs[1] - freqs[0]) if len(freqs) > 1 else 1.0
+    out = np.full(len(bands), np.nan)
+    for i, (lo, hi) in enumerate(zip(bands["low"], bands["high"], strict=True)):
+        p = psd[(freqs >= lo) & (freqs < hi)].sum() * df
+        if p > 0:
+            out[i] = 10 * np.log10(p)
+    return out
+
+
+def track_band_levels(wav: np.ndarray, sr: int, bands: pd.DataFrame) -> dict[str, float]:
+    """Le spectre moyen de chaque piste d'un enregistrement, en tiers d'octave.
+
+    Question : comment l'énergie se répartit-elle selon la fréquence sur chaque piste ? Entrée :
+    l'audio lu (`(n, pistes)`, flottant en pleine échelle), sa fréquence, `third_octave_bands`.
+    Sortie : `L<piste>_<bande>` en dB, pour les pistes 0 et 1.
+    Règle : comme `qc.qc_indices` : moyenne retirée, densité de Welch (Hann, 2 048 points,
+    recouvrement de moitié) sur les 2 min entières, puis `band_levels`.
+    Limite : un spectre moyen sur 2 min : un défaut de quelques secondes s'y dilue.
+    """
+    from blanci.inputs.qc import _welch
+
+    out: dict[str, float] = {}
+    for track in range(min(2, wav.shape[1])):
+        x = wav[:, track] - wav[:, track].mean()
+        freqs, psd = _welch(x, sr)
+        for name, level in zip(bands["name"], band_levels(freqs, psd, bands), strict=True):
+            out[f"L{track}_{name}"] = float(level)
+    return out
+
+
+def spectral_gaps(levels: pd.DataFrame, sample: pd.DataFrame, utc_offset_h: float) -> pd.DataFrame:
+    """L'écart de spectre entre les deux pistes d'un même enregistrement, corrigé du réglage.
+
+    Question : bande par bande, la piste 0 entend-elle comme la piste 1, au gain près ? Entrée :
+    les niveaux par bande (`track_band_levels`, une ligne par `recording_id`), l'échantillon
+    des pistes (`echantillon_pistes.csv` : point, `start_utc`, `motif`, `gain_0`, `gain_1`),
+    le décalage des noms (`recorder.filename_utc_offset_h`). Sortie : une ligne par
+    enregistrement stéréo : point, `day` (local), `motif`, `set_gap_db` (gain 0 − gain 1), et
+    `d_<bande>` = L0 − L1 − (gain 0 − gain 1), en dB.
+    Règle : les deux micros sont à quelques centimètres et entendent la même scène : à chaque
+    fréquence, leur écart ne dépend que du gain réglé. Le paysage sonore (chœur, pluie,
+    insectes) s'annule dans la différence ; un micro qui faiblit, s'étouffe ou crépite d'un
+    seul côté la fait sortir de 0, et la bande dit à quelle fréquence.
+    Limite : deux pistes étouffées ensemble ont d ≈ 0 (la règle du son étouffé reste en
+    parallèle) ; une bande où la scène est sous le bruit propre de l'enregistreur compare deux
+    bruits de fond (sa forme dépend du gain), pas deux micros ; un bruit tout près d'un seul
+    micro (insecte posé sur la bonnette, goutte) fait sortir d'une seule bande un seul jour.
+    """
+    cols = [c for c in levels if c.startswith("L0_")]
+    names = [c[3:] for c in cols]
+    keep = [c for c in ("recording_id", *POINT, "start_utc", "motif", "gain_0", "gain_1")
+            if c in sample]
+    df = sample[keep].merge(levels, on="recording_id", how="inner")
+    df = df.dropna(subset=["gain_0", "gain_1", *[f"L1_{n}" for n in names]], how="any")
+    set_gap = df["gain_0"].astype(float) - df["gain_1"].astype(float)
+    local = pd.to_datetime(df["start_utc"], utc=True).dt.tz_convert(None) \
+        + pd.Timedelta(hours=utc_offset_h)
+    out = df[[c for c in ("recording_id", *POINT, "motif") if c in df]].assign(
+        dataset=df["dataset"].astype(str), day=local.dt.normalize(), set_gap_db=set_gap)
+    d = {f"d_{n}": df[f"L0_{n}"] - df[f"L1_{n}"] - set_gap for n in names}
+    return pd.concat([out, pd.DataFrame(d, index=df.index)], axis=1).reset_index(drop=True)
+
+
+def _signed_extreme(values: np.ndarray) -> np.ndarray:
+    """Par ligne, la valeur de plus grand module, avec son signe (NaN ignorés)."""
+    filled = np.where(np.isnan(values), 0.0, values)
+    pick = np.abs(filled).argmax(axis=1)
+    out = values[np.arange(len(values)), pick]
+    return np.where(np.isnan(values).all(axis=1), np.nan, out)
+
+
+def spectral_gap_by_point(gaps: pd.DataFrame, fmin: float = 1000.0, fmax: float = 12000.0,
+                          window_days: int = 14, min_days: int = 7) -> pd.DataFrame:
+    """Le pire épisode d'écart de spectre entre pistes, par point.
+
+    Question : quel point a eu, pendant au moins une semaine, un micro qui n'entendait plus
+    comme l'autre, et à quelle fréquence ? Entrée : `spectral_gaps`, une ligne par jour (motif
+    « jour » de l'échantillon des pistes). Sortie : une ligne par point : `extreme_db` (signé :
+    négatif = piste 0 plus faible que réglé), `episode_start`, `episode_end`, `episode_days`,
+    `days`, `median_extreme_db` (sur toute la série), `set_gap_db`, et `d_<bande>` = médiane
+    de chaque bande sur l'épisode ; trié de `extreme_db` le plus faible au plus fort.
+    Règle : chaque jour, l'écart de plus grand module parmi les bandes de `fmin` à `fmax`
+    (1-12 kHz : le chant d'A. blanci, 4,4-5,5 kHz, et ce que voient les encodeurs ; sous 1 kHz
+    le vent et les manipulations touchent un micro à la fois, au-dessus de 12 kHz la scène
+    tombe souvent sous le bruit propre de l'enregistreur). Puis médiane glissante sur
+    `window_days` jours (au moins `min_days` jours lus, ou tous ceux du point s'il en a moins) :
+    un orage ou un chœur proche d'un seul micro un jour ne la déplace pas, il faut une moitié
+    de fenêtre de mauvais jours. L'épisode retenu est la fenêtre de plus grand module.
+    Limite : le maximum de 11 bandes bruitées n'est jamais 0 (≈ 1-2 dB pour un point sain) ;
+    une panne de moins d'une semaine passe ; deux micros qui faiblissent ensemble ne se voient
+    pas ; un point de moins de `min_days` jours n'a qu'une fenêtre, sa médiane entière.
+    """
+    names = [c for c in gaps if c.startswith("d_")]
+    centre = np.array([float(c[2:]) for c in names])
+    inside = [c for c, f in zip(names, centre, strict=True) if fmin <= f <= fmax]
+    if "motif" in gaps:  # les bascules d'état ajoutées à l'échantillon ne sont pas des jours
+        gaps = gaps[gaps["motif"] == "jour"]
+    rows = []
+    for key, g in gaps.sort_values("day").groupby(POINT, sort=False):
+        g = g.drop_duplicates("day", keep="first")
+        daily = pd.Series(_signed_extreme(g[inside].to_numpy(dtype=float)),
+                          index=pd.DatetimeIndex(g["day"]))
+        need = min(min_days, len(daily))
+        rolled = daily.rolling(f"{window_days}D", min_periods=need).median()
+        if rolled.notna().any():
+            end = rolled.abs().idxmax()
+        else:
+            end = daily.index[-1]
+        start = end - pd.Timedelta(days=window_days - 1)
+        episode = g[(g["day"] >= start) & (g["day"] <= end)]
+        rows.append({**dict(zip(POINT, key, strict=True)),
+                     "extreme_db": float(rolled.get(end, np.nan)),
+                     "episode_start": episode["day"].min(), "episode_end": episode["day"].max(),
+                     "episode_days": len(episode), "days": len(daily),
+                     "median_extreme_db": float(daily.median()),
+                     "set_gap_db": float(g["set_gap_db"].median()),
+                     **episode[names].median().to_dict()})
+    return pd.DataFrame(rows).sort_values("extreme_db").reset_index(drop=True)
+
+
+def spectral_gap_profile(gaps: pd.DataFrame, periods: dict[str, tuple[str, str]],
+                         **point: str) -> pd.DataFrame:
+    """L'écart de spectre d'un point, bande par bande, sur des périodes nommées.
+
+    Question : à quelle fréquence un micro a-t-il perdu, et l'a-t-il retrouvé ensuite ? Entrée :
+    `spectral_gaps`, des périodes {nom : (premier jour, dernier jour)} en heure locale, le
+    point (`mic_id=…`, et `site=`, `dataset=` si besoin). Sortie : une ligne par période :
+    `days` et la médiane de chaque `d_<bande>`.
+    Règle : médiane par bande sur les jours de la période (bornes comprises).
+    Limite : les bornes viennent d'une lecture de la série (`spectral_gap_by_point` ou
+    `track_gap_by_point`), pas d'une date de panne connue.
+    """
+    sel = gaps
+    for k, v in point.items():
+        sel = sel[sel[k].astype(str) == str(v)]
+    names = [c for c in gaps if c.startswith("d_")]
+    rows = []
+    for label, (a, b) in periods.items():
+        part = sel[(sel["day"] >= pd.Timestamp(a)) & (sel["day"] <= pd.Timestamp(b))]
+        rows.append({"period": label, "days": len(part), **part[names].median().to_dict()})
+    return pd.DataFrame(rows)
+
+
 # =============================================================================================
 # 11. Drapeaux
 # =============================================================================================
