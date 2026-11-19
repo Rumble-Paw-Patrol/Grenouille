@@ -43,9 +43,9 @@ les étiquettes et les qualités dans le visualiseur ; tout se garde dans `annot
 - **Qualité** : en intervalles, chaque intervalle a la sienne (barre au-dessus du
   spectrogramme) ; en fenêtres, une qualité pour la fenêtre.
 - **Validation** : commentaire facultatif (zone de texte sous le spectrogramme, dans l'encadré
-  du visualiseur), puis « Valider » (à droite du spectrogramme, ou Ctrl + Entrée) : la réponse
-  est ajoutée (jamais écrasée), copiée dans le dossier des annotations validées, et l'extrait
-  suivant s'affiche.
+  du visualiseur), puis « Valider » (le bouton à droite du spectrogramme, seul moyen d'envoyer :
+  aucun raccourci clavier) : la réponse est ajoutée (jamais écrasée), copiée dans le dossier des
+  annotations validées, et l'extrait suivant s'affiche.
 - **Groupes** : une file tirée par groupes montre, groupe par groupe, ce qui a été entendu ; un
   groupe homogène s'étiquette en entier d'un clic (source « bulk »).
 - **Habillage** : celui du tableau de bord (`style.py`, bandeau dans `bandeau.py`), clair ou
@@ -1524,7 +1524,7 @@ def main() -> None:
                 else {
                     "label": "Valider\n▶",
                     "disabled": not me,
-                    "help": "Valider l'annotation (Ctrl + Entrée)" if me else _NO_ANNOTATOR,
+                    "help": "Valider l'annotation" if me else _NO_ANNOTATOR,
                 },
                 notes=notes,
                 history=history,

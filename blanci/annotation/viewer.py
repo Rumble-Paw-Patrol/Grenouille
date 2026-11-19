@@ -60,8 +60,9 @@ de part et d'autre du curseur |
 | Modifier l'étiquette d'un intervalle | Une fois sélectionné, **clic** sur une étiquette en haut |
 | Supprimer un intervalle | Une fois sélectionné, touche **Suppr**, ou **clic** sur la petite \
 croix de sa pastille |
-| Valider l'annotation | Bouton **Valider** à droite du spectrogramme, ou **Ctrl + Entrée** \
-(le commentaire facultatif se tape dans la zone de texte sous le spectrogramme) |
+| Valider l'annotation | Bouton **Valider** à droite du spectrogramme, seul moyen d'envoyer \
+(aucun raccourci clavier ; le commentaire facultatif se tape dans la zone de texte sous le \
+spectrogramme) |
 """
 
 INDEX = r"""<!doctype html>
@@ -801,7 +802,13 @@ $("newqok").onclick = () => {
 $("newqname").addEventListener("keydown", e => {
   if (e.key === "Enter") $("newqok").click(); else if (e.key === "Escape") $("newqno").click();
 });
-$("submit").onclick = () => { if (D && D.submit && !D.submit.disabled) action("submit", {}); };
+// Seul un clic de souris envoie l'extrait (detail 0 : clic fabriqué par Entrée ou Espace sur le
+// bouton resté au premier plan) ; le bouton ne prend pas non plus le focus au clavier.
+$("submit").tabIndex = -1;
+$("submit").onclick = e => {
+  if (e.detail === 0) return;
+  if (D && D.submit && !D.submit.disabled) action("submit", {});
+};
 $("newname").addEventListener("keydown", e => {
   if (e.key === "Enter") $("newok").click();
   else if (e.key === "Escape") $("newno").click();
@@ -852,7 +859,7 @@ function render(args) {
   $("submit").hidden = !D.submit;
   if (D.submit) {
     $("submit").textContent = D.submit.label; $("submit").disabled = !!D.submit.disabled;
-    $("submit").title = D.submit.help || "Ctrl + Entrée";
+    $("submit").title = D.submit.help || "Valider l'annotation";
   }
   $("notes").innerHTML = "";
   (D.notes || []).forEach(t => {
@@ -1652,14 +1659,9 @@ $("gap3").onclick = () => {
 };
 $("home").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
 document.addEventListener("keydown", e => {
-  // Dans la zone de commentaire, seul Ctrl + Entrée (valider) garde son effet.
-  const ctrlEnter = e.key === "Enter" && (e.ctrlKey || e.metaKey);
-  if (e.target.id === "comment" ? !ctrlEnter : ["SELECT", "INPUT"].includes(e.target.tagName)) {
-    return;
-  }
-  if (ctrlEnter) {
-    e.preventDefault(); $("submit").click();
-  } else if (e.code === "Space") {
+  // Aucun raccourci n'envoie l'extrait : seul le bouton « Valider » à l'écran le fait.
+  if (["SELECT", "INPUT"].includes(e.target.tagName)) return;
+  if (e.code === "Space") {
     e.preventDefault();
     const p = players[active]; if (p) (p.paused ? p.play() : p.pause());
   } else if (D && D.interval_mode && /^[1-9]$/.test(e.key) && D.labels[+e.key - 1]) {
