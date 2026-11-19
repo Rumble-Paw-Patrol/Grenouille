@@ -14,6 +14,8 @@ Les scripts qui repèrent les enregistrements au son étouffé, piste par piste.
   
 - `files_son_etouffe.py` : écrit les files d'écoute (`muffled_perdus`, `muffled_douteux`, `autres_drapeaux`) d'après les mesures de `qc_deux_pistes.py`. Elles arrivent dans `annotations/files_ecoute/`.
 
+- `bascules_fines.py` : repère les micros qui s'étouffent ou se libèrent **en plein enregistrement**, sur tout le corpus. Tri sur les indices déjà en base (suites de fichiers bas, même plus courtes que les 4 du drapeau), puis `hf_ratio` par tranche de 2 s sur les deux pistes, marche d'un facteur 6 au moins, forme de la marche (brusque = geste, progressive = bonnette qui s'imbibe ou sèche), synchronie avec les autres micros du site, bord de campagne. Remplace `file_bascules.py`, dont les 11 candidats de CDR étaient des micros dans un sac. Sorties dans `paths.reports/son_etouffe/bascules_fines/` et la file `bascules_fines` ; `degradees` écrit la file `piste0_encodee_degradee`.
+
 - `muffled_perdus`   : deux pistes étouffées, un extrait de 5 s par enregistrement ;
 - `muffled_douteux`  : une piste étouffée et l'autre pas franchement claire, un extrait de 5 s par enregistrement ;
 - `autres_drapeaux`  : durée anormale / date hors relevé, enregistrements entiers ;

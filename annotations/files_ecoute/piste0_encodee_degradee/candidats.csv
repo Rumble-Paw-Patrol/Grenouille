@@ -1,0 +1,3 @@
+recording_id,path,site,mic_id,start_utc,offset_s,dur_s,score,reason,source,dataset,piste_0_hf,piste_1_hf,cause
+a878e4aa18fd50be,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2LA03021/Data/2LA03021_20251225_193000.wav,CDR,2LA03021,2025-12-25T22:30:00Z,45.0,30.0,,piste0_encodee_degradee/CDR/2LA03021,flag,2026,0.0016,0.5774,"piste 0 encodée sans drapeau, hf_ratio constant sur tout le fichier"
+d9d01ec1f00108fe,Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025/2MA01489/Data/2MA01489_20251224_193000.wav,CDR,2MA01489,2025-12-24T22:30:00Z,45.0,30.0,,piste0_encodee_degradee/CDR/2MA01489,flag,2026,0.001,0.4439,"piste 0 encodée sans drapeau, hf_ratio constant sur tout le fichier"
