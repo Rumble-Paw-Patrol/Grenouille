@@ -9,7 +9,8 @@ différence ; un micro qui faiblit, s'étouffe ou crépite d'un seul côté la f
 - à gauche : les 164 points classés par leur pire épisode de deux semaines (médiane glissante
   sur 14 jours de l'écart de plus grand module entre 1 et 12 kHz), ±6 dB en tirets, les points
   au-delà nommés ;
-- au milieu : d(f) de chaque point pendant cet épisode, bande par bande, dans le même ordre ;
+- au milieu : d(f) des points au-delà du seuil pendant cet épisode, bande par bande, rangés par
+  l'écart moyen sur 1-12 kHz (le pire écart en étiquette) ;
 - à droite : d(f) de Kaw D (SMA14079) avant, pendant et après sa perte du 23/05 au 23/07/2024.
 
 Chaque chiffre sort de `blanci/exploration/inventaire.py` (`spectral_gaps`,
@@ -88,7 +89,11 @@ def figure(gaps: pd.DataFrame, pts: pd.DataFrame, out: Path) -> None:
     bands = third_octave_bands(100, 20000)
     cols = [f"d_{n}" for n in bands["name"]]
     pts = pts.reset_index(drop=True).assign(rang=lambda d: np.arange(len(d)))
-    suspects = pts[pts.extreme_db.abs() > SEUIL]
+    inside = np.flatnonzero((bands["name"] >= 1000) & (bands["name"] <= 10000))
+    # Carte : rangée par l'écart moyen sur 1-12 kHz (dégradé lisible), le pire écart en étiquette
+    suspects = (pts[pts.extreme_db.abs() > SEUIL]
+                .assign(moyen=lambda d: d[[cols[i] for i in inside]].mean(axis=1))
+                .sort_values("moyen"))
     n, k = len(pts), len(suspects)
 
     fig = plt.figure(figsize=(22, max(8.5, 2.2 + 0.24 * k)))
@@ -126,7 +131,6 @@ def figure(gaps: pd.DataFrame, pts: pd.DataFrame, out: Path) -> None:
     ticks = [i for i, b in enumerate(bands["name"]) if b in (100, 250, 500, 1000, 2000, 4000,
                                                               8000, 16000)]
     ax.set_xticks(ticks, [f"{b / 1000:g}".replace(".", ",") for b in bands["name"].iloc[ticks]])
-    inside = np.flatnonzero((bands["name"] >= 1000) & (bands["name"] <= 10000))
     for x in (inside[0] - 0.5, inside[-1] + 0.5):
         ax.axvline(x, color=INK, lw=1.2, ls=":")
     noms = [f"{nom(r)}, {r.episode_start:%d/%m/%y}" for r in suspects.itertuples()]
@@ -135,7 +139,8 @@ def figure(gaps: pd.DataFrame, pts: pd.DataFrame, out: Path) -> None:
     ax.set_xlabel("fréquence (kHz) ; pointillés : 1-12 kHz\n"
                   "rouge : piste 0 plus faible que réglé ; vert : plus forte")
     titre(ax, "Les points suspects : à quelle fréquence",
-          "écart d(f) pendant le pire épisode (date de début),\nmême ordre qu'à gauche")
+          "d(f) pendant le pire épisode (date de début), rangés par\n"
+          "l'écart moyen sur 1-12 kHz ; entre parenthèses : le pire écart")
     cb = fig.colorbar(im, cax=fig.add_subplot(grid[3]), ticks=[-20, -10, -6, 0, 6, 10, 20])
     cb.set_label("dB", color=MUTED)
     cb.outline.set_visible(False)
