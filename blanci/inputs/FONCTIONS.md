@@ -17,8 +17,8 @@ Fiche vérifiée le 10/11/2026 sur le commit `9473508` du dépôt public (`git l
 
 Lecture : `a → b` veut dire « `a` appelle `b` » ; un point-virgule sépare les appels successifs d'une même fonction. Les noms sans préfixe sont dans `inputs/`.
 
-- **`blanci ingest`** : `cli.ingest` → `ingest` → `iter_audio_files` → `natural_key` ; pour un nom déjà inventorié ailleurs : `same_recording` → `audio_signature` → `read_guano` ; sinon `describe_recording` → `read_guano`, `parse_songmeter_name`, `audio_qc` (→ `qc_indices` → `_welch` ; `qc_flags` → `muffled_candidate`), `clock_corrected`, `core.recording_id_for`, `start_utc` (→ `parse_guano_timestamp`, `parse_songmeter_name`). Une fois tous les fichiers passés : `apply_clock_corrections` ; `apply_metadata_flags` → `metadata_flags` ; `apply_audio_flags` → `qc_flags`, `muffled_runs`, `_write_flags` ; `apply_annotation_flags` → `annotation_flags` → `_current_spans`.
-- **`blanci qc`** : `cli.qc_command` → `embed.select_recordings` → `is_excluded`, `positive_recordings` ; `check_recordings` → `positive_recordings` ; `_unread_neighbours` ; `_read_tracks` → `core.ahead` → `prepare` (dans les fils) → `core.variants`, `audio_qc` ; puis dans le fil principal `merge_audio_flags` → `parse_flags`, `_write_flags` ; `is_excluded`. Enfin `apply_audio_flags`.
+- **`blanci ingest`** : `cli.ingest` → `ingest` → `iter_audio_files` → `natural_key` ; pour un nom déjà inventorié ailleurs : `same_recording` → `audio_signature` → `read_guano` ; sinon `describe_recording` → `read_guano`, `parse_songmeter_name`, `audio_qc` (→ `qc_indices` → `_welch` ; `qc_flags` → `muffled_candidate`), `clock_corrected`, `core.recording_id_for`, `start_utc` (→ `parse_guano_timestamp`, `parse_songmeter_name`). Une fois tous les fichiers passés : `apply_clock_corrections` ; `apply_metadata_flags` → `metadata_flags` ; `apply_audio_flags` → `qc_flags`, `_track_hf`, `cusum_settings`, `muffled_cusum` (→ `_programme_ranks`, `_segments`, `_cusum_episodes` → `_cusum`, `_alarmed`), `_write_flags` ; `apply_annotation_flags` → `annotation_flags` → `_current_spans`.
+- **`blanci qc`** : `cli.qc_command` → `embed.select_recordings` → `is_excluded`, `positive_recordings` ; `check_recordings` → `positive_recordings` ; `_unread_neighbours` (→ `muffled_cusum`, `_programme_ranks`, `_segments`) ; `_read_tracks` → `core.ahead` → `prepare` (dans les fils) → `core.variants`, `audio_qc` ; puis dans le fil principal `merge_audio_flags` → `parse_flags`, `_write_flags` ; `is_excluded`. Enfin `apply_audio_flags`.
 - **`blanci flag`** : `cli.flag` → `apply_clock_corrections` → `clock_corrected`, `start_utc`, `parse_flags` ; `apply_metadata_flags` ; `apply_audio_flags` ; `apply_annotation_flags`. Aucune lecture d'audio.
 - **`blanci embed`** : `cli.embed` → `embed.select_recordings` → `is_excluded`, `positive_recordings` ; avec `--subset benchmark` : `benchmark_subset` → `pairing_options`, `benchmark_recordings` → `recordings_table`, `current_labels`, `load_spans`, `_positive_intervals`, `is_excluded`, `_pairing_pools`. Pendant l'encodage, `embed.embed_recordings` → `parse_flags`, `qc_indices`, `qc_flags`, `is_excluded`, `merge_audio_flags`, et à la fin `apply_audio_flags`.
 - **`blanci train`** (et tout ce qui entraîne ou évalue une tête) : `service.train_and_register` → `frozen_recordings` → `frozen_versions` → `frozen_directory` ; `pairing_options` ; `embedded_training_set` → `training_set` → `current_labels` ; `load_spans` → `annotator_filter` ; `interval_labels` → `current_intervals`, `_within_union` ; `transfer_labels` ; `_merge_labelled` ; `positive_annotations` ; `_positive_intervals` ; `suspect_false_negatives` ; `recordings_table` ; `paired_negatives` → `local_minutes`, `local_days`, `_pairing_pools`. Puis `folds_for` → `benchmark_folds`.
@@ -108,88 +108,91 @@ Les clés que ce code écrit dans `qc_flags` :
 | `confirmed_muffled`, `confirmed_duration_off`, `confirmed_off_campaign` | `confirm_flags` | oui |
 | `keep` | `keep_flags` | non : annule tous les autres |
 
-#### `parse_flags(qc)` — [qc.py:55](qc.py#L55)
+#### `parse_flags(qc)` — [qc.py:56](qc.py#L56)
 
 - Quand : partout où `qc_flags` est lu : `is_excluded`, `apply_audio_flags`, `embed.embed_recordings`, `cli.status`, `workbench.flagged_candidates`, quatre scripts.
 - Reçoit : le texte JSON de la base, un dictionnaire déjà lu, ou rien. Renvoie : un dictionnaire.
-- Détail : l'ancien nom `in_bag` est lu comme `muffled`, dans les clés et dans la liste `annotated` (`LEGACY_FLAGS`, [qc.py:52](qc.py#L52)). Pourquoi (commentaire) : tant que `blanci qc` n'a pas recalculé la base, l'enregistrement reste écarté.
+- Détail : l'ancien nom `in_bag` est lu comme `muffled`, dans les clés et dans la liste `annotated` (`LEGACY_FLAGS`, [qc.py:53](qc.py#L53)). Pourquoi (commentaire) : tant que `blanci qc` n'a pas recalculé la base, l'enregistrement reste écarté.
 
-#### `is_excluded(qc, keys=EXCLUDING_FLAGS)` — [qc.py:78](qc.py#L78)
+#### `is_excluded(qc, keys=EXCLUDING_FLAGS)` — [qc.py:79](qc.py#L79)
 
 - Quand : chaque fois qu'on décide si un enregistrement est dans le corpus : [`embed.select_recordings`](../embedding/embed.py#L79) (ce qui sera encodé), `embed.embed_recordings`, `_read_tracks`, `benchmark_recordings`, `annotation/plan.eligible_recordings`, `workbench.flagged_candidates`, `service._qc_flagged`, `explore.py`.
 - Reçoit : les drapeaux, et la liste des clés qui écartent. Renvoie : vrai si l'enregistrement est écarté.
 - Fait : si `keep` est posé, rend faux ; sinon vrai dès qu'une des clés est levée.
-- `flag_raised(flags, key)` ([qc.py:73](qc.py#L73)) : un drapeau est levé s'il est vrai, ou s'il figure dans la liste `annotated` (posé à l'écoute).
-- `EXCLUDING_FLAGS` ([qc.py:48](qc.py#L48)) : `muffled`, `silent`, `duration_off`, `off_campaign` et les trois `confirmed_…`. Le commentaire donne la conséquence : jamais encodé, donc ni négatif apparié, ni candidat à écouter, ni score.
+- `flag_raised(flags, key)` ([qc.py:74](qc.py#L74)) : un drapeau est levé s'il est vrai, ou s'il figure dans la liste `annotated` (posé à l'écoute).
+- `EXCLUDING_FLAGS` ([qc.py:49](qc.py#L49)) : `muffled`, `silent`, `duration_off`, `off_campaign` et les trois `confirmed_…`. Le commentaire donne la conséquence : jamais encodé, donc ni négatif apparié, ni candidat à écouter, ni score.
 
-#### `positive_recordings(con)` — [qc.py:127](qc.py#L127)
+#### `positive_recordings(con)` — [qc.py:128](qc.py#L128)
 
 - Quand : avant tout tri par drapeaux : `embed.select_recordings`, `embed.embed_recordings`, `check_recordings`, deux scripts de `scripts/son_etouffe/`.
 - Renvoie : l'ensemble des enregistrements où A. blanci a été entendu : le dernier label d'une de leurs fenêtres est positif, ou un intervalle positif y est encore valable.
 - Pourquoi (docstring du fichier) : un enregistrement où A. blanci a été entendu n'est jamais écarté, l'écoute prime sur le calcul.
 
-#### `audio_qc(source, thresholds)` — [qc.py:215](qc.py#L215)
+#### `audio_qc(source, thresholds)` — [qc.py:217](qc.py#L217)
 
 - Quand : à l'inventaire (`ingest.describe_recording`) et dans `blanci qc` (`prepare` de `check_recordings`).
 - Reçoit : un chemin ou un fichier en mémoire, et la section `qc` de la configuration. Renvoie : les drapeaux audio et les indices des deux pistes.
 - Fait : lit tout le fichier, les deux pistes en une fois, mesure chaque piste avec `qc_indices`, puis `qc_flags`.
 
-#### `qc_indices(wav, sr)` — [qc.py:163](qc.py#L163)
+#### `qc_indices(wav, sr)` — [qc.py:164](qc.py#L164)
 
 - Quand : dans `audio_qc` ; pendant l'encodage sur la piste lue (`embed.embed_recordings`) ; dans `evaluation/qc_calibration.py` et deux scripts.
 - Reçoit : une piste et sa fréquence. Renvoie : cinq mesures : `rms_dbfs` (niveau moyen), `peak`, `clip_fraction` (part d'échantillons au maximum), `hf_ratio` (part de l'énergie au-dessus de 2 kHz, sur l'énergie au-dessus de 100 Hz), `flatness_1_10k` (platitude du spectre entre 1 et 10 kHz).
-- `_welch(x, sr, nperseg=2048)` ([qc.py:143](qc.py#L143)) : le spectre moyen, comme `scipy.signal.welch` mais calculé par paquets de 256 segments. Pourquoi (docstring) : trois à quatre fois plus vite sur un enregistrement de 2 min, pour un écart relatif de 1e-7.
+- `_welch(x, sr, nperseg=2048)` ([qc.py:144](qc.py#L144)) : le spectre moyen, comme `scipy.signal.welch` mais calculé par paquets de 256 segments. Pourquoi (docstring) : trois à quatre fois plus vite sur un enregistrement de 2 min, pour un écart relatif de 1e-7.
 
-#### `qc_flags(indices, thresholds, indices_1=None)` — [qc.py:191](qc.py#L191)
+#### `qc_flags(indices, thresholds, indices_1=None)` — [qc.py:193](qc.py#L193)
 
 - Quand : dans `audio_qc`, dans `apply_audio_flags` (sur les indices déjà rangés), pendant l'encodage, dans `evaluation/qc_calibration.current_flags`.
 - Reçoit : les indices de la piste 0, les seuils, et les indices de la piste 1 d'un fichier stéréo. Renvoie : `silent`, `muffled_0`, `indices`, et `muffled_1`, `indices_1` s'il y a une seconde piste.
 - Détail : les indices sont gardés avec les drapeaux ; un seuil changé se réapplique sans relire l'audio. Tous les indices mesurés sont rangés, y compris ceux qu'aucun drapeau ne lit (saturation, platitude). `muffled_0` et `muffled_1` ne sont ici que des candidats.
-- `muffled_candidate(indices, thresholds)` ([qc.py:182](qc.py#L182)) : une piste est candidate si elle n'est pas silencieuse et si `hf_ratio` est sous `muffled_hf_ratio` (0,05 dans `default.yaml`).
+- `muffled_candidate(indices, thresholds)` ([qc.py:183](qc.py#L183)) : une piste est candidate si elle n'est pas silencieuse et si `hf_ratio` est sous `muffled_hf_ratio` (0,05 dans `default.yaml`).
 
-#### `check_recordings(con, recordings, raw_root, thresholds, workers=4, commit_every=100, progress_every=1000, renamed=None)` — [qc.py:321](qc.py#L321)
+#### `check_recordings(con, recordings, raw_root, thresholds, workers=4, commit_every=100, progress_every=1000, renamed=None)` — [qc.py:323](qc.py#L323)
 
 - Quand : c'est `blanci qc` ([`cli.qc_command`](../cli.py#L211)), à lancer avant le premier encodage.
 - Reçoit : les enregistrements retenus, `paths.raw`, les seuils, le nombre de fils, `audio.renamed`. Renvoie : un bilan (contrôlés, écartés, déjà faits, illisibles). Écrit : `qc_flags`.
-- Fait : 1. saute ce qui est déjà mesuré ; 2. lit le reste dans `workers` fils (`_read_tracks`) ; 3. recommence avec les voisins des candidats de la piste 1 dont la piste 1 n'a pas été lue (`_unread_neighbours`), de proche en proche, jusqu'à ce qu'il n'y en ait plus.
+- Fait : 1. saute ce qui est déjà mesuré ; 2. lit le reste dans `workers` fils (`_read_tracks`) ; 3. recommence avec les pistes 1 non lues qu'il faut lire (`_unread_neighbours` : piste 0 retenue par la carte CUSUM, voisins au programme d'un candidat piste 1), de proche en proche, jusqu'à ce qu'il n'y en ait plus.
 - Détail : « déjà mesuré » veut dire que les indices de la piste 0 sont rangés, et que la piste 1 l'est aussi, ou que le fichier est mono, ou que la piste 0 n'est pas candidate. Le commentaire donne la raison : sans piste 0 candidate, l'enregistrement ne peut pas être `muffled`. Le fichier est cherché sous `paths.raw` seulement, sous son nom d'origine puis sous les noms renommés.
-- `_read_tracks(…)` ([qc.py:422](qc.py#L422)) : la boucle de lecture : range les drapeaux avec `merge_audio_flags`, valide tous les 100, affiche l'avancement tous les 1 000 ; si un fichier est illisible et que `paths.raw` n'existe plus, s'arrête avec « n'est plus accessible ; relancer » au lieu de compter tout le disque en erreur.
-- `_unread_neighbours(con, known, thresholds)` ([qc.py:387](qc.py#L387)) : les enregistrements stéréo dont la piste 1 n'est pas lue et qui précèdent ou suivent, sans trou de plus de `muffled_max_gap_min`, un candidat piste 1 du même micro.
+- `_read_tracks(…)` ([qc.py:436](qc.py#L436)) : la boucle de lecture : range les drapeaux avec `merge_audio_flags`, valide tous les 100, affiche l'avancement tous les 1 000 ; si un fichier est illisible et que `paths.raw` n'existe plus, s'arrête avec « n'est plus accessible ; relancer » au lieu de compter tout le disque en erreur.
+- `_unread_neighbours(con, known, thresholds)` ([qc.py:389](qc.py#L389)) : les enregistrements stéréo dont la piste 1 n'est pas lue et dont la piste 0 est retenue par la carte CUSUM (sans être candidate : au milieu d'un épisode), ou qui précèdent ou suivent au programme (créneau voisin, nuit sautée, `_programme_ranks`) un candidat piste 1 du même micro. La série est lue dans toute la base, comme dans `apply_audio_flags`.
 
-#### `merge_audio_flags(con, recording_id, audio)` — [qc.py:309](qc.py#L309)
+#### `merge_audio_flags(con, recording_id, audio)` — [qc.py:311](qc.py#L311)
 
 - Quand : pour chaque enregistrement contrôlé, dans `_read_tracks` et dans `embed.embed_recordings`.
 - Fait : relit les drapeaux de la ligne, pose les drapeaux audio par-dessus sans effacer les autres, écrit, renvoie le tout.
-- `_write_flags(con, updates)` ([qc.py:303](qc.py#L303)) : l'écriture groupée de `qc_flags`, dans une transaction ; ne fait rien si la liste est vide.
+- `_write_flags(con, updates)` ([qc.py:305](qc.py#L305)) : l'écriture groupée de `qc_flags`, dans une transaction ; ne fait rien si la liste est vide.
 
-#### `apply_audio_flags(con, thresholds)` — [qc.py:489](qc.py#L489)
+#### `apply_audio_flags(con, thresholds)` — [qc.py:618](qc.py#L618)
 
 - Quand : à la fin de `blanci qc`, de `blanci ingest` et d'un encodage qui a contrôlé des fichiers ; dans `blanci flag`.
 - Reçoit : les seuils. Écrit : `silent`, `muffled_0`, `muffled_1`, `muffled`. Renvoie : le nombre d'enregistrements par drapeau.
-- Fait : 1. recalcule les candidats de chaque piste depuis les indices déjà rangés, aux seuils actuels, sans relire l'audio ; 2. ne garde un candidat que dans une suite (`muffled_runs`) ; 3. lève `muffled` si les deux pistes sont retenues ; pour un fichier mono, la piste 0 compte pour les deux.
-- Détails : un enregistrement sans indices ne change pas. Un fichier stéréo dont la piste 1 n'a pas été lue et dont la piste 0 est candidate garde son `muffled` d'avant. Une ligne n'est réécrite que si un drapeau a changé.
-- Pourquoi : la règle des suites est le n° 194, la règle des deux pistes le n° 203 (docstrings).
-- `muffled_runs(series, min_run=4, max_gap_min=60.0)` ([qc.py:466](qc.py#L466)) : garde les candidats qui forment une suite d'au moins `min_run` enregistrements consécutifs du même micro, sans trou de plus de `max_gap_min` minutes. Pourquoi (docstring) : un micro dans un sac donne une série continue ; un enregistrement grave isolé (singes hurleurs, chœur, orage) n'en est pas une. Aussi appelée par `evaluation/qc_calibration.py` et `scripts/son_etouffe/qc_deux_pistes.py`.
+- Fait : 1. relit `hf_ratio` de chaque piste depuis les indices déjà rangés, sans relire l'audio (piste muette ou non lue : hors série) ; 2. retient les pistes des épisodes de la carte CUSUM de leur micro (`muffled_cusum`) ; 3. lève `muffled` si les deux pistes sont retenues ; pour un fichier mono, la piste 0 compte pour les deux.
+- Détails : un enregistrement sans indices ne change pas. Un fichier stéréo dont la piste 1 n'a pas été lue et dont la piste 0 est candidate ou retenue garde son `muffled` d'avant, sans `muffled_1` (un `False` rangé avant est retiré : la piste n'a pas été lue). Une ligne n'est réécrite que si un drapeau a changé.
+- Pourquoi : la carte CUSUM remplace le 19/11/2026 la règle des suites (n° 194), que la nuit coupait ; la règle des deux pistes est le n° 203 (docstrings). Réglage et effet : `data/reports/son_etouffe/cusum.md`.
+- `muffled_cusum(series, ref_ratio=0.05, h=4.0, max_missed=1)` ([qc.py:579](qc.py#L579)) : carte CUSUM de Page (1954) sur la série d'une piste, micro par micro, dans l'ordre du programme. Chaque enregistrement apporte log10(`ref_ratio` / `hf_ratio`) décades (plancher `HF_FLOOR` = 1e-4) ; la statistique S = max(0, S + apport) alarme à `h`. Pourquoi (docstring) : la référence 0,05 est le milieu, en log, entre une piste saine (0,75) et une piste dans un sac (0,0035) ; à h = 4 un sac typique est retenu au 4e enregistrement, un enregistrement seul jamais (au plus 2,7). Aussi appelée par `evaluation/qc_calibration.py` et `scripts/son_etouffe/qc_deux_pistes.py`.
+- `cusum_settings(thresholds)` ([qc.py:490](qc.py#L490)) : le réglage lu dans `qc` : `muffled_hf_ratio` (référence), `muffled_cusum_h`, `muffled_max_missed_slots`. `_track_hf` ([qc.py:501](qc.py#L501)) : `hf_ratio` d'une piste, NaN si elle n'est pas lue ou muette.
+- `_programme_ranks(t)` ([qc.py:509](qc.py#L509)) : le rang de chaque enregistrement d'un micro dans son programme, lu dans les données (créneaux présents au moins un jour sur deux, grille au pas médian, jour commencé après le plus grand écart : la nuit) ; le dernier créneau du soir et le premier du lendemain ont des rangs voisins. `_segments` ([qc.py:539](qc.py#L539)) coupe la série après plus de `max_missed` créneaux manqués.
+- `_cusum`, `_alarmed`, `_cusum_episodes` ([qc.py:546](qc.py#L546), [559](qc.py#L559), [569](qc.py#L569)) : la statistique, les excursions qui atteignent `h`, et les points retenus : le cœur de l'épisode (excursion qui alarme lue dans le sens du temps et à l'envers) en entier, la traîne d'un seul sens seulement sous la référence.
 
-#### `apply_metadata_flags(con, thresholds, utc_offset_h=-3.0)` — [qc.py:277](qc.py#L277)
+#### `apply_metadata_flags(con, thresholds, utc_offset_h=-3.0)` — [qc.py:279](qc.py#L279)
 
 - Quand : à la fin de `ingest`, et dans `blanci flag`.
 - Écrit : `duration_off`, `off_campaign`, `clock_off` de tous les enregistrements, sans toucher aux autres clés. Renvoie : le nombre d'enregistrements par drapeau.
 - Pourquoi (commentaire de `ingest`) : ces drapeaux dépendent de toute la série d'un micro, ils sont donc recalculés sur toute la base à chaque fois.
-- `metadata_flags(recordings, thresholds, utc_offset_h=-3.0)` ([qc.py:227](qc.py#L227)) : le calcul. `duration_off` : durée à plus de `duration_tolerance_s` (1 s) de `expected_duration_s` (120 s). `off_campaign` : pour chaque (jeu, site, micro), les dates sont coupées en blocs là où un trou dépasse `campaign_gap_days` (7 jours) ; le plus gros bloc est le relevé, les autres en sortent. `clock_off` : l'heure du nom de fichier et celle de l'en-tête diffèrent de plus de `clock_tolerance_min` (5 min).
+- `metadata_flags(recordings, thresholds, utc_offset_h=-3.0)` ([qc.py:229](qc.py#L229)) : le calcul. `duration_off` : durée à plus de `duration_tolerance_s` (1 s) de `expected_duration_s` (120 s). `off_campaign` : pour chaque (jeu, site, micro), les dates sont coupées en blocs là où un trou dépasse `campaign_gap_days` (7 jours) ; le plus gros bloc est le relevé, les autres en sortent. `clock_off` : l'heure du nom de fichier et celle de l'en-tête diffèrent de plus de `clock_tolerance_min` (5 min).
 
-#### `apply_annotation_flags(con, recording_ids=None)` — [qc.py:601](qc.py#L601)
+#### `apply_annotation_flags(con, recording_ids=None)` — [qc.py:733](qc.py#L733)
 
 - Quand : après chaque annotation ([`service.append_label`](../service.py#L616), [`append_span`](../service.py#L673), [`append_labels_bulk`](../service.py#L748), `_import_set`), au début de `service.retrain`, à la fin de `ingest`, dans `blanci flag`.
 - Écrit : la clé `annotated` des enregistrements donnés (ou de tous). Renvoie : le nombre d'enregistrements annotés et, par drapeau, le nombre de signalés.
 - Fait : réécrit `annotated` d'après les derniers labels et les extraits encore valables ; un enregistrement qui n'est plus annoté perd la clé. Un label corrigé ou un extrait réécouté retire donc le drapeau qu'il avait posé.
-- `annotation_flags(con, recording_ids=None)` ([qc.py:577](qc.py#L577)) : le calcul : le label `artefact_muffled` (ou l'ancien `artefact_in_bag`) pose `muffled`, le label `rain` ou une mention de pluie dans le commentaire pose `rain`. Un enregistrement annoté sans rien de tel a une liste vide.
-- `_current_spans(con)` ([qc.py:554](qc.py#L554)) : les extraits encore valables, c'est-à-dire non recouverts en entier par un extrait plus récent.
+- `annotation_flags(con, recording_ids=None)` ([qc.py:709](qc.py#L709)) : le calcul : le label `artefact_muffled` (ou l'ancien `artefact_in_bag`) pose `muffled`, le label `rain` ou une mention de pluie dans le commentaire pose `rain`. Un enregistrement annoté sans rien de tel a une liste vide.
+- `_current_spans(con)` ([qc.py:686](qc.py#L686)) : les extraits encore valables, c'est-à-dire non recouverts en entier par un extrait plus récent.
 
-#### `confirm_flags(con, recording_ids, flags)` et `keep_flags(con, recording_ids)` — [qc.py:86](qc.py#L86)
+#### `confirm_flags(con, recording_ids, flags)` et `keep_flags(con, recording_ids)` — [qc.py:87](qc.py#L87)
 
 - Quand : aucune commande `blanci` ne les appelle ; seul `scripts/son_etouffe/confirmer_drapeaux.py` le fait, après écoute.
-- `confirm_flags` pose `confirmed_<drapeau>` (un des trois de `CONFIRMED_FLAGS`, sinon `ValueError`). `keep_flags` ([qc.py:110](qc.py#L110)) pose `keep`. Les deux renvoient le nombre d'enregistrements modifiés et lèvent `KeyError` pour un enregistrement absent de la base.
+- `confirm_flags` pose `confirmed_<drapeau>` (un des trois de `CONFIRMED_FLAGS`, sinon `ValueError`). `keep_flags` ([qc.py:111](qc.py#L111)) pose `keep`. Les deux renvoient le nombre d'enregistrements modifiés et lèvent `KeyError` pour un enregistrement absent de la base.
 - Pourquoi (commentaires) : ce sont des clés propres, que ni l'inventaire ni le contrôle audio ne réécrivent. `keep` veut dire « écouté et gardé malgré un drapeau » et l'emporte sur tous les autres.
 
 ## `labels.py` : les labels et les commentaires

@@ -399,7 +399,7 @@ def ingest(
     apply_clock_corrections(con, cfg["recorder"])
     # Les drapeaux d'inventaire dépendent de toute la série d'un micro : recalculés ici.
     report.flagged = apply_metadata_flags(con, cfg["qc"], cfg["recorder"]["filename_utc_offset_h"])
-    if run_qc:  # `muffled_*` rangés ne sont que des candidats : règle des suites (n° 194, 203)
+    if run_qc:  # `muffled_*` rangés ne sont que des candidats : carte CUSUM (n° 203)
         apply_audio_flags(con, cfg["qc"])
     # Un contrôle audio refait réécrit qc_flags : les drapeaux posés à l'écoute sont remis.
     apply_annotation_flags(con)

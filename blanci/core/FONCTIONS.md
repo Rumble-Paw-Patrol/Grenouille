@@ -164,7 +164,7 @@ La base garde le chemin de chaque enregistrement relatif à la racine du disque 
 
 #### `variants(rel, renamed=None)` — [locate.py:107](locate.py#L107)
 
-- Quand : chaque fois qu'un fichier audio est cherché ; appelée par `locate`, par [`app._missing_recording`](../annotation/app.py#L873), et par deux étapes qui cherchent sans `locate` : `prepare` dans [`inputs/qc.check_recordings`](../inputs/qc.py#L321) et `find` dans [`embed.embed_recordings`](../embedding/embed.py#L198).
+- Quand : chaque fois qu'un fichier audio est cherché ; appelée par `locate`, par [`app._missing_recording`](../annotation/app.py#L873), et par deux étapes qui cherchent sans `locate` : `prepare` dans [`inputs/qc.check_recordings`](../inputs/qc.py#L323) et `find` dans [`embed.embed_recordings`](../embedding/embed.py#L198).
 - Reçoit : le chemin relatif et `audio.renamed` (ancien dossier → nouveau dossier). Renvoie : une liste, le chemin d'origine d'abord, puis le même chemin sous chaque nouveau nom dont l'ancien est le début du chemin.
 - Pourquoi : les dossiers ont été renommés à la copie sur les disques du stage, et la base garde le chemin d'origine (commentaire de `config/default.yaml`, section `audio.renamed`). Les `\` sont remplacés par des `/` avant la comparaison.
 
@@ -212,7 +212,7 @@ Une seule fonction. Ne lit et n'écrit rien elle-même : elle fait tourner la fo
 
 #### `ahead(items, prepare, ahead=2, workers=1)` — [ahead.py:15](ahead.py#L15)
 
-- Quand : dans les boucles qui lisent beaucoup de fichiers. [`embed.embed_recordings`](../embedding/embed.py#L198) l'importe sous le nom `read_ahead` et garde les valeurs par défaut : un fil, deux enregistrements d'avance. [`inputs/qc._read_tracks`](../inputs/qc.py#L422), [`signal_processing.compute_onsets`](../heads/signal_processing.py#L281) et `qc_deux_pistes.measure` passent `2 * workers` d'avance et `workers` fils (`blanci qc` : 4 fils par défaut, donc 8 d'avance).
+- Quand : dans les boucles qui lisent beaucoup de fichiers. [`embed.embed_recordings`](../embedding/embed.py#L198) l'importe sous le nom `read_ahead` et garde les valeurs par défaut : un fil, deux enregistrements d'avance. [`inputs/qc._read_tracks`](../inputs/qc.py#L436), [`signal_processing.compute_onsets`](../heads/signal_processing.py#L281) et `qc_deux_pistes.measure` passent `2 * workers` d'avance et `workers` fils (`blanci qc` : 4 fils par défaut, donc 8 d'avance).
 - Reçoit : les éléments à traiter, la fonction `prepare` à appliquer à chacun, l'avance, le nombre de fils. Renvoie : un itérateur de `(élément, prepare(élément))`, dans l'ordre de départ.
 - Fait : 1. soumet chaque élément à un groupe de fils (nommés `blanci-lecture`) ; 2. dès qu'il y a plus de `ahead` éléments en attente, rend le plus ancien, en attendant son résultat s'il n'est pas prêt ; 3. à la fin, rend ceux qui restent ; 4. si la boucle de l'appelant s'arrête avant la fin, annule ce qui n'a pas commencé et attend ce qui tourne.
 - Détails : avec `ahead=0`, chaque élément est préparé à son tour. Une exception de `prepare` ne sort pas du fil : elle remonte dans la boucle de l'appelant au moment où son élément devait être rendu. Les `prepare` du projet attrapent eux-mêmes l'erreur de lecture et renvoient `None` ou un résultat marqué en échec.

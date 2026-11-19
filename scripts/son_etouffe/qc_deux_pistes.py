@@ -1,6 +1,6 @@
 """Son étouffé, piste par piste : `hf_ratio` et `rms_dbfs` sur les deux canaux des micros
 signalés `muffled` (calculé, noté à l'écoute ou dit étouffé dans un commentaire), sur toute
-leur campagne, puis la règle des suites (`muffled_runs`, n° 194) piste par piste.
+leur campagne, puis la carte CUSUM du son étouffé (`muffled_cusum`) piste par piste.
 
 `blanci qc` ne lit que `audio.channel` (piste 0, micro 1 à 6 dB) : un micro étouffé sur la
 seule piste 1 n'est jamais vu, et un micro écarté pour sa piste 0 a peut-être une piste 1
@@ -34,7 +34,13 @@ from blanci.annotation.selection import write_queue
 from blanci.core.ahead import ahead
 from blanci.core.config import config_path, default_user_config, load_config
 from blanci.core.locate import locate
-from blanci.inputs.qc import muffled_candidate, muffled_runs, parse_flags, qc_indices
+from blanci.inputs.qc import (
+    cusum_settings,
+    muffled_candidate,
+    muffled_cusum,
+    parse_flags,
+    qc_indices,
+)
 
 # Piste « valable » : ratio d'au moins deux fois le seuil d'`muffled`. Entre le seuil et ce
 # plancher, la piste n'est pas candidate sans être franchement claire : douteux.
@@ -44,6 +50,8 @@ MOSTLY = 0.8
 # Deux suites du même micro et du même état forment un épisode si rien ne les sépare que la
 # pause du programme (nuit : 19:30 → 05:00, heure locale) : pas d'enregistrement entre elles.
 EPISODE_GAP = pd.Timedelta(hours=12)
+# Suites de candidats (descriptives) : coupées par un trou de plus d'une heure.
+RUN_GAP = pd.Timedelta(minutes=60)
 # Commentaires d'écoute qui disent un son étouffé (le poste n'a pas de réponse pour ça).
 MUFFLED_COMMENT = re.compile(r"touff|dans (?:le |un )?sac", re.IGNORECASE)
 EXTRACT_S = 30.0
@@ -144,8 +152,9 @@ def measure(cfg: dict, todo: pd.DataFrame, out: Path, workers: int) -> None:
 
 
 def track_flags(rec: pd.DataFrame, qc: dict) -> pd.DataFrame:
-    """Piste par piste : candidat (`qc_flags`, seuil actuel) et étouffé (candidat retenu par
-    la règle des suites, `muffled_runs`). Une piste absente (fichier mono) n'est pas candidate."""
+    """Piste par piste : candidat (`qc_flags`, seuil actuel) et étouffé (piste retenue par la
+    carte CUSUM, `muffled_cusum`, comme `apply_audio_flags`). Une piste absente (fichier mono)
+    n'est pas candidate."""
     rec = rec.copy()
     for c in (0, 1):
         measured = rec[f"hf_ratio_{c}"].notna()
@@ -153,10 +162,10 @@ def track_flags(rec: pd.DataFrame, qc: dict) -> pd.DataFrame:
             bool(m) and muffled_candidate({"hf_ratio": h, "rms_dbfs": r}, qc)
             for m, h, r in zip(measured, rec[f"hf_ratio_{c}"], rec[f"rms_dbfs_{c}"], strict=True)
         ]
-        kept = muffled_runs(
-            rec[measured].assign(candidate=rec.loc[measured, f"candidat_{c}"]),
-            int(qc.get("muffled_min_run", 4)),
-            float(qc.get("muffled_max_gap_min", 60.0)),
+        loud = rec[f"rms_dbfs_{c}"] >= float(qc["silent_dbfs"])
+        kept = muffled_cusum(
+            rec.assign(hf_ratio=rec[f"hf_ratio_{c}"].where(measured & loud)),
+            **cusum_settings(qc),
         )
         rec[f"etouffe_{c}"] = rec["recording_id"].isin(kept)
     return rec
@@ -164,8 +173,8 @@ def track_flags(rec: pd.DataFrame, qc: dict) -> pd.DataFrame:
 
 def number_runs(rec: pd.DataFrame, qc: dict) -> pd.DataFrame:
     """Suites (`suite`) : enregistrements consécutifs du même micro, sans trou de plus de
-    `muffled_max_gap_min`, où une piste au moins est candidate."""
-    gap = pd.Timedelta(minutes=float(qc.get("muffled_max_gap_min", 60.0)))
+    `RUN_GAP`, où une piste au moins est candidate (description, pas une règle)."""
+    gap = RUN_GAP
     rec = rec.assign(t=pd.to_datetime(rec["start_utc"], utc=True, errors="coerce"), suite="")
     for (_, site, mic), mic_rows in rec.sort_values("t").groupby(["dataset", "site", "mic_id"]):
         hit = mic_rows["candidat_0"] | mic_rows["candidat_1"]
@@ -180,8 +189,8 @@ def clear(h: float, qc: dict) -> bool:
 
 
 def state(part: pd.DataFrame, qc: dict) -> str:
-    """État d'une suite : piste(s) étouffée(s) d'après la règle des suites, et l'autre
-    franchement valable. Trop courte pour la règle (< `muffled_min_run`) : « courte »."""
+    """État d'une suite : piste(s) étouffée(s) d'après la carte CUSUM, et l'autre
+    franchement valable. Aucune piste retenue par la carte : « courte »."""
     e0, e1 = part["etouffe_0"].mean(), part["etouffe_1"].mean()
     if e0 == 0 and e1 == 0:
         return "courte"

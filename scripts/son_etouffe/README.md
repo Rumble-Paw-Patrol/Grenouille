@@ -16,6 +16,8 @@ Les scripts qui repèrent les enregistrements au son étouffé, piste par piste.
 
 - `bascules_fines.py` : repère les micros qui s'étouffent ou se libèrent **en plein enregistrement**, sur tout le corpus. Tri sur les indices déjà en base (suites de fichiers bas, même plus courtes que les 4 du drapeau), puis `hf_ratio` par tranche de 2 s sur les deux pistes, marche d'un facteur 6 au moins, forme de la marche (brusque = geste, progressive = bonnette qui s'imbibe ou sèche), synchronie avec les autres micros du site, bord de campagne. Remplace `file_bascules.py`, dont les 11 candidats de CDR étaient des micros dans un sac. Sorties dans `paths.reports/son_etouffe/bascules_fines/` et la file `bascules_fines` ; `degradees` écrit la file `piste0_encodee_degradee`.
 
+- `effet_cusum.py` : effet de la carte CUSUM (`qc.muffled_cusum`, qui remplace le 19/11/2026 la règle des « 4 de suite » que la nuit coupait) avant de l'écrire en base, et sa calibration sur les cas écoutés. Lecture seule : `apply_audio_flags` est appliquée à une copie en mémoire de `recordings`. Sortie : `paths.reports/son_etouffe/cusum.md`.
+
 - `muffled_perdus`   : deux pistes étouffées, un extrait de 5 s par enregistrement ;
 - `muffled_douteux`  : une piste étouffée et l'autre pas franchement claire, un extrait de 5 s par enregistrement ;
 - `autres_drapeaux`  : durée anormale / date hors relevé, enregistrements entiers ;

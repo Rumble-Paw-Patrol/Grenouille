@@ -131,16 +131,20 @@ qc:
   # `blanci qc`, avant tout encodage (n° 173) ; `embed` ne contrôle que ce qui ne l'a pas été.
   during_embed: true
   silent_dbfs: -70.0               # RMS en dessous : enregistrement muet
-  # Son étouffé (micro dans un sac, bonnette contre le sol…), piste par piste : énergie > 2 kHz /
-  # énergie totale sous `muffled_hf_ratio` **et** au moins `muffled_min_run` enregistrements
-  # consécutifs du même micro (2 h au programme de 30 min), sans trou de plus de
-  # `muffled_max_gap_min` minutes (DECISIONS n° 194). Un enregistrement n'est écarté (`muffled`)
-  # que si les deux pistes le sont ; sinon il reste, avec `muffled_0` / `muffled_1` (n° 203).
-  # Un enregistrement grave isolé n'est pas un sac. Seuil calé sur trop peu d'exemples
-  # (n° 76, 81 : 0,02 → 0,2) ; abaissé à 0,05 avec la règle de durée.
+  # Son étouffé (micro dans un sac, bonnette contre le sol…), piste par piste : carte CUSUM de
+  # Page (1954) sur log10(énergie > 2 kHz / énergie totale), micro par micro, dans l'ordre du
+  # programme (la nuit ne coupe pas la série). Chaque enregistrement apporte
+  # log10(`muffled_hf_ratio` / hf_ratio) ; une piste est retenue dans un épisode dont la somme
+  # atteint `muffled_cusum_h` (qc.muffled_cusum). La référence 0,05 est le milieu, en log,
+  # entre piste saine (0,75) et piste dans un sac (0,0035) ; h = 4 retient un sac typique au
+  # 4e enregistrement et jamais un enregistrement seul (au plus 2,7). Plus de
+  # `muffled_max_missed_slots` créneaux du programme sans mesure coupent la série. Calibré le
+  # 19/11/2026 sur les écoutes (data/reports/son_etouffe/cusum.md). Un enregistrement n'est
+  # écarté (`muffled`) que si les deux pistes le sont ; sinon il reste, avec `muffled_0` /
+  # `muffled_1` (n° 203). `muffled_hf_ratio` décide aussi de lire la piste 1 (candidat).
   muffled_hf_ratio: 0.05
-  muffled_min_run: 4
-  muffled_max_gap_min: 60
+  muffled_cusum_h: 4.0
+  muffled_max_missed_slots: 1
   # Drapeaux calculés sur l'inventaire seul (sans lire l'audio), recalculés après chaque
   # inventaire ou par `blanci flag`. Un enregistrement signalé n'est jamais encodé.
   expected_duration_s: 120.0       # programme des Song Meter : 2 min toutes les 30 min

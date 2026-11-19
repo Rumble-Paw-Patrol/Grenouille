@@ -545,7 +545,7 @@ def embed(
     if report.qc_checked:
         typer.echo(
             f"contrôle audio : {report.qc_checked} enregistrements, {report.qc_excluded} écartés "
-            "(silencieux ; son étouffé : règle des suites en fin de passage)"
+            "(silencieux ; son étouffé : carte CUSUM en fin de passage)"
         )
     if report.gated:
         typer.echo(f"portes : {report.gated} fenêtres arrêtées (non encodées, score minimal)")

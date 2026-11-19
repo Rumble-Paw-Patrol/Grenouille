@@ -1305,8 +1305,8 @@ def track_flags_summary(rec: pd.DataFrame, cfg_qc: dict[str, Any]) -> pd.DataFra
     Question : combien d'enregistrements ont les deux pistes retenues, une seule, ou seulement
     des candidats isolés, et lesquels sont écartés ? Entrée : `load_recordings`, `qc` de la
     configuration. Sortie : une ligne par (catégorie, écarté) : `recordings`.
-    Règle : « retenue » = `muffled_0` / `muffled_1` rangés (candidat dans une suite de
-    `muffled_min_run`, `qc.apply_audio_flags`) ; « candidat » = `qc.muffled_candidate` sur les
+    Règle : « retenue » = `muffled_0` / `muffled_1` rangés (piste dans un épisode de la carte
+    CUSUM, `qc.apply_audio_flags`) ; « candidat » = `qc.muffled_candidate` sur les
     indices rangés, aux seuils actuels (`silent_dbfs`, `muffled_hf_ratio`). Catégories :
     deux pistes retenues ; piste 0 retenue seule ; piste 1 retenue seule ; candidat isolé sur
     la piste 0 (aucune piste retenue) ; candidat isolé sur la piste 1 seule ; aucun candidat ;
@@ -1642,7 +1642,7 @@ def stale_flags(rec: pd.DataFrame, cfg: dict[str, Any]) -> pd.DataFrame:
     `off_campaign`, `clock_off`) : `stored`, `recomputed`, `differ` (enregistrements dont la
     valeur change). Règle : `qc.metadata_flags`, la fonction même de `blanci flag`, appelée sur
     une copie : rien n'est écrit. Limite : les drapeaux audio (`muffled`…) ne se recalculent
-    pas ici (ils demandent les suites, `qc.apply_audio_flags`, qui écrit en base).
+    pas ici (ils demandent la carte CUSUM, `qc.apply_audio_flags`, qui écrit en base).
     """
     flags = metadata_flags(rec, cfg["qc"], float(cfg["recorder"]["filename_utc_offset_h"]))
     rows = []

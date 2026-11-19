@@ -12,8 +12,9 @@ fichier n'est jamais touché). Trois origines :
   des drapeaux que l'annotateur y a posés (label `artefact_muffled`, label ou mention de pluie).
 
 Son étouffé (micro dans un sac, bonnette contre le sol…) : un enregistrement n'est écarté que si
-**les deux pistes** le sont (`muffled_0` et `muffled_1`, chacune par la règle des suites) ; si
-une piste est valable il reste dans le corpus avec son drapeau (DECISIONS n° 203).
+**les deux pistes** le sont (`muffled_0` et `muffled_1`, chacune par la carte CUSUM,
+`muffled_cusum`) ; si une piste est valable il reste dans le corpus avec son drapeau
+(DECISIONS n° 203).
 
 Le contrôle audio ne sert qu'à sortir du projet les fichiers cassés ou sans rapport avec lui
 (DECISIONS n° 174) : il ne signale ni la pluie ni la saturation, qui font partie du milieu
@@ -181,7 +182,8 @@ def qc_indices(wav: np.ndarray, sr: int) -> dict[str, float]:
 
 def muffled_candidate(indices: dict[str, float], thresholds: dict[str, float]) -> bool:
     """Une piste d'un enregistrement ressemble à un son étouffé : pas silencieuse, et peu
-    d'énergie au-dessus de 2 kHz. Un candidat, pas un drapeau (règle des suites)."""
+    d'énergie au-dessus de 2 kHz. Un candidat, pas un drapeau (carte CUSUM, `muffled_cusum`) ;
+    sert à décider de lire la piste 1."""
     return (
         indices["rms_dbfs"] >= thresholds["silent_dbfs"]
         and indices["hf_ratio"] < thresholds["muffled_hf_ratio"]
@@ -199,8 +201,8 @@ def qc_flags(
     ceux qu'aucun drapeau ne lit (saturation, platitude du spectre).
 
     `muffled_0` et `muffled_1` ne sont ici que des candidats, jugés sur un seul enregistrement :
-    `apply_audio_flags` ne les garde que dans une suite d'enregistrements consécutifs du même
-    micro (n° 194), et ne lève `muffled` que si les deux pistes le sont (n° 203)."""
+    `apply_audio_flags` les remplace par la carte CUSUM de la série du micro (`muffled_cusum`),
+    et ne lève `muffled` que si les deux pistes sont retenues (n° 203)."""
     out: dict[str, Any] = {
         "silent": bool(indices["rms_dbfs"] < thresholds["silent_dbfs"]),
         "muffled_0": muffled_candidate(indices, thresholds),
@@ -375,8 +377,8 @@ def check_recordings(
         _read_tracks(
             con, todo, prepare, workers, report, protected, raw_root, commit_every, progress_every
         )
-        # La suite d'une piste 1 peut déborder la suite de la piste 0 : les voisins d'un
-        # candidat dont la piste 1 n'a pas été lue le sont aussi, de proche en proche.
+        # L'épisode d'une piste 1 peut déborder celui de la piste 0, et la carte retient des
+        # pistes 0 au-dessus du seuil : ces pistes 1 sont lues aussi, de proche en proche.
         todo = [
             by_id[rid] for rid in _unread_neighbours(con, by_id, thresholds) if rid not in todo_ids
         ]
@@ -387,36 +389,48 @@ def check_recordings(
 def _unread_neighbours(
     con: sqlite3.Connection, known: dict[str, Any], thresholds: dict[str, Any]
 ) -> list[str]:
-    """Enregistrements stéréo de `known` dont la piste 1 n'est pas lue et qui suivent ou
-    précèdent (sans trou de plus de `muffled_max_gap_min`) un candidat piste 1 du même micro."""
-    gap = pd.Timedelta(minutes=float(thresholds.get("muffled_max_gap_min", 60.0)))
-    rows = [
-        (rid, dataset, site, mic, start, channels, parse_flags(qc))
-        for rid, dataset, site, mic, start, channels, qc in con.execute(
-            "SELECT recording_id, dataset, site, mic_id, start_utc, channels, qc_flags "
-            "FROM recordings"
+    """Enregistrements stéréo de `known` dont la piste 1 n'est pas lue et qu'il faut lire : la
+    piste 0 est retenue par la carte CUSUM sans être candidate (dans un épisode, au-dessus de la
+    référence), ou l'enregistrement suit ou précède au programme (créneau voisin du même micro,
+    nuit sautée, `_programme_ranks`) un candidat piste 1. La série du micro est lue dans toute la
+    base, pour que la carte et le programme soient ceux de `apply_audio_flags`."""
+    settings = cusum_settings(thresholds)
+    rows = []
+    for rid, dataset, site, mic, start, channels, qc in con.execute(
+        "SELECT recording_id, dataset, site, mic_id, start_utc, channels, qc_flags "
+        "FROM recordings"
+    ):
+        flags = parse_flags(qc)
+        if "indices" not in flags:
+            continue
+        rows.append(
+            (
+                rid,
+                dataset,
+                site,
+                mic,
+                start,
+                _track_hf(flags["indices"], thresholds),
+                "indices_1" not in flags and channels != 1,
+                "indices_1" in flags and muffled_candidate(flags["indices_1"], thresholds),
+            )
         )
-        if rid in known
-    ]
-    frame = pd.DataFrame(
-        {
-            "id": [r[0] for r in rows],
-            "mic": [(r[1], r[2], r[3]) for r in rows],
-            "t": pd.to_datetime([r[4] for r in rows], utc=True, errors="coerce"),
-            "unread": ["indices" in r[6] and "indices_1" not in r[6] and r[5] != 1 for r in rows],
-            "cand": [
-                "indices_1" in r[6] and muffled_candidate(r[6]["indices_1"], thresholds)
-                for r in rows
-            ],
-        }
-    ).dropna(subset=["t"])
-    wanted: set[str] = set()
-    for _, mic in frame.sort_values("t").groupby("mic", sort=False):
-        t, unread, cand, ids = mic["t"], mic["unread"], mic["cand"], mic["id"]
-        near_before = (t.diff() <= gap) & cand.shift(fill_value=False)
-        near_after = (t.diff(-1).abs() <= gap) & cand.shift(-1, fill_value=False)
-        wanted.update(ids[unread & (near_before | near_after)])
-    return sorted(wanted)
+    columns = [*SERIES_COLUMNS, "unread", "cand"]
+    frame = pd.DataFrame(rows, columns=columns)
+    frame["start_utc"] = pd.to_datetime(frame["start_utc"], utc=True, errors="coerce")
+    frame = frame.dropna(subset=["start_utc"]).sort_values("start_utc", kind="stable")
+    retained = muffled_cusum(frame, **settings)
+    wanted = set(frame.loc[frame["unread"] & frame["recording_id"].isin(retained), "recording_id"])
+    keys = [frame[c].fillna("?") for c in ("dataset", "site", "mic_id")]
+    for _, mic in frame.groupby(keys, sort=False):
+        seg = _segments(_programme_ranks(mic["start_utc"]), settings["max_missed"])
+        same = np.diff(seg) == 0  # deux voisins au programme, sans trou
+        cand = mic["cand"].to_numpy()
+        near = np.zeros(len(mic), dtype=bool)
+        near[1:] |= cand[:-1] & same
+        near[:-1] |= cand[1:] & same
+        wanted.update(mic["recording_id"][mic["unread"].to_numpy() & near])
+    return sorted(wanted & set(known))
 
 
 def _read_tracks(
@@ -445,8 +459,8 @@ def _read_tracks(
             continue
         merged = merge_audio_flags(con, rec.recording_id, flags)
         report["checked"] += 1
-        # `muffled_*` ne sont ici que des candidats : seule la règle des suites
-        # (`apply_audio_flags`, n° 194 et 203) les confirme. Pas comptés parmi les écartés.
+        # `muffled_*` ne sont ici que des candidats : seule la carte CUSUM
+        # (`apply_audio_flags`, n° 203) les confirme. Pas comptés parmi les écartés.
         report["excluded"] += (
             is_excluded(merged | {"muffled": False}) and rec.recording_id not in protected
         )
@@ -463,68 +477,184 @@ def _read_tracks(
     con.commit()
 
 
-def muffled_runs(series: pd.DataFrame, min_run: int = 4, max_gap_min: float = 60.0) -> set[str]:
-    """Enregistrements `muffled` retenus : candidats d'une suite d'au moins `min_run`
-    enregistrements consécutifs du même micro (jeu, site, micro), sans trou de plus de
-    `max_gap_min` minutes entre deux voisins. Un micro dans un sac donne une série continue ;
-    un enregistrement grave isolé (singes hurleurs, chœur, orage) n'en est pas une.
+# --- Son étouffé : carte CUSUM sur la série de chaque piste de chaque micro ------------------
 
-    `series` : recording_id, dataset, site, mic_id, start_utc, candidate (bool).
+# Colonnes d'une série pour `muffled_cusum` : `hf_ratio` vide = piste non mesurée (non lue,
+# muette) à ce créneau.
+SERIES_COLUMNS = ["recording_id", "dataset", "site", "mic_id", "start_utc", "hf_ratio"]
+# Plancher de `hf_ratio` avant le logarithme : sous toutes les valeurs mesurées (la plus basse
+# est vers 4e-4) ; borne l'apport d'un seul enregistrement à log10(référence / plancher).
+HF_FLOOR = 1e-4
+
+
+def cusum_settings(thresholds: dict[str, Any]) -> dict[str, float]:
+    """Réglage de la carte du son étouffé, lu dans `qc` de la configuration : référence
+    (`muffled_hf_ratio`), seuil (`muffled_cusum_h`) et créneaux manquants tolérés
+    (`muffled_max_missed_slots`)."""
+    return {
+        "ref_ratio": float(thresholds["muffled_hf_ratio"]),
+        "h": float(thresholds.get("muffled_cusum_h", 4.0)),
+        "max_missed": int(thresholds.get("muffled_max_missed_slots", 1)),
+    }
+
+
+def _track_hf(indices: dict[str, float] | None, thresholds: dict[str, Any]) -> float:
+    """`hf_ratio` d'une piste pour la carte ; NaN si elle n'est pas lue ou si elle est muette
+    (une piste muette n'est pas étouffée : elle sort de la série)."""
+    if indices is None or indices["rms_dbfs"] < thresholds["silent_dbfs"]:
+        return np.nan
+    return float(indices["hf_ratio"])
+
+
+def _programme_ranks(t: pd.Series) -> np.ndarray:
+    """Rang de chaque enregistrement d'un micro dans son programme : deux créneaux qui se
+    suivent au programme ont des rangs consécutifs, **nuit comprise** (le dernier créneau du
+    soir et le premier du lendemain se suivent). `t` : heures de début d'un seul micro.
+
+    Le programme est lu dans les données : les minutes du jour (UTC) présentes au moins un jour
+    sur deux, complétées en grille régulière au pas médian entre elles (un créneau manqué reste
+    un créneau). Le jour du programme commence après le plus grand écart entre deux créneaux,
+    la nuit, ce qui tient aussi pour un programme qui passe minuit UTC. Un enregistrement hors
+    grille (essai, fichier coupé) prend le rang du créneau le plus proche. Sans programme
+    lisible (moins de deux créneaux), un rang par pas de 30 min.
+    """
+    t = pd.to_datetime(pd.Series(t), utc=True)
+    minutes = ((t - pd.Timestamp("2000-01-01", tz="UTC")).dt.total_seconds() / 60).to_numpy()
+    seen = pd.DataFrame({"m": np.floor(minutes % 1440), "d": minutes // 1440}).drop_duplicates()
+    share = seen.groupby("m").size() / seen["d"].nunique()
+    slots = np.sort(share.index[share >= 0.5].to_numpy())
+    if len(slots) < 2:
+        return np.round(minutes / 30).astype(np.int64)
+    night = int(np.argmax(np.diff(np.append(slots, slots[0] + 1440))))
+    start = slots[(night + 1) % len(slots)]
+    offsets = np.sort((slots - start) % 1440)
+    step = float(np.median(np.diff(offsets)))
+    n = int(round(offsets[-1] / step)) + 1
+    shifted = minutes - start
+    day = np.floor(shifted / 1440)
+    position = np.clip(np.round((shifted - day * 1440) / step), 0, n - 1)
+    return (day * n + position).astype(np.int64)
+
+
+def _segments(ranks: np.ndarray, max_missed: int) -> np.ndarray:
+    """Numéro de tronçon de chaque enregistrement (rangs dans l'ordre du temps) : un nouveau
+    tronçon commence après plus de `max_missed` créneaux manqués. La carte repart de zéro."""
+    missed = np.diff(ranks) - 1
+    return np.concatenate([[0], np.cumsum(missed > max_missed)]).astype(np.int64)
+
+
+def _cusum(increments: np.ndarray, segments: np.ndarray) -> np.ndarray:
+    """Statistique de Page (1954) : S = max(0, S précédent + apport), remise à zéro à chaque
+    tronçon."""
+    out = np.zeros(len(increments))
+    s = 0.0
+    for i, inc in enumerate(increments):
+        if i and segments[i] != segments[i - 1]:
+            s = 0.0
+        s = max(0.0, s + inc)
+        out[i] = s
+    return out
+
+
+def _alarmed(stat: np.ndarray, h: float, segments: np.ndarray) -> np.ndarray:
+    """Points d'une excursion (S > 0 sans interruption, dans un tronçon) dont le maximum
+    atteint `h` : l'excursion commence au début estimé de l'épisode (dernier zéro de S)."""
+    positive = stat > 0
+    follows = np.concatenate([[False], positive[:-1] & (np.diff(segments) == 0)])
+    excursion = np.cumsum(positive & ~follows)
+    peak = pd.Series(stat).groupby(excursion).transform("max").to_numpy()
+    return positive & (peak >= h)
+
+
+def _cusum_episodes(increments: np.ndarray, segments: np.ndarray, h: float) -> np.ndarray:
+    """Points retenus : le cœur de l'épisode (dans une excursion qui alarme en lisant la série
+    dans le sens du temps **et** à l'envers : du début estimé à la fin estimée) en entier ; la
+    traîne (excursion d'un seul sens, la statistique n'est pas encore retombée) seulement sous
+    la référence (apport positif)."""
+    forward = _alarmed(_cusum(increments, segments), h, segments)
+    backward = _alarmed(_cusum(increments[::-1], segments[::-1]), h, segments[::-1])[::-1]
+    return (forward & backward) | ((forward | backward) & (increments > 0))
+
+
+def muffled_cusum(
+    series: pd.DataFrame,
+    ref_ratio: float = 0.05,
+    h: float = 4.0,
+    max_missed: int = 1,
+) -> set[str]:
+    """Pistes retenues étouffées : carte CUSUM de Page (1954) sur la série de `hf_ratio` d'une
+    piste, micro par micro (jeu, site, micro), dans l'ordre du programme.
+
+    Apport de chaque enregistrement : log10(`ref_ratio`) − log10(`hf_ratio`), en décades ;
+    positif sous la référence. La référence est le milieu, en log, entre une piste saine
+    (médiane 0,75) et une piste dans un sac (médiane 0,0035) : 0,05, la valeur de référence
+    de Page pour ce saut. Une alarme quand la somme atteint `h` : à h = 4, un sac typique
+    (+1,16 par enregistrement) est retenu au 4e enregistrement, un enregistrement seul jamais
+    (apport au plus log10(0,05 / 1e-4) = 2,7). La série suit le programme
+    (`_programme_ranks`) : la nuit ne la coupe pas ; plus de `max_missed` créneaux sans mesure
+    la coupent. Épisodes retenus : `_cusum_episodes`. Réglage calibré le 19/11/2026
+    (`data/reports/son_etouffe/cusum.md`).
+
+    `series` : `SERIES_COLUMNS` ; toutes les lignes du micro servent à lire son programme,
+    seules celles qui ont un `hf_ratio` entrent dans la carte.
     """
     t = pd.to_datetime(series["start_utc"], utc=True, errors="coerce")
-    ordered = series.assign(t=t).dropna(subset=["t"]).sort_values("t")
+    ordered = series.assign(t=t).dropna(subset=["t"]).sort_values("t", kind="stable")
     keys = [ordered[c].fillna("?") for c in ("dataset", "site", "mic_id")]
-    gap = pd.Timedelta(minutes=max_gap_min)
+    ref = np.log10(ref_ratio)
     kept: set[str] = set()
     for _, mic in ordered.groupby(keys, sort=False):
-        broken = ~mic["candidate"] | (mic["t"].diff() > gap)
-        run = broken.cumsum()
-        runs = mic[mic["candidate"]].groupby(run[mic["candidate"]])["recording_id"]
-        for _, ids in runs:
-            if len(ids) >= min_run:
-                kept.update(ids)
+        hf = mic["hf_ratio"].to_numpy(dtype=float)
+        measured = ~np.isnan(hf)
+        if not measured.any():
+            continue
+        segments = _segments(_programme_ranks(mic["t"])[measured], max_missed)
+        increments = ref - np.log10(np.maximum(hf[measured], HF_FLOOR))
+        retained = _cusum_episodes(increments, segments, h)
+        kept.update(mic["recording_id"].to_numpy()[measured][retained])
     return kept
 
 
 def apply_audio_flags(con: sqlite3.Connection, thresholds: dict[str, Any]) -> dict[str, int]:
     """Recalcule les drapeaux audio depuis les indices déjà rangés, aux seuils actuels.
 
-    Sans relire l'audio : sert après un changement de seuil. Les enregistrements sans indices
-    (contrôle audio jamais fait) ne changent pas. `muffled_0` et `muffled_1` : ratio de la piste
-    sous le seuil **et** suite d'au moins `muffled_min_run` enregistrements consécutifs du même
-    micro (`muffled_runs`). `muffled` : les deux pistes à la fois (un fichier mono n'a que la
-    piste 0). Un fichier stéréo dont la piste 1 n'a pas été lue et dont la piste 0 est
-    candidate garde son `muffled` d'avant (relancer `blanci qc` pour lire la piste 1).
+    Sans relire l'audio : sert après un changement de réglage. Les enregistrements sans indices
+    (contrôle audio jamais fait) ne changent pas. `muffled_0` et `muffled_1` : piste retenue
+    par la carte CUSUM de la série de son micro (`muffled_cusum`, réglage `cusum_settings`).
+    `muffled` : les deux pistes à la fois (un fichier mono n'a que la piste 0, qui compte pour
+    les deux ; n° 203). Un fichier stéréo dont la piste 1 n'a pas été lue et dont la piste 0
+    est candidate ou retenue garde son `muffled` d'avant (relancer `blanci qc` pour la lire).
     """
     rows = con.execute(
         "SELECT recording_id, dataset, site, mic_id, start_utc, channels, qc_flags FROM recordings"
     ).fetchall()
-    audio_by_id, series = {}, {0: [], 1: []}
+    audio_by_id, items = {}, []
     for rid, dataset, site, mic, start, channels, qc in rows:
         flags = parse_flags(qc)
         if "indices" not in flags:
             continue
         audio = qc_flags(flags["indices"], thresholds, flags.get("indices_1"))
+        hf_0 = _track_hf(flags["indices"], thresholds)
+        hf_1 = _track_hf(flags.get("indices_1"), thresholds)
         if channels == 1:  # une seule piste : la piste 1 est la piste 0
             audio["muffled_1"] = audio["muffled_0"]
+            hf_1 = hf_0
         audio_by_id[rid] = audio
-        for track in (0, 1):
-            series[track].append(
-                (rid, dataset, site, mic, start, bool(audio.get(f"muffled_{track}")))
-            )
-    columns = ["recording_id", "dataset", "site", "mic_id", "start_utc", "candidate"]
-    min_run = int(thresholds.get("muffled_min_run", 4))
-    max_gap = float(thresholds.get("muffled_max_gap_min", 60.0))
-    kept = {}
-    for track, items in series.items():
-        kept[track] = muffled_runs(pd.DataFrame(items, columns=columns), min_run, max_gap)
+        items.append((rid, dataset, site, mic, start, hf_0, hf_1))
+    frame = pd.DataFrame(items, columns=[*SERIES_COLUMNS[:-1], "hf_0", "hf_1"])
+    settings = cusum_settings(thresholds)
+    kept = {
+        track: muffled_cusum(frame.rename(columns={f"hf_{track}": "hf_ratio"}), **settings)
+        for track in (0, 1)
+    }
     updates, counts = [], Counter()
     for rid, qc in ((r[0], r[6]) for r in rows):
         if rid not in audio_by_id:
             continue
         flags = parse_flags(qc)
         audio = audio_by_id[rid]
-        unread = "muffled_1" not in audio and audio["muffled_0"]  # piste 1 à lire
+        # piste 1 à lire : sans elle, on ne sait pas si les deux pistes sont étouffées
+        unread = "muffled_1" not in audio and (audio["muffled_0"] or rid in kept[0])
         new = {
             "silent": audio["silent"],
             "muffled_0": rid in kept[0],
@@ -533,12 +663,14 @@ def apply_audio_flags(con: sqlite3.Connection, thresholds: dict[str, Any]) -> di
         new["muffled"] = (
             bool(flags.get("muffled")) if unread else new["muffled_0"] and new["muffled_1"]
         )
-        if unread:
+        merged = flags | new
+        if unread:  # piste 1 inconnue : pas de `muffled_1`, même rangé avant (False périmé)
             new.pop("muffled_1")
+            merged.pop("muffled_1")
         counts.update(k for k in AUDIO_FLAGS if new[k])
         counts.update(k for k in ("muffled_0", "muffled_1") if new.get(k))
         if any(flags.get(k) != new.get(k) for k in (*AUDIO_FLAGS, "muffled_0", "muffled_1")):
-            updates.append((json.dumps(flags | new), rid))
+            updates.append((json.dumps(merged), rid))
     _write_flags(con, updates)
     return {k: counts[k] for k in (*AUDIO_FLAGS, "muffled_0", "muffled_1")}
 

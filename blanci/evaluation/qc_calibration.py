@@ -27,7 +27,7 @@ from blanci.core.db import window_id_for
 from blanci.embedding.grid import window_grid
 from blanci.inputs.dataset import EXCLUDED_LABELS, interval_labels, load_spans
 from blanci.inputs.labels import POSITIVE_LABELS
-from blanci.inputs.qc import muffled_runs, qc_flags, qc_indices
+from blanci.inputs.qc import cusum_settings, muffled_cusum, qc_flags, qc_indices
 
 # (drapeau, indice, sens) : le drapeau se lève quand l'indice est sous (« below ») ou
 # au-dessus (« above ») du seuil. Clé de config du seuil.
@@ -58,7 +58,7 @@ def labelled_windows(con: sqlite3.Connection) -> pd.DataFrame:
     écartée, comme `_merge_labelled`.
 
     `attrs["series"]` : indices déjà rangés par le contrôle audio pour tous les enregistrements
-    (voisins compris), dont la règle des suites de `muffled` a besoin."""
+    (voisins compris), dont la carte CUSUM de `muffled` a besoin."""
     cols = "r.path, r.dataset, r.site, r.mic_id, r.start_utc"
     df = pd.read_sql_query(
         f"""SELECT l.window_id, l.label, l.conditions, w.recording_id, w.offset_s, w.dur_s,
@@ -193,11 +193,11 @@ def _raised(values: pd.Series, threshold: float, direction: str) -> int:
 
 
 def bagged_recordings(indices: pd.DataFrame, thresholds: dict[str, Any]) -> set[str]:
-    """Enregistrements que le drapeau `muffled` retient vraiment aux seuils actuels : ratio sous
-    le seuil (hors silencieux) **et** suite de `muffled_min_run` enregistrements consécutifs du
-    même micro (`muffled_runs`, comme `apply_audio_flags`, n° 194). Les voisins viennent de
-    `indices.attrs["series"]` quand il existe ; sans lui (ou sans date), la règle se réduit
-    aux enregistrements présents, et à un seuil par enregistrement s'ils n'ont pas de micro."""
+    """Enregistrements que le drapeau `muffled` retient vraiment au réglage actuel : piste
+    retenue par la carte CUSUM de la série de son micro (`muffled_cusum`, hors silencieux, comme
+    `apply_audio_flags`). Les voisins viennent de `indices.attrs["series"]` quand il existe ;
+    sans lui, la carte se réduit aux enregistrements présents, et à un seuil par enregistrement
+    s'ils n'ont ni micro ni date."""
     one = indices.groupby("recording_id").first()
     context = [c for c in ("dataset", "site", "mic_id", "start_utc") if c in one]
     if len(context) < 4:  # pas de micro ni d'heure : pas de suite à juger
@@ -211,20 +211,16 @@ def bagged_recordings(indices: pd.DataFrame, thresholds: dict[str, Any]) -> set[
         series = pd.concat(
             [series, stored[~stored["recording_id"].isin(series["recording_id"])][cols]]
         )
-    candidate = (series["r_rms_dbfs"] >= thresholds["silent_dbfs"]) & (
-        series["r_hf_ratio"] < thresholds["muffled_hf_ratio"]
-    )
-    return muffled_runs(
-        series.assign(candidate=candidate),
-        int(thresholds.get("muffled_min_run", 4)),
-        float(thresholds.get("muffled_max_gap_min", 60.0)),
+    loud = series["r_rms_dbfs"] >= thresholds["silent_dbfs"]
+    return muffled_cusum(
+        series.assign(hf_ratio=series["r_hf_ratio"].where(loud)), **cusum_settings(thresholds)
     )
 
 
 def _flagged_now(
     values: pd.Series, threshold: float, direction: str, flag: str, bagged: set[str]
 ) -> int:
-    """Enregistrements signalés aux seuils actuels : `muffled` suit la règle des suites."""
+    """Enregistrements signalés aux seuils actuels : `muffled` suit la carte CUSUM."""
     if flag == "muffled":
         return int(values.index.isin(bagged).sum())
     return _raised(values, threshold, direction)
@@ -240,7 +236,7 @@ def _flagged_suggested(
     key: str,
 ) -> int:
     """Cibles signalées au seuil proposé, par la même règle que « aux seuils actuels » :
-    pour `muffled`, la règle des suites avec le seuil proposé à la place de l'actuel."""
+    pour `muffled`, la carte CUSUM avec le seuil proposé comme référence."""
     if flag != "muffled":
         return _raised(targets, suggestion, direction)
     if not np.isfinite(suggestion):

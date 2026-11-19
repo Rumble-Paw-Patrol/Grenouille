@@ -1,7 +1,7 @@
 """Files d'écoute et de réencodage du son étouffé, d'après les mesures de `qc_deux_pistes.py`.
 
 Règle (Léonard, 26/10) : un enregistrement n'est écarté que si **les deux pistes** sont
-étouffées (suite d'au moins `muffled_min_run` enregistrements du même micro, piste par piste).
+étouffées (règle des suites à l'époque, carte CUSUM depuis le 19/11/2026, piste par piste).
 Si une piste est valable il est gardé, avec son drapeau ; douteux, il va à l'écoute.
 
 Écrit, dans `paths.queues` :
