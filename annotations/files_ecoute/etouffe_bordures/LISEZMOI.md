@@ -1,6 +1,6 @@
 # File de candidats « etouffe_bordures »
 
-Écrite le 20/11/2026 à 11:14. 164 candidats, 164 enregistrements.
+Écrite le 20/11/2026 à 11:46. 164 candidats, 164 enregistrements.
 
 `candidats.csv` ne contient que des références (enregistrement, début, durée) : le poste d'annotation (`blanci annotate`) retrouve l'audio sur les disques branchés.
 
@@ -11,12 +11,13 @@
 
 ## Motifs
 
-- etouffe_bordures/CDR/candidat : 59
-- etouffe_bordures/CDR/après : 56
-- etouffe_bordures/CDR/avant : 43
-- etouffe_bordures/PatawaOuest/avant : 2
-- etouffe_bordures/PatawaOuest/candidat : 2
-- etouffe_bordures/PatawaOuest/après : 2
+- etouffe_bordures/CDR/candidat retenu : 59
+- etouffe_bordures/CDR/voisin sain : 50
+- etouffe_bordures/CDR/voisin retenu : 38
+- etouffe_bordures/CDR/voisin douteux : 11
+- etouffe_bordures/PatawaOuest/voisin sain : 2
+- etouffe_bordures/PatawaOuest/candidat retenu : 2
+- etouffe_bordures/PatawaOuest/voisin retenu : 2
 
 ## Sites
 

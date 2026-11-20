@@ -1,6 +1,6 @@
 # File de candidats « etouffe_douteux »
 
-Écrite le 20/11/2026 à 11:14. 35 candidats, 35 enregistrements.
+Écrite le 20/11/2026 à 11:46. 35 candidats, 35 enregistrements.
 
 `candidats.csv` ne contient que des références (enregistrement, début, durée) : le poste d'annotation (`blanci annotate`) retrouve l'audio sur les disques branchés.
 
@@ -11,9 +11,9 @@
 
 ## Motifs
 
-- etouffe_douteux/CDR/candidat : 14
-- etouffe_douteux/CDR/après : 12
-- etouffe_douteux/CDR/avant : 9
+- etouffe_douteux/CDR/candidat retenu : 14
+- etouffe_douteux/CDR/voisin retenu : 12
+- etouffe_douteux/CDR/voisin sain : 9
 
 ## Sites
 

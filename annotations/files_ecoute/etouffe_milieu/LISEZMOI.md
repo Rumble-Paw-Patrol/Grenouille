@@ -1,6 +1,6 @@
 # File de candidats « etouffe_milieu »
 
-Écrite le 20/11/2026 à 11:14. 112 candidats, 112 enregistrements.
+Écrite le 20/11/2026 à 11:46. 112 candidats, 112 enregistrements.
 
 `candidats.csv` ne contient que des références (enregistrement, début, durée) : le poste d'annotation (`blanci annotate`) retrouve l'audio sur les disques branchés.
 
@@ -11,12 +11,10 @@
 
 ## Motifs
 
-- etouffe_milieu/CDR/candidat : 53
-- etouffe_milieu/CDR/après : 32
-- etouffe_milieu/CDR/avant : 24
-- etouffe_milieu/PatawaOuest/avant : 1
-- etouffe_milieu/PatawaOuest/candidat : 1
-- etouffe_milieu/PatawaOuest/après : 1
+- etouffe_milieu/CDR/voisin retenu : 56
+- etouffe_milieu/CDR/candidat retenu : 53
+- etouffe_milieu/PatawaOuest/voisin retenu : 2
+- etouffe_milieu/PatawaOuest/candidat retenu : 1
 
 ## Sites
 

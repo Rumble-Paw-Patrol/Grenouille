@@ -490,15 +490,35 @@ def _pick(key: str, widget: str, end: str) -> None:
         st.session_state[end] = False
 
 
+# Rôle d'un extrait dans une file qui en groupe plusieurs (colonne facultative `role`, écrite par
+# `scripts/son_etouffe/files_milieu_bordure.py`) : le candidat, ou son voisin (sain, retenu,
+# douteux). Premier préfixe qui convient : (début du rôle, signe, couleur Streamlit).
+ROLE_MARKS = (("candidat", "●", "red"), ("voisin sain", "○", "green"), ("voisin", "◐", "orange"))
+
+
+def role_mark(role) -> tuple[str, str] | None:
+    """(signe, couleur) du rôle d'un extrait, None s'il n'en a pas (colonne absente ou vide)."""
+    if not isinstance(role, str) or not role:
+        return None
+    return next(
+        ((sign, color) for start, sign, color in ROLE_MARKS if role.startswith(start)),
+        ("·", "gray"),
+    )
+
+
 def _candidate_strip(queue, done, chosen, key, end, offset_h) -> None:
     """Liste déroulante des extraits de la file ouverte, sous la liste des files : numéro dans
-    la file entière, site, micro, heure, et ✓ label s'il a déjà été écouté. File terminée
-    (`end`) : aucun extrait n'est sélectionné, n'importe lequel se rouvre."""
+    la file entière, signe du rôle (● candidat, ○ voisin sain, ◐ voisin retenu ou douteux, si la
+    file en a), site, micro, heure, et ✓ label s'il a déjà été écouté. File terminée (`end`) :
+    aucun extrait n'est sélectionné, n'importe lequel se rouvre."""
+    roles = queue["role"] if "role" in queue else [None] * len(queue)
+    signs = [(role_mark(r) or ("", ""))[0] for r in roles]
     rows = [
-        f"{i + 1}. {site} · {mic} · {start} · {offset:.0f} s"
+        f"{i + 1}. {sign + ' ' if sign else ''}{site} · {mic} · {start} · {offset:.0f} s"
         + (f" · ✓ {NAMES.get(heard, heard)}" if heard else "")
-        for i, (site, mic, start, offset, heard) in enumerate(
+        for i, (sign, site, mic, start, offset, heard) in enumerate(
             zip(
+                signs,
                 queue["site"],
                 queue["mic_id"],
                 local_times(queue["start_utc"], offset_h),
@@ -1360,6 +1380,11 @@ def main() -> None:
         f"{candidate.get('reason') or ''}"
         + (f" · score précédent {score:.2f}" if score == score and score is not None else "")
     )
+    mark = role_mark(candidate.get("role"))
+    if mark:  # file qui groupe un candidat et ses voisins : dire lequel on écoute
+        st.markdown(f":{mark[1]}[**{mark[0]} {str(candidate['role']).upper()}**]")
+    if isinstance(candidate.get("cause"), str) and candidate["cause"]:
+        st.caption(candidate["cause"])
 
     media = None
     full = locate(str(candidate["path"]), raw, extra, cfg["audio"].get("renamed"))

@@ -132,7 +132,23 @@ def local(t: pd.Timestamp) -> str:
     return f"{t + UTC_OFFSET:%d/%m %H:%M}"
 
 
-def queue_rows(mic: pd.DataFrame, found: list[dict], kind: str, first_group: int) -> list[dict]:
+def role_label(r: pd.Series, candidate: bool, track: int, ref: float) -> str:
+    """Rôle d'un extrait pour le poste d'annotation : « candidat retenu » ; pour un voisin,
+    « voisin retenu » (retenu sur la piste du candidat), « voisin sain » (aucune piste lue n'est
+    retenue ni sous le seuil) ou « voisin douteux » (non retenu, mais une piste lue sous le
+    seuil : candidat isolé)."""
+    if candidate:
+        return "candidat retenu"
+    if r[f"ret{track}"]:
+        return "voisin retenu"
+    hf = [r[f"hf{t}"] for t in TRACKS if not np.isnan(r[f"hf{t}"])]
+    clear = bool(hf) and not any(r[f"ret{t}"] for t in TRACKS) and min(hf) >= ref
+    return "voisin sain" if clear else "voisin douteux"
+
+
+def queue_rows(
+    mic: pd.DataFrame, found: list[dict], kind: str, first_group: int, ref: float
+) -> list[dict]:
     """Trois extraits par groupe (voisin d'avant, candidat, voisin d'après), dans l'ordre du
     temps. Un enregistrement déjà pris (candidat d'un autre groupe, ou voisin) n'est pas répété."""
     rows = []
@@ -148,6 +164,7 @@ def queue_rows(mic: pd.DataFrame, found: list[dict], kind: str, first_group: int
             r = mic.loc[pos]
             role = "candidat" if pos == g["centre"] else ("avant" if pos < g["centre"] else "après")
             inside = bool(r[f"ret{t}"])
+            label = role_label(r, role == "candidat", t, ref)
             what = {
                 "milieu": f"retenu à hf {c[f'hf{t}']:.3f}, au-dessus du seuil, au milieu d'un "
                 f"{episode}",
@@ -176,7 +193,8 @@ def queue_rows(mic: pd.DataFrame, found: list[dict], kind: str, first_group: int
                     "offset_s": round(offset, 1),
                     "dur_s": min(EXTRACT_S, float(r["duration_s"])),
                     "score": np.nan,
-                    "reason": f"etouffe_{kind}/{r['site']}/{role}",
+                    "reason": f"etouffe_{kind}/{r['site']}/{label}",
+                    "role": label,
                     "source": "flag",
                     "dataset": r["dataset"],
                     "piste_0_hf": round(r["hf0"], 4),
@@ -217,9 +235,9 @@ def main() -> None:
     n_middle = n_border = n_doubt = 0
     for mic in series(load(config_path(cfg, "db"))):
         middle, border, doubt = groups(mic, ref, max_gap)
-        middle_rows += queue_rows(mic, middle, "milieu", n_middle + 1)
-        border_rows += queue_rows(mic, border, "bordures", n_border + 1)
-        doubt_rows += queue_rows(mic, doubt, "douteux", n_doubt + 1)
+        middle_rows += queue_rows(mic, middle, "milieu", n_middle + 1, ref)
+        border_rows += queue_rows(mic, border, "bordures", n_border + 1, ref)
+        doubt_rows += queue_rows(mic, doubt, "douteux", n_doubt + 1, ref)
         n_middle, n_border, n_doubt = (
             n_middle + len(middle),
             n_border + len(border),
