@@ -141,14 +141,12 @@ INDEX = r"""<!doctype html>
          border-radius: 12px; background: var(--surface-2); transition: border-color .2s; }
   .mic.on { border-color: var(--accent); box-shadow: 0 0 18px -10px var(--accent); }
   /* Volume, filtre et contraste : sur une ligne si l'encadré (pas la fenêtre) a la place,
-     sinon chacun passe à la ligne ; un curseur ne descend jamais sous 110 px. */
+     sinon chacun passe à la ligne ; les curseurs gardent 110 px, ni écrasés ni étirés. */
   .mic-set { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
              justify-content: center; }
   .mic-set > span { display: inline-flex; gap: 5px; align-items: center; flex: 0 0 auto;
                     white-space: nowrap; }
-  .mic-set > span:has(input[type=range]) { flex: 1 1 auto; }
-  .mic-set input[type=range] { width: 110px; min-width: 110px; max-width: 240px;
-                               flex: 1 1 110px; }
+  .mic-set input[type=range] { width: 110px; min-width: 110px; flex: 0 0 110px; }
   .mic-set .gainv, .mic-set .rangev { min-width: 3.4em; }
   .mic-audio audio { display: block; width: 100%; height: 32px; }
   .mic:not(.on) .mic-audio { opacity: .55; }
