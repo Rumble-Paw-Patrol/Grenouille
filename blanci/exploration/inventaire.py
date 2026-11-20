@@ -49,6 +49,8 @@ from blanci.inputs.qc import (
     metadata_flags,
     muffled_candidate,
     parse_flags,
+    position_in_survey,
+    survey_windows,
 )
 
 # Un point d'écoute : le micro à un site, pour un jeu (en 2023, la station garde ses micros
@@ -1562,8 +1564,8 @@ def flag_counts(rec: pd.DataFrame) -> dict[str, Any]:
     Règle : `qc.is_excluded` décide, comme partout dans la chaîne. Limite : compte ce qui est
     rangé (`stale_flags` dit si c'est à jour).
     """
-    keys = (*EXCLUDING_FLAGS, "clock_off", "clock_corrected", "rain", "muffled_0", "muffled_1",
-            "keep")
+    keys = (*EXCLUDING_FLAGS, "clock_off", "survey_edge", "clock_corrected", "rain", "muffled_0",
+            "muffled_1", "keep")
     raised = {k: int(rec["fl"].map(lambda f, k=k: flag_raised(f, k)).sum()) for k in keys}
     no_keep = rec["fl"].map(lambda f: is_excluded({k: v for k, v in f.items() if k != "keep"}))
     causes = rec.loc[rec["excluded"], "fl"].map(exclusion_cause).value_counts()
@@ -1573,50 +1575,95 @@ def flag_counts(rec: pd.DataFrame) -> dict[str, Any]:
             "raised": raised, "causes": causes.to_dict()}
 
 
+def _declared_side(rec: pd.DataFrame, cfg_qc: dict[str, Any]) -> pd.Series:
+    """Où tombe chaque enregistrement d'un relevé déclaré : `dans`, `bordure avant`, `bordure
+    après` (zone tampon, gardés), `avant la pose`, `après la relève` (hors relevé) ; `NaN` pour
+    un relevé sans dates. Même calcul que `qc.metadata_flags`, sur l'heure locale de `rec`."""
+    first, last = survey_windows(rec, cfg_qc)
+    return position_in_survey(rec["local"], first, last, float(cfg_qc.get("survey_buffer_h", 0)))
+
+
+_OFF_SIDES = ("avant la pose", "après la relève")
+
+
 def campaign_blocks(rec: pd.DataFrame, cfg_qc: dict[str, Any]) -> pd.DataFrame:
     """Les blocs de la série de chaque micro : la campagne et ce qui est hors relevé.
 
     Question : comment la règle du hors relevé découpe-t-elle chaque série ? Entrée :
     `load_recordings`, `qc` de la configuration. Sortie : une ligne par bloc : `block`,
-    `campaign` (le plus gros bloc du point), `n`, `n_normal` (de durée normale), `first`,
-    `last` (heure locale), `excluded`.
-    Règle : celle de `off_campaign` (`qc.metadata_flags`) : dates triées par (jeu, site,
-    micro), coupure à chaque trou de plus de `campaign_gap_days`. Reprise du § 7 du notebook 05.
-    Limite : un micro reposé au même site après une pause de plus de `campaign_gap_days` fait
-    deux vrais blocs, et le petit passe hors relevé ; le seuil n'est pas estimé (pas de dates
-    de pose du terrain).
+    `campaign` (pas hors relevé), `n`, `n_normal` (de durée normale), `first`, `last` (heure
+    locale), `excluded`, `survey` (le relevé déclaré, vide en repli), `where` (`dans`, `bordure
+    avant` ou `bordure après` : zone tampon, gardée, `avant la pose`, `après la relève` : hors
+    relevé, ou `repli`).
+    Règle : celle de `off_campaign` (`qc.metadata_flags`). Un relevé déclaré (`qc.surveys`) donne
+    pour chaque micro un bloc dans les dates de pose et de relève, et au plus un bloc par côté
+    hors des dates (zone tampon `survey_buffer_h` comprise : ces fichiers restent, signalés
+    `survey_edge`). Un relevé sans dates garde l'ancienne règle : dates triées par (jeu, site,
+    micro), coupure à chaque trou de plus de `campaign_gap_days`, le plus gros bloc est la
+    campagne (§ 7 du notebook 05).
+    Limite : un micro qui passe plusieurs relevés a un bloc dans chacun, donc plusieurs blocs de
+    campagne ; les « petits blocs » ne sont plus comparables à ceux d'avant les dates déclarées
+    (un reste de carte étalé sur des mois fait un seul bloc avant la pose). En repli, le seuil
+    n'est pas estimé (pas de dates de pose du terrain) et un micro reposé au même site après
+    une pause de plus de `campaign_gap_days` fait deux vrais blocs.
     """
+    side = _declared_side(rec, cfg_qc)
+    declared = survey_windows(rec, cfg_qc)[0].notna()
     gap = pd.Timedelta(days=float(cfg_qc["campaign_gap_days"]))
+    dated = rec.dropna(subset=["t"])
+
+    def row(key: tuple, part: pd.DataFrame, campaign: bool, survey: str, where: str) -> dict:
+        return {**dict(zip(POINT, key, strict=True)), "campaign": campaign, "n": len(part),
+                "n_normal": int(part["normal"].sum()), "first": part["local"].min(),
+                "last": part["local"].max(), "excluded": int(part["excluded"].sum()),
+                "survey": survey, "where": where}
+
     rows = []
-    for key, g in rec.dropna(subset=["t"]).sort_values("t").groupby(POINT):
+    for key, g in dated[~declared[dated.index]].sort_values("t").groupby(POINT):
         block = (g["t"].diff() > gap).cumsum()
         main = block.value_counts().idxmax()
         for k, part in g.groupby(block):
-            rows.append({**dict(zip(POINT, key, strict=True)), "block": int(k),
-                         "campaign": k == main, "n": len(part),
-                         "n_normal": int(part["normal"].sum()), "first": part["local"].min(),
-                         "last": part["local"].max(), "excluded": int(part["excluded"].sum())})
-    return pd.DataFrame(rows, columns=[*POINT, "block", "campaign", "n", "n_normal", "first",
-                                       "last", "excluded"])
+            rows.append(row(key, part, k == main, "", "repli"))
+    decl = dated[declared[dated.index]]
+    for (*key, survey, where), part in decl.groupby([*POINT, "survey", side[decl.index]]):
+        rows.append(row(tuple(key), part, where not in _OFF_SIDES, survey, where))
+    cols = [*POINT, "block", "campaign", "n", "n_normal", "first", "last", "excluded",
+            "survey", "where"]
+    out = pd.DataFrame(rows, columns=[c for c in cols if c != "block"])
+    out = out.sort_values([*POINT, "first"], kind="stable").reset_index(drop=True)
+    out.insert(len(POINT), "block", out.groupby(POINT).cumcount())
+    return out[cols]
 
 
 def near_campaign_orphans(
     rec: pd.DataFrame, cfg_qc: dict[str, Any], min_gap_days: float = 3.0
 ) -> pd.DataFrame:
-    """Les petits groupes séparés de la campagne par un trou trop court pour la règle.
+    """Les petits groupes isolés de leur série à l'intérieur du relevé.
 
-    Question : quels enregistrements sont isolés de leur série, mais pas assez pour être hors
-    relevé (trou entre `min_gap_days` et `campaign_gap_days`) ? Entrée : `load_recordings`,
-    `qc` de la configuration, `min_gap_days`. Sortie : les blocs concernés (colonnes de
-    `campaign_blocks`, plus `gap_days` jusqu'au bloc voisin le plus proche).
-    Règle : découpage de `campaign_blocks` refait avec `min_gap_days` ; on garde les blocs non
-    principaux à ce seuil dont aucun enregistrement n'est hors relevé. `min_gap_days` = 3 n'est
-    pas dans la configuration : choix de lecture.
-    Limite : ne dit pas ce que sont ces fichiers (tests, restes de carte) : il faut écouter.
+    Question : quels enregistrements sont dans les dates de leur relevé, mais séparés du gros de
+    la série de leur micro par au moins `min_gap_days` ? Entrée : `load_recordings`, `qc` de la
+    configuration, `min_gap_days`. Sortie : les blocs concernés (colonnes de `campaign_blocks`
+    sauf `where`, plus `gap_days` jusqu'au bloc voisin le plus proche).
+    Règle : découpage refait avec `min_gap_days`, par micro et par relevé déclaré (seulement les
+    jours de pose à relève) ; en repli, par micro (ancienne règle de `off_campaign`, où ces
+    blocs étaient ceux séparés par moins de `campaign_gap_days`). On garde les blocs non
+    principaux dont aucun enregistrement n'est hors relevé. `min_gap_days` = 3 n'est pas dans la
+    configuration : choix de lecture.
+    Limite : ne dit pas ce que sont ces fichiers (tests, restes de carte) : il faut écouter. Avec
+    les dates déclarées, les essais de réglage d'avant la pose n'y sont plus : ils sont hors
+    relevé.
     """
+    side = _declared_side(rec, cfg_qc)
+    declared = survey_windows(rec, cfg_qc)[0].notna()
     gap = pd.Timedelta(days=float(min_gap_days))
+    dated = rec.dropna(subset=["t"])
+    repli = dated[~declared[dated.index]]
+    inside = dated[declared[dated.index] & ~side[dated.index].isin(_OFF_SIDES)]
+    series = [(k, g) for k, g in repli.groupby(POINT)]
+    series += [(k[:-1], g) for k, g in inside.groupby([*POINT, "survey"])]
     rows = []
-    for key, g in rec.dropna(subset=["t"]).sort_values("t").groupby(POINT):
+    for key, g in series:
+        g = g.sort_values("t")
         diff = g["t"].diff()
         block = (diff > gap).cumsum()
         main = block.value_counts().idxmax()
@@ -1641,14 +1688,15 @@ def stale_flags(rec: pd.DataFrame, cfg: dict[str, Any]) -> pd.DataFrame:
     Question : un chiffre lu dans `qc_flags` est-il à jour ? Entrée : `load_recordings`
     (de préférence `datasets=None` : le hors relevé se calcule par micro, tous jeux confondus),
     la configuration. Sortie : une ligne par drapeau d'inventaire (`duration_off`,
-    `off_campaign`, `clock_off`) : `stored`, `recomputed`, `differ` (enregistrements dont la
-    valeur change). Règle : `qc.metadata_flags`, la fonction même de `blanci flag`, appelée sur
-    une copie : rien n'est écrit. Limite : les drapeaux audio (`muffled`…) ne se recalculent
-    pas ici (ils demandent la carte CUSUM, `qc.apply_audio_flags`, qui écrit en base).
+    `off_campaign`, `clock_off`, `survey_edge`) : `stored`, `recomputed`, `differ`
+    (enregistrements dont la valeur change). Règle : `qc.metadata_flags`, la fonction même de
+    `blanci flag`, appelée sur une copie : rien n'est écrit. Limite : les drapeaux audio
+    (`muffled`…) ne se recalculent pas ici (ils demandent la carte CUSUM,
+    `qc.apply_audio_flags`, qui écrit en base).
     """
     flags = metadata_flags(rec, cfg["qc"], float(cfg["recorder"]["filename_utc_offset_h"]))
     rows = []
-    for k in ("duration_off", "off_campaign", "clock_off"):
+    for k in ("duration_off", "off_campaign", "clock_off", "survey_edge"):
         stored = rec["fl"].map(lambda f, k=k: bool(f.get(k))).to_numpy()
         new = flags[k].to_numpy(dtype=bool)
         rows.append({"flag": k, "stored": int(stored.sum()), "recomputed": int(new.sum()),
@@ -1991,6 +2039,14 @@ def presentation_4_numbers(
                 int(mat["n"].sum()), "near_campaign_orphans(rec, cfg['qc'])"))
     add(_number("4", "dont dans la campagne : micros", 12, int(mat["mic_id"].nunique()),
                 "near_campaign_orphans(rec, cfg['qc'])"))
+    off_dec = dec[~dec["campaign"]]
+    add(_number("10", "Mataroni, 30-31/12/2025, hors relevé (dates déclarées) : enregistrements",
+                26, len(off_dec), "rec[Mataroni, 30-31/12].campaign"))
+    add(_number("10", "Mataroni, 30-31/12/2025, hors relevé (dates déclarées) : micros", 20,
+                int(off_dec["mic_id"].nunique()), "rec[Mataroni, 30-31/12].campaign"))
+    add(_number("10", "en bordure de relevé (zone tampon de 24 h, gardés)", None,
+                int(rec["fl"].map(lambda f: bool(f.get("survey_edge"))).sum()),
+                "flag_counts(rec)['raised']['survey_edge']"))
 
     if pistes is not None:
         S = pistes[pistes["erreur"].isna()] if "erreur" in pistes else pistes

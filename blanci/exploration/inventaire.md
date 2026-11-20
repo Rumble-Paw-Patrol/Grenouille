@@ -468,26 +468,26 @@ Les deux micros d'un enregistreur entendent la même scène : bande par bande, l
   - « 681 » et « 173 pour la durée » : depuis la correction, c'est 680 et 172 (le positif de Mataroni est gardé) ;
   - « 95 611 sur 96 292 » (diapo 24) : c'est 95 630 sur 96 310 (relevé 7, puis correction).
 
-#### `campaign_blocks(rec, cfg_qc)` — [inventaire.py:1364](inventaire.py#L1364)
+#### `campaign_blocks(rec, cfg_qc)` — [inventaire.py](inventaire.py)
 
 - Question : comment la règle du hors relevé découpe-t-elle chaque série ?
-- Entrée : `load_recordings`, `qc`. Sortie : une ligne par bloc : principal ou non, effectif, de durée normale, dates, écartés.
-- Règle : celle de `off_campaign` (trou de plus de `campaign_gap_days` = 7 jours) ; reprend le § 7 du notebook 05.
-- Limite : un micro reposé au même site après plus de 7 jours fait deux vrais blocs, et le petit passe hors relevé ; le seuil n'est pas estimé.
-- Prez n° 4 : diapo 10. Résultat : 238 blocs, 74 petits, 106 enregistrements hors relevé dont 20 de 2 min, 88 écartés. Ce qu'on peut dire : tous les chiffres de la boîte « hors relevé » tiennent. Ce qu'on ne peut pas dire : la date de pose réelle de chaque micro.
+- Entrée : `load_recordings`, `qc`. Sortie : une ligne par bloc : principal (`campaign`) ou non, effectif, de durée normale, dates, écartés, plus `survey` (le relevé déclaré) et `where` (`dans`, `bordure avant`, `bordure après`, `avant la pose`, `après la relève`, `repli`).
+- Règle : celle de `off_campaign` depuis le 20/11/2026. Un relevé déclaré dans `qc.surveys` (dossier d'origine, jour de pose, jour de relève) donne à chaque micro un bloc dans les dates, et au plus un bloc par côté hors des dates (la zone tampon de 24 h, `survey_buffer_h`, fait des blocs `bordure`, gardés et signalés `survey_edge`). Un relevé sans dates garde l'ancienne règle (trou de plus de `campaign_gap_days` = 7 jours, le plus gros bloc est la campagne ; reprend le § 7 du notebook 05).
+- Limite : un micro qui passe plusieurs relevés a un bloc dans chacun ; les blocs ne se comparent plus à ceux d'avant (un reste de carte étalé sur des mois fait un seul bloc `avant la pose`). En repli, un micro reposé au même site après plus de 7 jours fait deux vrais blocs, et le petit passe hors relevé.
+- Prez n° 4 : diapo 10. Résultat avant les dates déclarées (règle des 7 jours, base du 19/11) : 238 blocs, 74 petits, 106 enregistrements hors relevé dont 20 de 2 min, 88 écartés. Avec les dates déclarées (base du 20/11) : 291 blocs, 79 petits, 114 hors relevé dont 1 de 2 min, 114 écartés. Ce qu'on peut dire : les dates de pose et de relève sont celles de la table (noms de dossiers, sous-dossiers de 2023-24), pas devinées. Ce qu'on ne peut pas dire : que ces dates sont celles des tuteurs (à confirmer, surtout la pose du relevé 1 de 2023).
 
-#### `near_campaign_orphans(rec, cfg_qc, min_gap_days=3.0)` — [inventaire.py:1391](inventaire.py#L1391)
+#### `near_campaign_orphans(rec, cfg_qc, min_gap_days=3.0)` — [inventaire.py](inventaire.py)
 
-- Question : quels enregistrements sont isolés de leur série, mais pas assez pour être hors relevé ?
-- Entrée : `load_recordings`, `qc`, `min_gap_days`. Sortie : les blocs séparés de la campagne par 3 à 7 jours.
-- Règle : découpage refait à `min_gap_days` (3 jours, choix de lecture, absent de la configuration).
-- Limite : ne dit pas ce que sont ces fichiers.
-- Prez n° 4 : diapos 4 et 10. Résultat : 19 blocs, 25 enregistrements de 19 micros, tous à Mataroni les 30 et 31/12/2025, séparés de la pose par 5,8 à 6,9 jours. Avec le 26ᵉ, déjà hors relevé (2LA03555, 0,8 s), on retrouve les 26 enregistrements de 20 micros de la diapo 10. Ce qu'on peut dire : le « 25 enregistrements de 12 micros » des notes de la diapo 4 est faux sur les micros (19, ou 20 avec le 26ᵉ). Ce qu'on ne peut pas dire : si ce sont des tests ou des restes de carte (il faut écouter ; ils sont de toute façon écartés pour leur durée).
+- Question : quels enregistrements sont dans les dates de leur relevé, mais séparés du gros de la série de leur micro ?
+- Entrée : `load_recordings`, `qc`, `min_gap_days`. Sortie : les blocs séparés de la campagne par au moins `min_gap_days`.
+- Règle : découpage refait à `min_gap_days` (3 jours, choix de lecture, absent de la configuration), par micro et par relevé déclaré (jours de pose à relève et zone tampon) ; en repli, par micro, comme avant (blocs non hors relevé séparés par 3 à 7 jours).
+- Limite : ne dit pas ce que sont ces fichiers. Avec les dates déclarées, les essais de réglage d'avant la pose ne sont plus des orphelins : ils sont hors relevé.
+- Prez n° 4 : diapos 4, 10 et 13. Résultat avant les dates déclarées : 19 blocs, 25 enregistrements de 19 micros, tous à Mataroni les 30 et 31/12/2025, séparés de la pose par 5,8 à 6,9 jours ; avec le 26ᵉ, déjà hors relevé (2LA03555, 0,8 s), les 26 enregistrements de 20 micros. Depuis les dates déclarées : 0, les 26 sont hors relevé (le chiffre « dans la campagne » de la diapo n'est plus vrai). Ce qu'on peut dire : « 26 enregistrements de 20 micros, hors relevé ». Ce qu'on ne peut pas dire : si ce sont des tests ou des restes de carte (il faut écouter ; ils sont de toute façon écartés pour leur durée).
 
 #### `stale_flags(rec, cfg)` — [inventaire.py:1426](inventaire.py#L1426)
 
 - Question : les drapeaux d'inventaire rangés sont-ils ceux que donnerait la configuration actuelle ?
-- Entrée : `load_recordings` (tous les jeux), configuration. Sortie : une ligne par drapeau : rangés, recalculés, différents.
+- Entrée : `load_recordings` (tous les jeux), configuration. Sortie : une ligne par drapeau d'inventaire (`duration_off`, `off_campaign`, `clock_off`, `survey_edge`) : rangés, recalculés, différents.
 - Règle : `qc.metadata_flags`, la fonction même de `blanci flag`, sur une copie ; rien n'est écrit.
 - Limite : les drapeaux audio ne se recalculent pas ici.
 - Prez n° 4 : diapos 9 ter et 10. Résultat avant correction : `duration_off` et `clock_off` à jour ; `off_campaign` diffère pour 1 enregistrement (Kaw 2023, `f670702208cbfa39`, 18 s), rangé hors relevé alors que la règle actuelle ne l'y met plus. C'est lui qui faisait 87 au lieu de 86. Après `blanci flag` (18/11, vers 18 h) : aucun drapeau d'inventaire périmé. Ce qu'on peut dire : la fonction a trouvé l'écart, et `blanci flag` l'a résorbé. Ce qu'on ne peut pas dire : depuis quand ce drapeau était périmé.

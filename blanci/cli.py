@@ -57,7 +57,9 @@ from blanci.inputs.qc import (
     apply_audio_flags,
     apply_metadata_flags,
     check_recordings,
+    declared_surveys,
     parse_flags,
+    undeclared_surveys,
 )
 from blanci.results.activity import write_activity_report
 from blanci.service import (
@@ -174,6 +176,7 @@ def ingest(
         f"{len(report.errors)} erreurs"
     )
     _echo_flags(report.flagged)
+    _echo_survey_rule(con, cfg)
     # Un rapport par (jeu, site) : inventorier un relevé n'écrase pas le rapport du précédent.
     stem = f"{dataset}_{site}" if site else dataset
     reports = config_path(cfg, "reports")
@@ -196,8 +199,26 @@ def _echo_flags(flagged: dict[str, int]) -> None:
     typer.echo(
         f"signalés (jamais encodés) : {flagged.get('duration_off', 0)} de durée anormale, "
         f"{flagged.get('off_campaign', 0)} hors relevé ; "
-        f"remarque : {flagged.get('clock_off', 0)} à l'horloge douteuse (encodés)"
+        f"remarque : {flagged.get('clock_off', 0)} à l'horloge douteuse, "
+        f"{flagged.get('survey_edge', 0)} en bordure de relevé (zone tampon, encodés)"
     )
+
+
+def _echo_survey_rule(con: Any, cfg: dict[str, Any]) -> None:
+    """Journal du hors relevé : combien de relevés ont des dates déclarées (`qc.surveys`), et
+    ceux qui passent encore par la règle de repli (trou de plus de `campaign_gap_days`)."""
+    recordings = pd.read_sql_query("SELECT path, site FROM recordings", con)
+    qc = cfg["qc"]
+    n_declared = len({survey for survey, _ in declared_surveys(qc)})
+    fallback = undeclared_surveys(recordings, qc)
+    typer.echo(f"hors relevé : dates déclarées (qc.surveys) pour {n_declared} relevés")
+    if len(fallback):
+        typer.echo(
+            f"  règle de repli (trou de plus de {qc['campaign_gap_days']} jours, qui devine la "
+            f"pose) pour {len(fallback)} relevés sans dates :"
+        )
+        for survey, n in fallback.itertuples(index=False):
+            typer.echo(f"    {survey} ({n} enregistrements)")
 
 
 def _echo_annotated(counts: dict[str, int]) -> None:
@@ -268,6 +289,7 @@ def flag(ctx: typer.Context) -> None:
     corrected = apply_clock_corrections(con, cfg["recorder"])
     typer.echo(f"horloges corrigées (recorder.clock_corrections) : {corrected} enregistrements")
     _echo_flags(apply_metadata_flags(con, cfg["qc"], cfg["recorder"]["filename_utc_offset_h"]))
+    _echo_survey_rule(con, cfg)
     audio = apply_audio_flags(con, cfg["qc"])
     typer.echo(
         "audio (enregistrements déjà contrôlés) : "

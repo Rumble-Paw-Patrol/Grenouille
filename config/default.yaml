@@ -149,7 +149,47 @@ qc:
   # inventaire ou par `blanci flag`. Un enregistrement signalé n'est jamais encodé.
   expected_duration_s: 120.0       # programme des Song Meter : 2 min toutes les 30 min
   duration_tolerance_s: 1.0        # au-delà : duration_off (test, déclenchement manuel)
-  campaign_gap_days: 7             # trou plus long dans la série d'un micro : sort du relevé
+  # Hors relevé (`off_campaign`) : un enregistrement daté hors des dates de son relevé. Un relevé
+  # est son dossier d'origine (`survey`, les deux premiers dossiers du chemin en base) avec le
+  # jour de la pose (`start`) et le jour de la relève (`end`), en jours locaux, inclus ; `site`
+  # (facultatif) donne ses propres dates à un site du relevé. Les essais de réglage d'avant la
+  # pose, les restes de carte SD et ce qui suit la relève sortent du relevé, quel que soit leur
+  # écart aux dates (la règle des 7 jours devinait la pose : elle laissait passer les essais de
+  # Mataroni des 30-31/12/2025, à 5,8-6,9 jours, et écartait le relevé 7). Zone tampon : un
+  # fichier à moins de `survey_buffer_h` heures des dates reste dans le corpus, signalé
+  # `survey_edge` (micro posé la veille ou récupéré le lendemain : 2MA07942 de CDR, 14 fichiers le
+  # 28/12/2025). Un relevé absent de cette table garde la règle de repli `campaign_gap_days`
+  # (`blanci flag` les liste). 2026 : dates du nom des dossiers. 2023-24 : la date de relève est
+  # celle du sous-dossier de chaque site, la pose celle de la relève précédente ; la pose du
+  # relevé 1 est le premier fichier du programme de chaque site (aucune relève avant). Dates
+  # proposées à Léonard le 20/11/2026, à remplacer par celles des tuteurs si elles diffèrent.
+  survey_buffer_h: 24
+  surveys:
+    - {survey: "Projet Phénologie blanci/Premier relevé_décembre 2023", site: Kaw, start: 2023-11-06, end: 2023-12-26}
+    - {survey: "Projet Phénologie blanci/Premier relevé_décembre 2023", site: Molokoi, start: 2023-11-14, end: 2023-12-28}
+    - {survey: "Projet Phénologie blanci/Premier relevé_décembre 2023", site: Tresor, start: 2023-11-08, end: 2023-12-26}
+    - {survey: "Projet Phénologie blanci/Second relevé_février 2024", site: Kaw, start: 2023-12-26, end: 2024-02-19}
+    - {survey: "Projet Phénologie blanci/Second relevé_février 2024", site: Molokoi, start: 2023-12-28, end: 2024-02-20}
+    - {survey: "Projet Phénologie blanci/Second relevé_février 2024", site: Tresor, start: 2023-12-26, end: 2024-02-20}
+    - {survey: "Projet Phénologie blanci/Troisième relevé_avril 2024", site: Kaw, start: 2024-02-19, end: 2024-04-09}
+    - {survey: "Projet Phénologie blanci/Troisième relevé_avril 2024", site: Molokoi, start: 2024-02-20, end: 2024-04-11}
+    - {survey: "Projet Phénologie blanci/Troisième relevé_avril 2024", site: Tresor, start: 2024-02-20, end: 2024-04-09}
+    - {survey: "Projet Phénologie blanci/Quatrième relevé_juin 2024", site: Kaw, start: 2024-04-09, end: 2024-06-25}
+    - {survey: "Projet Phénologie blanci/Quatrième relevé_juin 2024", site: Molokoi, start: 2024-04-11, end: 2024-06-25}
+    - {survey: "Projet Phénologie blanci/Quatrième relevé_juin 2024", site: Tresor, start: 2024-04-09, end: 2024-06-25}
+    - {survey: "Projet Phénologie blanci/Cinquième relevé_septembre 2024", site: Kaw, start: 2024-06-25, end: 2024-09-03}
+    - {survey: "Projet Phénologie blanci/Cinquième relevé_septembre 2024", site: Molokoi, start: 2024-06-25, end: 2024-09-03}
+    - {survey: "Projet Phénologie blanci/Cinquième relevé_septembre 2024", site: Tresor, start: 2024-06-25, end: 2024-09-03}
+    - {survey: "Projet Phénologie blanci/Sixième relevé_novembre 2024", site: Kaw, start: 2024-09-03, end: 2024-11-27}
+    - {survey: "Projet Phénologie blanci/Sixième relevé_novembre 2024", site: Molokoi, start: 2024-09-03, end: 2024-11-26}
+    - {survey: "Projet Phénologie blanci/Sixième relevé_novembre 2024", site: Tresor, start: 2024-09-03, end: 2024-11-27}
+    - {survey: "Projet blanci 2025/RELEVE 1 CDR - 21-27 décembre 2025", start: 2025-12-21, end: 2025-12-27}
+    - {survey: "Projet blanci 2025/RELEVE 2 Patawa - 30 dec 2025 -04 janv 2026", start: 2025-12-30, end: 2026-01-04}
+    - {survey: "Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026", start: 2026-01-06, end: 2026-01-13}
+    - {survey: "Projet blanci 2025/RELEVE 5 RNRT - 9-16 fev 2026", start: 2026-02-09, end: 2026-02-16}
+    - {survey: "Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026", start: 2026-02-20, end: 2026-03-03}
+    - {survey: "audio/R7_2026-05_Mataroni", start: 2026-05-19, end: 2026-05-19}
+  campaign_gap_days: 7             # relevé sans dates (repli) : un trou plus long dans la série d'un micro l'en sort
   # Heure du nom de fichier contre heure de l'en-tête GUANO : au-delà de cet écart, `clock_off`
   # est levé. Une remarque, qui n'écarte rien (DECISIONS n° 191) : une horloge vérifiée se
   # corrige dans `recorder.clock_corrections`, et l'enregistrement porte alors `clock_corrected`.

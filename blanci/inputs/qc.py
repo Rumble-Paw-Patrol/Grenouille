@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from typing import Any
@@ -223,21 +224,119 @@ def audio_qc(source: Any, thresholds: dict[str, float]) -> dict[str, Any]:
 
 # --- Drapeaux d'inventaire : calculés sur les métadonnées, sans lire l'audio -----------------
 
-METADATA_FLAGS = ("duration_off", "off_campaign", "clock_off")
+METADATA_FLAGS = ("duration_off", "off_campaign", "clock_off", "survey_edge")
+
+
+def survey_of(path: Any) -> str | None:
+    """Le relevé d'origine d'un enregistrement : les deux premiers dossiers de son chemin en
+    base (`Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026`), en NFC. `None` sans chemin."""
+    if not isinstance(path, str) or not path:
+        return None
+    parts = path.replace("\\", "/").split("/")
+    return unicodedata.normalize("NFC", "/".join(parts[:2]))
+
+
+def declared_surveys(thresholds: dict[str, Any]) -> dict[tuple[str, str | None], tuple[Any, Any]]:
+    """Les relevés aux dates déclarées (`qc.surveys`) : `{(relevé, site ou None): (pose, relève)}`.
+
+    Chaque entrée de la configuration a `survey` (`survey_of`), `start` (jour de la pose) et `end`
+    (jour de la relève), jours locaux inclus ; `site` est facultatif (relevé dont les sites n'ont
+    pas été relevés le même jour : phénologie 2023-24). Une entrée avec `site` l'emporte sur
+    celle du relevé entier. Lève `ValueError` sur une entrée incomplète, une relève avant la
+    pose ou un relevé déclaré deux fois."""
+    out: dict[tuple[str, str | None], tuple[Any, Any]] = {}
+    for entry in thresholds.get("surveys") or ():
+        try:
+            survey, start, end = entry["survey"], entry["start"], entry["end"]
+        except KeyError as err:
+            raise ValueError(f"qc.surveys : clé {err} manquante dans {entry!r}") from err
+        start, end = pd.Timestamp(start).normalize(), pd.Timestamp(end).normalize()
+        if end < start:
+            raise ValueError(f"qc.surveys : relève avant la pose dans {entry!r}")
+        key = (unicodedata.normalize("NFC", str(survey)), entry.get("site"))
+        if key in out:
+            raise ValueError(f"qc.surveys : relevé déclaré deux fois : {key}")
+        out[key] = (start, end)
+    return out
+
+
+def survey_windows(
+    recordings: pd.DataFrame, thresholds: dict[str, Any]
+) -> tuple[pd.Series, pd.Series]:
+    """Pose et relève déclarées de chaque enregistrement (`NaT` : relevé sans dates).
+
+    Entrée : `recordings` avec `path` et `site`. Sortie : deux séries `start`, `end` (jours, sans
+    fuseau), de même index. Sans colonne `path`, tout est `NaT`."""
+    start = pd.Series(pd.NaT, index=recordings.index, dtype="datetime64[ns]")
+    end = start.copy()
+    declared = declared_surveys(thresholds)
+    if not declared or "path" not in recordings:
+        return start, end
+    survey = recordings["path"].map(survey_of)
+    # Les entrées du relevé entier d'abord, celles d'un site ensuite : elles les recouvrent.
+    entries = sorted(declared.items(), key=lambda kv: kv[0][1] is not None)
+    for (name, site), (first, last) in entries:
+        rows = survey == name
+        if site is not None:
+            rows &= recordings["site"] == site
+        start[rows], end[rows] = first, last
+    return start, end
+
+
+def position_in_survey(
+    local: pd.Series, first: pd.Series, last: pd.Series, buffer_h: float = 0.0
+) -> pd.Series:
+    """Où tombe chaque heure locale par rapport à son relevé déclaré (`survey_windows`).
+
+    `dans` : du début du jour de pose à la fin du jour de relève. `bordure avant` / `bordure
+    après` : hors de ces jours, mais à moins de `buffer_h` heures (zone tampon : un micro
+    récupéré le lendemain de la relève, posé la veille de la pose). `avant la pose` / `après la
+    relève` : plus loin, hors relevé. `NaN` : relevé sans dates, ou fichier sans date."""
+    buffer = pd.Timedelta(hours=float(buffer_h))
+    begin, stop = first, last + pd.Timedelta(days=1)
+    pos = pd.Series(np.nan, index=local.index, dtype=object)
+    known = first.notna() & local.notna()
+    pos[known & (local >= begin) & (local < stop)] = "dans"
+    pos[known & (local < begin)] = "avant la pose"
+    pos[known & (local < begin) & (local >= begin - buffer)] = "bordure avant"
+    pos[known & (local >= stop)] = "après la relève"
+    pos[known & (local >= stop) & (local < stop + buffer)] = "bordure après"
+    return pos
+
+
+def undeclared_surveys(recordings: pd.DataFrame, thresholds: dict[str, Any]) -> pd.DataFrame:
+    """Les relevés sans dates déclarées, jugés par la règle de repli (trou de plus de
+    `campaign_gap_days`) : une ligne par relevé d'origine (`survey`), avec son nombre
+    d'enregistrements (`recordings`)."""
+    start, _ = survey_windows(recordings, thresholds)
+    rest = recordings.loc[start.isna()]
+    if "path" not in rest or rest.empty:
+        return pd.DataFrame(columns=["survey", "recordings"])
+    counts = rest["path"].map(survey_of).fillna("(sans chemin)").value_counts().sort_index()
+    return counts.rename_axis("survey").rename("recordings").reset_index()
 
 
 def metadata_flags(
     recordings: pd.DataFrame, thresholds: dict[str, Any], utc_offset_h: float = -3.0
 ) -> pd.DataFrame:
-    """`duration_off`, `off_campaign` et `clock_off` par enregistrement.
+    """`duration_off`, `off_campaign`, `clock_off` et `survey_edge` par enregistrement.
 
     - duration_off : durée hors du programme (2 min ± tolérance) — tests, déclenchements
       manuels, fichiers coupés.
-    - off_campaign : enregistrement isolé de la série de son micro. Pour chaque couple
-      (jeu, site, micro), les dates sont découpées en blocs là où un trou dépasse
-      `campaign_gap_days` ; le plus gros bloc est la campagne, les autres en sortent (tests
-      d'avant pose, restes de carte SD d'un autre lieu). Un micro posé en continu sur
-      plusieurs relevés d'un même site reste un seul bloc.
+    - off_campaign : enregistrement hors des dates de son relevé. Un relevé déclaré dans
+      `qc.surveys` (dossier d'origine, jour de pose, jour de relève, en jours locaux à
+      `utc_offset_h`) écarte tout fichier daté hors de ces jours et de la zone tampon
+      `survey_buffer_h` : essais de réglage d'avant la pose, restes de carte SD, enregistreur
+      oublié après la relève.
+    - survey_edge : fichier d'un relevé déclaré, hors des jours de pose à relève mais dans la
+      zone tampon (`survey_buffer_h`, 24 h : micro posé la veille ou récupéré le lendemain).
+      Remarque seulement : il reste dans le corpus. Un relevé sans dates
+      déclarées (ou sans `path`) garde l'ancienne règle, de repli : pour chaque couple (jeu,
+      site, micro), les dates sont découpées en blocs là où un trou dépasse `campaign_gap_days`,
+      le plus gros bloc est la campagne, les autres en sortent. Elle devine les dates de pose et
+      se trompe dans les deux sens (essais à 5,8-6,9 jours de la pose laissés passer, micro
+      reposé tard écarté) ; `undeclared_surveys` liste les relevés qui y passent encore. Un
+      fichier sans date n'est jamais signalé.
     - clock_off : l'heure du nom de fichier (heure locale de l'enregistreur, à
       `utc_offset_h`) et celle de l'en-tête (`start_utc`, GUANO) diffèrent de plus de
       `clock_tolerance_min` (DECISIONS n° 154 : Molokoi SMA14636 en avril 2024, en-tête en
@@ -255,8 +354,15 @@ def metadata_flags(
     out["duration_off"] = (df["duration_s"] - expected).abs() > tolerance
     out["off_campaign"] = False
 
-    dated = df.assign(t=pd.to_datetime(df["start_utc"], utc=True, errors="coerce"))
-    dated = dated.dropna(subset=["t"])
+    t = pd.to_datetime(df["start_utc"], utc=True, errors="coerce")
+    first, last = survey_windows(recordings, thresholds)
+    local = (t + pd.Timedelta(hours=utc_offset_h)).dt.tz_localize(None)
+    where = position_in_survey(local, first, last, float(thresholds.get("survey_buffer_h", 0.0)))
+    out["off_campaign"] = where.isin(("avant la pose", "après la relève")).to_numpy()
+    out["survey_edge"] = where.isin(("bordure avant", "bordure après")).to_numpy()
+
+    # Repli : ce que les dates déclarées ne couvrent pas, jugé sur la série de son micro.
+    dated = df.assign(t=t)[first.isna()].dropna(subset=["t"])
     keys = [dated[c].fillna("?") for c in ("dataset", "site", "mic_id")]
     for _, group in dated.sort_values("t").groupby(keys, sort=False):
         block = (group["t"].diff() > gap).cumsum()
