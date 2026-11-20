@@ -346,6 +346,9 @@ const $ = id => document.getElementById(id);
 let D = null, players = [], graphs = [], buffers = [], active = 0, actx = null;
 let raw = [], decoding = [];  // fichiers chargés, décodages lancés (`decode`)
 let view = null, intervals = [], selected = -1, vmax = [], loading = 0, newLabel = null;
+// Piste imposée par l'extrait (`track` : file d'écoute à réécouter sur une piste) ; ne
+// touche pas au micro choisi d'habitude (S.channel), et un clic sur un micro l'annule.
+let forcedTrack = null;
 let otherSel = null;  // intervalle d'un envoi déjà fait mis en relief : "rang de l'envoi:j"
 // Envois rendus silencieux d'un clic sur leur nom (plus dessinés), par extrait.
 const muted = new Set();
@@ -645,7 +648,7 @@ $("slope").onchange = () => {
 // Choisir un micro : son spectrogramme (même vue, même zoom) et son son ; la lecture continue,
 // le lecteur choisi est recalé sur l'autre s'ils ont dérivé.
 function setChannel(c) {
-  S.channel = c; saveSettings();
+  forcedTrack = null; S.channel = c; saveSettings();
   const prev = players[active];
   if (players.length && active !== shownTrack()) {
     active = shownTrack();
@@ -846,6 +849,7 @@ function render(args) {
   if (S.band === undefined) {
     S = {band: D.band, bandOnly: false, gain: 0, range: 60, channel: D.channel};
   }
+  if (fresh) forcedTrack = D.track ?? null;
   if (![12, 24, 48, 96, "fft"].includes(S.slope)) S.slope = "fft";
   D.audios.forEach((a, i) => mic(i));
   $("ivbar").style.display = D.interval_mode ? "" : "none";
@@ -991,7 +995,10 @@ async function load() {
 }
 // Décodage et niveau de référence d'une piste, à la demande : au chargement, seulement la
 // piste affichée ; une autre quand on l'affiche, ou quand on la lance en mode FFT.
-const shownTrack = () => S.channel < D.audios.length ? S.channel : 0;
+const shownTrack = () => {
+  const c = forcedTrack ?? S.channel;
+  return c < D.audios.length ? c : 0;
+};
 function decode(i) {
   if (!decoding[i] && raw[i]) {
     const token = loading, p = given[D.audios[i].src];
@@ -1848,6 +1855,7 @@ def viewer_args(
     notes: list[str] | None = None,
     history: list[dict] | None = None,
     comment_reset: int | None = None,
+    track: int | None = None,
 ) -> dict:
     """Arguments du composant. `audios` : (nom, chemin rendu par `asset`, début en s dans
     l'enregistrement), couvrant [t0, t1] ; `windows` : {t0, t1, label, current, candidate} ;
@@ -1856,7 +1864,9 @@ def viewer_args(
     de couleur dans `style.LABEL_COLORS` ; `intervals` : [début, fin, label, qualité] affichés à
     l'ouverture de l'extrait, ou quand `intervals_key` change (autre annotateur) ; `others` :
     {annotateur : intervalles}, ceux des autres, affichés sans pouvoir être modifiés ;
-    `band_hz`, `channel` : réglages de départ, la première fois ;
+    `band_hz`, `channel` : réglages de départ, la première fois ; `track` : piste sur
+    laquelle s'ouvre cet extrait, quel que soit le micro choisi d'habitude (un clic sur un
+    micro la quitte) ;
     `next_audios` : une liste comme `audios` par extrait suivant (les deux prochains), que le
     navigateur prépare dans l'ordre pendant qu'on annote celui-ci (fichiers attendus s'ils ne
     sont pas encore écrits) ;
@@ -1913,6 +1923,7 @@ def viewer_args(
         ],
         "interval_mode": bool(interval_mode),
         "channel": int(channel),
+        "track": None if track is None else int(track),
         "height": int(height),
         "next": [
             [{"name": name, "src": src, "start": float(start)} for name, src, start in audios]

@@ -609,9 +609,11 @@ def pistes(
 ) -> None:
     """Enregistrements d'un stock encodés sur une autre piste que celle de la règle.
 
-    La piste de la règle : `audio.channel`, `audio.channel_rules` (micro sourd, gain inversé),
-    puis le repli du son étouffé (n° 203). Sans `--apply`, montre par partition ce qui serait
-    retiré et écrit la liste sous paths.reports/pistes/. Avec `--apply`, retire ces fenêtres du
+    La piste de la règle : pour un enregistrement annoté, la piste écoutée (intervalles
+    A. blanci, sinon dernier envoi) ; pour le reste, `audio.channel`, `audio.channel_rules`
+    (micro sourd, gain inversé), puis le repli du son étouffé (n° 203). Sans `--apply`, montre
+    par partition ce qui serait retiré et écrit la liste sous paths.reports/pistes/. Avec
+    `--apply`, retire ces fenêtres du
     stock (partition réécrite d'un bloc) : la reprise de `blanci embed` les réencode. Les
     fenêtres retirées sont gardées dans <stocks>/_mis_de_cote/<stock>_pistes_<aaaammjj>/ (mêmes
     partitions, avec retrait.csv), pour comparer les scores sur les anciens et les nouveaux

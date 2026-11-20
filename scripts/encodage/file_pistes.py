@@ -28,6 +28,7 @@ import pandas as pd
 
 from blanci.core.config import LOCAL_CONFIG, PROJECT_ROOT, config_path, load_config
 from blanci.embedding.channels import (
+    annotation_channels,
     channel_key,
     channel_plan,
     channel_rules,
@@ -97,6 +98,7 @@ def main() -> None:
     recs = pd.read_sql_query("SELECT * FROM recordings", con)
     flags = {r: parse_flags(q) for r, q in zip(recs["recording_id"], recs["qc_flags"], strict=True)}
     selected = select_recordings(con)
+    listened = annotation_channels(con)  # extraits annotés : sur la piste écoutée
     print(f"base {db} : {len(recs)} enregistrements, {len(selected)} gardés par les drapeaux")
     params = {
         r["model_id"]: json.loads(r["params_json"] or "{}")
@@ -125,7 +127,7 @@ def main() -> None:
         todo["fenetres"] = [
             len(window_grid(d if d == d else 120.0, window_s, hop_s)) for d in todo["duration_s"]
         ]
-        expected = expected_channels(todo, channel, rules)
+        expected = expected_channels(todo, channel, rules, listened=listened)
         todo["piste"] = todo["recording_id"].map(expected)
         columns = [
             "recording_id",
@@ -177,13 +179,13 @@ def main() -> None:
     )
     by_id = spans.drop_duplicates("recording_id")
     before = expected_channels(by_id, channel, [])
-    after = expected_channels(by_id, channel, rules)
+    after = expected_channels(by_id, channel, rules, listened=listened)
     spans["encodee_avant"] = spans["recording_id"].map(before)
     spans["encodee_apres"] = spans["recording_id"].map(after)
-    listened = [(json.loads(c) if c else {}).get("channel_listened") for c in spans["conditions"]]
+    sent = [(json.loads(c) if c else {}).get("channel_listened") for c in spans["conditions"]]
     spans["ecoutee"] = [
         None if e is None else channel_key(int(e) if str(e) in ("0", "1") else e, n)
-        for e, n in zip(listened, spans["channels"], strict=True)
+        for e, n in zip(sent, spans["channels"], strict=True)
     ]
     spans["positif"] = spans["recording_id"].isin(positive_recordings(con))
     test_file = args.repo / TEST_QUEUE

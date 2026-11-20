@@ -362,6 +362,18 @@ def load_candidates(path: Path, con: sqlite3.Connection) -> pd.DataFrame:
     return queue
 
 
+def queue_track(candidate: Any) -> int | None:
+    """Piste sur laquelle la file fait écouter ce candidat (colonne facultative `channel` : 0 ou
+    1, ex. extraits écoutés sur une piste cassée, à réécouter sur l'autre) ; None : celle que
+    l'annotateur a choisie d'habitude."""
+    try:
+        value = candidate.get("channel")
+        track = None if value is None or pd.isna(value) else int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return track if track in (0, 1) else None
+
+
 # --- Annotateurs ---------------------------------------------------------------------------------
 
 # Liste des annotateurs du projet, une personne par ligne, versionnée avec les annotations :

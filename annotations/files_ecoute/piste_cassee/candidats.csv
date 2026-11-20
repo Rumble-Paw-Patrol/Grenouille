@@ -1,0 +1,46 @@
+recording_id,offset_s,dur_s,channel,reason,source
+020856a1f28e7b6d,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+10f4ff5dc3819e0c,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+17002be8b62a4f7f,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+2be59115281b9bac,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+47f866a6fc21b8b7,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+4a5a691a9df703af,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+4f27db3e25460d19,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+5a4163b60bc5610e,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+5eafb02f2b48de4f,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+6bccd12a7c88e22b,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+9b52ff2d9fc8579e,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+a1ad512f513c52f9,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+adda2ee213e1867b,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+b3c7716d1dec6692,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+bb1dc43439513016,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+c2d47bc800b5e553,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+c535b4548ac16f61,0.0,30.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+c535b4548ac16f61,30.0,30.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+c535b4548ac16f61,60.0,30.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+c535b4548ac16f61,90.0,30.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+cb2a1ee3db945904,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+f15fb73261288d65,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+ff99f66e1ac374ff,0.0,120.0,1,"piste_cassee/piste 0 étouffée, piste 1 saine",plan
+111a8d18216602b5,0.0,120.0,0,"piste_cassee/piste 1 étouffée, piste 0 saine",plan
+077e5b735cc0e0cd,0.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+077e5b735cc0e0cd,30.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+077e5b735cc0e0cd,60.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+077e5b735cc0e0cd,90.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+424988846792c7bd,0.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+424988846792c7bd,30.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+424988846792c7bd,60.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+424988846792c7bd,90.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+4e9fa062eb7f0e69,0.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+4e9fa062eb7f0e69,30.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+4e9fa062eb7f0e69,60.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+4e9fa062eb7f0e69,90.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+518e058638427d96,0.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+518e058638427d96,30.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+518e058638427d96,60.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+518e058638427d96,90.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+5350d57d4f02a319,0.0,120.0,1,piste_cassee/règle : piste 0 sourde,plan
+9a03bba8eed5287e,0.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+9a03bba8eed5287e,30.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+9a03bba8eed5287e,60.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan
+9a03bba8eed5287e,90.0,30.0,1,piste_cassee/règle : piste 0 sourde,plan

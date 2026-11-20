@@ -109,6 +109,7 @@ from blanci.annotation.workbench import (
     next_position,
     ordered_classes,
     progress,
+    queue_track,
     read_annotators,
     read_channels,
     save_answer,
@@ -1429,6 +1430,10 @@ def main() -> None:
 
     # Fenêtres de la page : celle du candidat, ou le découpage de l'extrait (mode fenêtres).
     cand_offset, cand_dur = float(candidate["offset_s"]), float(candidate["dur_s"])
+    # Piste imposée par la file (colonne `channel` : extrait à réécouter sur sa piste valable) ;
+    # sinon le micro choisi d'habitude dans le visualiseur.
+    track = queue_track(candidate)
+    start_channel = spectro_default if track is None else track
     windows = [(cand_offset, cand_dur)]
     if window_mode and media is not None:
         offsets = split_windows(media["t0"], media["t1"], cand_offset, float(split_s))
@@ -1481,7 +1486,7 @@ def main() -> None:
         if not doubts:
             st.session_state.pop("confirmed_submit", None)
             comment = (st.session_state.get(_comment_key(form_key)) or "").strip() or None
-            channel = st.session_state.get(f"ch::{extract}", spectro_default)
+            channel = st.session_state.get(f"ch::{extract}", start_channel)
             if _save_extract(con, candidate, t0, t1, intervals, annotator, channel, comment):
                 _advance(con, queue, pos, nav_args, key, end)
                 st.rerun()
@@ -1524,7 +1529,7 @@ def main() -> None:
             for j, ((o, d), i) in enumerate(zip(windows, ids, strict=True))
         ]
         ckey = f"ch::{extract}"
-        st.session_state.setdefault(ckey, spectro_default)
+        st.session_state.setdefault(ckey, start_channel)
         _viewer_fragment(
             viewer_args(
                 t0,
@@ -1554,6 +1559,7 @@ def main() -> None:
                 notes=notes,
                 history=history,
                 comment_reset=None if window_mode else st.session_state.get("validated", 0),
+                track=track,
             ),
             extract,
             ikey,

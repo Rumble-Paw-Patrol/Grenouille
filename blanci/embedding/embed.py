@@ -34,6 +34,7 @@ from blanci.core.db import utc_now, window_id_for
 from blanci.core.locate import mounted_disks, variants
 from blanci.embedding.channels import (
     MUFFLED_0_CHANNEL,
+    annotation_channels,
     channel_key,
     channel_rules,
     check_stock_channels,
@@ -238,10 +239,13 @@ def embed_recordings(
     en amont est refusé (`check_stock_identity`) : la reprise y ajouterait des embeddings qui
     ne se comparent pas aux siens (DECISIONS n° 143).
 
-    `rules` (`audio.channel_rules`) : piste lue par micro et par période (`recording_channel`),
-    rangée pour chaque enregistrement encodé (table `stock_channels`). Un stock qui contient des
-    enregistrements encodés sur une autre piste que celle de la règle est refusé
-    (`channels.check_stock_channels`) : la reprise les sauterait ; `blanci pistes` les retire.
+    Piste lue : celle qu'on a écoutée pour un enregistrement annoté (`annotation_channels`),
+    sinon `rules` (`audio.channel_rules`) : piste lue par micro et par période, puis le repli du
+    son étouffé (`recording_channel`). Elle est rangée pour chaque enregistrement encodé (table
+    `stock_channels`). Un stock qui contient des enregistrements encodés sur une autre piste que
+    celle de la règle est refusé (`channels.check_stock_channels`) : la reprise les sauterait ;
+    `blanci pistes` les retire. Une annotation sur l'autre piste d'un enregistrement déjà encodé
+    le rend donc à retirer.
 
     `ahead` : enregistrements lus et contrôlés d'avance par le fil de lecture (0 : aucun).
     `resample` : voir `resample_mode` ; rangé avec le stock, qui refuse d'en changer.
@@ -257,7 +261,9 @@ def embed_recordings(
     identity = stock_identity(encoder, channel, mode, gates, rules)
     check_stock_identity(con, eid, identity)
     store = EmbeddingStore(store_root, eid)
-    check_stock_channels(con, store, channel, rules, thresholds=qc_thresholds)
+    # Piste écoutée des enregistrements annotés : elle passe avant la règle et le repli.
+    listened = annotation_channels(con)
+    check_stock_channels(con, store, channel, rules, thresholds=qc_thresholds, listened=listened)
     protected = positive_recordings(con) if qc_thresholds is not None else set()
     window_s = round(encoder.window_s, 2)
     hop_s = hop_for_overlap(window_s, overlap)
@@ -287,7 +293,14 @@ def embed_recordings(
     def prepare(rec: Any) -> _Audio:
         """Fil de lecture : ce qui se calcule sur le signal sans la base ni l'encodeur."""
         known = parse_flags(rec.qc_flags)
-        read = recording_channel(known, channel, rec._asdict(), rules, thresholds=qc_thresholds)
+        read = recording_channel(
+            known,
+            channel,
+            rec._asdict(),
+            rules,
+            thresholds=qc_thresholds,
+            listened=listened.get(rec.recording_id),
+        )
         try:
             wav, sr = load_audio(find(rec.path), read)
         except Exception:  # fichier illisible : déjà signalé à l'inventaire

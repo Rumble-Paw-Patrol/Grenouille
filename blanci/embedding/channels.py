@@ -124,14 +124,19 @@ def recording_channel(
     rules: list[dict[str, Any]] | None = None,
     fallback: bool = True,
     thresholds: Mapping[str, float] | None = None,
+    listened: int | None = None,
 ) -> int | str:
-    """Canal lu pour un enregistrement : celui de la règle qui s'applique (`rule_channel`), sinon
+    """Canal lu pour un enregistrement. Annoté (`listened`, 0 ou 1 : `annotation_channels`) :
+    la piste écoutée, toujours, cassée ou non (son label n'est vrai que pour elle). Sinon, celui
+    de la règle qui s'applique (`rule_channel`), sinon
     `channel` ; puis, avec `fallback`, l'autre piste si celle-ci est étouffée et que l'autre est
     **lue et saine** (n° 203, précisé le 20/11/2026) : ses indices sont rangés, elle n'est pas
     retenue étouffée, pas muette et son `hf_ratio` n'est pas sous le seuil (`thresholds` :
     `qc` de la configuration, `DEFAULT_QC` à défaut). Une piste que `blanci qc` n'a pas lue, ou
     sous le seuil sans épisode (douteuse), ne sert pas de repli. Un fichier mono est lu tel quel
     quel que soit le canal (`load_audio`)."""
+    if listened in (0, 1):
+        return int(listened)
     chosen = rule_channel(rec, rules, channel) if rec is not None and rules else channel
     if not fallback:
         return chosen
@@ -158,11 +163,19 @@ def _channels_of(
     rules: list[dict[str, Any]],
     fallback: bool,
     thresholds: Mapping[str, float] | None = None,
+    listened: Mapping[str, int] | None = None,
 ) -> pd.Series:
+    listened = listened or {}
     out = {
         rec["recording_id"]: channel_key(
             recording_channel(
-                parse_flags(rec.get("qc_flags")), channel, rec, rules, fallback, thresholds
+                parse_flags(rec.get("qc_flags")),
+                channel,
+                rec,
+                rules,
+                fallback,
+                thresholds,
+                listened.get(rec["recording_id"]),
             ),
             rec.get("channels"),
         )
@@ -176,9 +189,11 @@ def expected_channels(
     channel: int | str,
     rules: list[dict[str, Any]],
     thresholds: Mapping[str, float] | None = None,
+    listened: Mapping[str, int] | None = None,
 ) -> pd.Series:
-    """Piste à lire pour chaque enregistrement (index : `recording_id`), règles et repli compris."""
-    return _channels_of(recordings, channel, rules, fallback=True, thresholds=thresholds)
+    """Piste à lire pour chaque enregistrement (index : `recording_id`) : la piste écoutée d'un
+    enregistrement annoté (`listened`, `annotation_channels`), sinon règles et repli."""
+    return _channels_of(recordings, channel, rules, True, thresholds, listened)
 
 
 def legacy_channels(
@@ -209,36 +224,73 @@ HEARD_LABELS = ("blanci", "blanci_chorus", "blanci_uncertain")
 def listened_channels(
     con: sqlite3.Connection, labels: Iterable[str] = HEARD_LABELS
 ) -> pd.DataFrame:
-    """Piste sur laquelle A. blanci a été entendu, par enregistrement : celle qu'on écoutait en
-    plaçant chaque intervalle encore valable (`dataset.current_intervals` ; celle de l'envoi
-    quand l'intervalle ne la dit pas, migration 7). Colonnes `recording_id`, `n_0`, `n_1`
-    (intervalles tracés sur chaque piste), `n_unknown` (piste inconnue), `listened` (« 0 » ou
-    « 1 », la piste de la majorité, comme `stock_channels` ; vide sans piste connue) et `mixed`
-    (des intervalles sur les deux pistes). Pour comparer à la piste encodée (`channel_plan`)."""
+    """Piste écoutée de chaque enregistrement annoté par extraits (poste, paquet d'écoute) : un
+    extrait annoté s'encode sur la piste où on l'a écouté, son label n'est vrai que pour elle.
+
+    - A. blanci entendu : la piste de la majorité de ses intervalles encore valables
+      (`dataset.current_intervals`), celle qu'on écoutait en plaçant chacun (`intervals.channel`,
+      migration 7 ; celle de l'envoi pour un intervalle d'avant) ; à égalité, la piste 0 ;
+    - sinon (extraits « rien », faux amis seuls) : la piste du dernier envoi qui la dit
+      (`spans.conditions.channel_listened`) : réécouter un extrait sur l'autre piste l'y fait
+      passer.
+
+    Colonnes `recording_id`, `n_0`, `n_1`, `n_unknown` (intervalles A. blanci par piste),
+    `last` (piste du dernier envoi), `listened` (« 0 », « 1 », comme `stock_channels` ; vide
+    sans piste connue), `source` (« intervalles » ou « envoi ») et `mixed` (A. blanci tracé sur
+    les deux pistes). Les labels par fenêtres (import de Biophonia) ne disent pas de piste."""
     from blanci.inputs.dataset import current_intervals, load_spans
 
-    columns = ["recording_id", "n_0", "n_1", "n_unknown", "listened", "mixed"]
+    columns = [
+        "recording_id", "n_0", "n_1", "n_unknown", "last", "listened", "source", "mixed"
+    ]  # fmt: skip
+    sent = pd.read_sql_query(
+        "SELECT recording_id, json_extract(conditions, '$.channel_listened') AS channel "
+        "FROM spans ORDER BY span_id",
+        con,
+    )
+    if sent.empty:
+        return pd.DataFrame(columns=columns)
+    sent["channel"] = pd.to_numeric(sent["channel"], errors="coerce")
+    known = sent.dropna(subset=["channel"])
+    last = known.groupby("recording_id")["channel"].last().astype(int).astype(str)
+    out = pd.DataFrame({"recording_id": sent["recording_id"].unique()})
     spans, intervals = load_spans(con)
     intervals = current_intervals(spans, intervals)
-    if intervals.empty:
-        return pd.DataFrame(columns=columns)
-    heard = intervals[intervals["label"].isin(list(labels))]
-    if heard.empty:
-        return pd.DataFrame(columns=columns)
-    channel = pd.to_numeric(heard["channel"], errors="coerce")
-    out = pd.DataFrame(
-        {
-            "recording_id": heard["recording_id"].to_numpy(),
-            "n_0": (channel == 0).to_numpy(dtype=int),
-            "n_1": (channel == 1).to_numpy(dtype=int),
-            "n_unknown": channel.isna().to_numpy(dtype=int),
-        }
-    )
-    out = out.groupby("recording_id", as_index=False).sum()
-    known = (out["n_0"] + out["n_1"]) > 0
-    out["listened"] = np.where(known, np.where(out["n_1"] > out["n_0"], "1", "0"), None)
+    heard = intervals[intervals["label"].isin(list(labels))] if len(intervals) else intervals
+    if len(heard):
+        channel = pd.to_numeric(heard["channel"], errors="coerce")
+        counts = (
+            pd.DataFrame(
+                {
+                    "recording_id": heard["recording_id"].to_numpy(),
+                    "n_0": (channel == 0).to_numpy(dtype=int),
+                    "n_1": (channel == 1).to_numpy(dtype=int),
+                    "n_unknown": channel.isna().to_numpy(dtype=int),
+                }
+            )
+            .groupby("recording_id", as_index=False)
+            .sum()
+        )
+        out = out.merge(counts, on="recording_id", how="left")
+    for col in ("n_0", "n_1", "n_unknown"):
+        out[col] = out[col].fillna(0).astype(int) if col in out else 0
+    out["last"] = out["recording_id"].map(last)
+    by_intervals = (out["n_0"] + out["n_1"]) > 0
+    majority = np.where(out["n_1"] > out["n_0"], "1", "0")
+    out["listened"] = np.where(by_intervals, majority, out["last"])
+    out["listened"] = out["listened"].where(out["listened"].notna(), None)
+    by_send = np.where(out["last"].notna(), "envoi", None)
+    out["source"] = np.where(by_intervals, "intervalles", by_send)
     out["mixed"] = (out["n_0"] > 0) & (out["n_1"] > 0)
     return out[columns]
+
+
+def annotation_channels(con: sqlite3.Connection) -> dict[str, int]:
+    """{recording_id : piste écoutée} des enregistrements annotés dont la piste est connue
+    (`listened_channels`), à passer à `recording_channel` : elle passe avant la règle et le
+    repli."""
+    heard = listened_channels(con).dropna(subset=["listened"])
+    return {rid: int(ch) for rid, ch in zip(heard["recording_id"], heard["listened"], strict=True)}
 
 
 # --- Contenu d'un stock -----------------------------------------------------------------------
@@ -298,11 +350,14 @@ def channel_plan(
     rules: list[dict[str, Any]],
     contents: pd.DataFrame | None = None,
     thresholds: Mapping[str, float] | None = None,
+    listened: Mapping[str, int] | None = None,
 ) -> pd.DataFrame:
     """Pour chaque enregistrement du stock : la piste encodée (`encoded` : rangée, sinon
-    `legacy_channels`), celle de la règle (`expected`), `recorded` (piste rangée en base),
-    `stale` (les deux diffèrent), avec sa partition, ses fenêtres, son micro et sa date. Un
-    enregistrement du stock absent de la table `recordings` est laissé de côté."""
+    `legacy_channels`), celle de la règle (`expected`, la piste écoutée pour un enregistrement
+    annoté : `listened`, lue dans la base par `annotation_channels` s'il n'est pas donné),
+    `recorded` (piste rangée en base), `stale` (les deux diffèrent), avec sa partition, ses
+    fenêtres, son micro et sa date. Un enregistrement du stock absent de la table `recordings`
+    est laissé de côté."""
     contents = stock_contents(store) if contents is None else contents
     columns = [*contents.columns, "mic_id", "start_utc", "encoded", "expected", "recorded", "stale"]
     if contents.empty:
@@ -319,7 +374,9 @@ def channel_plan(
         channel,
         thresholds,
     )
-    expected = expected_channels(recs, channel, rules, thresholds)
+    if listened is None:
+        listened = annotation_channels(con)
+    expected = expected_channels(recs, channel, rules, thresholds, listened)
     out = contents.merge(recs[["recording_id", "mic_id", "start_utc"]], on="recording_id")
     out["recorded"] = out["recording_id"].isin(recorded.index)
     out["encoded"] = out["recording_id"].map(pd.concat([recorded, legacy]))
@@ -335,13 +392,14 @@ def check_stock_channels(
     rules: list[dict[str, Any]],
     command: str = "blanci pistes",
     thresholds: Mapping[str, float] | None = None,
+    listened: Mapping[str, int] | None = None,
 ) -> pd.DataFrame:
     """ValueError si le stock contient des enregistrements encodés sur une autre piste que celle
     de la règle : la reprise les sauterait, et le stock mêlerait les deux pistes. Sinon, range
     la piste des enregistrements encodés avant la table `stock_channels` (celle de
     `legacy_channels`) : un changement de règle ou de drapeau sera jugé contre elle. Rend le
-    plan (`channel_plan`)."""
-    plan = channel_plan(con, store, channel, rules, thresholds=thresholds)
+    plan (`channel_plan`). `listened` : comme `channel_plan`."""
+    plan = channel_plan(con, store, channel, rules, thresholds=thresholds, listened=listened)
     stale = plan[plan["stale"]]
     if len(stale):
         by = stale.groupby(["encoded", "expected"]).size()
