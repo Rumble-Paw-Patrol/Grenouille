@@ -156,6 +156,13 @@ MIGRATIONS = [
         PRIMARY KEY (encoder_id, recording_id)
     );
     """,
+    # 7 — piste écoutée quand l'intervalle a été placé (0 : micro 1, 1 : micro 2) : celle où le
+    # chant a été entendu, sur laquelle encoder l'enregistrement. NULL : pas dite à l'intervalle
+    # (avant la migration, import d'un ancien export), celle de l'envoi s'applique
+    # (`spans.conditions.channel_listened`).
+    """
+    ALTER TABLE intervals ADD COLUMN channel INTEGER;
+    """,
 ]
 
 

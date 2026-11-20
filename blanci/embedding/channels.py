@@ -25,6 +25,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -199,6 +200,45 @@ def legacy_channels(
         "muffled_0_channel" in stored,
         thresholds,
     )
+
+
+# Intervalles qui disent où A. blanci a été entendu (les faux amis et étiquettes ajoutées non).
+HEARD_LABELS = ("blanci", "blanci_chorus", "blanci_uncertain")
+
+
+def listened_channels(
+    con: sqlite3.Connection, labels: Iterable[str] = HEARD_LABELS
+) -> pd.DataFrame:
+    """Piste sur laquelle A. blanci a été entendu, par enregistrement : celle qu'on écoutait en
+    plaçant chaque intervalle encore valable (`dataset.current_intervals` ; celle de l'envoi
+    quand l'intervalle ne la dit pas, migration 7). Colonnes `recording_id`, `n_0`, `n_1`
+    (intervalles tracés sur chaque piste), `n_unknown` (piste inconnue), `listened` (« 0 » ou
+    « 1 », la piste de la majorité, comme `stock_channels` ; vide sans piste connue) et `mixed`
+    (des intervalles sur les deux pistes). Pour comparer à la piste encodée (`channel_plan`)."""
+    from blanci.inputs.dataset import current_intervals, load_spans
+
+    columns = ["recording_id", "n_0", "n_1", "n_unknown", "listened", "mixed"]
+    spans, intervals = load_spans(con)
+    intervals = current_intervals(spans, intervals)
+    if intervals.empty:
+        return pd.DataFrame(columns=columns)
+    heard = intervals[intervals["label"].isin(list(labels))]
+    if heard.empty:
+        return pd.DataFrame(columns=columns)
+    channel = pd.to_numeric(heard["channel"], errors="coerce")
+    out = pd.DataFrame(
+        {
+            "recording_id": heard["recording_id"].to_numpy(),
+            "n_0": (channel == 0).to_numpy(dtype=int),
+            "n_1": (channel == 1).to_numpy(dtype=int),
+            "n_unknown": channel.isna().to_numpy(dtype=int),
+        }
+    )
+    out = out.groupby("recording_id", as_index=False).sum()
+    known = (out["n_0"] + out["n_1"]) > 0
+    out["listened"] = np.where(known, np.where(out["n_1"] > out["n_0"], "1", "0"), None)
+    out["mixed"] = (out["n_0"] > 0) & (out["n_1"] > 0)
+    return out[columns]
 
 
 # --- Contenu d'un stock -----------------------------------------------------------------------

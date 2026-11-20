@@ -697,9 +697,11 @@ def append_span(
     annotator: str | None = None,
 ) -> int:
     """Ajoute un extrait écouté [start_s, end_s] et ses intervalles d'A. blanci (début, fin,
-    label, qualité facultative) ; renvoie span_id. `other_label` : label des fenêtres de
-    l'extrait qui ne touchent aucun intervalle. `quality` : qualité de l'extrait, celle des
-    intervalles qui n'ont pas la leur. Ajout seul : une correction est un nouveau span (§13.7)."""
+    label, qualité et piste écoutée facultatives) ; renvoie span_id. `other_label` : label des
+    fenêtres de l'extrait qui ne touchent aucun intervalle. `quality` : qualité de l'extrait,
+    celle des intervalles qui n'ont pas la leur. Piste d'un intervalle : 0 ou 1, celle qu'on
+    écoutait en le plaçant ; None : celle de l'envoi (`conditions.channel_listened`). Ajout
+    seul : une correction est un nouveau span (§13.7)."""
     if not end_s > start_s:
         raise ValueError(f"extrait vide : {start_s}–{end_s} s")
     if other_label not in LABELS or other_label in POSITIVE_LABELS:
@@ -713,13 +715,17 @@ def append_span(
     cleaned = []
     for i0, i1, label, *rest in intervals:
         interval_quality = rest[0] if rest else None
+        channel = rest[1] if len(rest) > 1 else None
         if label not in INTERVAL_LABELS and not label.startswith(CUSTOM_PREFIX):
             raise ValueError(f"label d'intervalle inconnu : {label!r}")
         _check_quality(interval_quality)
+        if channel is not None and channel not in (0, 1):
+            raise ValueError(f"piste d'intervalle inconnue : {channel!r} (attendues : 0, 1)")
         i0, i1 = max(float(i0), start_s), min(float(i1), end_s)
         if i1 <= i0:
             raise ValueError(f"intervalle vide ou hors de l'extrait : {i0}–{i1} s")
-        cleaned.append((round(i0, 2), round(i1, 2), label, interval_quality))
+        channel = None if channel is None else int(channel)
+        cleaned.append((round(i0, 2), round(i1, 2), label, interval_quality, channel))
     if (
         con.execute("SELECT 1 FROM recordings WHERE recording_id = ?", (recording_id,)).fetchone()
         is None
@@ -745,7 +751,8 @@ def append_span(
     )
     span_id = int(cursor.lastrowid)
     con.executemany(
-        "INSERT INTO intervals (span_id, start_s, end_s, label, quality) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO intervals (span_id, start_s, end_s, label, quality, channel) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
         [(span_id, *interval) for interval in cleaned],
     )
     con.commit()
@@ -794,7 +801,17 @@ def _text(value: Any) -> str | None:
     return str(value).strip() or None
 
 
-EXPORT_FILES = ("extraits_annotes.csv", "intervalles_annotes.csv", "fenetres_annotees.csv")
+def _channel(value: Any) -> int | None:
+    """Piste écoutée lue dans un CSV (« 0 », « 1 », 1.0) ; None pour une case vide ou autre."""
+    text = _text(value)
+    try:
+        channel = int(float(text)) if text is not None else None
+    except ValueError:
+        return None
+    return channel if channel in (0, 1) else None
+
+
+EXPORT_FILES =("extraits_annotes.csv", "intervalles_annotes.csv", "fenetres_annotees.csv")
 # Écrit avec les trois autres mais jamais relu à l'import : un relevé des extraits réécoutés.
 REANNOTATIONS_FILE = "reannotations.csv"
 
@@ -946,6 +963,9 @@ def _import_set(
                 conditions |= comment_fields(comment) | {"comment": comment}
             if str(row.multiclass).strip().lower() == "false":
                 conditions["multiclass"] = False
+            listened = _channel(getattr(row, "channel", None))
+            if listened is not None:
+                conditions["channel_listened"] = listened
             classes = [c.strip() for c in (_text(row.classes) or "").split(",") if c.strip()]
             cursor = con.execute(
                 "INSERT INTO spans (recording_id, start_s, end_s, other_label, classes, "
@@ -967,10 +987,17 @@ def _import_set(
             )
             span = by_span.get(row.span_id, pd.DataFrame(columns=["start_s"]))
             con.executemany(
-                "INSERT INTO intervals (span_id, start_s, end_s, label, quality) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO intervals (span_id, start_s, end_s, label, quality, channel) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 [
-                    (cursor.lastrowid, float(i.start_s), float(i.end_s), i.label, _text(i.quality))
+                    (
+                        cursor.lastrowid,
+                        float(i.start_s),
+                        float(i.end_s),
+                        i.label,
+                        _text(i.quality),
+                        _channel(getattr(i, "channel", None)),
+                    )
                     for i in span.sort_values("start_s").itertuples(index=False)
                 ],
             )

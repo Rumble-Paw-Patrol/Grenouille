@@ -125,7 +125,9 @@ def load_spans(
     con: sqlite3.Connection, annotator: str | Sequence[str | None] | None = None
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(extraits écoutés, intervalles) de l'annotation par intervalles. Les intervalles
-    portent recording_id ; `annotator` : seulement les extraits de cet annotateur, ou de ces
+    portent recording_id et `channel`, la piste écoutée quand ils ont été placés (celle de
+    l'envoi, `conditions.channel_listened`, s'ils ne la disent pas ; vide si aucune) ;
+    `annotator` : seulement les extraits de cet annotateur, ou de ces
     annotateurs (`annotator_filter` ; masquage des autres dans le poste, §5)."""
     condition, params = annotator_filter(annotator)
     where = f"WHERE {condition}" if condition else ""
@@ -139,7 +141,8 @@ def load_spans(
     spans["comment"] = spans["conditions"].map(_comment)
     spans = spans.drop(columns="conditions")
     intervals = pd.read_sql_query(
-        "SELECT i.span_id, s.recording_id, i.start_s, i.end_s, i.label, i.quality "
+        "SELECT i.span_id, s.recording_id, i.start_s, i.end_s, i.label, i.quality, "
+        "COALESCE(i.channel, json_extract(s.conditions, '$.channel_listened')) AS channel "
         f"FROM intervals i JOIN spans s USING (span_id) {where_joined} "
         "ORDER BY i.interval_id",
         con,
@@ -170,6 +173,8 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     conditions = spans["conditions"].map(lambda c: json.loads(c) if c else {})
     spans["comment"] = conditions.map(lambda c: c.get("comment"))
     spans["multiclass"] = conditions.map(lambda c: c.get("multiclass", True))
+    spans["channel"] = pd.array(conditions.map(lambda c: c.get("channel_listened")), "Int64")
+    intervals["channel"] = pd.array(intervals["channel"], "Int64")
     spans["classes"] = spans["classes"].map(lambda c: ", ".join(json.loads(c)) if c else "")
     quality = intervals["quality"].fillna("")
     text = (
@@ -188,11 +193,11 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     extracts = extracts[
         ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "n_blanci",
          "intervalles", "other_label", "classes", "multiclass", "quality", "species",
-         "comment", "annotator", "source", "created_at", "recording_id"]
+         "comment", "annotator", "source", "created_at", "recording_id", "channel"]
     ]  # fmt: skip
     intervals = intervals.merge(rec, on="recording_id", how="left")[
         ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "label",
-         "quality", "valable"]
+         "quality", "valable", "channel"]
     ]  # fmt: skip
     return extracts, intervals
 

@@ -736,8 +736,12 @@ function backupSave(list) {
 function backupClear() {
   const all = backupRead(); delete all[backupKey()]; backupWrite(all);
 }
+// Un intervalle reçu ([début, fin, label, qualité, piste]) : la piste est celle qu'on écoutait
+// en le traçant (`shownTrack`), gardée quand on déplace ses bords ou qu'on change d'étiquette ;
+// null quand elle n'est pas connue (envoi d'avant, paquet relu).
+const ivOf = ([t0, t1, l, q, ch]) => ({t0, t1, label: l, quality: q || null, channel: ch ?? null});
 function emit(extra) {
-  const list = intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]);
+  const list = intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality, i.channel]);
   if (D.interval_mode) {
     if (extra && extra.action && extra.action.type === "submit") backupClear();
     else backupSave(list);
@@ -745,7 +749,7 @@ function emit(extra) {
   send("streamlit:setComponentValue", {dataType: "json", value: Object.assign({
     key: D.extract, ivkey: D.ivkey, channel: shownTrack(),
     comment: $("comment").value, reset: D.reset,
-    intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality]),
+    intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality, i.channel]),
     add_label: null, action: null,
   }, extra || {})});
 }
@@ -898,12 +902,12 @@ function render(args) {
   if (fresh) {
     view = {t0: D.t0, t1: D.t1, f0: 0, f1: D.fview};
     intervals = (D.intervals || [])
-      .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
+      .map(ivOf);
     // Travail non envoyé retrouvé dans le navigateur (cadre actualisé, page rechargée).
     const saved = D.interval_mode ? backupRead()[backupKey()] : null;
     const same = saved && JSON.stringify(saved.iv) === JSON.stringify(D.intervals || []);
     if (saved && !same) {
-      intervals = saved.iv.map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
+      intervals = saved.iv.map(ivOf);
       setTimeout(() => emit(), 0);  // le poste reprend aussi ces intervalles
     }
     selected = -1; otherSel = null; vmax = []; specKey = ""; ownHidden = false;
@@ -915,7 +919,7 @@ function render(args) {
   } else {
     if (ivChanged) {
       intervals = (D.intervals || [])
-        .map(([t0, t1, l, q]) => ({t0, t1, label: l, quality: q || null}));
+        .map(ivOf);
       selected = -1;
     }
     if (othersChanged) otherSel = null;
@@ -1448,6 +1452,10 @@ function list() {
       q.title = MEDALS[iv.quality] ? `Qualité ${iv.quality}, ${MEDALS[iv.quality]}` : "";
       chip.append(" · ", q);
     }
+    if (D.audios.length > 1 && iv.channel !== null && D.audios[iv.channel]) {
+      chip.append(` · 🎧 ${iv.channel + 1}`);
+      chip.title += `\nTracé en écoutant ${D.audios[iv.channel].name}`;
+    }
     const x = document.createElement("button");
     x.textContent = "×"; x.title = "Effacer";
     x.onclick = ev => { ev.stopPropagation(); remove(i); };
@@ -1640,7 +1648,7 @@ window.addEventListener("mouseup", e => {
   if (d.mode === "draw") {
     const t0 = Math.min(d.t, d.t2), t1 = Math.max(d.t, d.t2);
     if (t1 - t0 >= 0.05) {
-      intervals.push({t0, t1, label: newLabel, quality: newQuality});
+      intervals.push({t0, t1, label: newLabel, quality: newQuality, channel: shownTrack()});
       selected = -1; changed();
     } else draw();
   } else if (d.mode === "edge") {
@@ -1803,9 +1811,16 @@ _component = None
 
 
 def _intervals(intervals: list | None) -> list[list]:
-    """[début, fin, label, qualité] de chaque intervalle (qualité None si absente)."""
+    """[début, fin, label, qualité, piste écoutée] de chaque intervalle (None si absentes)."""
     return [
-        [float(i[0]), float(i[1]), str(i[2]), i[3] if len(i) > 3 else None] for i in intervals or []
+        [
+            float(i[0]),
+            float(i[1]),
+            str(i[2]),
+            i[3] if len(i) > 3 else None,
+            None if len(i) < 5 or i[4] is None else int(i[4]),
+        ]
+        for i in intervals or []
     ]
 
 

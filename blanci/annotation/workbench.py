@@ -720,14 +720,14 @@ def extract_intervals(
     start_s: float,
     end_s: float,
     annotator: str | list[str | None] | None = None,
-) -> dict[str | None, list[tuple[float, float, str, str | None]]]:
-    """Intervalles (début, fin, label, qualité) du dernier envoi de chaque annotateur sur
-    l'extrait [start_s, end_s], à réafficher quand on y revient : {annotateur : intervalles},
-    dans l'ordre des envois (liste vide : extrait envoyé sans intervalle). Un envoi compte s'il
-    a les bornes de l'extrait ou s'il le contient (enregistrement entier annoté avant un
-    découpage en extraits plus courts, comme `test_v1` le 23/10) : ses intervalles sont alors
-    coupés aux bornes de l'extrait. `annotator` : ces annotateurs seulement
-    (`visible_annotators`)."""
+) -> dict[str | None, list[tuple[float, float, str, str | None, int | None]]]:
+    """Intervalles (début, fin, label, qualité, piste écoutée) du dernier envoi de chaque
+    annotateur sur l'extrait [start_s, end_s], à réafficher quand on y revient : {annotateur :
+    intervalles}, dans l'ordre des envois (liste vide : extrait envoyé sans intervalle). Un
+    envoi compte s'il a les bornes de l'extrait ou s'il le contient (enregistrement entier
+    annoté avant un découpage en extraits plus courts, comme `test_v1` le 23/10) : ses
+    intervalles sont alors coupés aux bornes de l'extrait. `annotator` : ces annotateurs
+    seulement (`visible_annotators`)."""
     from blanci.inputs.dataset import annotator_filter
 
     condition, params = annotator_filter(annotator)
@@ -744,16 +744,20 @@ def extract_intervals(
 
 def _clipped(
     con: sqlite3.Connection, span_id: int, start_s: float, end_s: float
-) -> list[tuple[float, float, str, str | None]]:
-    """Intervalles de l'envoi `span_id`, coupés aux bornes de l'extrait [start_s, end_s]."""
+) -> list[tuple[float, float, str, str | None, int | None]]:
+    """Intervalles (début, fin, label, qualité, piste écoutée) de l'envoi `span_id`, coupés aux
+    bornes de l'extrait [start_s, end_s]. Piste : celle de l'intervalle, sinon celle de l'envoi
+    (`conditions.channel_listened`) : un réenvoi la garde."""
     kept = []
-    for a, b, c, q in con.execute(
-        "SELECT start_s, end_s, label, quality FROM intervals WHERE span_id = ? ORDER BY start_s",
+    for a, b, c, q, ch in con.execute(
+        "SELECT i.start_s, i.end_s, i.label, i.quality, "
+        "COALESCE(i.channel, json_extract(s.conditions, '$.channel_listened')) "
+        "FROM intervals i JOIN spans s USING (span_id) WHERE i.span_id = ? ORDER BY i.start_s",
         (span_id,),
     ):
         a, b = max(float(a), start_s), min(float(b), end_s)
         if b - a >= 0.01:
-            kept.append((round(a, 3), round(b, 3), str(c), q))
+            kept.append((round(a, 3), round(b, 3), str(c), q, None if ch is None else int(ch)))
     return kept
 
 

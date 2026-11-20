@@ -173,6 +173,7 @@ let custom = get("etiquettes", P.custom || {});
 let hidden = new Set(get("masques", [])), everyone = get("tout-masquer", false);
 let noComments = get("sans-commentaires", false);
 let pos = 0, version = 0, current = [], ready = false, dir = null, unsaved = false;
+let listened = null;
 const fold = s => String(s || "").toLocaleLowerCase("fr");
 const sameName = (a, b) => fold(a) === fold(b);
 
@@ -290,6 +291,7 @@ function open() {
   const it = item();
   const mine = answers[it.key];
   const ownSaved = Object.entries(it.others).find(([n]) => sameName(n, me));
+  listened = mine?.channel ?? null;  // piste écoutée : dite par le visualiseur à chaque geste
   // rien de tracé = d'accord avec l'envoyeur (ses intervalles restent en pointillés)
   current = (mine ? (mine.accord ? [] : mine.intervals) : ownSaved ? ownSaved[1] : [])
     .map(i => [...i]);
@@ -381,7 +383,10 @@ window.addEventListener("message", e => {
       lastNonce = v.add_label.nonce;
       addCustom(v.add_label.name, v.add_label.color);
     }
-    if (v && v.key === item().key && v.ivkey === ivkey()) current = v.intervals;
+    if (v && v.key === item().key && v.ivkey === ivkey()) {
+      current = v.intervals;
+      listened = v.channel ?? listened;
+    }
   }
 });
 
@@ -394,7 +399,8 @@ $("send").addEventListener("click", async () => {
   const it = item(), t0 = it.offset_s, t1 = it.offset_s + it.dur_s;
   const r2 = t => Math.round(t * 100) / 100;
   const traced = current
-    .map(([a, b, l, q]) => [r2(Math.max(a, t0)), r2(Math.min(b, t1)), l, q || null])
+    .map(([a, b, l, q, ch]) =>
+      [r2(Math.max(a, t0)), r2(Math.min(b, t1)), l, q || null, ch ?? null])
     .filter(([a, b]) => b > a);
   const accord = !traced.length && (it.proposal || []).length > 0;  // rien tracé = d'accord
   answers[it.key] = {
@@ -402,6 +408,7 @@ $("send").addEventListener("click", async () => {
     accord,
     species: $("species").value.trim() || null,
     comment: $("comment").value.trim() || null,
+    channel: listened,
     created_at: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
   };
   put(`reponses:${me}`, answers);
@@ -422,9 +429,9 @@ const line = row => row.map(cell).join(",") + "\n";
 function csvs() {  // comme `service.export_annotations`
   const head1 = ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s",
     "n_blanci", "intervalles", "other_label", "classes", "multiclass", "quality", "species",
-    "comment", "annotator", "source", "created_at", "recording_id"];
+    "comment", "annotator", "source", "created_at", "recording_id", "channel"];
   const head2 = ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "label",
-    "quality", "valable", "annotator"];
+    "quality", "valable", "annotator", "channel"];
   let a = line(head1), b = line(head2);
   P.items.map((it, i) => [it, i + 1, answers[it.key]]).filter(([, , s]) => s)
     .sort((x, y) => x[2].created_at.localeCompare(y[2].created_at))
@@ -436,9 +443,9 @@ function csvs() {  // comme `service.export_annotations`
         s.intervals.map(([x, y, l, q]) => `${x.toFixed(2)}-${y.toFixed(2)} ${l}` +
           (q ? ` (${q})` : "")).join("; "),
         "background", labels.length ? labels.join(", ") : "background", "False", "",
-        s.species, s.comment, me, it.source, s.created_at, it.recording_id]);
-      for (const [x, y, l, q] of s.intervals) {
-        b += line([id, it.path, it.site, it.mic_id, it.start_utc, x, y, l, q, "True", me]);
+        s.species, s.comment, me, it.source, s.created_at, it.recording_id, s.channel]);
+      for (const [x, y, l, q, ch] of s.intervals) {
+        b += line([id, it.path, it.site, it.mic_id, it.start_utc, x, y, l, q, "True", me, ch]);
       }
     });
   return [a, b];

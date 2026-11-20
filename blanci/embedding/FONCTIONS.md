@@ -138,6 +138,13 @@ La piste par défaut est `audio.channel` (0 : le micro réglé à 6 dB). Une rè
 - Limite : les drapeaux sont ceux d'aujourd'hui ; un `muffled_0` posé après l'encodage d'un enregistrement ancien n'est pas vu. Une fois sa piste rangée (`check_stock_channels`), un drapeau changé se juge contre elle.
 - `_channels_of(recordings, channel, rules, fallback)` ([channels.py:133](channels.py#L133)) : le calcul commun.
 
+#### `listened_channels(con, labels=HEARD_LABELS)` — [channels.py:209](channels.py#L209)
+
+- Renvoie : par enregistrement, la piste sur laquelle A. blanci a été entendu : `n_0`, `n_1` (intervalles encore valables, `dataset.current_intervals`, tracés sur chaque piste), `n_unknown`, `listened` (« 0 » ou « 1 », la majorité, à égalité « 0 » ; vide sans piste connue) et `mixed` (des intervalles sur les deux pistes). `HEARD_LABELS` : A. blanci, plusieurs, incertain ; les faux amis et les étiquettes ajoutées ne comptent pas.
+- Piste d'un intervalle : celle qu'on écoutait en le plaçant (`intervals.channel`, migration 7 du 20/11/2026, rangée par le poste et le paquet d'écoute) ; avant, celle de l'envoi (`spans.conditions.channel_listened`, la piste affichée au clic sur « Valider »).
+- Pourquoi : encoder un enregistrement sur la piste où le chant a été entendu, que la règle (`recording_channel`) ne connaît pas. Pas encore branchée dans `expected_channels` : elle sert à comparer à `channel_plan`.
+- Limite : la piste « écoutée » est la piste affichée quand l'intervalle est tracé ; rien ne dit que l'annotateur a comparé les deux.
+
 #### `stock_contents(store)` — [channels.py:170](channels.py#L170)
 
 - Renvoie : les enregistrements du stock et leurs fenêtres, partition par partition (morceaux d'un passage interrompu compris) : `recording_id`, `dataset`, `site`, `month`, `windows`. Ne lit que la colonne `recording_id`.
