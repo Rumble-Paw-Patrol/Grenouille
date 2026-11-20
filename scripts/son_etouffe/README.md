@@ -18,6 +18,8 @@ Les scripts qui repèrent les enregistrements au son étouffé, piste par piste.
 
 - `effet_cusum.py` : effet de la carte CUSUM (`qc.muffled_cusum`, qui remplace le 19/11/2026 la règle des « 4 de suite » que la nuit coupait) avant de l'écrire en base, et sa calibration sur les cas écoutés. Lecture seule : `apply_audio_flags` est appliquée à une copie en mémoire de `recordings`. Sortie : `paths.reports/son_etouffe/cusum.md`.
 
+- `files_milieu_bordure.py` : deux files d'écoute sur les épisodes de la carte CUSUM, chaque candidat avec ses deux voisins au programme (trois extraits de 30 s). `etouffe_milieu` : enregistrements retenus alors que leur `hf_ratio` est au-dessus de 5 %, en plein milieu d'un épisode. `etouffe_bordures` : premier et dernier enregistrement retenus de chaque épisode. Lecture seule de la base ; les files arrivent dans `annotations/files_ecoute/`.
+
 - `muffled_perdus`   : deux pistes étouffées, un extrait de 5 s par enregistrement ;
 - `muffled_douteux`  : une piste étouffée et l'autre pas franchement claire, un extrait de 5 s par enregistrement ;
 - `autres_drapeaux`  : durée anormale / date hors relevé, enregistrements entiers ;

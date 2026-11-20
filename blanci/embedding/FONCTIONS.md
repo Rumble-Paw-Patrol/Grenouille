@@ -125,8 +125,8 @@ La piste par défaut est `audio.channel` (0 : le micro réglé à 6 dB). Une rè
 #### `recording_channel(flags, channel, rec=None, rules=None, fallback=True)` — [channels.py:104](channels.py#L104)
 
 - Quand : dans `prepare` (`embed_recordings`), pour chaque enregistrement ; via `expected_channels` et `legacy_channels`.
-- Renvoie : la piste de la règle (sinon `channel`), puis, avec `fallback`, l'autre piste si celle-ci est étouffée seule : piste 0 étouffée et pas la 1 → `MUFFLED_0_CHANNEL` ([channels.py:36](channels.py#L36)), c'est-à-dire 1 ; piste 1 choisie, étouffée et pas la 0 → 0. Avec `channel="mean"`, seul le premier cas joue (comme avant les règles).
-- Pourquoi : un enregistrement dont seule la piste lue est étouffée reste dans le corpus et s'encode sur l'autre (n° 203) ; un micro sourd (Kaw D SMA14079, 2024) ou réglé à 18 dB sur la piste 0 (21 points de Patawa Est et RNRT) se lit sur la piste 1.
+- Renvoie : la piste de la règle (sinon `channel`), puis, avec `fallback`, l'autre piste si celle-ci est étouffée et que l'autre est **lue et saine** (indices rangés, non étouffée) : piste 0 étouffée, piste 1 lue (`indices_1`) et pas étouffée → `MUFFLED_0_CHANNEL` ([channels.py:36](channels.py#L36)), c'est-à-dire 1 ; piste 1 choisie, étouffée, piste 0 lue et pas étouffée → 0. Avec `channel="mean"`, seul le premier cas joue (comme avant les règles).
+- Pourquoi : un enregistrement dont seule la piste lue est étouffée reste dans le corpus et s'encode sur l'autre (n° 203) ; la piste 1 n'est lue que si la piste 0 est candidate, et la carte CUSUM retient aussi des pistes 0 au-dessus du seuil : sans `indices_1`, on ne bascule pas (20/11/2026, 25 enregistrements de CDR étaient comptés « à encoder sur la piste 1 » sans que celle-ci ait été mesurée) ; un micro sourd (Kaw D SMA14079, 2024) ou réglé à 18 dB sur la piste 0 (21 points de Patawa Est et RNRT) se lit sur la piste 1.
 
 #### `channel_key(channel, channels=2)` — [channels.py:123](channels.py#L123)
 

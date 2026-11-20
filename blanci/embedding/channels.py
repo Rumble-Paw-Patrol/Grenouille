@@ -4,8 +4,9 @@ La piste par défaut est `audio.channel` (0 : premier micro, réglé à 6 dB). D
 
 - une règle de `audio.channel_rules` : pour ces micros (sur ce site, ce jeu, cette période), lire
   telle piste. Micro sourd (Kaw D SMA14079 en 2024), gain inversé (piste 0 réglée à 18 dB) ;
-- le repli du son étouffé : la piste choisie est étouffée et l'autre non, on lit l'autre
-  (`muffled_0` sans `muffled_1`, DECISIONS n° 203 ; et l'inverse quand la règle choisit la piste 1).
+- le repli du son étouffé : la piste choisie est étouffée et l'autre est lue et saine (indices
+  rangés, non étouffée), on lit l'autre (`muffled_0` sans `muffled_1`, DECISIONS n° 203 ; et
+  l'inverse quand la règle choisit la piste 1). Une piste non lue ne sert pas de repli.
 
 Chaque stock range la piste lue de chaque enregistrement (table `stock_channels`, rangée par
 `embed`). Un enregistrement encodé avant cette table a la piste que donnent les réglages rangés
@@ -109,15 +110,19 @@ def recording_channel(
     fallback: bool = True,
 ) -> int | str:
     """Canal lu pour un enregistrement : celui de la règle qui s'applique (`rule_channel`), sinon
-    `channel` ; puis, avec `fallback`, l'autre piste si celle-ci est étouffée et pas l'autre
-    (n° 203). Un fichier mono est lu tel quel quel que soit le canal (`load_audio`)."""
+    `channel` ; puis, avec `fallback`, l'autre piste si celle-ci est étouffée et que l'autre est
+    **lue et saine** (indices rangés, pas étouffée ; n° 203, précisé le 20/11/2026). Une piste
+    1 que `blanci qc` n'a pas encore lue (`indices_1` absent) ne vaut pas la piste choisie :
+    on ne change de piste qu'à bon escient. Un fichier mono est lu tel quel quel que soit le
+    canal (`load_audio`)."""
     chosen = rule_channel(rec, rules, channel) if rec is not None and rules else channel
     if not fallback:
         return chosen
     m0, m1 = bool(flags.get("muffled_0")), bool(flags.get("muffled_1"))
+    read0, read1 = "indices" in flags, "indices_1" in flags
     if chosen == 1:
-        return 0 if m1 and not m0 else 1
-    return MUFFLED_0_CHANNEL if m0 and not m1 else chosen
+        return 0 if m1 and not m0 and read0 else 1
+    return MUFFLED_0_CHANNEL if m0 and not m1 and read1 else chosen
 
 
 def channel_key(channel: int | str, channels: Any = 2) -> str:
