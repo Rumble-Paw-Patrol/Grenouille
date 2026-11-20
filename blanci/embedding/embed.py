@@ -257,7 +257,7 @@ def embed_recordings(
     identity = stock_identity(encoder, channel, mode, gates, rules)
     check_stock_identity(con, eid, identity)
     store = EmbeddingStore(store_root, eid)
-    check_stock_channels(con, store, channel, rules)
+    check_stock_channels(con, store, channel, rules, thresholds=qc_thresholds)
     protected = positive_recordings(con) if qc_thresholds is not None else set()
     window_s = round(encoder.window_s, 2)
     hop_s = hop_for_overlap(window_s, overlap)
@@ -287,7 +287,7 @@ def embed_recordings(
     def prepare(rec: Any) -> _Audio:
         """Fil de lecture : ce qui se calcule sur le signal sans la base ni l'encodeur."""
         known = parse_flags(rec.qc_flags)
-        read = recording_channel(known, channel, rec._asdict(), rules)
+        read = recording_channel(known, channel, rec._asdict(), rules, thresholds=qc_thresholds)
         try:
             wav, sr = load_audio(find(rec.path), read)
         except Exception:  # fichier illisible : déjà signalé à l'inventaire

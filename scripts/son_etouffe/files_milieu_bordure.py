@@ -1,4 +1,4 @@
-"""Deux files d'écoute sur la carte CUSUM du son étouffé : le milieu et les bords des épisodes.
+"""Trois files d'écoute sur la carte CUSUM du son étouffé : milieu, bords, pistes douteuses.
 
 Un épisode est une suite d'enregistrements consécutifs d'un micro (dans l'ordre du programme,
 `qc._programme_ranks`, un créneau manqué toléré) dont une même piste est retenue par la carte
@@ -15,7 +15,11 @@ du fichier, dans l'ordre du temps, par candidat.
   enregistrements les plus proches de l'enlèvement ou de la pose, et leur voisin hors épisode,
   non retenu, dit si la carte coupe au bon endroit.
 
-Lecture seule de la base ; n'écrit que les deux files dans `annotations/files_ecoute/`.
+- `etouffe_douteux` : enregistrements dont une piste est retenue et dont l'autre, lue, est sous
+  le seuil sans être retenue (candidat isolé) : les deux pistes se ressemblent, la seconde n'est
+  pas franchement saine. `recording_channel` n'y bascule pas de piste.
+
+Lecture seule de la base ; n'écrit que les trois files dans `annotations/files_ecoute/`.
 
     uv run python scripts/son_etouffe/files_milieu_bordure.py [--config <fichier>]
 """
@@ -96,10 +100,13 @@ def neighbours(ranks: np.ndarray, i: int, max_gap: int) -> tuple[int | None, int
     return before, after
 
 
-def groups(mic: pd.DataFrame, ref: float, max_gap: int) -> tuple[list[dict], list[dict]]:
-    """Groupes « milieu » et « bordure » d'un micro : chacun a `centre`, `voisins` (positions
-    de la série) et de quoi écrire la cause."""
-    middle, border = [], []
+def groups(
+    mic: pd.DataFrame, ref: float, max_gap: int
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Groupes « milieu », « bordure » et « douteux » d'un micro : chacun a `centre`, `voisins`
+    (positions de la série) et de quoi écrire la cause. Douteux : piste retenue dont l'autre
+    piste, lue, est sous le seuil sans être retenue (candidat isolé)."""
+    middle, border, doubt = [], [], []
     ranks = mic["rank"].to_numpy()
     for t in TRACKS:
         hf, kept = mic[f"hf{t}"].to_numpy(), mic[f"ret{t}"].to_numpy(dtype=bool)
@@ -108,12 +115,17 @@ def groups(mic: pd.DataFrame, ref: float, max_gap: int) -> tuple[list[dict], lis
             for i in range(first + 1, last):
                 if hf[i] >= ref:
                     middle.append({**span, "centre": i, "voisins": (i - 1, i + 1)})
+            other = 1 - t
+            for i in range(first, last + 1):
+                o = mic.loc[i, f"hf{other}"]
+                if not mic.loc[i, f"ret{other}"] and o < ref:  # NaN : piste non lue, exclue
+                    doubt.append({**span, "centre": i, "voisins": neighbours(ranks, i, max_gap)})
             for i in sorted({first, last}):
                 side = "seul" if first == last else ("début" if i == first else "fin")
                 border.append(
                     {**span, "centre": i, "side": side, "voisins": neighbours(ranks, i, max_gap)}
                 )
-    return middle, border
+    return middle, border, doubt
 
 
 def local(t: pd.Timestamp) -> str:
@@ -140,6 +152,8 @@ def queue_rows(mic: pd.DataFrame, found: list[dict], kind: str, first_group: int
                 "milieu": f"retenu à hf {c[f'hf{t}']:.3f}, au-dessus du seuil, au milieu d'un "
                 f"{episode}",
                 "bordures": f"{g.get('side')} d'épisode, retenu à hf {c[f'hf{t}']:.3f} ; {episode}",
+                "douteux": f"piste {t} retenue (hf {c[f'hf{t}']:.3f}), piste {1 - t} lue sous le "
+                f"seuil sans épisode (hf {c[f'hf{1 - t}']:.3f}) ; {episode}",
             }[kind]
             cause = (
                 f"groupe {n} : {what}"
@@ -199,12 +213,18 @@ def main() -> None:
     cfg = load_config(args.config or default_user_config())
     settings = cusum_settings(cfg["qc"])
     ref, max_gap = settings["ref_ratio"], int(settings["max_missed"]) + 1
-    middle_rows, border_rows, n_middle, n_border = [], [], 0, 0
+    middle_rows, border_rows, doubt_rows = [], [], []
+    n_middle = n_border = n_doubt = 0
     for mic in series(load(config_path(cfg, "db"))):
-        middle, border = groups(mic, ref, max_gap)
+        middle, border, doubt = groups(mic, ref, max_gap)
         middle_rows += queue_rows(mic, middle, "milieu", n_middle + 1)
         border_rows += queue_rows(mic, border, "bordures", n_border + 1)
-        n_middle, n_border = n_middle + len(middle), n_border + len(border)
+        doubt_rows += queue_rows(mic, doubt, "douteux", n_doubt + 1)
+        n_middle, n_border, n_doubt = (
+            n_middle + len(middle),
+            n_border + len(border),
+            n_doubt + len(doubt),
+        )
     about = {
         "origine": "scripts/son_etouffe/files_milieu_bordure.py (carte CUSUM, "
         f"référence {ref:g}, un créneau manqué toléré)",
@@ -221,6 +241,13 @@ def main() -> None:
             border_rows,
             "premier et dernier enregistrement retenus de chaque épisode, avec leurs deux "
             "voisins au programme (dont un hors épisode) ; extraits de 30 s",
+        ),
+        (
+            "etouffe_douteux",
+            doubt_rows,
+            "enregistrements dont une piste est retenue et l'autre, lue, est sous le seuil sans "
+            "être retenue (douteuse : le repli de piste ne s'y fait pas), avec leurs deux "
+            "voisins au programme ; extraits de 30 s",
         ),
     ):
         queue = dedupe(rows)

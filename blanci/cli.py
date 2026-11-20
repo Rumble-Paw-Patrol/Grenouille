@@ -614,7 +614,7 @@ def pistes(
     for name in _split(encoder):
         directory = _stock_dir(root, name)
         store = EmbeddingStore(root, directory.name)
-        plan = channel_plan(con, store, cfg["audio"]["channel"], rules)
+        plan = channel_plan(con, store, cfg["audio"]["channel"], rules, thresholds=cfg["qc"])
         stale = plan[plan["stale"]]
         typer.echo(
             f"{store.encoder_id} ({directory}) : {plan['recording_id'].nunique()} enregistrements, "

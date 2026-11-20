@@ -5,8 +5,9 @@ La piste par défaut est `audio.channel` (0 : premier micro, réglé à 6 dB). D
 - une règle de `audio.channel_rules` : pour ces micros (sur ce site, ce jeu, cette période), lire
   telle piste. Micro sourd (Kaw D SMA14079 en 2024), gain inversé (piste 0 réglée à 18 dB) ;
 - le repli du son étouffé : la piste choisie est étouffée et l'autre est lue et saine (indices
-  rangés, non étouffée), on lit l'autre (`muffled_0` sans `muffled_1`, DECISIONS n° 203 ; et
-  l'inverse quand la règle choisit la piste 1). Une piste non lue ne sert pas de repli.
+  rangés, non étouffée, au-dessus du seuil), on lit l'autre (`muffled_0` sans `muffled_1`,
+  DECISIONS n° 203 ; et l'inverse quand la règle choisit la piste 1). Une piste non lue ou
+  douteuse (sous le seuil sans épisode) ne sert pas de repli.
 
 Chaque stock range la piste lue de chaque enregistrement (table `stock_channels`, rangée par
 `embed`). Un enregistrement encodé avant cette table a la piste que donnent les réglages rangés
@@ -35,6 +36,8 @@ from blanci.inputs.qc import parse_flags
 # Piste 0 étouffée et piste 1 valable (`muffled_0` sans `muffled_1`, DECISIONS n° 203) :
 # l'enregistrement est encodé sur la piste 1.
 MUFFLED_0_CHANNEL = 1
+# Seuils du contrôle audio (`qc` de la configuration) quand l'appelant n'en donne pas.
+DEFAULT_QC = {"silent_dbfs": -70.0, "muffled_hf_ratio": 0.05}
 RULE_KEYS = ("dataset", "site", "mic_id", "from", "to", "channel", "reason")
 
 
@@ -102,27 +105,40 @@ def rule_channel(
     return default if i is None else rules[i]["channel"]
 
 
+def _sound(indices: Mapping[str, Any] | None, thresholds: Mapping[str, float]) -> bool:
+    """Piste lue et saine : indices rangés, pas muette et au-dessus du seuil du son étouffé. Une
+    piste sous le seuil sans épisode (candidat isolé) n'est pas saine : douteuse."""
+    if not indices or "rms_dbfs" not in indices or "hf_ratio" not in indices:
+        return False
+    return (
+        indices["rms_dbfs"] >= thresholds["silent_dbfs"]
+        and indices["hf_ratio"] >= thresholds["muffled_hf_ratio"]
+    )
+
+
 def recording_channel(
     flags: Mapping[str, Any],
     channel: int | str,
     rec: Mapping[str, Any] | None = None,
     rules: list[dict[str, Any]] | None = None,
     fallback: bool = True,
+    thresholds: Mapping[str, float] | None = None,
 ) -> int | str:
     """Canal lu pour un enregistrement : celui de la règle qui s'applique (`rule_channel`), sinon
     `channel` ; puis, avec `fallback`, l'autre piste si celle-ci est étouffée et que l'autre est
-    **lue et saine** (indices rangés, pas étouffée ; n° 203, précisé le 20/11/2026). Une piste
-    1 que `blanci qc` n'a pas encore lue (`indices_1` absent) ne vaut pas la piste choisie :
-    on ne change de piste qu'à bon escient. Un fichier mono est lu tel quel quel que soit le
-    canal (`load_audio`)."""
+    **lue et saine** (n° 203, précisé le 20/11/2026) : ses indices sont rangés, elle n'est pas
+    retenue étouffée, pas muette et son `hf_ratio` n'est pas sous le seuil (`thresholds` :
+    `qc` de la configuration, `DEFAULT_QC` à défaut). Une piste que `blanci qc` n'a pas lue, ou
+    sous le seuil sans épisode (douteuse), ne sert pas de repli. Un fichier mono est lu tel quel
+    quel que soit le canal (`load_audio`)."""
     chosen = rule_channel(rec, rules, channel) if rec is not None and rules else channel
     if not fallback:
         return chosen
+    th = thresholds or DEFAULT_QC
     m0, m1 = bool(flags.get("muffled_0")), bool(flags.get("muffled_1"))
-    read0, read1 = "indices" in flags, "indices_1" in flags
     if chosen == 1:
-        return 0 if m1 and not m0 and read0 else 1
-    return MUFFLED_0_CHANNEL if m0 and not m1 and read1 else chosen
+        return 0 if m1 and not m0 and _sound(flags.get("indices"), th) else 1
+    return MUFFLED_0_CHANNEL if m0 and not m1 and _sound(flags.get("indices_1"), th) else chosen
 
 
 def channel_key(channel: int | str, channels: Any = 2) -> str:
@@ -136,11 +152,17 @@ def channel_key(channel: int | str, channels: Any = 2) -> str:
 
 
 def _channels_of(
-    recordings: pd.DataFrame, channel: int | str, rules: list[dict[str, Any]], fallback: bool
+    recordings: pd.DataFrame,
+    channel: int | str,
+    rules: list[dict[str, Any]],
+    fallback: bool,
+    thresholds: Mapping[str, float] | None = None,
 ) -> pd.Series:
     out = {
         rec["recording_id"]: channel_key(
-            recording_channel(parse_flags(rec.get("qc_flags")), channel, rec, rules, fallback),
+            recording_channel(
+                parse_flags(rec.get("qc_flags")), channel, rec, rules, fallback, thresholds
+            ),
             rec.get("channels"),
         )
         for rec in recordings.to_dict("records")
@@ -149,14 +171,20 @@ def _channels_of(
 
 
 def expected_channels(
-    recordings: pd.DataFrame, channel: int | str, rules: list[dict[str, Any]]
+    recordings: pd.DataFrame,
+    channel: int | str,
+    rules: list[dict[str, Any]],
+    thresholds: Mapping[str, float] | None = None,
 ) -> pd.Series:
     """Piste à lire pour chaque enregistrement (index : `recording_id`), règles et repli compris."""
-    return _channels_of(recordings, channel, rules, fallback=True)
+    return _channels_of(recordings, channel, rules, fallback=True, thresholds=thresholds)
 
 
 def legacy_channels(
-    recordings: pd.DataFrame, stored: Mapping[str, Any], channel: int | str
+    recordings: pd.DataFrame,
+    stored: Mapping[str, Any],
+    channel: int | str,
+    thresholds: Mapping[str, float] | None = None,
 ) -> pd.Series:
     """Piste lue pour un enregistrement encodé avant la table `stock_channels`, d'après les
     réglages rangés avec son stock : son canal (`channel` s'il n'est pas rangé, comme le
@@ -165,7 +193,11 @@ def legacy_channels(
     d'aujourd'hui : un drapeau `muffled_0` posé après l'encodage n'est pas vu."""
     rules = stored.get("channel_rules") or []
     return _channels_of(
-        recordings, stored.get("channel", channel), rules, "muffled_0_channel" in stored
+        recordings,
+        stored.get("channel", channel),
+        rules,
+        "muffled_0_channel" in stored,
+        thresholds,
     )
 
 
@@ -225,6 +257,7 @@ def channel_plan(
     channel: int | str,
     rules: list[dict[str, Any]],
     contents: pd.DataFrame | None = None,
+    thresholds: Mapping[str, float] | None = None,
 ) -> pd.DataFrame:
     """Pour chaque enregistrement du stock : la piste encodée (`encoded` : rangée, sinon
     `legacy_channels`), celle de la règle (`expected`), `recorded` (piste rangée en base),
@@ -244,8 +277,9 @@ def channel_plan(
         recs[~recs["recording_id"].isin(recorded.index)],
         _stored_identity(con, store.encoder_id),
         channel,
+        thresholds,
     )
-    expected = expected_channels(recs, channel, rules)
+    expected = expected_channels(recs, channel, rules, thresholds)
     out = contents.merge(recs[["recording_id", "mic_id", "start_utc"]], on="recording_id")
     out["recorded"] = out["recording_id"].isin(recorded.index)
     out["encoded"] = out["recording_id"].map(pd.concat([recorded, legacy]))
@@ -260,13 +294,14 @@ def check_stock_channels(
     channel: int | str,
     rules: list[dict[str, Any]],
     command: str = "blanci pistes",
+    thresholds: Mapping[str, float] | None = None,
 ) -> pd.DataFrame:
     """ValueError si le stock contient des enregistrements encodés sur une autre piste que celle
     de la règle : la reprise les sauterait, et le stock mêlerait les deux pistes. Sinon, range
     la piste des enregistrements encodés avant la table `stock_channels` (celle de
     `legacy_channels`) : un changement de règle ou de drapeau sera jugé contre elle. Rend le
     plan (`channel_plan`)."""
-    plan = channel_plan(con, store, channel, rules)
+    plan = channel_plan(con, store, channel, rules, thresholds=thresholds)
     stale = plan[plan["stale"]]
     if len(stale):
         by = stale.groupby(["encoded", "expected"]).size()

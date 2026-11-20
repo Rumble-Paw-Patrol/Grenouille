@@ -1,6 +1,6 @@
 # File de candidats « etouffe_milieu »
 
-Écrite le 20/11/2026 à 10:47. 112 candidats, 112 enregistrements.
+Écrite le 20/11/2026 à 11:14. 112 candidats, 112 enregistrements.
 
 `candidats.csv` ne contient que des références (enregistrement, début, durée) : le poste d'annotation (`blanci annotate`) retrouve l'audio sur les disques branchés.
 
