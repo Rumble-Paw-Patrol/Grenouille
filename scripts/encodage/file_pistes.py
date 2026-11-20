@@ -64,9 +64,14 @@ STOCKS = {
 TEST_QUEUE = Path("annotations") / "files_ecoute" / "test_v1" / "candidats.csv"
 
 
-def group_of(rec: dict, flags: dict, rules: list[dict], reasons: list[str], channel) -> str:
-    """Groupe d'un enregistrement de la file : la règle qui le touche, le repli du son étouffé,
-    ou « autre » (absent du stock pour une autre raison)."""
+def group_of(
+    rec: dict, flags: dict, rules: list[dict], reasons: list[str], channel, listened=None
+) -> str:
+    """Groupe d'un enregistrement de la file : la piste écoutée ou dite en commentaire
+    (enregistrement annoté, `listened`), la règle qui le touche, le repli du son étouffé, ou
+    « autre » (absent du stock pour une autre raison)."""
+    if listened and rec["recording_id"] in listened:
+        return "piste écoutée ou commentée"
     i = matching_rule(rec, rules)
     if i is not None:
         return f"règle : {reasons[i]}"
@@ -118,7 +123,7 @@ def main() -> None:
         ok = set(plan.loc[~plan["stale"], "recording_id"])
         todo = selected[~selected["recording_id"].isin(ok)].copy()
         todo["groupe"] = [
-            group_of(rec, flags[rec["recording_id"]], rules, reasons, channel)
+            group_of(rec, flags[rec["recording_id"]], rules, reasons, channel, listened)
             for rec in todo.to_dict("records")
         ]
         todo["retirer"] = todo["recording_id"].isin(set(stale["recording_id"]))
@@ -141,8 +146,9 @@ def main() -> None:
             "fenetres",
         ]
         todo[columns].to_csv(out / f"{model}.csv", index=False)  # tout ce qui manque
-        tracks = todo[todo["groupe"] != OTHER]
-        tracks[columns].to_csv(out / f"{model}_pistes.csv", index=False)  # les trois groupes
+        # Les groupes, et tout ce qui est retiré du stock (à réencoder, quel que soit son groupe).
+        tracks = todo[(todo["groupe"] != OTHER) | todo["retirer"]]
+        tracks[columns].to_csv(out / f"{model}_pistes.csv", index=False)
         rate, source = RATES[model]
         hours = todo["fenetres"].sum() / rate / 3600
         hours_tracks = tracks["fenetres"].sum() / rate / 3600
