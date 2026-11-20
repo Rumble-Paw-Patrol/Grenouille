@@ -1,0 +1,2 @@
+recording_id,path,site,mic_id,start_utc,offset_s,dur_s,score,reason,source,dataset
+beb85498461a3c8e,Projet Phénologie blanci/Second relevé_février 2024/Molokoi 20022024/SM4 amont/SMA14157_20231228_110000.wav,Molokoi,SMA14157,2023-12-28T14:00:00Z,0.0,120.0,,molokoi_28_12_2023,flag,2023
