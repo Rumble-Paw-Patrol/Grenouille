@@ -1443,7 +1443,7 @@ def _signed_extreme(values: np.ndarray) -> np.ndarray:
     return np.where(np.isnan(values).all(axis=1), np.nan, out)
 
 
-def spectral_gap_by_point(gaps: pd.DataFrame, fmin: float = 1000.0, fmax: float = 12000.0,
+def spectral_gap_by_point(gaps: pd.DataFrame, fmin: float = 100.0, fmax: float = 12000.0,
                           window_days: int = 14, min_days: int = 7) -> pd.DataFrame:
     """Le pire épisode d'écart de spectre entre pistes, par point.
 
@@ -1454,15 +1454,17 @@ def spectral_gap_by_point(gaps: pd.DataFrame, fmin: float = 1000.0, fmax: float 
     `days`, `median_extreme_db` (sur toute la série), `set_gap_db`, et `d_<bande>` = médiane
     de chaque bande sur l'épisode ; trié de `extreme_db` le plus faible au plus fort.
     Règle : chaque jour, l'écart de plus grand module parmi les bandes de `fmin` à `fmax`
-    (1-12 kHz : le chant d'A. blanci, 4,4-5,5 kHz, et ce que voient les encodeurs ; sous 1 kHz
-    le vent et les manipulations touchent un micro à la fois, au-dessus de 12 kHz la scène
-    tombe souvent sous le bruit propre de l'enregistreur). Puis médiane glissante sur
+    (100 Hz – 12 kHz : sous 6 kHz l'écart d'un point sain est aussi stable à 100 Hz qu'à 1 kHz,
+    et un micro peut ne perdre que les graves (SMA14636 : plus de 20 dB sous 1 kHz) ; au-dessus
+    de 12 kHz la scène tombe sous le bruit propre de l'enregistreur et les deux pistes ne se
+    comparent plus : Kaw D, sourd de 25 dB, y a d ≈ 0). Puis médiane glissante sur
     `window_days` jours (au moins `min_days` jours lus, ou tous ceux du point s'il en a moins) :
     un orage ou un chœur proche d'un seul micro un jour ne la déplace pas, il faut une moitié
     de fenêtre de mauvais jours. L'épisode retenu est la fenêtre de plus grand module.
-    Limite : le maximum de 11 bandes bruitées n'est jamais 0 (≈ 1-2 dB pour un point sain) ;
-    une panne de moins d'une semaine passe ; deux micros qui faiblissent ensemble ne se voient
-    pas ; un point de moins de `min_days` jours n'a qu'une fenêtre, sa médiane entière.
+    Limite : le maximum de 21 bandes bruitées n'est jamais 0 (plus qu'avec 11 bandes de 1 à
+    12 kHz : le seuil se resserre) ; une panne de moins d'une semaine passe ; deux micros qui
+    faiblissent ensemble ne se voient pas ; un point de moins de `min_days` jours n'a qu'une
+    fenêtre, sa médiane entière.
     """
     names = [c for c in gaps if c.startswith("d_")]
     centre = np.array([float(c[2:]) for c in names])
