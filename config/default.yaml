@@ -34,9 +34,11 @@ audio:
     # −2,2 dB à 18 h 30. Fin retenue : premier enregistrement à moins de 6 dB de l'écart
     # habituel du micro. Mais à 18 h 30 c'est la piste 1 qui baisse (−34 → −39 dBFS), la piste
     # 0 ne remonte pas : en août, les deux pistes sont plus basses qu'en mai (à vérifier à
-    # l'écoute, file kaw_d_micro_sourd).
+    # l'écoute, file kaw_d_micro_sourd). Écoutée (20/11) : la piste 0 est bien cassée mais passe
+    # les filtres ; `broken` : sur toute la casse mesurée on garde la piste 1, même pour un
+    # enregistrement annoté sur la piste 0. Hors de cette période, la piste 0 est viable.
     - {mic_id: SMA14079, from: "2024-05-23T11:00Z", to: "2024-07-31T18:30Z", channel: 1,
-       reason: piste 0 sourde}
+       reason: piste 0 sourde, broken: true}
     # Gain inversé : piste 0 réglée à 18 dB, piste 1 à 6 dB, sur tout le relevé (en-têtes de
     # l'échantillon des pistes, `inventaire.gain_settings` : 21 points sur 164, réglage
     # constant). On lit la piste à 6 dB, comme partout ailleurs.

@@ -39,7 +39,7 @@ from blanci.inputs.qc import parse_flags
 MUFFLED_0_CHANNEL = 1
 # Seuils du contrôle audio (`qc` de la configuration) quand l'appelant n'en donne pas.
 DEFAULT_QC = {"silent_dbfs": -70.0, "muffled_hf_ratio": 0.05}
-RULE_KEYS = ("dataset", "site", "mic_id", "from", "to", "channel", "reason")
+RULE_KEYS = ("dataset", "site", "mic_id", "from", "to", "channel", "reason", "broken")
 
 
 def _utc(value: Any) -> str:
@@ -68,6 +68,8 @@ def channel_rules(raw: Iterable[Mapping[str, Any]] | None) -> list[dict[str, Any
             "mic_id": sorted({str(m) for m in ([mics] if isinstance(mics, str) else mics)}),
             "channel": int(rule["channel"]),
         }
+        if rule.get("broken"):
+            out["broken"] = True
         for key in ("dataset", "site"):
             if rule.get(key) is not None:
                 out[key] = str(rule[key])
@@ -126,8 +128,10 @@ def recording_channel(
     thresholds: Mapping[str, float] | None = None,
     listened: int | None = None,
 ) -> int | str:
-    """Canal lu pour un enregistrement. Annoté (`listened`, 0 ou 1 : `annotation_channels`) :
-    la piste écoutée, toujours, cassée ou non (son label n'est vrai que pour elle). Sinon, celui
+    """Canal lu pour un enregistrement. Règle `broken` qui s'applique (piste cassée passée à
+    travers les filtres, Kaw D SMA14079 du 23/05 au 31/07/2024) : la piste de la règle, même
+    pour un enregistrement annoté. Annoté (`listened`, 0 ou 1 : `annotation_channels`) :
+    la piste écoutée, cassée ou non (son label n'est vrai que pour elle). Sinon, celui
     de la règle qui s'applique (`rule_channel`), sinon
     `channel` ; puis, avec `fallback`, l'autre piste si celle-ci est étouffée et que l'autre est
     **lue et saine** (n° 203, précisé le 20/11/2026) : ses indices sont rangés, elle n'est pas
@@ -135,9 +139,14 @@ def recording_channel(
     `qc` de la configuration, `DEFAULT_QC` à défaut). Une piste que `blanci qc` n'a pas lue, ou
     sous le seuil sans épisode (douteuse), ne sert pas de repli. Un fichier mono est lu tel quel
     quel que soit le canal (`load_audio`)."""
+    i = matching_rule(rec, rules) if rec is not None and rules else None
+    if i is not None and rules[i].get("broken"):
+        # piste cassée que les filtres ne voient pas (`broken`) : la règle l'emporte sur la piste
+        # écoutée, tant que dure la casse mesurée
+        return rules[i]["channel"]
     if listened in (0, 1):
         return int(listened)
-    chosen = rule_channel(rec, rules, channel) if rec is not None and rules else channel
+    chosen = channel if i is None else rules[i]["channel"]
     if not fallback:
         return chosen
     th = thresholds or DEFAULT_QC
