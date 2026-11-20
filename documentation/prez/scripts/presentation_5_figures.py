@@ -41,6 +41,7 @@ sys.path.insert(0, str(ROOT))
 
 from blanci.core.config import config_path, default_user_config, load_config  # noqa: E402
 from blanci.core.locate import locate  # noqa: E402
+from blanci.exploration.inventaire import weighted_prevalence  # noqa: E402
 from blanci.inputs.dataset import current_intervals, interval_labels  # noqa: E402
 
 FIG = ROOT / "documentation" / "prez" / "figures" / "annotation"
@@ -302,20 +303,10 @@ def fig_durees() -> dict:
             "q75": round(float(d.quantile(0.75)), 2)}
 
 
-def prevalences(cur: pd.DataFrame, n_boot: int = 4000) -> pd.DataFrame:
-    """Prévalence par niveau du test, par enregistrement de 2 min : brute, et pondérée par
-    1 / probabilité de tirage (Horvitz-Thompson), intervalle à 95 % par bootstrap."""
-    t = cur[cur.file == "test_v1"].groupby("recording_id").agg(
-        pos=("pos", "max"), p=("prob_tirage", "first"), niveau=("niveau", "first"))
-    rng = np.random.default_rng(0)
-    rows = []
-    for niv, g in t.groupby("niveau"):
-        w, y = 1 / g.p.to_numpy(), g.pos.to_numpy(float)
-        est = (w * y).sum() / w.sum()
-        k = rng.integers(0, len(g), size=(n_boot, len(g)))
-        boot = (w[k] * y[k]).sum(1) / w[k].sum(1)
-        rows.append((niv, len(g), int(y.sum()), y.mean(), est, *np.percentile(boot, [2.5, 97.5])))
-    return pd.DataFrame(rows, columns=["niveau", "n", "pos", "brute", "ponderee", "bas", "haut"])
+def prevalences(cur: pd.DataFrame) -> pd.DataFrame:
+    """Prévalence par niveau du test : le calcul est `inventaire.weighted_prevalence`
+    (testée, graine fixée), le script ne fait que choisir les extraits du test."""
+    return weighted_prevalence(cur[cur.file == "test_v1"], by="niveau")
 
 
 def fig_precision(prev: pd.DataFrame) -> dict:

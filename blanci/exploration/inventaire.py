@@ -1884,6 +1884,40 @@ def protected_positives(rec: pd.DataFrame, positives: Iterable[str]) -> dict[str
             "excluded": int(pos["excluded"].sum())}
 
 
+def weighted_prevalence(drawn: pd.DataFrame, by: str = "niveau", n_boot: int = 4000,
+                        seed: int = 0) -> pd.DataFrame:
+    """La prévalence d'A. blanci par enregistrement tiré, brute et corrigée du tirage.
+
+    Question : quelle part des enregistrements de 2 min contient A. blanci, une fois corrigé le
+    surtirage des strates (heures de pic doublées) ? Entrée : `drawn`, une ligne par extrait
+    écouté (ou par enregistrement) avec `recording_id`, `pos` (A. blanci entendu), `prob_tirage`
+    (probabilité d'inclusion, colonne du `candidats.csv` du plan) et la colonne `by` (le niveau
+    du test) ; `n_boot`, `seed` (le tirage du bootstrap, fixé pour que le chiffre se rejoue).
+    Sortie : une ligne par valeur de `by` : `n` (enregistrements), `pos` (positifs), `brute`
+    (`pos / n`), `ponderee`, `bas`, `haut` (intervalle à 95 %, percentiles du bootstrap).
+    Règle : un enregistrement vaut positif si un de ses extraits l'est ; estimateur de
+    Horvitz-Thompson normalisé, chaque enregistrement pèse 1 / `prob_tirage` ; le bootstrap
+    rééchantillonne les enregistrements d'un niveau, poids compris, à l'intérieur de chaque
+    niveau (un seul générateur, qui passe les niveaux dans l'ordre trié). Limite : le tirage de
+    l'enregistrement est supposé indépendant d'un enregistrement à l'autre ; un niveau de
+    quelques enregistrements donne un intervalle large, et un niveau sans positif un intervalle
+    nul. Lève `ValueError` si une probabilité manque ou n'est pas dans ]0, 1].
+    """
+    per_recording = drawn.groupby("recording_id").agg(
+        pos=("pos", "max"), p=("prob_tirage", "first"), group=(by, "first"))
+    if not per_recording["p"].between(0, 1, inclusive="right").all():
+        raise ValueError("prob_tirage manque ou n'est pas dans ]0, 1] : prévalence non pondérable")
+    rng = np.random.default_rng(seed)
+    rows = []
+    for key, g in per_recording.groupby("group"):
+        w, y = 1 / g["p"].to_numpy(), g["pos"].to_numpy(float)
+        est = (w * y).sum() / w.sum()
+        k = rng.integers(0, len(g), size=(n_boot, len(g)))
+        boot = (w[k] * y[k]).sum(1) / w[k].sum(1)
+        rows.append((key, len(g), int(y.sum()), y.mean(), est, *np.percentile(boot, [2.5, 97.5])))
+    return pd.DataFrame(rows, columns=[by, "n", "pos", "brute", "ponderee", "bas", "haut"])
+
+
 # =============================================================================================
 # 14. Comparaisons
 # =============================================================================================

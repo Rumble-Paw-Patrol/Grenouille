@@ -18,7 +18,7 @@ Plusieurs chiffres de la présentation n° 4 venaient de calculs faits une fois,
 - **Le disque** : `read_headers`, `file_size_check` et `disk_inventory` lisent le disque ; elles prennent un échantillon explicite et lèvent `FileNotFoundError` si aucun fichier n'est trouvé.
 - **Le point de départ** est `load_recordings` : une ligne par enregistrement, avec l'heure locale, le jour, le créneau et les drapeaux lus (colonne `fl`).
 
-Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/verification/chiffres_presentation_4.py`, qui écrit [`documentation/prez/chiffres_presentation_4.md`](../../documentation/prez/chiffres_presentation_4.md) (chiffre annoncé, chiffre recalculé, fonction, statut, empreinte de la base, commit). Tests : [`tests/exploration/test_inventaire.py`](../../tests/exploration/test_inventaire.py), un jeu fictif de trois micros sur quatre jours, avec une horloge décalée et un doublon, où chaque réponse se compte à la main (38 tests).
+Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/verification/chiffres_presentation_4.py`, qui écrit [`documentation/prez/chiffres_presentation_4.md`](../../documentation/prez/chiffres_presentation_4.md) (chiffre annoncé, chiffre recalculé, fonction, statut, empreinte de la base, commit). Tests : [`tests/exploration/test_inventaire.py`](../../tests/exploration/test_inventaire.py), un jeu fictif de trois micros sur quatre jours, avec une horloge décalée et un doublon, où chaque réponse se compte à la main (53 tests).
 
 ## Sommaire
 
@@ -35,7 +35,7 @@ Rejouer tous les chiffres de la présentation n° 4 : `uv run python scripts/ver
 10. [Pistes](#10-pistes) : `track_levels`, `track_gap_by_point`, `track_flags_summary`, `third_octave_bands`, `band_levels`, `track_band_levels`, `spectral_gaps`, `spectral_gap_by_point`, `spectral_gap_profile`
 11. [Drapeaux](#11-drapeaux) : `exclusion_cause`, `flag_counts`, `campaign_blocks`, `near_campaign_orphans`, `stale_flags`
 12. [Base et disque](#12-base-et-disque) : `disk_inventory`, `base_vs_disk`
-13. [Annotations et scores](#13-annotations-et-scores) : `listened_recordings`, `annotation_coverage_by`, `score_coverage`, `recording_detections`, `excluded_with_detections`, `protected_positives`
+13. [Annotations et scores](#13-annotations-et-scores) : `listened_recordings`, `annotation_coverage_by`, `score_coverage`, `recording_detections`, `excluded_with_detections`, `protected_positives`, `weighted_prevalence`
 14. [Comparaisons](#14-comparaisons) : `compare_groups`, `stratum_effort`
 15. [Rejeu de la présentation n° 4](#15-rejeu-de-la-présentation-n-4) : `presentation_4_numbers`
 16. [Chiffres de la présentation n° 4 : ce qui se rejoue, ce qui ne se rejoue pas](#16-chiffres-de-la-présentation-n-4--ce-qui-se-rejoue-ce-qui-ne-se-rejoue-pas)
@@ -563,6 +563,14 @@ Les deux micros d'un enregistreur entendent la même scène : bande par bande, l
 - Entrée : `load_recordings`, `qc.positive_recordings(con)`. Sortie : positifs, positifs portant un drapeau écartant, positifs écartés.
 - Règle : `qc.is_excluded`. Limite : ne protège que ce qui a été écouté.
 - Prez n° 4 : diapo 11 (« un enregistrement où A. blanci a été entendu n'est jamais écarté »). Résultat : 160 positifs dans les jeux 2023 et 2026. Avant correction, **1 était écarté** : Mataroni SMA13417, 06/01/2026 11 h 30, 104 s (`9e453c33941c80ce`), celui de la diapo 10, écouté le 12/11 avec A. blanci de 0 à 67 s. Il portait `confirmed_duration_off` (confirmation en bloc) et pas `keep`. Le 18/11, `keep` lui a été posé (`qc.keep_flags`) : aucun positif écarté depuis, et cette vérification fait partie du rejeu de la présentation. Ce qu'on peut dire : la règle de la diapo 11 tient de nouveau. Ce qu'on ne peut pas dire : qu'il n'y a pas de chant parmi les écartés jamais écoutés.
+
+#### `weighted_prevalence(drawn, by="niveau", n_boot=4000, seed=0)` — [inventaire.py:1887](inventaire.py#L1887)
+
+- Question : quelle part des enregistrements de 2 min contient A. blanci, une fois corrigé le surtirage des strates (heures de pic doublées) ?
+- Entrée : une ligne par extrait écouté du test, avec `recording_id`, `pos`, `prob_tirage` (colonne du `candidats.csv` du plan) et le niveau. Sortie : par niveau, `n`, `pos`, `brute`, `ponderee`, `bas`, `haut`.
+- Règle : positif si un extrait de l'enregistrement l'est ; Horvitz-Thompson normalisé, poids 1 / `prob_tirage` ; intervalle à 95 % par bootstrap des enregistrements du niveau (graine 0, pour se rejouer). Lève `ValueError` si une probabilité manque ou sort de ]0, 1].
+- Limite : tirages supposés indépendants d'un enregistrement à l'autre ; niveau de quelques enregistrements = intervalle large, niveau sans positif = intervalle nul.
+- Prez n° 5 : diapo 18 (`presentation_5_figures.py : prevalences()`, qui appelle cette fonction). Résultat (test v1, `annotations/extraits_annotes.csv` de ce jour, rejoué le 20/11/2026) : niveau 1, 3 positifs sur 84, brute 3,6 %, pondérée 1,8 % [0 ; 4,3] ; niveau 2, 0 sur 83 ; niveau 3, 22 sur 83, brute 26,5 %, pondérée 29,6 % [17,0 ; 43,0]. Rejouer : `uv run python documentation/prez/scripts/presentation_5_figures.py` (affiche le tableau). Tests : `test_weighted_prevalence_*`, à la main sur un jeu de poids 2, 2, 4, 4.
 
 ## 14. Comparaisons
 
