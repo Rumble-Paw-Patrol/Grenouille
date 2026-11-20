@@ -28,7 +28,7 @@ Corrigé : `fig_calendrier` (`documentation/prez/scripts/presentation_4_figures.
 
 ## 3. Ce qui reste à faire sur le contrôle
 
-1. **Dates de relevé déclarées au lieu du seuil de 7 jours.** `off_campaign` devine les dates de pose par un trou de 7 jours : il laisse passer les essais de Mataroni (5,8-6,9 jours) et écartait le micro reposé au relevé 7 (2LA03595, 19/05/2026). Les dates sont dans le nom des dossiers (« 06-13 janv 2026 ») : une table de relevés (pose, relève) dans la configuration, et tout fichier hors de ses dates est hors relevé. La complétude (diapo 8) gagnerait aussi des jours de pose et de relève exacts.
+1. **Dates de relevé déclarées au lieu du seuil de 7 jours : fait le 20/11/2026** (`qc.surveys` dans `config/default.yaml` : 12 relevés, dossier d'origine, jour de pose, jour de relève ; les 26 essais de Mataroni sont hors relevé, les 18 fichiers du relevé 7 n'en sont plus ; zone tampon de 24 h, drapeau `survey_edge`, qui garde et signale 37 fichiers dont 2MA07942 de CDR récupéré le 28/12 ; la règle des 7 jours reste en repli pour `audio/R2_2024-02_fevrier`, et `blanci flag` le dit). Dates 2026 prises dans le nom des dossiers, dates 2023-24 dans les sous-dossiers (relève) et la relève précédente (pose) ; **la pose du relevé 1 de 2023 (Kaw 06/11, Trésor 08/11, Molokoï 14/11) est le premier fichier du programme : à remplacer par celle des tuteurs si elle diffère.** Reste : la complétude (diapo 7 : jours-micros 3 139, jours partiels 11, Molokoï E 36 jours au lieu de 54, à cause d'un fichier de SMA14157 le 28/12/2023, `confirmed_off_campaign` mais plus hors relevé) à relire.
 2. **Micro sourd** (diapos 20 et 22) : mesuré, pas dans le contrôle. Un drapeau par piste quand l'écart entre pistes s'éloigne de plus de 6 dB du réglage, sur une suite (même règle que l'étouffé). Cinq points : Kaw D SMA14079 (23/05 – 23/07/2024), SMA14636 (CDR puis Patawa Ouest), Molokoï SMA14157, RNRT 2MA08067, Mataroni 2LA05191.
 3. **Bascules en plein enregistrement** (11 cas à CDR) : en cours (`scripts/son_etouffe/bascules_fines.py`, files `bascules_fines` et `piste0_encodee_degradee`, non committés).
 4. **Doublons renommés** : lancer le hachage du contenu (57 lignes ont une empreinte).
@@ -64,6 +64,6 @@ Corrigé : `fig_calendrier` (`documentation/prez/scripts/presentation_4_figures.
 
 ## 7. Autres points
 
-- Chiffres de la diapo 13 à garder : « 25 enregistrements de 19 micros » des 30-31/12 (26 de 20 micros avec 2LA03555, déjà hors relevé).
+- Chiffres de la diapo 13 : « 25 enregistrements de 19 micros » des 30-31/12 n'est plus vrai depuis les dates déclarées (`near_campaign_orphans` rend 0) ; dire « 26 enregistrements de 20 micros, hors relevé » (écartés par leur durée comme avant).
 - Après les drapeaux nouveaux (dates de relevé, micro sourd), relancer `blanci flag`, puis `scripts/verification/chiffres_presentation_4.py` et le tableau de bord.
 - Indice spectral pour les micros étouffés : discuté dans la session du 19/11 ; à décider avant d'écrire du code.

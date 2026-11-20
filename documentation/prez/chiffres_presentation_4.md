@@ -1,8 +1,8 @@
 # Chiffres de la présentation n° 4, rejoués
 
-Rejoué le 19/11/2026 à 17 h 56 par `uv run python scripts/verification/chiffres_presentation_4.py`, code au commit `d00fe7e`. Chaque chiffre vient de la fonction citée, dans `blanci/exploration/inventaire.py` (fiches : `blanci/exploration/inventaire.md`).
+Rejoué le 20/11/2026 à 11 h 37 par `uv run python scripts/verification/chiffres_presentation_4.py`, code au commit `1f210d6`. Chaque chiffre vient de la fonction citée, dans `blanci/exploration/inventaire.py` (fiches : `blanci/exploration/inventaire.md`).
 
-Base : `blanci.sqlite`, schéma v6, 96 349 lignes dans `recordings`, empreinte de l'inventaire `92b0ecc4b7569d7b`, des drapeaux `303db0347b5b3c22`, dernier extrait écouté le 2026-11-19T19:34:51Z. Même empreinte = même base : les chiffres doivent être les mêmes.
+Base : `blanci.sqlite`, schéma v6, 96 349 lignes dans `recordings`, empreinte de l'inventaire `92b0ecc4b7569d7b`, des drapeaux `7c6578bac8b64e5c`, dernier extrait écouté le 2026-11-19T19:34:51Z. Même empreinte = même base : les chiffres doivent être les mêmes.
 
 Rapports lus : `pistes/echantillon_pistes.csv`, `ingest_duplicates_2026_Mataroni.csv`. Absents : aucun.
 
@@ -14,14 +14,17 @@ Rapports lus : `pistes/echantillon_pistes.csv`, `ingest_duplicates_2026_Mataroni
 | 3 | enregistreurs | 95 | 95 | ok | `corpus_totals(rec)['recorders']` |
 | 3 | lieux (relevés empilés sur leur site) | 4 | 4 | ok | `rec.site.map(lieux).nunique()` |
 | — | lignes hors des jeux 2023 et 2026 (non comptées) | — | 39 | recalculé (pas de chiffre annoncé) | `dataset_counts(con)` |
-| 5 bis | taille de la base (Go) | 6,7 | 6,677 | ok | `database_fingerprint(con)['size_bytes']` |
+| 5 bis | taille de la base (Go) | 6,7 | 6,68 | ok | `database_fingerprint(con)['size_bytes']` |
 | 3 | enregistrements, programme 5 h → 19 h 30 | 74 007 | 74 007 | ok | `programme_counts(rec, recording_programme(rec))` |
 | 3 | enregistrements, programme 6 h → 18 h 30 | 22 289 | 22 289 | ok | `programme_counts(rec, recording_programme(rec))` |
 | 3 | enregistrements de points sans programme lu | — | 14 | recalculé (pas de chiffre annoncé) | `programme_counts(rec, recording_programme(rec))` |
 | 10 | Mataroni, 30-31/12/2025 : enregistrements | 26 | 26 | ok | `counts_by(rec[Mataroni, 30-31/12], 'site')` |
 | 10 | Mataroni, 30-31/12/2025 : micros | 20 | 20 | ok | `counts_by(...)` |
-| 4 | dont dans la campagne (trou de moins de 7 j) : enregistrements | 25 | 25 | ok | `near_campaign_orphans(rec, cfg['qc'])` |
-| 4 | dont dans la campagne : micros | 12 | 19 | différent | `near_campaign_orphans(rec, cfg['qc'])` |
+| 4 | dont dans la campagne (trou de moins de 7 j) : enregistrements | 25 | 0 | différent | `near_campaign_orphans(rec, cfg['qc'])` |
+| 4 | dont dans la campagne : micros | 12 | 0 | différent | `near_campaign_orphans(rec, cfg['qc'])` |
+| 10 | Mataroni, 30-31/12/2025, hors relevé (dates déclarées) : enregistrements | 26 | 26 | ok | `rec[Mataroni, 30-31/12].campaign` |
+| 10 | Mataroni, 30-31/12/2025, hors relevé (dates déclarées) : micros | 20 | 20 | ok | `rec[Mataroni, 30-31/12].campaign` |
+| 10 | en bordure de relevé (zone tampon de 24 h, gardés) | — | 37 | recalculé (pas de chiffre annoncé) | `flag_counts(rec)['raised']['survey_edge']` |
 | 6 | points réglés 6 / 18 dB | 143 | 143 | ok | `gain_settings(echantillon_pistes)` |
 | 6 | points réglés 18 / 6 dB | 21 | 21 | ok | `gain_settings(echantillon_pistes)` |
 | 6 | dont enregistreurs 2MA | 18 | 18 | ok | `gain_settings(echantillon_pistes)` |
@@ -30,15 +33,15 @@ Rapports lus : `pistes/echantillon_pistes.csv`, `ingest_duplicates_2026_Mataroni
 | 6 | dont un par micro et par jour (le reste : bascules d'état) | — | 3 466 | recalculé (pas de chiffre annoncé) | `sample_recordings(rec, channels=2) ≈ motif « jour »` |
 | 6 | points de l'échantillon | 164 | 164 | ok | `echantillon_pistes.csv` |
 | 20 | points à plus de 6 dB de l'écart réglé | 5 | 5 | ok | `track_gap_by_point(echantillon_pistes, gain_settings(...), 'level_diff_db')` |
-| 7 | jours-micros intérieurs | 3 137 | 3 137 | ok | `completeness_summary(mic_days(rec, prog))` |
+| 7 | jours-micros intérieurs | 3 137 | 3 139 | différent | `completeness_summary(mic_days(rec, prog))` |
 | 7 | jours-micros complets | 3 128 | 3 128 | ok | `completeness_summary(...)` |
-| 7 | part complète (%) | 99,7 | 99,713 | ok | `completeness_summary(...)` |
-| 7 | jours partiels | 9 | 9 | ok | `completeness_summary(...)` |
-| 7 | jours-micros 2023 | 2 217 | 2 217 | ok | `completeness_summary(...)` |
-| 7 | part complète 2023 (%) | 99,8 | 99,82 | ok | `completeness_summary(...)` |
-| 7 | jours-micros 2026 | 920 | 920 | ok | `completeness_summary(...)` |
-| 7 | part complète 2026 (%) | 99,5 | 99,457 | ok | `completeness_summary(...)` |
-| 7 | Molokoï E : plus long trou (jours) | 54 | 54 | ok | `empty_days(rec, 'station', stations)` |
+| 7 | part complète (%) | 99,7 | 99,65 | différent | `completeness_summary(...)` |
+| 7 | jours partiels | 9 | 11 | différent | `completeness_summary(...)` |
+| 7 | jours-micros 2023 | 2 217 | 2 218 | différent | `completeness_summary(...)` |
+| 7 | part complète 2023 (%) | 99,8 | 99,775 | ok | `completeness_summary(...)` |
+| 7 | jours-micros 2026 | 920 | 921 | différent | `completeness_summary(...)` |
+| 7 | part complète 2026 (%) | 99,5 | 99,349 | différent | `completeness_summary(...)` |
+| 7 | Molokoï E : plus long trou (jours) | 54 | 36 | différent | `empty_days(rec, 'station', stations)` |
 | 7 | Kaw D : plus long trou (jours) | 5 | 5 | ok | `empty_days(rec, 'station', stations)` |
 | 7 | RNRT : micros sans rien le 10/02/2026 | 5 | 5 | ok | `empty_days(rec, 'mic')` |
 | 9 | enregistrements à l'horloge corrigée | 1 521 | 1 521 | ok | `clock_corrected_counts(rec)` |
@@ -53,12 +56,12 @@ Rapports lus : `pistes/echantillon_pistes.csv`, `ingest_duplicates_2026_Mataroni
 | 9 ter | dont étouffé par le calcul (deux pistes) | 399 | 436 | différent | `flag_counts(rec)['causes']` |
 | 9 ter | écartés pour la durée | 173 | 172 | différent | `flag_counts(rec)['causes']` |
 | 9 ter | hors relevé seul | 2 | 2 | ok | `flag_counts(rec)['causes']` |
-| 9 ter | hors relevé et durée | 86 | 86 | ok | `flag_counts(rec)['causes']` |
-| 10 | blocs | 238 | 238 | ok | `campaign_blocks(rec, cfg['qc'])` |
-| 10 | petits blocs (hors relevé) | 74 | 74 | ok | `campaign_blocks(...)` |
-| 10 | enregistrements hors relevé (levés) | 106 | 106 | ok | `campaign_blocks(...)` |
-| 10 | dont de 2 min | 20 | 20 | ok | `campaign_blocks(...)` |
-| 10 | hors relevé écartés | 88 | 88 | ok | `campaign_blocks(...)` |
+| 9 ter | hors relevé et durée | 86 | 113 | différent | `flag_counts(rec)['causes']` |
+| 10 | blocs | 238 | 291 | différent | `campaign_blocks(rec, cfg['qc'])` |
+| 10 | petits blocs (hors relevé) | 74 | 79 | différent | `campaign_blocks(...)` |
+| 10 | enregistrements hors relevé (levés) | 106 | 114 | différent | `campaign_blocks(...)` |
+| 10 | dont de 2 min | 20 | 1 | différent | `campaign_blocks(...)` |
+| 10 | hors relevé écartés | 88 | 114 | différent | `campaign_blocks(...)` |
 | 10 | fichiers de durée anormale | 173 | 173 | ok | `duration_classes(rec, cfg['qc'])` |
 | 10 | dont tests (< 30 s) | 125 | 125 | ok | `duration_classes(...)` |
 | 10 | dont coupés (30 à 119 s) | 34 | 34 | ok | `duration_classes(...)` |
