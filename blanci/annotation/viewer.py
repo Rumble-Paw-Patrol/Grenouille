@@ -101,7 +101,9 @@ INDEX = r"""<!doctype html>
   button, select, input { background: var(--champ); color: var(--ink); border-radius: 8px;
                           border: 1px solid var(--line-fort); padding: 3px 9px; font: inherit;
                           transition: color .2s, border-color .2s, box-shadow .2s; }
-  button { cursor: pointer; }
+  /* Tailles plancher : un élément qui manque de place passe à la ligne au lieu de
+     rétrécir, quelle que soit la largeur laissée par le bandeau de Streamlit. */
+  button { cursor: pointer; flex-shrink: 0; min-height: 24px; white-space: nowrap; }
   button:hover:not(:disabled) { border-color: var(--accent);
                                 box-shadow: 0 0 14px -4px var(--accent); }
   button:disabled { opacity: .4; cursor: default; }
@@ -109,15 +111,17 @@ INDEX = r"""<!doctype html>
   input:focus { outline: none; border-color: var(--accent);
                 box-shadow: 0 0 0 3px var(--anneau); }
   input[type=number] { width: 4.4em; font-family: var(--mono); font-size: 11.5px; }
-  input[type=range] { width: 80px; vertical-align: middle; padding: 0; border: 0; background: none;
+  input[type=range] { width: 80px; min-width: 80px; vertical-align: middle; padding: 0; border: 0;
+                      background: none;
                       accent-color: var(--accent); box-shadow: none; }
   input[type=checkbox] { accent-color: var(--accent); vertical-align: -2px; }
   label { color: var(--muted); }
-  .group { display: flex; gap: 5px; align-items: center; padding-right: 9px;
+  .group { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding-right: 9px;
            border-right: 1px solid var(--line); }
   .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted);
          text-transform: uppercase; margin-right: 2px; }
-  .val { font-family: var(--mono); font-size: 11px; color: var(--ink); min-width: 3.2em; }
+  .val { font-family: var(--mono); font-size: 11px; color: var(--ink); min-width: 3.2em;
+         flex-shrink: 0; }
   .contrastv { min-width: 1.2em; text-align: center; }
   button.mini { padding: 1px 8px; border-radius: 999px; font-weight: 600; min-width: 26px; }
   /* Boutons à deux états (Suivre, Bande seule) : allumés comme le bouton du micro choisi. */
@@ -130,20 +134,22 @@ INDEX = r"""<!doctype html>
   /* Un encadré par micro (moitié de la largeur chacun) : volume, filtre dynamique et
      contraste sur une ligne en haut, son lecteur, puis le bouton qui l'affiche et le fait
      entendre, contre la toile. */
-  .mics { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 10px;
-          margin: 2px 0 8px; }
+  /* Côte à côte tant que chaque encadré garde 330 px, l'un sous l'autre sinon. */
+  .mics { display: grid; gap: 10px; margin: 2px 0 8px;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); }
   .mic { display: grid; gap: 7px; padding: 8px 9px 9px; border: 1px solid var(--line);
          border-radius: 12px; background: var(--surface-2); transition: border-color .2s; }
   .mic.on { border-color: var(--accent); box-shadow: 0 0 18px -10px var(--accent); }
-  /* Une seule ligne : les curseurs rétrécissent ; sur un écran étroit, retour à la ligne. */
-  .mic-set { display: flex; flex-wrap: nowrap; gap: 6px 10px; align-items: center;
-             justify-content: center; min-width: 0; }
-  .mic-set > span { display: inline-flex; gap: 5px; align-items: center; min-width: 0;
-                    flex: 0 1 auto; white-space: nowrap; }
-  .mic-set input[type=range] { width: 90px; min-width: 36px; flex: 1 1 90px; }
-  .mic-set .gainv, .mic-set .rangev { min-width: 3em; }
-  .mic-set > span:last-child { flex-shrink: 0; }  /* contraste : ses boutons ne rétrécissent pas */
-  @media (max-width: 1000px) { .mic-set { flex-wrap: wrap; } }
+  /* Volume, filtre et contraste : sur une ligne si l'encadré (pas la fenêtre) a la place,
+     sinon chacun passe à la ligne ; un curseur ne descend jamais sous 110 px. */
+  .mic-set { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
+             justify-content: center; }
+  .mic-set > span { display: inline-flex; gap: 5px; align-items: center; flex: 0 0 auto;
+                    white-space: nowrap; }
+  .mic-set > span:has(input[type=range]) { flex: 1 1 auto; }
+  .mic-set input[type=range] { width: 110px; min-width: 110px; max-width: 240px;
+                               flex: 1 1 110px; }
+  .mic-set .gainv, .mic-set .rangev { min-width: 3.4em; }
   .mic-audio audio { display: block; width: 100%; height: 32px; }
   .mic:not(.on) .mic-audio { opacity: .55; }
   .mic-btn { width: 100%; padding: 5px 10px; font-weight: 600; color: var(--muted); }
@@ -174,7 +180,8 @@ INDEX = r"""<!doctype html>
   #notes div { padding: 5px 10px; border-left: 3px solid var(--gold); border-radius: 0 8px 8px 0;
                background: linear-gradient(90deg, var(--anneau), transparent);
                font-size: 12.5px; }
-  canvas { display: block; flex: 1 1 0; width: 0; min-width: 0; cursor: crosshair; outline: none;
+  canvas { display: block; flex: 1 1 0; width: 0; min-width: 260px; cursor: crosshair;
+           outline: none;
            border-radius: 10px;
            user-select: none; -webkit-user-select: none;
            box-shadow: 0 0 0 1px rgba(255, 210, 120, .14); transition: box-shadow .2s; }
