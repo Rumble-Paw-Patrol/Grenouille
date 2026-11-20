@@ -784,9 +784,23 @@ def apply_audio_flags(con: sqlite3.Connection, thresholds: dict[str, Any]) -> di
 # --- Drapeaux posés à l'écoute --------------------------------------------------------------
 
 # Dernier label d'une fenêtre écoutée → drapeau de son enregistrement. Une mention de pluie
-# dans le commentaire (étiquette de condition « rain ») le pose aussi, même sur un positif.
+# dans le commentaire (étiquette de condition « rain ») le pose aussi, même sur un positif ; un
+# enregistrement dit inutilisable (« poubelle », « dans sac », « deux pistes muffled », « en
+# train d'être posé »… : étiquette « discard ») est écarté comme un son étouffé.
 ANNOTATION_FLAGS = {"artefact_muffled": "muffled", "artefact_in_bag": "muffled", "rain": "rain"}
-CONDITION_FLAGS = {"rain": "rain"}
+CONDITION_FLAGS = {"rain": "rain", "discard": "muffled"}
+
+
+def _condition_tags(conditions: str | None) -> list[str]:
+    """Étiquettes de condition d'un label ou d'un extrait : celles rangées à l'envoi, et celles
+    que le commentaire dit aujourd'hui (`labels.comment_fields`, relu à chaque fois : une
+    étiquette ajoutée après l'envoi, comme « discard », vaut pour les anciens commentaires)."""
+    from blanci.inputs.labels import comment_fields
+
+    if not conditions:
+        return []
+    stored = json.loads(conditions)
+    return [*stored.get("tags", []), *comment_fields(stored.get("comment")).get("tags", [])]
 
 
 def _current_spans(con: sqlite3.Connection) -> list[tuple[str, list[str], str | None]]:
@@ -831,7 +845,7 @@ def annotation_flags(
             continue
         flags = found[rid]  # annoté, même sans drapeau
         flags.update(ANNOTATION_FLAGS[label] for label in labels if label in ANNOTATION_FLAGS)
-        tags = json.loads(conditions).get("tags", []) if conditions else []
+        tags = _condition_tags(conditions)
         flags.update(CONDITION_FLAGS[t] for t in tags if t in CONDITION_FLAGS)
     return {rid: sorted(flags) for rid, flags in found.items()}
 

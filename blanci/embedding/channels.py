@@ -20,6 +20,7 @@ et `drop_recordings` les retire de leur partition pour que la reprise de `embed`
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -230,8 +231,60 @@ def legacy_channels(
 HEARD_LABELS = ("blanci", "blanci_chorus", "blanci_uncertain")
 
 
+# Piste dite dans un commentaire (texte normalisé, `labels.normalize`) : « piste 1 », ou
+# « micro 2 » (micro n = piste n − 1) ; « piste 2 » ne peut être que la seconde, la piste 1.
+_TRACK = r"(piste|micro) ?([0-2])"
+_BROKEN = r"(?:muffled|etouffee?|sourde?|cassee?)"
+_GOOD = (
+    rf"(?:ecouter|annotee?|lire)\b[^,.;]{{0,25}}?(?:sur|via) (?:la |le )?{_TRACK}",
+    rf"(?:voir|garder|prendre) (?:la |le )?{_TRACK}",
+    rf"{_TRACK} (?:est )?(?:valable|saine?|ok|bonne?|bien mieux|mieux|aide|en entend)",
+)
+_BAD = (
+    rf"{_BROKEN} (?:sur )?(?:la |le )?{_TRACK}",
+    rf"{_TRACK} (?:est )?{_BROKEN}",
+    rf"{_BROKEN} ?([01])\b",  # « muffled 0 »
+)
+_RULE = r"bascule (?:deja )?faite"
+
+
+def comment_channel(comment: str | None) -> int | str | None:
+    """Piste que dit un commentaire d'écoute : 0 ou 1 quand il dit la piste valable (« piste 1
+    valable », « garder piste 1 », « écouter sur le micro 2 », « annoté sur la piste 1 ») ou
+    la piste cassée (« muffled 0 », « seul le micro 1 est étouffé » : l'autre) ; « rule »
+    pour « bascule déjà faite » (la règle et le repli décident, pas la piste écoutée) ; None
+    s'il ne dit rien, ou se contredit. Micro n = piste n − 1, « piste 2 » = piste 1."""
+    from blanci.inputs.labels import normalize
+
+    if not comment:
+        return None
+    text = normalize(comment)
+
+    def tracks(patterns: tuple[str, ...]) -> set[int]:
+        found = set()
+        for pattern in patterns:
+            for m in re.finditer(pattern, text):
+                groups = [g for g in m.groups() if g is not None]
+                kind, digit = (groups[0], groups[1]) if len(groups) == 2 else ("piste", groups[0])
+                n = int(digit) - (kind == "micro" or digit == "2")
+                if n in (0, 1):
+                    found.add(n)
+        return found
+
+    good, bad = tracks(_GOOD), tracks(_BAD)
+    if len(good) == 1 and not (good & bad):
+        return good.pop()
+    if not good and len(bad) == 1:
+        return 1 - bad.pop()
+    if re.search(_RULE, text):
+        return "rule"
+    return None
+
+
 def listened_channels(
-    con: sqlite3.Connection, labels: Iterable[str] = HEARD_LABELS
+    con: sqlite3.Connection,
+    labels: Iterable[str] = HEARD_LABELS,
+    thresholds: Mapping[str, float] | None = None,
 ) -> pd.DataFrame:
     """Piste écoutée de chaque enregistrement annoté par extraits (poste, paquet d'écoute) : un
     extrait annoté s'encode sur la piste où on l'a écouté, son label n'est vrai que pour elle.
@@ -241,20 +294,30 @@ def listened_channels(
       migration 7 ; celle de l'envoi pour un intervalle d'avant) ; à égalité, la piste 0 ;
     - sinon (extraits « rien », faux amis seuls) : la piste du dernier envoi qui la dit
       (`spans.conditions.channel_listened`) : réécouter un extrait sur l'autre piste l'y fait
-      passer.
+      passer ;
+    - une piste écoutée cassée cède la place à la piste valable : étouffée, l'autre lue et
+      saine (`muffled_<piste>`, repli du n° 203 ; `thresholds` : `qc`, `DEFAULT_QC` à défaut) ;
+      une casse que les filtres ne voient pas passe par une règle `broken` (`recording_channel`) ;
+    - mais le commentaire passe avant tout (« toujours regarder le commentaire », 20/11/2026) :
+      la piste que dit le dernier commentaire qui en dit une (`comment_channel` : « piste 1
+      valable », « muffled 0 »…) ; « bascule déjà faite » : pas de piste écoutée, la règle et
+      le repli décident.
 
     Colonnes `recording_id`, `n_0`, `n_1`, `n_unknown` (intervalles A. blanci par piste),
-    `last` (piste du dernier envoi), `listened` (« 0 », « 1 », comme `stock_channels` ; vide
-    sans piste connue), `source` (« intervalles » ou « envoi ») et `mixed` (A. blanci tracé sur
-    les deux pistes). Les labels par fenêtres (import de Biophonia) ne disent pas de piste."""
+    `last` (piste du dernier envoi), `comment` (« 0 », « 1 » ou « rule » : `comment_channel`),
+    `listened` (« 0 », « 1 », comme `stock_channels` ; vide sans piste connue ou pour « rule »),
+    `source` (« commentaire », « piste cassée », « intervalles » ou « envoi ») et `mixed`
+    (A. blanci tracé sur les deux pistes). Les labels par fenêtres (import de Biophonia) ne
+    disent pas de piste."""
     from blanci.inputs.dataset import current_intervals, load_spans
 
     columns = [
-        "recording_id", "n_0", "n_1", "n_unknown", "last", "listened", "source", "mixed"
+        "recording_id", "n_0", "n_1", "n_unknown", "last", "comment", "listened", "source",
+        "mixed",
     ]  # fmt: skip
     sent = pd.read_sql_query(
-        "SELECT recording_id, json_extract(conditions, '$.channel_listened') AS channel "
-        "FROM spans ORDER BY span_id",
+        "SELECT recording_id, json_extract(conditions, '$.channel_listened') AS channel, "
+        "json_extract(conditions, '$.comment') AS comment FROM spans ORDER BY span_id",
         con,
     )
     if sent.empty:
@@ -284,12 +347,33 @@ def listened_channels(
     for col in ("n_0", "n_1", "n_unknown"):
         out[col] = out[col].fillna(0).astype(int) if col in out else 0
     out["last"] = out["recording_id"].map(last)
+    said = sent.assign(track=sent["comment"].map(comment_channel)).dropna(subset=["track"])
+    told = said.groupby("recording_id")["track"].last().astype(str)
+    out["comment"] = out["recording_id"].map(told)
     by_intervals = (out["n_0"] + out["n_1"]) > 0
     majority = np.where(out["n_1"] > out["n_0"], "1", "0")
-    out["listened"] = np.where(by_intervals, majority, out["last"])
-    out["listened"] = out["listened"].where(out["listened"].notna(), None)
+    listened = pd.Series(np.where(by_intervals, majority, out["last"]), index=out.index)
     by_send = np.where(out["last"].notna(), "envoi", None)
-    out["source"] = np.where(by_intervals, "intervalles", by_send)
+    source = pd.Series(np.where(by_intervals, "intervalles", by_send), index=out.index)
+    # Piste écoutée cassée (étouffée, l'autre lue et saine : le repli du n° 203) : la piste
+    # valable, comme si on l'avait écoutée.
+    qc = dict(con.execute("SELECT recording_id, qc_flags FROM recordings").fetchall())
+    th = thresholds or DEFAULT_QC
+    for i, (rid, track) in enumerate(zip(out["recording_id"], listened, strict=True)):
+        if track not in ("0", "1"):
+            continue
+        flags, other = parse_flags(qc.get(rid)), 1 - int(track)
+        other_indices = flags.get("indices" if other == 0 else "indices_1")
+        if (
+            flags.get(f"muffled_{track}")
+            and not flags.get(f"muffled_{other}")
+            and _sound(other_indices, th)
+        ):
+            listened.iloc[i], source.iloc[i] = str(other), "piste cassée"
+    by_comment = out["comment"].notna()
+    listened = listened.where(~by_comment, out["comment"].where(out["comment"] != "rule"))
+    out["listened"] = listened.where(listened.notna(), None)
+    out["source"] = source.where(~by_comment, "commentaire")
     out["mixed"] = (out["n_0"] > 0) & (out["n_1"] > 0)
     return out[columns]
 

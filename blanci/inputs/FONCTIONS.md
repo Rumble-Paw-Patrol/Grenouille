@@ -105,7 +105,7 @@ Les clés que ce code écrit dans `qc_flags` :
 | `clock_off` | `apply_metadata_flags` | non (une remarque, DECISIONS n° 191) |
 | `survey_edge` | `apply_metadata_flags` | non (une remarque : fichier dans la zone tampon de 24 h autour des dates d'un relevé déclaré) |
 | `clock_corrected` | `ingest.apply_clock_corrections` | non |
-| `annotated` (liste : `muffled`, `rain`) | `apply_annotation_flags` | `muffled` oui, `rain` non |
+| `annotated` (liste : `muffled`, `rain`) | `apply_annotation_flags` : label (micro étouffé, dans sac, pluie) ou commentaire relu à chaque fois (« pluie » ; « poubelle », « dans sac », « deux pistes muffled », « en train d'être posé », « en cours de manipulation » : `muffled`, étiquette `discard` du 20/11/2026) | `muffled` oui, `rain` non |
 | `confirmed_muffled`, `confirmed_duration_off`, `confirmed_off_campaign` | `confirm_flags` | oui |
 | `keep` | `keep_flags` | non : annule tous les autres |
 

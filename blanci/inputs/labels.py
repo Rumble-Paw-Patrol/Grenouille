@@ -123,6 +123,15 @@ CONDITION_TAGS = {
     "rain": re.compile(r"\bpluie\b"),
     "noise": re.compile(r"bruits? parasites?|bruite"),
     "uncertain_mention": re.compile(r"\?"),
+    # Enregistrement inutilisable dit à l'écoute (« poubelle », « micro dans sac », « muffled
+    # sur les deux pistes », « en train d'être posé par l'équipe »…) : écarté du corpus
+    # (`qc.CONDITION_FLAGS`), relu à chaque fois dans le commentaire.
+    "discard": re.compile(
+        r"poubelle|\bdans (?:le |un |la |une )?(?:sac|voiture)\b|"
+        r"(?:muffled|etouffee?s?|cassee?s?) (?:sur )?(?:les )?(?:deux|2) (?:pistes|micros)|"
+        r"(?:deux|2) (?:pistes|micros) (?:muffled|etouffee?s?|cassee?s?)|"
+        r"\ba (?:supprimer|ecarter|degager)\b|en train d.etre pose|en cours de manipulation"
+    ),
 }
 
 
