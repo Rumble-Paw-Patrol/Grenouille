@@ -312,6 +312,9 @@ def current_intervals(spans: pd.DataFrame, intervals: pd.DataFrame) -> pd.DataFr
     return intervals[keep].reset_index(drop=True)
 
 
+ROUNDING_TOLERANCE_S = 0.006  # bornes d'extrait arrondies à 0,01 s : au plus 5 ms d'écart
+
+
 def _within_union(
     w0: np.ndarray, w1: np.ndarray, s0: np.ndarray, s1: np.ndarray, eps: float = 1e-6
 ) -> np.ndarray:
@@ -368,10 +371,14 @@ def interval_labels(
         sp = spans_of[rid]
         iv = valid_of.get(rid, valid.iloc[:0])
         s0, s1 = sp["start_s"].to_numpy(dtype=float), sp["end_s"].to_numpy(dtype=float)
-        inside = (w0[:, None] >= s0[None, :] - eps) & (w1[:, None] <= s1[None, :] + eps)
+        # Les bornes des extraits sont arrondies au centième : une fenêtre de la durée exacte du
+        # fichier (52,653 s) dépasse de 3 ms l'extrait entier enregistré (0–52,65) et ne serait
+        # plus « écoutée ». Tolérance d'arrondi, pas de chevauchement réel.
+        tol = max(eps, ROUNDING_TOLERANCE_S)
+        inside = (w0[:, None] >= s0[None, :] - tol) & (w1[:, None] <= s1[None, :] + tol)
         # Extraits voisins (30 s d'un enregistrement de 2 min) : une fenêtre à cheval sur leur
         # frontière est entièrement écoutée, elle n'est pas à écarter.
-        covered = _within_union(w0, w1, s0, s1)
+        covered = _within_union(w0, w1, s0, s1, tol)
         overlap_span = np.minimum(w1[:, None], s1[None, :]) - np.maximum(w0[:, None], s0[None, :])
         i0, i1 = iv["start_s"].to_numpy(dtype=float), iv["end_s"].to_numpy(dtype=float)
         common = np.minimum(w1[:, None], i1[None, :]) - np.maximum(w0[:, None], i0[None, :])
