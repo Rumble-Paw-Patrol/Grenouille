@@ -19,6 +19,10 @@ du fichier, dans l'ordre du temps, par candidat.
   le seuil sans être retenue (candidat isolé) : les deux pistes se ressemblent, la seconde n'est
   pas franchement saine. `recording_channel` n'y bascule pas de piste.
 
+Rôle d'un voisin : « voisin sain » dès qu'une piste lue est saine (non retenue, hf au-dessus du
+seuil : l'enregistrement s'encode sur elle), même si l'autre piste est retenue ; sinon « voisin
+retenu » (une piste retenue) ou « voisin douteux » (une piste lue sous le seuil sans épisode).
+
 Lecture seule de la base ; n'écrit que les trois files dans `annotations/files_ecoute/`.
 
     uv run python scripts/son_etouffe/files_milieu_bordure.py [--config <fichier>]
@@ -134,16 +138,20 @@ def local(t: pd.Timestamp) -> str:
 
 def role_label(r: pd.Series, candidate: bool, track: int, ref: float) -> str:
     """Rôle d'un extrait pour le poste d'annotation : « candidat retenu » ; pour un voisin,
-    « voisin retenu » (retenu sur la piste du candidat), « voisin sain » (aucune piste lue n'est
-    retenue ni sous le seuil) ou « voisin douteux » (non retenu, mais une piste lue sous le
-    seuil : candidat isolé)."""
+    « voisin sain » dès qu'une piste lue est saine (non retenue, hf au-dessus du seuil : c'est la
+    règle de `recording_channel`, l'enregistrement s'encode sur elle), sinon « voisin retenu »
+    (une piste retenue par la carte) ou « voisin douteux » (aucune piste saine, aucune retenue :
+    une piste lue sous le seuil sans épisode)."""
     if candidate:
         return "candidat retenu"
-    if r[f"ret{track}"]:
-        return "voisin retenu"
-    hf = [r[f"hf{t}"] for t in TRACKS if not np.isnan(r[f"hf{t}"])]
-    clear = bool(hf) and not any(r[f"ret{t}"] for t in TRACKS) and min(hf) >= ref
-    return "voisin sain" if clear else "voisin douteux"
+    if healthy_tracks(r, ref):
+        return "voisin sain"
+    return "voisin retenu" if any(r[f"ret{t}"] for t in TRACKS) else "voisin douteux"
+
+
+def healthy_tracks(r: pd.Series, ref: float) -> list[int]:
+    """Pistes lues, non retenues et au-dessus du seuil (NaN : piste non lue, exclue)."""
+    return [t for t in TRACKS if not r[f"ret{t}"] and r[f"hf{t}"] >= ref]
 
 
 def queue_rows(
@@ -165,6 +173,7 @@ def queue_rows(
             role = "candidat" if pos == g["centre"] else ("avant" if pos < g["centre"] else "après")
             inside = bool(r[f"ret{t}"])
             label = role_label(r, role == "candidat", t, ref)
+            sane = healthy_tracks(r, ref)
             what = {
                 "milieu": f"retenu à hf {c[f'hf{t}']:.3f}, au-dessus du seuil, au milieu d'un "
                 f"{episode}",
@@ -177,7 +186,9 @@ def queue_rows(
                 if role == "candidat"
                 else (
                     f"groupe {n} : voisin {role} ({'dans' if inside else 'hors'} l'épisode, "
-                    f"piste {t} hf {r[f'hf{t}']:.3f}) du candidat de {local(c['t'])}"
+                    f"piste {t} hf {r[f'hf{t}']:.3f}"
+                    + "".join(f", piste {h} saine à hf {r[f'hf{h}']:.3f}" for h in sane if h != t)
+                    + f") du candidat de {local(c['t'])}"
                 )
             )
             offset = float(
