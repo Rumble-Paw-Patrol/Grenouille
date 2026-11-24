@@ -648,3 +648,11 @@ Les chiffres du contrôle qualité qui viennent du notebook 06 sont rejouables e
 7. **Deux fichiers de E: ne sont pas en base sans être dans un rapport d'erreurs** :
    - le dernier fichier de SMA14157 (21/11/2023 12 h 30), tronqué à 256 Kio : l'arrêt du micro en pleine écriture ;
    - un chant dirigé de 2 min du 05/12/2023 (`Anomaloglossus blanci_Trésor_déc2023.wav`), jamais inventorié, à verser dans le jeu `reference` si c'est voulu.
+
+## 18. Tableau de bord : contrôle qualité, pistes, fenêtres
+
+Ajouté pour la carte « Contrôle qualité » du tableau de bord (`documentation/tableau-de-bord/construire.py`). Entrées : `load_recordings` (tous les jeux) et l'ensemble retenu par `embed.select_recordings`.
+
+- `qc_outcome(rec, kept)` : retenus, écartés et leurs causes (`exclusion_cause`, une par enregistrement), heures ; `saved_by_positive` compte les flagués gardés parce qu'un positif y est entendu.
+- `piste_outcome(corpus)` : le manifeste du corpus (`scripts/encodage/manifeste_corpus.corpus`) → piste 0 par défaut, piste 0 par règle, switches vers la piste 1 et leurs origines.
+- `window_counts(rec, windows, overlap)` : fenêtres par enregistrement de 120 s et au total, pas = longueur × (1 − chevauchement). Juste sur les comptes à la main des tests (79, 47, 39 pour 3, 5, 6 s avec 50 %).

@@ -2234,3 +2234,78 @@ def presentation_4_numbers(
     add(_number("11", "enregistrements où A. blanci a été entendu, écartés (règle : aucun)", 0,
                 prot["excluded"], "protected_positives(rec, positive_recordings(con))"))
     return pd.DataFrame(out)
+
+
+# =============================================================================================
+# 18. Tableau de bord : ce que le contrôle qualité a gardé, écarté, et ce qui change de piste
+# =============================================================================================
+
+
+def qc_outcome(rec: pd.DataFrame, kept: Iterable[str]) -> dict[str, Any]:
+    """Ce que le contrôle qualité a fait de l'inventaire : retenus, écartés par cause, sauvés.
+
+    Question : combien d'enregistrements le corpus garde-t-il, combien sont écartés, et pour
+    quelle cause ? Entrée : `load_recordings(con, cfg, datasets=None)` ; `kept` : les
+    identifiants que garde `embed.select_recordings` (il ne retire jamais un enregistrement
+    où A. blanci a été entendu). Sortie : dict `recordings`, `kept`, `excluded` (= recordings -
+    kept), `hours_total`, `hours_kept`, `causes` (écartés par `exclusion_cause`), `flagged`
+    (drapeaux écartants levés, avant le positif), `saved_by_positive` (flagués mais gardés).
+    Règle : une seule cause par enregistrement écarté (`exclusion_cause`). Limite : compte la
+    base telle qu'elle est ; `database_fingerprint` la date.
+    """
+    gardes = rec["recording_id"].isin(set(kept))
+    ecartes = rec.loc[~gardes]
+    causes = ecartes["fl"].map(exclusion_cause).value_counts()
+    return {
+        "recordings": int(len(rec)),
+        "kept": int(gardes.sum()),
+        "excluded": int((~gardes).sum()),
+        "hours_total": float(rec["duration_s"].sum() / 3600),
+        "hours_kept": float(rec.loc[gardes, "duration_s"].sum() / 3600),
+        "causes": {str(k): int(v) for k, v in causes.items()},
+        "flagged": int(rec["excluded"].sum()),
+        "saved_by_positive": int((rec["excluded"] & gardes).sum()),
+    }
+
+
+def piste_outcome(corpus: pd.DataFrame) -> dict[str, Any]:
+    """Sur quelle piste s'encode chaque enregistrement retenu, et pourquoi on a changé de piste.
+
+    Question : combien d'enregistrements passent sur la piste 1 (le « switch »), et pour quelle
+    raison ? Entrée : le manifeste du corpus, `scripts/encodage/manifeste_corpus.corpus(con,
+    cfg)` : colonnes `piste` (« 0 » ou « 1 ») et `origine`. Sortie : dict `kept` (lignes du
+    manifeste), `piste0_defaut` (origine « défaut »), `piste0_regle` (piste 0 choisie par une
+    règle ou une écoute : pas un switch), `switches` (piste 1), `causes` (origine → nombre, pour
+    la piste 1). Règle : la piste 0 est le défaut, la piste 1 est un switch. Limite : l'origine
+    dit ce qui a décidé, pas si la décision était juste ; voir `channels.expected_channels`.
+    """
+    piste = corpus["piste"].astype(str)
+    origine = corpus["origine"].astype(str)
+    s1 = piste == "1"
+    return {
+        "kept": int(len(corpus)),
+        "piste0_defaut": int(((piste == "0") & (origine == "défaut")).sum()),
+        "piste0_regle": int(((piste == "0") & (origine != "défaut")).sum()),
+        "switches": int(s1.sum()),
+        "causes": {str(k): int(v) for k, v in origine[s1].value_counts().items()},
+    }
+
+
+def window_counts(rec: pd.DataFrame, windows: Sequence[float] = (3, 5, 6),
+                  overlap: float = 0.5) -> dict[float, dict[str, int]]:
+    """Fenêtres potentielles par longueur, par enregistrement de 2 min et au total.
+
+    Question : combien de fenêtres d'encodage le corpus représente-t-il ? Entrée : `load_recordings`
+    (colonne `duration_s`). Sortie : pour chaque longueur w, `per_120s` (fenêtres d'un
+    enregistrement de 120 s), `hop_s` (pas, w × (1 − chevauchement)) et `total` (somme sur
+    tous les enregistrements). Règle : une fenêtre par pas tant qu'elle tient dans le fichier.
+    Limite : un fichier plus court que w n'a aucune fenêtre.
+    """
+    out: dict[float, dict[str, int]] = {}
+    dur = rec["duration_s"].astype(float)
+    for w in windows:
+        hop = w * (1 - overlap)
+        n = np.where(dur >= w, np.floor((dur - w) / hop) + 1, 0).astype(np.int64)
+        out[w] = {"per_120s": int(np.floor((120 - w) / hop) + 1), "hop_s": hop,
+                  "total": int(n.sum())}
+    return out
