@@ -8,9 +8,12 @@ Scripts qui vérifient ce que l'inventaire et le contrôle qualité (`blanci ing
 - `file_mataroni_releve7.py` : file `mataroni_releve7`, les 18 fichiers du relevé 7 de Mataroni (2LA03595, point GI07, 19/05/2026), chacun suivi du même créneau du même micro au relevé 3 (12/01/2026), pour juger à l'oreille s'ils viennent du même lieu ou d'un autre programme resté sur la carte SD. Gains inversés au relevé 7 : écouter la piste 1 (6 dB) contre la piste 0 du relevé 3 (colonne `cause`).
 - `files_apres_prez4.py` : trois files d'écoute du récap de la présentation n° 4 (`documentation/prez/recap_qc_presentation_4.md`) : `kaw_d_micro_sourd` (la panne de la piste 0 de Kaw D en 2024, étape par étape), `blancinet_ecartes` (écartés que BlanciNet note à 0,5 ou plus, jamais écoutés) et `coupes_programme` (fichiers coupés sur un créneau du programme, écartés, jamais écoutés).
 
+- `releves_r4_r7.py` : contrôle de l'inventaire des relevés arrivés le 23/11/2026 (R4 RHOZACE : Gabaret et Pai ; R7 Mataroni), tout par les fonctions de `inventaire.py` : effectifs, drapeaux et causes d'exclusion, programme et complétude, jours vides, noms hors convention, doublons de contenu, durées et tailles, et, sur un en-tête par micro et par jour, gains, horloge et position. Écrit `paths.reports/releves_r4_r7/` (`RAPPORT.md`, `entetes.csv`, `signales.csv`).
+
 ```
 uv run python scripts/controle_qualite/echantillon_pistes.py
 uv run python scripts/controle_qualite/spectre_pistes.py
 uv run python scripts/controle_qualite/verifier_doublons.py --disque F:/audio
 uv run python scripts/controle_qualite/files_apres_prez4.py
+uv run python scripts/controle_qualite/releves_r4_r7.py --config config/local_F.yaml
 ```

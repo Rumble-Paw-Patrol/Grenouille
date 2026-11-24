@@ -52,6 +52,19 @@ audio:
     - {dataset: "2026", site: RNRT, channel: 1, reason: gain inversé,
        mic_id: [2MA05015, 2MA07933, 2MA07936, 2MA07942, 2MA08002, 2MA08026, 2MA08067, 2MA10139,
                 2MA10210, 2MA10509, SMA13417, SMA13599, SMA14801]}
+    # R4 (Gabaret, Pai) et R7 (Mataroni, mai 2026) : tous les micros à 18 / 6 dB (en-têtes de
+    # trois fichiers par micro lus sur le disque Seagate le 23/11/2026). À Mataroni, seul le
+    # relevé 7 : les mêmes micros étaient à 6 / 18 dB en janvier (aucune règle au relevé 3).
+    - {dataset: "2026", site: Gabaret, channel: 1, reason: gain inversé,
+       mic_id: [2LA03021, 2LA03595, 2LA04115, 2LA04134, 2LA04168, 2LA04378, 2LA05017, 2LA05190,
+                2LA05206]}
+    - {dataset: "2026", site: Pai, channel: 1, reason: gain inversé,
+       mic_id: [2LA03021, 2LA04118, 2LA04171, 2LA04179, 2LA04185, 2LA04443, 2LA04513, 2LA05206,
+                2LA05209, 2LA05244]}
+    - {dataset: "2026", site: Mataroni, from: "2026-05-01T00:00Z", channel: 1,
+       reason: gain inversé,
+       mic_id: [2LA03595, 2LA04111, 2LA04118, 2LA04134, 2LA04168, 2LA04171, 2LA04179, 2LA04186,
+                2LA04378, 2LA04443, 2LA04445, 2LA04513, 2LA05017, 2LA05190, 2LA05206]}
   # Dossiers renommés à la copie sur les disques du stage (scripts/02 : BLANCI_2023-24,
   # scripts/04 : BLANCI_2025-26). La base garde le chemin d'origine (disque Biophonia) ;
   # l'annotation cherche aussi l'enregistrement sous le nouveau nom.
@@ -195,7 +208,12 @@ qc:
     - {survey: "Projet blanci 2025/RELEVE 3 Mataroni - 06-13 janv 2026", start: 2026-01-06, end: 2026-01-13}
     - {survey: "Projet blanci 2025/RELEVE 5 RNRT - 9-16 fev 2026", start: 2026-02-09, end: 2026-02-16}
     - {survey: "Projet blanci 2025/RELEVE 6 Patawa Est - 20 fev-3 mars 2026", start: 2026-02-20, end: 2026-03-03}
-    - {survey: "audio/R7_2026-05_Mataroni", start: 2026-05-19, end: 2026-05-19}
+    # R4 et R7 complet : disque Seagate Basic de Biophonia, copiés et inventoriés le 23/11/2026
+    # (scripts/copie/07). Dates : premier et dernier fichier du programme de chaque site.
+    # Gabaret : GAB_166 du 12 au 26/02, puis GAB_164 du 25/03 au 15/04 (trois micros reposés).
+    - {survey: "audio/R4_2026-02_RHOZACE", site: Pai, start: 2026-02-11, end: 2026-02-26}
+    - {survey: "audio/R4_2026-02_RHOZACE", site: Gabaret, start: 2026-02-12, end: 2026-04-15}
+    - {survey: "audio/R7_2026-05_Mataroni", start: 2026-05-19, end: 2026-05-28}
   campaign_gap_days: 7             # relevé sans dates (repli) : un trou plus long dans la série d'un micro l'en sort
   # Heure du nom de fichier contre heure de l'en-tête GUANO : au-delà de cet écart, `clock_off`
   # est levé. Une remarque, qui n'écarte rien (DECISIONS n° 191) : une horloge vérifiée se

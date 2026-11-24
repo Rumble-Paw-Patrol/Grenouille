@@ -13,13 +13,14 @@ arrêter l'encodage :
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*encode_modele.ps1*' -or $_.CommandLine -like '*encode_pistes.ps1*' -or $_.Name -eq 'blanci.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 
 
-Encodage du corpus entériné (contrôle qualité clos le 20/11/2026)
------------------------------------------------------------------
+Encodage du corpus entériné (contrôle qualité clos le 20/11/2026, relevés R4 RHOZACE et R7 Mataroni ajoutés le 23/11/2026)
+------------------------------------------------------------------------------------------------------------------------
 
-Le corpus : annotations\corpus_20261120\ (corpus.csv : chaque enregistrement retenu et sa piste ; LISEZMOI.md : comptes et empreinte de la base).
-À partir d'ici, ne plus lancer blanci flag, blanci qc ni blanci ingest : ils recalculeraient les drapeaux, donc le corpus.
+Le corpus : annotations\corpus_20261123\ (corpus.csv : chaque enregistrement retenu et sa piste ; LISEZMOI.md : comptes et empreinte de la base). 107 293 enregistrements retenus, 3 576,6 h.
+Le manifeste du 20/11 (corpus_20261120, 95 633 enregistrements) reste comme trace : les 95 633 n'ont pas changé le 23/11 (chemins, sites, durées, empreintes et sélection identiques à la sauvegarde F:\data\dblanci_sauvegarde_20261123_avant_R4_R7.sqlite).
+Ne lancer blanci ingest (et blanci qc, blanci flag) que pour un nouveau relevé, après une sauvegarde datée de la base ; vérifier ensuite que rien n'a bougé pour les anciens enregistrements, puis refaire le manifeste (scripts/encodage/manifeste_corpus.py) et les listes (étape 2).
 
-Les deux disques branchés (BLANCI_2023-24 et BLANCI_2025-26, F:), le poste d'annotation fermé, dans PowerShell. Les commandes se tapent l'une après l'autre ; chacune attend la fin de la précédente.
+Les deux disques branchés (BLANCI_2023-24, E: le 23/11 : audio 2018, 2023 et reference ; BLANCI_2025-26, F: : audio 2026 et stocks perch_v2 et audioprotopnet), le poste d'annotation fermé, dans PowerShell. Les commandes se tapent l'une après l'autre ; chacune attend la fin de la précédente.
 
 0. aller dans le dépôt :
 
@@ -27,7 +28,7 @@ Set-Location C:\Users\ll34272\Grenouille
 
 1. sauvegarder la base telle qu'entérinée (copie datée sur F:) :
 
-uv run python -c "import sqlite3; s=sqlite3.connect(r'C:\Users\ll34272\base_blanci\blanci.sqlite'); d=sqlite3.connect(r'F:\data\db\blanci_corpus_20261120.sqlite'); s.backup(d); d.close(); print('ok')"
+uv run python -c "import sqlite3; s=sqlite3.connect(r'C:\Users\ll34272\base_blanci\blanci.sqlite'); d=sqlite3.connect(r'F:\data\db\blanci_corpus_20261123.sqlite'); s.backup(d); d.close(); print('ok')"
 
 2. les listes et les chiffres (lecture seule) :
 
@@ -40,7 +41,7 @@ uv run python scripts/encodage/file_pistes.py
 uv run blanci pistes --encoder birdnet,birdnet_v3
 uv run blanci pistes --encoder perch_v2 --embeddings data/embeddings
 
-   (le 20/11 : ≈ 7 545 enregistrements dans birdnet et birdnet_v3, 7 374 dans perch_v2 ; audioprotopnet repart de zéro sur F:, rien à retirer)
+   (le 20/11 et encore le 23/11 : ≈ 7 545 enregistrements dans birdnet et birdnet_v3, 7 374 dans perch_v2 ; audioprotopnet repart de zéro sur F:, rien à retirer ; R4 et R7 ne sont dans aucun stock)
 
 4. retirer des stocks, en gardant les anciens embeddings :
 
@@ -51,18 +52,19 @@ uv run blanci pistes --encoder perch_v2 --embeddings data/embeddings --apply
    (mêmes partitions que le stock, plus retrait.csv : piste encodée et piste de la règle de chaque enregistrement).
    Pour comparer les scores : EmbeddingStore(r"C:\Users\ll34272\embeddings_pc\_mis_de_cote", "birdnet-bacpipe1.3.5_pistes_<aaaammjj>").load()
    La partition d'origine n'est remplacée qu'une fois sa copie écrite ; relancer la commande après une coupure ne double rien.
-   La table windows n'est pas touchée. Place libre sur C: le 20/11 : 14 Go (les copies de birdnet et birdnet_v3 y vont).
+   La table windows n'est pas touchée. Place libre sur C: le 23/11 : 17,9 Go ; l'encodage y ajoute ≈ 7 Go (birdnet ≈ 3,1 Go, birdnet_v3 ≈ 4,0 Go ; les fenêtres retirées changent seulement de dossier).
 
 5. lancer l'encodage (perch_v2, birdnet, birdnet_v3 sur tout ce qui leur manque, puis audioprotopnet sur tout le corpus, sur F:) :
 
 Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','C:\Users\ll34272\Grenouille\scripts\encodage\encode_pistes.ps1'
 
-   durées estimées le 20/11 : perch_v2 ≈ 7 h, birdnet ≈ 4 h, birdnet_v3 ≈ 16 h, audioprotopnet ≈ 211 h (≈ 9 jours, ≈ 9,3 Go sur F:)
+   durées estimées le 23/11 (rapports\encodage_pistes\LISEZMOI.md) : perch_v2 ≈ 14 h (22 032 enregistrements), birdnet ≈ 11 h et birdnet_v3 ≈ 40 h (19 656 chacun), audioprotopnet ≈ 237 h (107 204, ≈ 10 jours, ≈ 10 Go sur F:)
    reprendre à un modèle (ce qui est fait est sauté) : ajouter '-Depuis','birdnet_v3' à la fin de la liste
    voir où ça en est : Get-Content C:\Users\ll34272\Grenouille\rapports\encodage.log -Tail 5
                        Get-Content C:\Users\ll34272\Grenouille\rapports\embed_birdnet_v3.log -Tail 3
    arrêter : la commande « arrêter l'encodage » plus haut
 
+   Un fichier introuvable (disque débranché) n'arrête pas l'encodage : il est compté dans les « illisibles » de la ligne de fin de rapports\embed_<encodeur>.log et sera repris au passage suivant. Le 23/11, avec E: et F: branchés, les 107 293 retenus sont tous trouvés ; s'il y a des illisibles, vérifier les deux disques et relancer.
    Sans l'étape 4, `blanci embed` refuse le stock (« encodés sur une autre piste ») et la file s'arrête au premier modèle.
 
 6. vérifier à la fin : rien à retirer, rien qui manque.
