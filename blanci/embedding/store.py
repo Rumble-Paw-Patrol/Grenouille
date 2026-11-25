@@ -183,6 +183,36 @@ class EmbeddingStore:
             if all(wanted[k] is None or values[k] in wanted[k] for k in PARTITION_KEYS):
                 yield path
 
+    def load_meta(self, filters: dict | None = None) -> tuple[list[Path], pd.DataFrame]:
+        """Métadonnées des partitions retenues (sans embeddings), dans l'ordre de `load`."""
+        paths = list(self.fragments(filters))
+        metas = []
+        for path in paths:
+            names = [n for n in pq.read_schema(path).names if n != "emb"]
+            metas.append(pq.read_table(path, columns=names).to_pandas())
+        if not metas:
+            return paths, pd.DataFrame(columns=META_COLUMNS)
+        return paths, pd.concat(metas, ignore_index=True)
+
+    def load_rows(self, paths: list[Path], rows: np.ndarray) -> np.ndarray:
+        """Embeddings (float32) des lignes `rows` de la concaténation des partitions `paths`
+        (indices de `load_meta`), dans l'ordre demandé, sans charger tout le stock d'un bloc."""
+        rows = np.asarray(rows)
+        out = None
+        offset = 0
+        for path in paths:
+            n = pq.ParquetFile(path).metadata.num_rows
+            local = np.flatnonzero((rows >= offset) & (rows < offset + n))
+            if len(local):
+                column = pq.read_table(path, columns=["emb"]).column("emb").combine_chunks()
+                dim = column.type.list_size
+                emb = column.flatten().to_numpy(zero_copy_only=False).reshape(-1, dim)
+                if out is None:
+                    out = np.empty((len(rows), emb.shape[1]), dtype=np.float32)
+                out[local] = emb[rows[local] - offset]
+            offset += n
+        return out if out is not None else np.zeros((0, 0), dtype=np.float32)
+
     def load(self, filters: dict | None = None) -> tuple[pd.DataFrame, np.ndarray]:
         parts = [self.read(path) for path in self.fragments(filters)]
         if not parts:

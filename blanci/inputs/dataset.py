@@ -788,7 +788,9 @@ def embedded_training_set(
     Point d'entrée commun du benchmark (§2) et de l'entraînement de la tête (§4) : les deux
     doivent voir exactement les mêmes labels et les mêmes négatifs appariés.
     """
-    meta, emb = store.load(filters)
+    # Métadonnées d'abord, embeddings des seules fenêtres étiquetées ensuite : le stock entier
+    # (plusieurs millions de fenêtres) ne tient pas en mémoire.
+    paths, meta = store.load_meta(filters)
     if not len(meta):
         raise ValueError(f"aucun embedding pour {store.encoder_id} (filtres : {filters})")
     data = training_set(
@@ -806,7 +808,7 @@ def embedded_training_set(
     if data.empty:
         raise ValueError(f"aucune fenêtre étiquetée dans le stock de {store.encoder_id}")
     data["gated"] = gated_mask(meta)[data["row"].to_numpy()]  # seuillage en amont
-    return data, emb[data["row"].to_numpy()].astype(np.float32)
+    return data, store.load_rows(paths, data["row"].to_numpy())
 
 
 def benchmark_recordings(
