@@ -1,25 +1,27 @@
 # ruff: noqa: E501
-"""Toutes les données de la prez PNA (lecture seule) : `donnees.json` + `courbe.png`.
+"""Toutes les données de la prez PNA v2, BirdNET 2.4 (lecture seule) : `donnees.json` + `courbe.png`.
 
     uv run python documentation/prez/scripts/presentation_7/donnees.py
 
-Entrées (écrites par extraire.py, extraire_labels.py, figures_audio.py) : `echantillon.npz`
-(fenêtres Perch v2 tirées au hasard, ≈ 600 par site), `annotees.npz` (fenêtres étiquetées par
-`training_set`), `enregistrements.npz` (signature moyenne de 80 enregistrements par site),
-`envelope.npz`.
+Entrées (rapports/presentation_7/, écrites par extraire_birdnet.py) : `birdnet_hasard.npz`
+(fenêtres de 3 s tirées au hasard, ≈ 600 par site), `birdnet_annotees.npz` (fenêtres
+étiquetées par `training_set`).
 
-1. Ce qui organise les groupes : k-moyennes (k = nombre de sites) sur les vecteurs normés, accord
-   (ARI) avec le site, le point d'écoute, le moment de la journée, le mois ; au niveau fenêtre et
-   au niveau enregistrement ; intervalle à 95 % par bootstrap (200 tirages des points).
-   Répartition des fenêtres positives entre les groupes (centre le plus proche).
+1. Ce qui rend deux fenêtres semblables : part de la variance des vecteurs (normés) expliquée par
+   chaque facteur pris seul, sur les fenêtres écoutées (somme des carrés entre groupes / somme
+   totale, comme `heads/cluster.variance_partition`) : site ; point d'écoute dans son site
+   (part du point moins part du site) ; moment de la journée ; mois ; présence d'A. blanci.
+   Variabilité : 100 moitiés des enregistrements tirées sans remise (2,5 et 97,5 centiles). Contrôle : les quatre premiers
+   facteurs sur les fenêtres tirées au hasard. Contrôle aussi : k-moyennes (k = 8) et part des
+   fenêtres avec chant dans chaque groupe.
 2. Simulation d'apprentissage actif, tête linéaire (régression logistique, C = 1, classes
    équilibrées) : les micros sont coupés en deux (70 % apprentissage, 30 % évaluation, graine
-   fixe). Départ : 40 fenêtres annotées tirées au hasard dans les micros d'apprentissage ; à
-   chaque tour, 30 fenêtres de plus, choisies 60-20-20 (incertaines, meilleurs scores, hasard)
+   fixe). Départ : 80 fenêtres annotées tirées au hasard dans les micros d'apprentissage ; à
+   chaque tour, 40 fenêtres de plus, choisies 60-20-20 (incertaines, meilleurs scores, hasard)
    ou toutes au hasard ; on « révèle » leur label (déjà connu : c'est un rejeu). Note : AP sur
    les fenêtres des micros d'évaluation, jamais vues. 10 répétitions (graines), moyenne et
    enveloppe min-max.
-3. Le nuage affiché : 70 fenêtres au hasard par site (Kaw, Molokoi, Trésor, Mataroni) + des
+3. Le nuage affiché : 120 fenêtres au hasard par site (Kaw, Molokoi, Trésor, Mataroni) + des
    fenêtres annotées de ces sites (dont toutes celles révélées aux tours 0 à 4 de la répétition
    0) ; vues ACP → direction de la tête finale ; score de chaque version de la tête.
 """
@@ -33,10 +35,11 @@ from pathlib import Path
 import matplotlib
 import numpy as np
 import pandas as pd
+from scipy.sparse import csr_matrix
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import adjusted_rand_score, average_precision_score
+from sklearn.metrics import average_precision_score
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -49,71 +52,85 @@ OUT: dict = {}
 
 
 def norm(X):
-    X = np.asarray(X, dtype=np.float64)
+    X = np.asarray(X, dtype=np.float32)
     return X / np.linalg.norm(X, axis=1, keepdims=True)
 
 
 con = sqlite3.connect("file:C:/Users/ll34272/base_blanci/blanci.sqlite?mode=ro", uri=True)
 recs = pd.read_sql_query("SELECT recording_id, site, mic_id, start_utc FROM recordings", con).set_index("recording_id")
-e, a, r = (np.load(ICI / f, allow_pickle=False) for f in ("echantillon.npz", "annotees.npz", "enregistrements.npz"))
-Xe, Xa, Xr = norm(e["X"]), norm(a["X"]), norm(r["X"])
+e, a = (np.load(ICI / f, allow_pickle=False) for f in ("birdnet_hasard.npz", "birdnet_annotees.npz"))
+Xe, Xa = norm(e["X"]), norm(a["X"])
 ya, sa, pa = a["y"], a["site"], a["point"]
-print("annotées :", len(ya), "dont positives", int(ya.sum()))
+print("annotées :", len(ya), "dont positives", int(ya.sum()), "; dimension", Xa.shape[1])
+OUT["dim"] = int(Xa.shape[1])
 OUT["annotees"] = (
     pd.DataFrame({"site": sa, "y": ya}).groupby("site")["y"].agg(fenetres="size", positives="sum").reset_index().to_dict("records")
 )
 OUT["n_annotees"], OUT["n_positives"] = int(len(ya)), int(ya.sum())
 OUT["n_enr_positifs"] = int(pd.Series(a["recording_id"][ya == 1]).nunique())
 OUT["n_micros_annotes"] = int(pd.Series(pa).nunique())
+OUT["n_sites_annotes"] = int(pd.Series(sa).nunique())
 
 
-# ------------------------------------------------------------ 1. ce qui organise les groupes
-def facteurs(ids):
+# ------------------------------------------------------------ 1. ce qui rend deux fenêtres semblables
+def facteurs(ids, y=None):
     m = recs.loc[ids].reset_index()
     h = (pd.to_datetime(m["start_utc"], utc=True) - pd.Timedelta(hours=3)).dt.hour
-    moment = np.select([(h >= 5) & (h < 8), (h >= 8) & (h < 17), (h >= 17) & (h < 20)], ["aube", "jour", "crépuscule"], "nuit")
-    return {
+    f = {
         "site": m["site"].to_numpy(str),
-        "point d'écoute": (m["site"] + "/" + m["mic_id"]).to_numpy(str),
-        "moment de la journée": moment,
+        "point": (m["site"] + "/" + m["mic_id"]).to_numpy(str),
+        "moment de la journée": np.select([(h >= 5) & (h < 8), (h >= 8) & (h < 17), (h >= 17) & (h < 20)], ["aube", "jour", "crépuscule"], "nuit"),
         "mois": pd.to_datetime(m["start_utc"], utc=True).dt.strftime("%m").to_numpy(str),
     }
+    if y is not None:
+        f["présence d'A. blanci"] = np.asarray(y).astype(str)
+    return f
 
 
-def accords(X, ids, k, n_boot=200):
-    lab = KMeans(k, n_init=10, random_state=SEED).fit_predict(X)
-    fac = facteurs(ids)
-    rng = np.random.default_rng(SEED)
-    res = {}
-    for nom, f in fac.items():
-        val = adjusted_rand_score(f, lab)
-        boot = []
-        for _ in range(n_boot):
-            i = rng.integers(0, len(lab), len(lab))
-            boot.append(adjusted_rand_score(f[i], lab[i]))
-        res[nom] = {"ari": round(val, 3), "lo": round(float(np.percentile(boot, 2.5)), 3), "hi": round(float(np.percentile(boot, 97.5)), 3)}
-    return res, lab
+def eta2(X, lab):
+    """Part de la somme des carrés entre groupes : Σ n_g ‖m_g − m‖² / Σ ‖x − m‖²."""
+    mu = X.mean(axis=0, dtype=np.float64)
+    tot = float((X.astype(np.float64) ** 2).sum() - len(X) * (mu**2).sum())
+    _, inv = np.unique(lab, return_inverse=True)
+    M = csr_matrix((np.ones(len(inv), np.float32), (inv, np.arange(len(inv)))))
+    sums = np.asarray(M @ X, dtype=np.float64)
+    n = np.bincount(inv).astype(np.float64)
+    return float(((sums**2).sum(axis=1) / n).sum() - len(X) * (mu**2).sum()) / tot
 
 
-k = len(np.unique(e["site"]))
-OUT["clusters"] = {"k": k, "n_fenetres": int(len(Xe)), "n_enregistrements": int(len(Xr))}
-OUT["clusters"]["fenetre"], lab_e = accords(Xe, e["recording_id"], k)
-OUT["clusters"]["enregistrement"], _ = accords(Xr, r["recording_id"], k)
-# robustesse au nombre de groupes (site seulement)
-OUT["clusters"]["k_robustesse"] = {
-    niveau: {kk: round(adjusted_rand_score(s, KMeans(kk, n_init=10, random_state=SEED).fit_predict(X)), 3) for kk in (4, 8, 12)}
-    for niveau, X, s in (("fenetre", Xe, e["site"]), ("enregistrement", Xr, r["site"]))
-}
+def parts(X, fac):
+    r = {k: eta2(X, v) for k, v in fac.items()}
+    r["point d'écoute (dans son site)"] = r.pop("point") - r["site"]
+    return r
+
+
+fac_a = facteurs(a["recording_id"], ya)
+val = parts(Xa, fac_a)
+rng_b = np.random.default_rng(SEED)
+rec_u, rec_inv = np.unique(a["recording_id"], return_inverse=True)
+par_rec = [np.flatnonzero(rec_inv == i) for i in range(len(rec_u))]
+boot = []
+for _ in range(100):  # moitiés d'enregistrements tirées sans remise (un doublon gonflerait les facteurs fins)
+    idx = np.concatenate([par_rec[i] for i in rng_b.choice(len(rec_u), len(rec_u) // 2, replace=False)])
+    boot.append(parts(Xa[idx], {k: v[idx] for k, v in fac_a.items()}))
+OUT["variance"] = sorted(
+    [{"facteur": k, "part": round(v, 4), "lo": round(float(np.percentile([b[k] for b in boot], 2.5)), 4), "hi": round(float(np.percentile([b[k] for b in boot], 97.5)), 4)} for k, v in val.items()],
+    key=lambda d: -d["part"],
+)
+OUT["variance_hasard"] = {k: round(v, 4) for k, v in parts(Xe, facteurs(e["recording_id"])).items()}
+OUT["n_enr_annotes"] = int(len(rec_u))
+OUT["n_hasard"] = int(len(Xe))
+print(json.dumps(OUT["variance"], ensure_ascii=False), OUT["variance_hasard"])
+
+k = 8
 km = KMeans(k, n_init=10, random_state=SEED).fit(Xe)
-grp_pos = km.predict(Xa[ya == 1])
-part = np.bincount(grp_pos, minlength=k) / len(grp_pos)
-part_hasard = np.bincount(km.labels_, minlength=k) / len(km.labels_)
-OUT["clusters"]["positifs_par_groupe"] = [round(float(x), 3) for x in part]
-OUT["clusters"]["hasard_par_groupe"] = [round(float(x), 3) for x in part_hasard]
 grp_a = km.predict(Xa)
-OUT["clusters"]["annotees_par_groupe"] = [[int(((grp_a == g) & (ya == 1)).sum()), int((grp_a == g).sum())] for g in range(k)]
-OUT["clusters"]["sites_par_groupe_pos"] = [sorted(set(sa[(grp_a == g) & (ya == 1)].tolist())) for g in range(k)]
-print(json.dumps(OUT["clusters"], ensure_ascii=False, indent=1))
+OUT["clusters"] = {
+    "k": k, "hasard_par_groupe": [round(float(x), 3) for x in np.bincount(km.labels_, minlength=k) / len(km.labels_)],
+    "positifs_par_groupe": [round(float(x), 3) for x in np.bincount(grp_a[ya == 1], minlength=k) / max(1, (ya == 1).sum())],
+    "annotees_par_groupe": [[int(((grp_a == g) & (ya == 1)).sum()), int((grp_a == g).sum())] for g in range(k)],
+}
+print(json.dumps(OUT["clusters"], ensure_ascii=False))
 
 # ------------------------------------------------------------ 2. simulation d'apprentissage actif
 points = np.unique(pa)
@@ -125,7 +142,7 @@ eval_pts = set(rng0.choice(pts_pos, max(1, int(0.3 * len(pts_pos))), replace=Fal
 is_eval = np.isin(pa, list(eval_pts))
 tr, te = np.flatnonzero(~is_eval), np.flatnonzero(is_eval)
 print("évaluation :", len(te), "fenêtres,", int(ya[te].sum()), "positives,", len(eval_pts), "micros")
-N0, LOT, TOURS = 40, 30, 8
+N0, LOT, TOURS = 80, 40, 8
 
 
 def tete(idx):
@@ -180,7 +197,7 @@ for mode, coul, nom in (("actif", "#1E6B45", "file 60-20-20"), ("hasard", "#9AA3
     ax.fill_between(c["n"], c["min"], c["max"], color=coul, alpha=0.15, lw=0)
     ax.plot(c["n"], c["moy"], "-o", color=coul, ms=4, lw=2, label=nom)
 ax.axhline(ap_tout, color="#5B6B63", ls=":", lw=1.2)
-ax.text(c["n"][-1], ap_tout + 0.01, f"toutes mes annotations ({len(tr)} fenêtres)", ha="right", va="bottom", fontsize=8, color="#5B6B63")
+ax.text(c["n"][-1], ap_tout + 0.01, f"toutes mes annotations ({len(tr):,} fenêtres)".replace(",", " "), ha="right", va="bottom", fontsize=8, color="#5B6B63")
 ax.axhline(OUT["simulation"]["prevalence_eval"], color="#C8553D", ls="--", lw=1)
 ax.text(c["n"][0], OUT["simulation"]["prevalence_eval"] + 0.01, "modèle qui tire au hasard", fontsize=8, color="#C8553D")
 ax.set_xlabel("fenêtres annotées pour l'entraînement", color="#5B6B63")
@@ -205,8 +222,8 @@ dans4 = np.isin(sa, SITES4)
 rev = np.flatnonzero(dans4 & (tour_rev >= 0) & (tour_rev <= 4))
 rng = np.random.default_rng(SEED + 1)
 jamais = np.flatnonzero(dans4 & (tour_rev < 0) & ~is_eval)
-sel_a = np.concatenate([rev, rng.choice(jamais, max(0, 140 - len(rev)), replace=False)])
-idx_e = np.concatenate([rng.choice(np.flatnonzero(e["site"] == s), 70, replace=False) for s in SITES4])
+sel_a = np.concatenate([rev, rng.choice(jamais, max(0, 220 - len(rev)), replace=False)])
+idx_e = np.concatenate([rng.choice(np.flatnonzero(e["site"] == s), 120, replace=False) for s in SITES4])
 X = np.vstack([Xe[idx_e], Xa[sel_a]])
 site = np.concatenate([e["site"][idx_e], sa[sel_a]])
 y = np.concatenate([np.full(len(idx_e), -1), ya[sel_a]])
@@ -215,7 +232,7 @@ cat = [""] * len(idx_e) + [cat1.get(int(i), "") for i in sel_a]
 # fenêtre « héros » : une fenêtre positive de l'enregistrement de Molokoi des figures audio
 hero_rec = "39313dd7512432b3"
 cand = np.flatnonzero((a["recording_id"] == hero_rec) & (ya == 1))
-hero = int(cand[np.argmin(np.abs(a["offset_s"][cand] - 25))]) if len(cand) else int(np.flatnonzero((sa == "Molokoi") & (ya == 1))[0])
+hero = int(cand[np.argmin(np.abs(a["offset_s"][cand] - 24))]) if len(cand) else int(np.flatnonzero((sa == "Molokoi") & (ya == 1))[0])
 sel_a = sel_a[sel_a != hero]
 X = np.vstack([Xe[idx_e], Xa[sel_a]])
 site = np.concatenate([e["site"][idx_e], sa[sel_a]])
@@ -265,8 +282,9 @@ OUT["nuage"] = {
     "groupe": groupes, "vues": vues, "ts": TS, "boussole": boussole, "seuil_u": seuil_u, "scores": scores,
     "ap_rejeu": [round(float(x), 3) for x in ap0], "n_rejeu": n0.tolist(),
 }
-env = np.load(ICI / "envelope.npz")
-OUT["enveloppe"] = (env["large"] / env["large"].max()).round(4).tolist()
+brut = a["X"][hero]
+OUT["vecteur"] = {"haut": brut[:8].round(2).tolist(), "bas": brut[-8:].round(2).tolist(), "min": round(float(brut.min()), 3), "max": round(float(brut.max()), 3),
+                  "corpus_min": round(float(np.percentile(e["X"], 0.5)), 3), "corpus_max": round(float(np.percentile(e["X"], 99.5)), 3)}
 (ICI / "donnees.json").write_text(json.dumps(OUT, ensure_ascii=False), encoding="utf-8")
 print("nuage :", len(X), "points ; révélés tours 0-4 :", len(rev), "; héros", OUT["hero"])
 print("AP rejeu 0 :", OUT["nuage"]["ap_rejeu"])

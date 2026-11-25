@@ -1,15 +1,20 @@
 # ruff: noqa: E501
-"""Présentation PNA A. blanci (restitution de stage, 15 min), animée par la Morphose.
+"""Présentation PNA A. blanci, v2 (restitution de stage, 15 min), animée par la Morphose.
 
     uv run --with python-pptx python documentation/prez/scripts/presentation_7/deck.py [sortie.pptx]
 
-Lit `donnees.json` et `courbe.png` (donnees.py), `spectro.png` et `extrait.wav`
-(figures_audio.py), et deux figures du dépôt (titre.png, inventaire_qc/inv_sites.png).
-Chaque point du nuage est une forme nommée « !!p<i> », chaque barre d'enveloppe « !!env<i »… :
-d'une diapo à l'autre, PowerPoint fait glisser et recolore les formes qui portent le même nom
-(Morphose, PowerPoint 2019 / Microsoft 365 ; un PowerPoint plus ancien fait un fondu). Les vues
-du nuage sont de vraies projections linéaires des 1 536 nombres de Perch. Les diapos
-intermédiaires de la rotation avancent seules (une seule frappe pour toute la rotation).
+Sortie par défaut : `documentation/prez/presentation_7_pna_v2.pptx` (la v1 est retouchée à la main
+par Léonard : ne jamais écrire par-dessus). Lit dans `rapports/presentation_7/` : `donnees.json`
+et `courbe.png` (donnees.py, BirdNET 2.4), `onde.npz`, `fenetre_spectro.png`,
+`inv_sites_pna.png`, `chiffres_pna.json` (figures_pna.py), `spectro.png` et `extrait.wav`
+(figures_audio.py) ; et `documentation/prez/figures/titre.png`.
+
+Chaque forme animée porte un nom « !!… » : d'une diapo à l'autre, PowerPoint fait glisser,
+grandir et recolorer les formes qui portent le même nom (Morphose, PowerPoint 2019 / Microsoft
+365 ; un PowerPoint plus ancien fait un fondu). La forme d'onde est le vrai signal (minimum et
+maximum par tranche) ; le zoom sur la fenêtre de 3 s chasse le reste de l'enregistrement hors de
+l'écran. Les vues du nuage sont de vraies projections linéaires des 1 024 nombres de BirdNET.
+Les diapos intermédiaires de la rotation avancent seules (une seule frappe pour la rotation).
 Écrit aussi `planche.png` (contrôle visuel des nuages) dans `rapports/presentation_7/`.
 """
 
@@ -28,17 +33,19 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
-ICI = Path(__file__).resolve().parents[4] / "rapports" / "presentation_7"  # données, jamais committées
-ICI.mkdir(parents=True, exist_ok=True)
 DEPOT = Path(__file__).resolve().parents[4]
+ICI = DEPOT / "rapports" / "presentation_7"  # données, jamais committées
 FIG = DEPOT / "documentation" / "prez" / "figures"
-SORTIE = Path(sys.argv[1]) if len(sys.argv) > 1 else DEPOT / "documentation" / "prez" / "presentation_7_pna.pptx"
+SORTIE = Path(sys.argv[1]) if len(sys.argv) > 1 else DEPOT / "documentation" / "prez" / "presentation_7_pna_v2.pptx"
 D = json.loads((ICI / "donnees.json").read_text(encoding="utf-8"))
+K = json.loads((ICI / "chiffres_pna.json").read_text(encoding="utf-8"))
 N = D["nuage"]
+DIM = D["dim"]
 
 DARK, INK, MUTED, SAGE, PALE, PALER = "0E2A24", "1B2A24", "5B6B63", "A7BFB2", "E4EEE8", "F3F7F4"
 GOLD, TEAL, TERRA = "E9B44C", "2A7F72", "C8553D"
 GRIS, GRIS_PALE = "B9C3BD", "E3E8E5"
+ECRAN, ONDE = "0D1A1F", "CFE6EE"  # fond et trait de la forme d'onde (comme un écran d'enregistreur)
 POS, MID, NEG = "1E6B45", "E9B44C", "C8553D"  # vert foncé → or → rouge terre : la clarté change aussi
 GROUPES = ["3E7CB1", "D9822B", "8A6BBE", "2A7F72"]
 SITES = {"Kaw": "3E7CB1", "Molokoi": "D9822B", "Tresor": "8A6BBE", "Mataroni": "2A7F72"}
@@ -138,14 +145,15 @@ def B(t):
     return (t, {"bold": True})
 
 
-def fleche(s, x1, y1, x2, y2, color=SAGE, width=1.5, nom=None):
+def fleche(s, x1, y1, x2, y2, color=SAGE, width=1.5, nom=None, pointe=True):
     c = s.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
     if nom:
         c.name = nom
     c.line.color.rgb = rgb(color)
     c.line.width = Pt(width)
-    ln = c.line._get_or_add_ln()
-    ln.append(ln.makeelement(qn("a:tailEnd"), {"type": "triangle", "w": "med", "len": "med"}))
+    if pointe:
+        ln = c.line._get_or_add_ln()
+        ln.append(ln.makeelement(qn("a:tailEnd"), {"type": "triangle", "w": "med", "len": "med"}))
     return c
 
 
@@ -163,7 +171,7 @@ def diapo(rubrique, titre, note, ms=1200, auto=False, transition=True):
     fond(s)
     w = 0.083 * len(rubrique) + 0.32
     boite(s, 0.6, 0.4, w, 0.32, PALE, nom="!!rub")
-    texte(s, 0.6, 0.4, w, 0.32, rubrique.upper() if False else rubrique, size=10, color=TEAL, bold=True, align="c", anchor="m", nom="!!rubt")
+    texte(s, 0.6, 0.4, w, 0.32, rubrique, size=10, color=TEAL, bold=True, align="c", anchor="m", nom="!!rubt")
     texte(s, 0.6, 0.8, 12.1, 0.8, titre, size=22, bold=True, font="Cambria", nom="Titre")
     PAGE[0] += 1
     texte(s, 12.33, 7.08, 0.5, 0.25, str(PAGE[0]), size=9, color=SAGE, align="r")
@@ -180,7 +188,7 @@ def panneau(s, lignes, y=1.75, h=4.95, size=15):
 
 # ------------------------------------------------------------------ nuage
 GX, GY, GW, GH = 0.7, 1.75, 7.9, 4.95
-R_PT = 0.12
+R_PT, LW_PT = 0.085, 0.75
 NPTS = len(N["site"])
 HERO = NPTS - 1
 
@@ -205,19 +213,19 @@ def degrade(p):
     return mix(NEG, MID, p * 2) if p < 0.5 else mix(MID, POS, (p - 0.5) * 2)
 
 
-def nuage(s, x, y, couleurs, contours=None, titre="", seulement=None):
+def nuage(s, x, y, couleurs, contours=None, titre="", seulement=None, rayon=None):
     if titre:
         PLANCHE.append((titre, np.asarray(x), np.asarray(y), couleurs, contours))
     for i in range(NPTS) if seulement is None else seulement:
+        r = R_PT if rayon is None else rayon.get(i, R_PT)
         line = contours[i] if contours is not None else None
-        boite(s, x[i], y[i], R_PT, R_PT, couleurs[i], line=line, forme=MSO_SHAPE.OVAL, nom=f"!!p{i}", lw=1.5)
+        boite(s, x[i] - (r - R_PT) / 2, y[i] - (r - R_PT) / 2, r, r, couleurs[i], line=line, forme=MSO_SHAPE.OVAL, nom=f"!!p{i}", lw=LW_PT)
 
 
-def legende(s, items, y0=6.82):
-    x = GX
+def legende(s, items, y0=6.82, x=GX):
     for coul, lib, contour in items:
-        boite(s, x, y0 + 0.05, 0.16, 0.16, coul, line=INK if contour else None, forme=MSO_SHAPE.OVAL, nom=f"!!leg_{lib}", lw=1.5)
-        texte(s, x + 0.24, y0, 2.6, 0.3, lib, size=12, color=MUTED, nom=f"!!legt_{lib}")
+        boite(s, x, y0 + 0.06, 0.13, 0.13, coul, line=INK if contour else None, forme=MSO_SHAPE.OVAL, nom=f"!!leg_{lib}", lw=LW_PT)
+        texte(s, x + 0.22, y0, 2.6, 0.3, lib, size=12, color=MUTED, nom=f"!!legt_{lib}")
         x += 0.36 + 0.08 * len(lib) + 0.25
 
 
@@ -245,8 +253,7 @@ def etat(t_rev, version=None):
     ou couleur du score de la version `version` de la tête."""
     coul, cont = [], []
     for i in range(NPTS):
-        connu = TOUR[i] == -2 or (0 <= TOUR[i] <= t_rev)
-        if connu:
+        if TOUR[i] == -2 or (0 <= TOUR[i] <= t_rev):
             coul.append(POS if Y[i] == 1 else NEG)
             cont.append(INK)
         else:
@@ -257,8 +264,7 @@ def etat(t_rev, version=None):
 
 def jauge(s, t):
     """Score du modèle (AP sur des micros jamais vus) après le tour t du rejeu."""
-    ap = N["ap_rejeu"][t]
-    n = N["n_rejeu"][t]
+    ap, n = N["ap_rejeu"][t], N["n_rejeu"][t]
     x, y, w = 9.25, 5.55, 3.25
     texte(s, x, y, w, 0.26, "Score du modèle (micros jamais entendus)", size=11, color=MUTED, nom="!!jt")
     boite(s, x, y + 0.32, w, 0.26, GRIS_PALE, nom="!!jf")
@@ -267,43 +273,48 @@ def jauge(s, t):
 
 
 # ================================================================== diapos
-RUB_I, RUB_E, RUB_C, RUB_K, RUB_S = "Le projet", "1 · Encoder", "2 · Regrouper ?", "3 · Apprendre", "La suite"
+RUB_I, RUB_E, RUB_C, RUB_K, RUB_S = "Le projet", "1 · Encoder", "2 · Regrouper", "3 · Apprendre", "La suite"
+C = K["corpus"]
+heures = C["heures"]
+jours = heures / 7
 
 # 1. titre -----------------------------------------------------------
 s = prs.slides.add_slide(BLANK)
 fond(s, DARK)
 s.shapes.add_picture(str(FIG / "titre.png"), Inches(8.9), Inches(0), height=Inches(7.5))
-texte(s, 0.8, 1.55, 7.6, 0.4, "PLAN NATIONAL D'ACTIONS · ANOMALOGLOSSUS BLANCI", size=12, color=GOLD, bold=True)
-texte(s, 0.8, 2.05, 7.7, 2.2, "Entendre A. blanci dans 3 200 heures de forêt", size=40, color="FFFFFF", bold=True, font="Cambria", after=0)
-texte(s, 0.8, 4.2, 7.6, 0.9, "Détection acoustique automatique : où en est le stage, comment la méthode fonctionne, ce qu'elle apportera aux prochaines campagnes", size=16, color=SAGE)
+texte(s, 0.8, 1.6, 7.6, 0.4, "PLAN NATIONAL D'ACTIONS", size=12, color=GOLD, bold=True)
+texte(s, 0.8, 2.1, 7.7, 3.0, [[("Outil de détection automatique d'", {}), ("Anomaloglossus blanci", {"italic": True})]], size=40, color="FFFFFF", bold=True, font="Cambria", after=0)
 texte(s, 0.8, 5.75, 7.6, 0.35, "Léonard Laplace-Palette", size=16, color="FFFFFF", bold=True)
-texte(s, 0.8, 6.15, 7.6, 0.35, "Restitution de stage · réunion du PNA · [date]", size=13, color=SAGE)
+texte(s, 0.8, 6.15, 7.6, 0.35, "Restitution de stage · PNA · Jeudi 26 Novembre 2026", size=13, color=SAGE)
 texte(s, 9.1, 7.05, 4.0, 0.3, "Chant d'A. blanci : les notes en forme de virgule, vers 4,7 kHz", size=9, color="FFFFFF", italic=True)
-notes(s, """Bonjour. Je présente mon stage : détecter automatiquement le chant d'Anomaloglossus blanci dans les enregistrements des campagnes de suivi. L'image à droite est un spectrogramme : le temps de gauche à droite, la hauteur du son de bas en haut. Les petites virgules claires, ce sont les notes d'A. blanci. Quinze minutes : le problème, les données, puis la méthode en trois étapes, et ce qu'elle donnera pour la campagne de février.""")
+notes(s, """Bonjour. Je présente mon stage : un outil qui détecte automatiquement le chant d'Anomaloglossus blanci dans les enregistrements des campagnes de suivi. L'image à droite est un spectrogramme : le temps de gauche à droite, la hauteur du son de bas en haut. Les petites virgules claires, ce sont les notes d'A. blanci.""")
 
-# 2. le problème -----------------------------------------------------
-s = diapo(RUB_I, "Trop d'heures pour une oreille humaine", "", transition=False)
-heures = 3187.9
-jours = heures / 7
-texte(s, 0.6, 1.75, 7.6, 2.4, [
-    "Le PNA a besoin de savoir où et quand A. blanci chante : quels sites, quels mois, quelles heures.",
-    "Les enregistreurs posés depuis 2023 ont capté la forêt toutes les 30 minutes, 2 minutes à chaque fois.",
-    [B("Objectif du stage : "), "un outil qui dit, pour chaque enregistrement, si A. blanci y chante, et avec quelle certitude, pour n'écouter que ce qui compte."],
-], size=17, after=14)
+# 2. l'idée ----------------------------------------------------------
+s = diapo(RUB_I, "L'idée : automatiser l'écoute de dizaines de milliers d'enregistrements", "", transition=False)
 for k, (gros, petit) in enumerate([
-    (fr(95633), "enregistrements de 2 min"),
-    (f"{fr(heures)} h", "d'audio, 8 sites, 164 points d'écoute"),
-    (f"{fr(jours)} jours", "d'écoute à 7 h par jour, soit 2 ans de travail"),
+    (fr(C["enregistrements"]), "enregistrements de 2 minutes"),
+    (f"{fr(heures)} h", f"d'audio · {C['sites']} sites · {C['points']} points d'écoute"),
+    (f"{fr(jours)} jours", "d'écoute à 7 h par jour"),
 ]):
     x = 0.6 + k * 4.1
-    boite(s, x, 4.75, 3.85, 1.75, PALER, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.06)
-    texte(s, x + 0.25, 4.9, 3.4, 0.7, gros, size=30, color=TEAL if k < 2 else TERRA, bold=True, font="Cambria")
-    texte(s, x + 0.25, 5.65, 3.4, 0.7, petit, size=13, color=MUTED)
-texte(s, 9.0, 1.85, 3.75, 2.6, [
-    [B("Pourquoi c'est difficile")],
-    "Des notes de 0,2 s, espacées de quelques secondes, au milieu du chœur des insectes, des oiseaux et des autres grenouilles.",
-], size=14, color=INK)
-notes(s, f"""Le Plan national d'actions a besoin de savoir où et quand l'espèce chante. Depuis 2023, des enregistreurs captent deux minutes de forêt toutes les demi-heures. Au total, {fr(95633)} enregistrements gardés, {fr(heures)} heures. Pour les écouter, il faudrait {fr(jours)} journées de sept heures : deux ans à plein temps. L'objectif du stage est donc un outil qui trie : il dit pour chaque enregistrement si A. blanci y chante, avec une certitude, et l'oreille humaine ne sert plus qu'à vérifier.""")
+    boite(s, x, 1.85, 3.85, 1.6, PALER, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.06)
+    texte(s, x + 0.25, 1.98, 3.4, 0.7, gros, size=30, color=TEAL if k < 2 else TERRA, bold=True, font="Cambria")
+    texte(s, x + 0.25, 2.72, 3.4, 0.6, petit, size=13, color=MUTED)
+texte(s, 0.6, 3.95, 12.1, 0.4, "L'outil : deux réseaux de neurones", size=18, bold=True, color=INK)
+etapes2 = [
+    ("Enregistrement", "2 minutes de forêt", PALER, INK),
+    ("BirdNET", "réseau n° 1 : résume le son", DARK, "FFFFFF"),
+    ("Ma tête de classification", "réseau n° 2 : reconnaît A. blanci", TEAL, "FFFFFF"),
+    ("A. blanci ?", "oui / non, et avec quelle certitude", PALE, INK),
+]
+for k, (t, st, fill, coul) in enumerate(etapes2):
+    x = 0.6 + k * 3.15
+    boite(s, x, 4.6, 2.75, 1.55, fill, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.08)
+    texte(s, x + 0.15, 4.78, 2.45, 0.5, t, size=17, bold=True, color=coul, align="c")
+    texte(s, x + 0.15, 5.35, 2.45, 0.7, st, size=12, color=coul if fill in (DARK, TEAL) else MUTED, align="c")
+    if k < 3:
+        fleche(s, x + 2.78, 5.37, x + 3.12, 5.37, color=SAGE, width=2.2)
+notes(s, f"""Depuis 2023, des enregistreurs captent deux minutes de forêt toutes les demi-heures. Aujourd'hui, {fr(C['enregistrements'])} enregistrements contrôlés, {fr(heures)} heures, sur {C['sites']} sites. Pour tout écouter, il faudrait {fr(jours)} journées de sept heures : plus de deux ans à plein temps. L'idée est donc d'automatiser l'écoute. L'outil enchaîne deux réseaux de neurones. Le premier, BirdNET, développé par l'université Cornell, résume chaque morceau de son en une liste de nombres. Le second, que j'entraîne moi-même sur mes écoutes, lit ces nombres et dit si A. blanci chante, avec une certitude.""")
 
 # 3. ce qu'on cherche (audio) ----------------------------------------
 s = diapo(RUB_I, "Ce qu'on cherche : quelques notes brèves dans le bruit de la forêt", "", transition=False)
@@ -316,242 +327,262 @@ except Exception as exc:  # noqa: BLE001
     s.shapes.add_picture(str(pic), Inches(0.6), Inches(1.8), width=Inches(8.0))
     audio_ok = False
 texte(s, 0.6, 5.1, 8.0, 0.6, "10 s enregistrées à Molokoï (point F, 26/02/2024, 13 h 30). Cliquer sur l'image pour écouter.", size=12, color=MUTED, italic=True)
-panneau(s, [
-    [B("Les virgules à 4,7 kHz : A. blanci.")],
-    "Une note de 0,2 s toutes les 3 à 4 s.",
-    "Au-dessus, la bande continue des insectes ; en dessous, d'autres grenouilles.",
-    "Sur 2 minutes, le chant occupe moins de 5 % du temps et une bande étroite de fréquences.",
-], y=1.8, h=4.6)
+panneau(s, [[B("Les virgules à 4,7 kHz : A. blanci.")]], y=1.8, h=4.6)
 notes(s, """Voici dix secondes à Molokoï. Je lance le son. Les petites virgules vers 4,7 kilohertz, ce sont les notes d'A. blanci : une toute petite note, toutes les trois ou quatre secondes. Au-dessus, la bande continue, ce sont des insectes ; en dessous, d'autres espèces. Retenez cette image : le chant prend très peu de place, dans le temps comme en fréquence. C'est toute la difficulté.""")
 
 # 4. inventaire + contrôle qualité -----------------------------------
-s = diapo(RUB_I, "Avant toute IA : inventorier et contrôler 96 000 enregistrements", "", transition=False)
-s.shapes.add_picture(str(FIG / "inventaire_qc" / "inv_sites.png"), Inches(0.6), Inches(1.75), width=Inches(7.6))
-texte(s, 0.6, 5.85, 7.6, 0.8, "Inventaire : 4 lieux de suivi (2023-24) et 4 relevés d'une semaine (2025-26), empilés sur leur lieu.", size=11, color=MUTED, italic=True)
-panneau(s, [
-    [B("Inventaire")],
-    "96 349 fichiers ; 95 enregistreurs ; horloges recalées, doublons et trous repérés.",
-    [B("Contrôle qualité")],
-    "Chaque enregistreur a deux micros (gains 6 et 18 dB) : la bonne piste est choisie pour chacun ; 7 900 enregistrements lisent l'autre piste (gain inversé, micro cassé, son étouffé).",
-    "716 écartés (son étouffé, durée anormale, hors relevé).",
-    [B(f"Corpus figé le 20/11/2026 : {fr(95633)} enregistrements.")],
-], size=13)
-notes(s, """Avant de parler d'intelligence artificielle, il a fallu savoir ce qu'on avait. L'inventaire : 96 349 fichiers, 95 enregistreurs, des horloges à recaler. Puis le contrôle qualité : chaque enregistreur a deux micros réglés différemment, et pour près de 8 000 enregistrements la bonne piste n'est pas celle qu'on croit, micro cassé ou étouffé. 716 enregistrements sont écartés. Le corpus est figé depuis le 20 novembre : tout ce qui suit travaille sur ces 95 633 enregistrements.""")
+INV = K["inventaire"]
+s = diapo(RUB_I, f"Avant toute IA : inventorier et contrôler {fr(round(INV['enregistrements'], -3))} enregistrements", "", transition=False)
+s.shapes.add_picture(str(ICI / "inv_sites_pna.png"), Inches(0.5), Inches(1.75), width=Inches(8.2))
+texte(s, 0.6, 6.15, 8.0, 0.6, "Heures enregistrées par lieu ; les relevés 2025-2026 (dont Gabaret et Pai, et Mataroni jusqu'en mai) empilés sur leur lieu.", size=11, color=MUTED, italic=True)
+boite(s, 9.0, 1.75, 3.75, 3.35, PALER, nom="!!pan")
+texte(s, 9.25, 1.95, 3.3, 3.0, [
+    [B("Inventaire : ")],
+    [f"{fr(INV['enregistrements'])} fichiers ; horloges recalées, doublons et trous repérés."],
+    [B("Contrôle qualité : ")],
+    [f"deux micros par enregistreur, la bonne piste choisie pour chacun ; {fr(INV['enregistrements'] - C['enregistrements'])} enregistrements écartés."],
+    [B(f"Corpus figé le 23/11/2026 : {fr(C['enregistrements'])} enregistrements.")],
+], size=13, after=6)
+boite(s, 9.0, 5.3, 3.75, 1.4, "FFF6E3", forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.06)
+boite(s, 9.0, 5.39, 0.06, 1.22, GOLD)
+texte(s, 9.25, 5.42, 3.35, 1.2, [[B("Vous avez des enregistrements, avec ou sans A. blanci ?")], ["Ils m'aideront à entraîner le modèle : je les prends volontiers."]], size=13, after=4)
+notes(s, f"""Avant de parler d'intelligence artificielle, il a fallu savoir ce qu'on avait. L'inventaire : {fr(INV['enregistrements'])} fichiers, avec les relevés arrivés cette semaine, Gabaret, Pai et Mataroni jusqu'en mai. Des horloges à recaler, des doublons, des trous. Puis le contrôle qualité : chaque enregistreur a deux micros réglés différemment, et pour des milliers d'enregistrements la bonne piste n'est pas celle qu'on croit. {fr(INV['enregistrements'] - C['enregistrements'])} enregistrements sont écartés. Le corpus est figé depuis le 23 novembre : {fr(C['enregistrements'])} enregistrements. Et un appel : si vous avez des enregistrements, avec ou sans A. blanci, ils m'aideront à entraîner le modèle.""")
 
-# ---------------------------------------------------------- 1 · encoder
-env = np.array(D["enveloppe"])
-NB = len(env)  # barres de 0,5 s
-hero_off = D["hero"]["offset_s"]
-f0, f1 = int(hero_off / 0.5), int((hero_off + 5) / 0.5)
+# ---------------------------------------------------------- 1 · encoder : forme d'onde et zoom
+ONDE_NPZ = np.load(ICI / "onde.npz")
+lo, hi, flo, fhi = ONDE_NPZ["lo"], ONDE_NPZ["hi"], ONDE_NPZ["flo"], ONDE_NPZ["fhi"]
+PAS, FPAS = float(ONDE_NPZ["pas"]), float(ONDE_NPZ["fpas"])
+F0, F1 = (float(v) for v in ONDE_NPZ["fen"])
+NB, NF = len(lo), len(flo)
+dans = set(range(int(round(F0 / PAS)), int(round(F1 / PAS))))
+P = max(np.abs(lo).max(), np.abs(hi).max())
+PW = max(np.abs(flo).max(), np.abs(fhi).max())
+WX0, WX1 = 0.75, 12.58
+PPS = (WX1 - WX0) / (NB * PAS)  # pouces par seconde, enregistrement entier
+CY, HH = 3.85, 1.75
+BW = 0.014
+ZX0, ZW = 0.85, 5.45  # fenêtre zoomée : de ZX0 à ZX0 + ZW
+ZPPS = ZW / (F1 - F0)
+ZCY, ZHH = 4.2, 2.0
 
 
-def enveloppe(s, x0, x1, base, hmax, couleurs=None, cache=(), vers=None):
-    bw = (x1 - x0) / NB
+def barre(s, x, a, b, cy, hh, peak, nom, w=BW):
+    top, h = cy - b / peak * hh, max(0.008, (b - a) / peak * hh)
+    boite(s, x, top, w, h, ONDE, nom=nom)
+
+
+def onde(s, mode):
+    """mode : « entier » (2 min), « fenetres » (idem + grille de 3 s), « zoom » (la fenêtre seule)."""
+    if mode == "zoom":
+        boite(s, 0.6, 1.85, 5.95, 4.7, ECRAN, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.03, nom="!!ecran")
+    else:
+        boite(s, 0.6, 1.85, 12.13, 4.0, ECRAN, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.03, nom="!!ecran")
     for i in range(NB):
-        h = max(0.012, env[i] * hmax)
-        if vers is not None and i in cache:
-            bx, by, bww, bh = vers
-            boite(s, bx, by, bww, bh, (couleurs or {}).get(i, INK), nom=f"!!env{i}")
+        if i in dans:
             continue
-        boite(s, x0 + i * bw + bw * 0.15, base - h, bw * 0.7, h, (couleurs or {}).get(i, INK), nom=f"!!env{i}")
-    return bw
+        t = i * PAS
+        if mode == "zoom":  # zoom : le reste de l'enregistrement est chassé hors de l'écran
+            x = ZX0 + (t - F0) * ZPPS
+            x = min(x, -0.6) if t < F0 else max(x, 13.6)
+            barre(s, x, lo[i], hi[i], ZCY, ZHH, PW, f"!!o{i}", w=BW * ZPPS / PPS)
+        else:
+            barre(s, WX0 + t * PPS, lo[i], hi[i], CY, HH, P, f"!!o{i}")
+    for j in range(NF):
+        t = F0 + j * FPAS
+        if mode == "zoom":
+            barre(s, ZX0 + (t - F0) * ZPPS, flo[j], fhi[j], ZCY, ZHH, PW, f"!!z{j}")
+        else:
+            barre(s, WX0 + t * PPS, flo[j], fhi[j], CY, HH, P, f"!!z{j}")
+    if mode == "fenetres":
+        for k in range(1, int(NB * PAS / 3)):
+            boite(s, WX0 + 3 * k * PPS - 0.004, 1.95, 0.008, 3.8, "2C4048", nom=f"!!sep{k}")
+    if mode == "fenetres":
+        boite(s, WX0 + F0 * PPS - 0.03, 1.93, (F1 - F0) * PPS + 0.06, 3.84, None, line=GOLD, lw=2.5, nom="!!fen")
+    elif mode == "zoom":
+        boite(s, 0.68, 1.93, 5.79, 4.54, None, line=GOLD, lw=2.5, nom="!!fen")
+    if mode == "zoom":
+        texte(s, ZX0, 6.6, 1.0, 0.3, "0 s", size=12, color=MUTED, nom="!!t0")
+        texte(s, ZX0 + ZW - 1.0, 6.6, 1.0, 0.3, "3 s", size=12, color=MUTED, align="r", nom="!!t1")
+    else:
+        texte(s, WX0, 5.95, 1.0, 0.3, "0 s", size=12, color=MUTED, nom="!!t0")
+        texte(s, WX1 - 1.0, 5.95, 1.0, 0.3, "2 min", size=12, color=MUTED, align="r", nom="!!t1")
 
 
-s = diapo(RUB_E, "Un enregistrement de 2 minutes, tel que l'ordinateur le reçoit", "", ms=1000)
-enveloppe(s, 0.7, 12.6, 5.6, 3.2)
-texte(s, 0.7, 5.75, 11.9, 0.3, "0 s", size=11, color=MUTED, nom="!!t0")
-texte(s, 11.6, 5.75, 1.0, 0.3, "120 s", size=11, color=MUTED, align="r", nom="!!t1")
-texte(s, 0.7, 6.25, 11.9, 0.8, "Chaque barre : l'énergie du son pendant une demi-seconde. Fond plat : la forêt. Les pics réguliers : les notes d'A. blanci.", size=15, color=INK, nom="!!leg_env")
-notes(s, """L'ordinateur n'a pas d'oreilles : il reçoit une suite de nombres. Ici, chaque barre est l'énergie du son pendant une demi-seconde, sur les deux minutes. Quand la forêt est calme, la ligne est plate. Les pics réguliers, ce sont les notes d'A. blanci : dans cet enregistrement-là, c'est le son le plus fort.""")
+s = diapo(RUB_E, "Un enregistrement de 2 minutes", "", ms=1000)
+onde(s, "entier")
+notes(s, """Voici un enregistrement de deux minutes, tel que l'ordinateur le reçoit : la forme du signal sonore. Quand la forêt est calme, c'est presque une ligne ; chaque son fait dresser des barres. Les pics réguliers, ce sont les notes d'A. blanci : dans cet enregistrement-là, c'est le son le plus fort.""")
 
-s = diapo(RUB_E, "On le découpe en fenêtres de 5 secondes", "", ms=900)
-bw = enveloppe(s, 0.7, 12.6, 5.6, 3.2)
-for k in range(1, 24):
-    boite(s, 0.7 + k * 10 * bw, 2.2, 0.012, 3.45, GRIS_PALE, nom=f"!!sep{k}")
-boite(s, 0.7 + f0 * bw, 2.15, 10 * bw, 3.55, None, line=GOLD, lw=3, nom="!!fen")
-texte(s, 0.7, 5.75, 11.9, 0.3, "0 s", size=11, color=MUTED, nom="!!t0")
-texte(s, 11.6, 5.75, 1.0, 0.3, "120 s", size=11, color=MUTED, align="r", nom="!!t1")
-texte(s, 0.7, 6.25, 11.9, 0.8, "24 fenêtres par enregistrement. Tout ce qui suit travaille fenêtre par fenêtre ; un enregistrement prend le score de sa meilleure fenêtre.", size=15, color=INK, nom="!!leg_env")
-notes(s, """Le modèle écoute cinq secondes à la fois : on découpe donc l'enregistrement en 24 fenêtres. Tout le reste de la méthode travaille fenêtre par fenêtre ; à la fin, un enregistrement prend le score de sa meilleure fenêtre. Suivons celle-ci, encadrée en jaune.""")
+s = diapo(RUB_E, "On le découpe en fenêtres de 3 secondes", "", ms=900)
+onde(s, "fenetres")
+notes(s, """BirdNET écoute trois secondes à la fois : on découpe donc l'enregistrement en quarante fenêtres. Tout le reste de la méthode travaille fenêtre par fenêtre ; à la fin, un enregistrement prend le score de sa meilleure fenêtre. Suivons celle-ci, encadrée en jaune.""")
 
-BOX = (5.1, 3.85, 3.0, 1.55)
-s = diapo(RUB_E, "Chaque fenêtre passe dans un modèle déjà entraîné : Perch", "", ms=1400)
-bwp = (12.6 - 0.7) / NB
-coul = {i: GRIS for i in range(NB)}
-enveloppe(s, 0.7, 12.6, 3.25, 1.2, couleurs=coul, cache=set(range(f0, f1)), vers=(BOX[0] + BOX[2] / 2 - 0.05, BOX[1] + BOX[3] / 2 - 0.05, 0.1, 0.1))
-boite(s, 0.7 + f0 * bwp, 1.95, 10 * bwp, 1.4, None, line=GOLD, lw=3, nom="!!fen")
-fleche(s, 0.7 + (f0 + 5) * bwp, 3.4, BOX[0] + BOX[2] / 2, BOX[1] - 0.05, color=GOLD, width=2, nom="!!fl1")
-boite(s, *BOX, DARK, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.12, nom="!!perch")
-texte(s, BOX[0], BOX[1] + 0.2, BOX[2], 1.2, [[B("Perch")], ["Google · 12 millions de réglages appris sur 15 000 espèces"]], size=14, color="FFFFFF", align="c", nom="!!percht", after=4)
-texte(s, 0.7, 5.75, 11.9, 1.2, "Un réseau de neurones entraîné par Google sur des centaines de milliers d'enregistrements d'oiseaux, d'amphibiens et d'insectes. Je ne le modifie pas : je m'en sers comme d'une oreille.", size=15, color=INK, nom="!!leg_env")
-notes(s, """Chaque fenêtre passe dans Perch, un modèle publié par Google, entraîné sur des centaines de milliers d'enregistrements et environ quinze mille espèces, oiseaux, amphibiens, insectes. Il a douze millions de réglages internes. Je ne le réentraîne pas : je l'utilise tel quel, comme une oreille déjà exercée. On utilise souvent BirdNET, de Cornell ; Perch est de la même taille, et il range mieux nos chants de grenouilles sur les tests que j'ai faits.""")
-
-bande = D["bande"]
-vals = np.array(bande["brut"])
-vmax = np.abs(vals).max()
-CW, CX, CY = 0.205, 1.0, 6.05
+V = D["vecteur"]
+vals = V["haut"] + V["bas"]
+VX, VW, VY0, VH = 9.3, 1.35, 1.95, 0.255
 
 
-def cellule(v, pale=False):
-    t = min(1.0, abs(v) / vmax)
-    base = "2A7F72" if v >= 0 else "C8553D"
-    if pale:
-        t *= 0.25
-    a_ = [int(base[k:k + 2], 16) for k in (0, 2, 4)]
-    return "".join(f"{round(255 + (c - 255) * t):02X}" for c in a_)
+def case(v):
+    t = min(1.0, max(0.0, (v - V["corpus_min"]) / (V["corpus_max"] - V["corpus_min"])))
+    base = (0x9C, 0xCF, 0xC4)  # coloration légère
+    return "".join(f"{round(255 + (c - 255) * t):02X}" for c in base)
 
 
-s = diapo(RUB_E, "…et en ressort sous forme de 1 536 nombres", "", ms=1400)
-enveloppe(s, 0.7, 12.6, 3.25, 1.2, couleurs=coul, cache=set(range(f0, f1)), vers=(BOX[0] + BOX[2] / 2 - 0.05, BOX[1] + BOX[3] / 2 - 0.05, 0.1, 0.1))
-boite(s, 0.7 + f0 * bwp, 1.95, 10 * bwp, 1.4, None, line=GOLD, lw=3, nom="!!fen")
-fleche(s, 0.7 + (f0 + 5) * bwp, 3.4, BOX[0] + BOX[2] / 2, BOX[1] - 0.05, color=GOLD, width=2, nom="!!fl1")
-boite(s, *BOX, DARK, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.12, nom="!!perch")
-texte(s, BOX[0], BOX[1] + 0.2, BOX[2], 1.2, [[B("Perch")], ["Google · 12 millions de réglages appris sur 15 000 espèces"]], size=14, color="FFFFFF", align="c", nom="!!percht", after=4)
-fleche(s, BOX[0] + BOX[2] / 2, BOX[1] + BOX[3] + 0.03, BOX[0] + BOX[2] / 2, CY - 0.08, color=GOLD, width=2, nom="!!fl2")
-for j, v in enumerate(vals):
-    boite(s, CX + j * CW, CY, CW - 0.02, 0.45, cellule(v), nom=f"!!c{j}")
-texte(s, CX, CY + 0.52, 9.9, 0.3, "  ".join(fr(v, 3) for v in vals[:9]) + "  …  (48 des 1 536 nombres de cette fenêtre)", size=10, color=MUTED, nom="!!cval", font="Consolas")
-texte(s, CX + 48 * CW + 0.25, CY - 0.05, 0.6, 0.55, "=", size=22, color=INK, bold=True, nom="!!egal")
-boite(s, CX + 48 * CW + 0.75, CY + 0.17, R_PT, R_PT, POS, line=INK, forme=MSO_SHAPE.OVAL, nom=f"!!p{HERO}", lw=1.5)
-texte(s, CX + 48 * CW + 0.95, CY + 0.08, 1.3, 0.3, "un point", size=13, color=INK, bold=True, nom="!!unpoint")
-notes(s, """En sortie : 1 536 nombres. C'est la signature de la fenêtre. Que veut dire chaque nombre ? Personne ne sait le dire : c'est la boîte noire. Mais deux sons qui se ressemblent donnent deux listes de nombres proches. Et une liste de nombres, c'est une position : chaque fenêtre devient un point.""")
+def vecteur(s, x):
+    rows = [("v", j) for j in range(8)] + [("e", None)] + [("v", 8 + j) for j in range(8)]
+    for r, (kind, j) in enumerate(rows):
+        y = VY0 + r * VH
+        if kind == "e":
+            texte(s, x, y - 0.04, VW, VH + 0.05, "⋮", size=16, color=MUTED, align="c", nom="!!vell", anchor="m", after=0)
+            continue
+        boite(s, x, y, VW, VH, case(vals[j]), line="C9D3CE", lw=0.5, nom=f"!!v{j}")
+        texte(s, x, y, VW, VH, fr(vals[j], 2), size=13, color=INK, align="c", anchor="m", nom=f"!!vt{j}", after=0)
+    bas = VY0 + len(rows) * VH
+    for side, xx in (("g", x - 0.08), ("d", x + VW + 0.06)):
+        boite(s, xx, VY0 - 0.04, 0.02, bas - VY0 + 0.08, INK, nom=f"!!bk{side}")
+        boite(s, min(xx, xx + 0.08 * (1 if side == "g" else -1)), VY0 - 0.04, 0.1, 0.02, INK, nom=f"!!bk{side}h")
+        boite(s, min(xx, xx + 0.08 * (1 if side == "g" else -1)), bas + 0.02, 0.1, 0.02, INK, nom=f"!!bk{side}b")
+    texte(s, x - 0.6, bas + 0.12, VW + 1.2, 0.3, f"16 nombres affichés sur {fr(DIM)}", size=12, color=MUTED, align="c", nom="!!vlab")
+    return VY0 + (bas - VY0) / 2
+
+
+s = diapo(RUB_E, f"Une fenêtre de 3 secondes devient {fr(DIM)} nombres", "", ms=1600)
+onde(s, "zoom")
+fleche(s, 6.62, 4.2, 6.95, 4.2, color=SAGE, width=2.2, nom="!!fa1")
+boite(s, 7.0, 3.8, 1.65, 0.8, DARK, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.12, nom="!!bn")
+texte(s, 7.0, 3.8, 1.65, 0.8, [[B("BirdNET")]], size=17, color="FFFFFF", align="c", anchor="m", nom="!!bnt")
+fleche(s, 8.7, 4.2, 9.1, 4.2, color=SAGE, width=2.2, nom="!!fa2")
+vmid = vecteur(s, VX)
+notes(s, f"""Zoomons sur cette fenêtre de trois secondes : la note d'A. blanci au milieu, et le bruit de la forêt autour. BirdNET, un réseau de neurones de l'université Cornell entraîné sur les chants de plus de 6 000 espèces, transforme ces trois secondes en {fr(DIM)} nombres, rangés dans une colonne : on appelle ça un vecteur. J'en affiche seize. Que veut dire chaque nombre ? Personne ne sait le dire : c'est la boîte noire. Mais deux sons qui se ressemblent donnent deux colonnes de nombres proches. Je ne modifie pas BirdNET : je m'en sers comme d'une oreille déjà exercée.""")
 
 # ---------------------------------------------------------- 2 · regrouper
-x0, y0, _ = VUES[0]
+u0, v0 = N["vues"][0]
+BOXR = (3.3, 1.85, 9.4, 4.75)
+BOXL = (0.6, 1.85, 5.9, 4.75)
+xr, yr, _ = ecran(u0, v0, BOXR)
+xl, yl, _ = ecran(u0, v0, BOXL)
 gris = [GRIS] * NPTS
-gris[HERO] = POS
-cont0 = [None] * NPTS
-cont0[HERO] = INK
+gris[HERO] = GOLD
+cont_h = [None] * NPTS
+cont_h[HERO] = INK
+gros = {HERO: 0.2}
 
-s = diapo(RUB_C, "Chaque fenêtre de 5 s devient un point", "", ms=1600)
-nuage(s, x0, y0, gris, cont0, "nuage gris")
-texte(s, x0[HERO] + 0.18, y0[HERO] - 0.08, 2.4, 0.3, "la fenêtre de Molokoï", size=11, color=POS, bold=True, nom="!!herot")
-panneau(s, [
-    f"{NPTS} fenêtres de Kaw, Molokoï, Trésor et Mataroni.",
-    "1 536 nombres ne se dessinent pas : on montre leur ombre sur l'écran, selon les deux directions où les fenêtres diffèrent le plus.",
-    [("Une ombre cache une partie du relief : on ne conclut jamais sur ce dessin seul.", {"italic": True, "color": MUTED})],
-])
-notes(s, """Voici notre fenêtre, et 400 autres, chacune un point. Un point à 1 536 coordonnées ne se dessine pas : on projette son ombre sur l'écran, selon les deux directions où les fenêtres diffèrent le plus. C'est une ombre : elle cache une partie du relief. On s'en sert pour voir, jamais pour conclure.""")
+s = diapo(RUB_C, "Chaque fenêtre devient un point dans l'espace", "", ms=1600)
+vecteur(s, 0.75)
+nuage(s, xr, yr, gris, cont_h, "nuage", rayon=gros)
+fleche(s, 0.75 + VW + 0.12, vmid, xr[HERO] - 0.02, yr[HERO] + R_PT / 2, color=GOLD, width=1.5, nom="!!lien", pointe=True)
+texte(s, 3.3, 6.68, 9.4, 0.3, f"Un point = une fenêtre de 3 s ; ici {NPTS} fenêtres de Kaw, Molokoï, Trésor et Mataroni, vues à plat.", size=12, color=MUTED, nom="!!cap")
+notes(s, f"""Une colonne de {fr(DIM)} nombres, c'est une position dans un espace à {fr(DIM)} dimensions : chaque fenêtre devient un point. Notre fenêtre, c'est le point jaune. Les autres points sont {NPTS} fenêtres de quatre forêts. Un espace à {fr(DIM)} dimensions ne se dessine pas : on le met à plat, comme une ombre portée. Deux fenêtres qui se ressemblent sont deux points proches.""")
 
-s = diapo(RUB_C, "L'ordinateur forme des groupes de fenêtres qui se ressemblent", "", ms=1000)
-nuage(s, x0, y0, [GROUPES[g] for g in N["groupe"]], None, "groupes")
-panneau(s, [
-    "C'est le clustering : 4 groupes, calculés sur les 1 536 nombres, pas sur l'écran.",
-    "Personne ne lui dit ce qu'il y a dans les fenêtres.",
-    "Si le chant d'A. blanci marquait fortement la signature, un groupe devrait le rassembler.",
-])
-notes(s, """Première idée, la plus simple : demander à l'ordinateur de faire des paquets de fenêtres qui se ressemblent, sans rien lui dire. C'est le clustering. Si le chant d'A. blanci marquait fortement la signature, un des paquets devrait le rassembler.""")
+s = diapo(RUB_C, "Les fenêtres qui se ressemblent forment des groupes", "", ms=1000)
+vecteur(s, 0.75)
+coulg = [GROUPES[g] for g in N["groupe"]]
+nuage(s, xr, yr, coulg, cont_h, "groupes", rayon=gros)
+fleche(s, 0.75 + VW + 0.12, vmid, xr[HERO] - 0.02, yr[HERO] + R_PT / 2, color=GOLD, width=1.5, nom="!!lien", pointe=True)
+texte(s, 3.3, 6.68, 9.4, 0.3, "Groupes formés par l'ordinateur sur les 1 024 nombres, sans rien savoir du contenu des fenêtres.", size=12, color=MUTED, nom="!!cap")
+notes(s, """Demandons à l'ordinateur de faire des paquets de fenêtres qui se ressemblent, sans rien lui dire de leur contenu. C'est le clustering. Il trouve des groupes. Mais qu'est-ce qui les fait, ces groupes ?""")
 
-s = diapo(RUB_C, "Les groupes ne suivent pas vraiment les forêts", "", ms=1000)
-nuage(s, x0, y0, [SITES[k] for k in SITE], None, "sites")
-legende(s, [(c, NOM_SITE[k], False) for k, c in SITES.items()])
-panneau(s, [
-    "Même nuage, coloré par forêt.",
-    "Je m'attendais à ce que chaque groupe soit une forêt, avec son ambiance propre.",
-    "Mataroni se détache un peu ; les autres forêts se mélangent.",
-])
-notes(s, """Recolorons par forêt. Je m'attendais à ce que les paquets soient les forêts, chacune avec son ambiance : sa rivière, ses insectes. Ce n'est vrai qu'en partie : Mataroni se détache un peu, le reste se mélange. Mais attention, c'est un dessin, une ombre : vérifions sur les vrais nombres.""")
+VAR = D["variance"]
+nom_fac = {"site": "le site", "point d'écoute (dans son site)": "le point d'écoute, dans son site", "moment de la journée": "le moment de la journée", "mois": "le mois", "présence d'A. blanci": "la présence d'A. blanci"}
+premier = "le lieu" if {VAR[0]["facteur"], VAR[1]["facteur"]} == {"site", "point d'écoute (dans son site)"} else nom_fac[VAR[0]["facteur"]]
+pos_b = next(i for i, v in enumerate(VAR) if v["facteur"] == "présence d'A. blanci")
+s = diapo(RUB_C, f"Ce qui rend deux fenêtres semblables : d'abord {premier}, presque pas A. blanci" if pos_b >= 2 else "Ce qui rend deux fenêtres semblables", "", ms=1400)
+nuage(s, xl, yl, coulg, cont_h, "facteurs", rayon=gros)
+texte(s, 7.0, 1.85, 5.7, 0.6, "Part des différences entre fenêtres expliquée par chaque facteur", size=14, color=MUTED, nom="!!vt")
+vmax = max(v["part"] for v in VAR) * 1.05
+for r, v in enumerate(VAR):
+    yb = 2.65 + r * 0.78
+    blanci = v["facteur"] == "présence d'A. blanci"
+    coul = POS if blanci else TEAL
+    lib = v["facteur"][0].upper() + v["facteur"][1:]
+    texte(s, 7.0, yb - 0.02, 2.35, 0.6, lib, size=14, bold=blanci, color=POS if blanci else INK, nom=f"!!vf{r}")
+    lw = 2.55 * v["part"] / vmax
+    boite(s, 9.45, yb, max(lw, 0.02), 0.32, coul, nom=f"!!vb{r}")
+    texte(s, 9.55 + 2.55 * v["part"] / vmax, yb - 0.01, 0.9, 0.35, f"{fr(100 * v['part'], 1)} %", size=14, bold=True, color=coul, nom=f"!!vv{r}")
+texte(s, 7.0, 6.5, 5.7, 0.4, f"{fr(D['n_annotees'])} fenêtres écoutées, {D['n_sites_annotes']} sites ; même ordre sur {fr(D['n_hasard'])} fenêtres tirées au hasard.", size=11, color=MUTED, nom="!!vn")
+VH_ = D["variance_hasard"]
+notes(s, f"""Pour chaque facteur, je mesure quelle part des différences entre fenêtres il explique, sur les {fr(D['n_annotees'])} fenêtres que j'ai écoutées. Dans l'ordre : {', '.join(f"{nom_fac[v['facteur']]}, {fr(100 * v['part'], 1)} %" for v in VAR)}. Ce qui rapproche deux fenêtres, c'est d'abord le lieu et l'ambiance du moment. La présence d'A. blanci n'explique presque rien. Contrôle : sur des fenêtres tirées au hasard, l'ordre des quatre premiers facteurs est {', '.join(f"{nom_fac[k]} {fr(100 * x, 1)} %" for k, x in sorted(VH_.items(), key=lambda kv: -kv[1]))}. Chaque facteur est pris seul ; ils se recouvrent en partie, le mois et le site surtout, puisque chaque relevé a ses dates. Le moment de la journée et la présence d'A. blanci sont à égalité, tout en bas : la différence entre les deux n'est pas significative.""")
 
-# diapo mesurée : ce qui organise les groupes
-C = D["clusters"]
-s = diapo(RUB_C, "Mesuré : ni la forêt ni l'heure ne font les groupes, mais l'un d'eux attire le chant", "", transition=False)
-fac = ["site", "point d'écoute", "moment de la journée", "mois"]
-X0, Y0, LW, H = 0.9, 2.3, 6.6, 3.6
-echelle = max(0.5, max(C[n][f]["hi"] for n in ("fenetre", "enregistrement") for f in fac) * 1.15)
-texte(s, X0, 1.75, 7.5, 0.35, "Accord entre les groupes et chaque facteur (0 = aucun, 1 = les groupes sont ce facteur)", size=13, color=MUTED)
-for k, f in enumerate(fac):
-    yb = Y0 + k * 0.9
-    texte(s, X0, yb + 0.05, 1.9, 0.6, f, size=13, color=INK, bold=True)
-    for j, (niv, coul, _lib) in enumerate((("fenetre", TEAL, "fenêtres de 5 s"), ("enregistrement", GOLD, "enregistrements entiers"))):
-        v = C[niv][f]
-        yy = yb + j * 0.34
-        boite(s, X0 + 2.0, yy, LW * v["ari"] / echelle, 0.26, coul)
-        boite(s, X0 + 2.0 + LW * v["lo"] / echelle, yy + 0.12, LW * (v["hi"] - v["lo"]) / echelle, 0.02, INK)
-        texte(s, X0 + 2.1 + LW * v["hi"] / echelle, yy - 0.02, 0.8, 0.3, fr(v["ari"], 2), size=11, color=INK)
-boite(s, X0 + 2.0, 6.0, 0.2, 0.2, TEAL)
-texte(s, X0 + 2.3, 5.97, 2.2, 0.3, f"{fr(C['n_fenetres'])} fenêtres", size=11, color=MUTED)
-boite(s, X0 + 4.3, 6.0, 0.2, 0.2, GOLD)
-texte(s, X0 + 4.6, 5.97, 4.2, 0.3, f"{fr(C['n_enregistrements'])} enregistrements (moyenne de leurs fenêtres)", size=11, color=MUTED)
-pp = np.array(C["positifs_par_groupe"])
-ph = np.array(C["hasard_par_groupe"])
-gb = int(np.argmax(pp))
-pos_g, tot_g = C["annotees_par_groupe"][gb]
-pct = lambda x: f"{fr(100 * x)} %"  # noqa: E731
-panneau(s, [
-    [B("Méthode")],
-    f"k-moyennes, k = {C['k']} (autant que de sites), sur les 8 sites ; trait noir : intervalle à 95 % (bootstrap, 200 tirages).",
-    [B("Le groupe du chant")],
-    f"Un groupe pèse {pct(ph[gb])} des fenêtres de la forêt, mais rassemble {pct(pp[gb])} de mes fenêtres avec chant ; {pct(pos_g / tot_g)} des fenêtres annotées qu'il contient ont du chant, sur tous les sites.",
-    f"Mais {pct(1 - pp[gb])} des chants sont ailleurs, et ce que vaut le reste du groupe ne se saura qu'en l'écoutant.",
-], size=12)
-notes(s, f"""Je l'ai mesuré sur les 1 536 nombres, pas sur le dessin. Pour chaque facteur, un indice d'accord entre les groupes et ce facteur : zéro, aucun lien ; un, les groupes sont exactement ce facteur. En bleu-vert, au niveau des fenêtres de cinq secondes ; en jaune, au niveau des enregistrements entiers. Le site ressort le plus, mais l'accord reste faible : ni la forêt, ni l'heure, ni le mois n'organisent vraiment ces groupes. En revanche, surprise : un des {C['k']} groupes, qui ne pèse que {pct(ph[gb])} de la forêt, rassemble {pct(pp[gb])} de mes fenêtres avec chant, et presque toutes les fenêtres annotées qui y tombent ont du chant. Le clustering n'est donc pas aveugle au chant. Mais il en laisse plus de la moitié ailleurs, il ne donne aucune certitude, et il ne s'améliore pas quand j'écoute. Pour ça, il faut apprendre à partir de mes exemples. Et c'est une piste pour la suite : écouter une trentaine de fenêtres tirées au hasard dans ce groupe.""")
+# dilution
+CH = K["chant"]
+s = diapo(RUB_C, "Dans une fenêtre, le chant d'A. blanci ne pèse presque rien", "", transition=False)
+s.shapes.add_picture(str(ICI / "fenetre_spectro.png"), Inches(0.5), Inches(1.75), height=Inches(4.9))
+stats = [
+    (f"{fr(100 * CH['temps_mediane'])} %", f"du temps : une note de {fr(CH['duree_note_mediane_s'], 1)} s ({fr(100 * CH['temps_p25'])} à {fr(100 * CH['temps_p75'])} % selon le chant)"),
+    (f"{fr(100 * CH['bande'])} %", "des fréquences : 4,4 à 5,5 kHz sur les 15 kHz que lit BirdNET"),
+    (f"{fr(100 * CH['surface_mediane'], 1)} %", "de l'image"),
+]
+for r, (gros_, petit) in enumerate(stats):
+    yb = 1.85 + r * 1.3
+    boite(s, 7.4, yb, 5.3, 1.12, PALER, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.06)
+    texte(s, 7.6, yb + 0.15, 1.6, 0.8, gros_, size=30, bold=True, font="Cambria", color=GOLD if r == 2 else TEAL)
+    texte(s, 9.25, yb + 0.18, 3.3, 0.85, petit, size=13, color=INK, anchor="m")
+texte(s, 7.4, 5.85, 5.3, 0.8, "Le reste, c'est la forêt : l'information « A. blanci » est diluée dans un océan de bruit.", size=15, bold=True, color=INK)
+notes(s, f"""Pourquoi ? Revenons à notre fenêtre de trois secondes, en spectrogramme. La note d'A. blanci est dans le cadre jaune. Elle dure environ {fr(CH['duree_note_mediane_s'], 1)} seconde : {fr(100 * CH['temps_mediane'])} % du temps de la fenêtre, entre {fr(100 * CH['temps_p25'])} et {fr(100 * CH['temps_p75'])} % selon les chants, mesuré sur {CH['n_fenetres']} fenêtres où j'ai marqué les notes une à une. Elle n'occupe que {fr(100 * CH['bande'])} % des fréquences. Au total, à peine {fr(100 * CH['surface_mediane'], 1)} % de l'image. Tout le reste, c'est la forêt. Les nombres de BirdNET résument toute la fenêtre : l'information sur la grenouille y est diluée dans un océan de bruit. Le regroupement automatique ne peut pas la faire ressortir seul : il faut lui apprendre ce qu'on cherche.""")
 
 # ---------------------------------------------------------- 3 · apprendre
-# split : annotées (tour 0 + héros) à gauche, en attente à droite
 connu0 = (TOUR == -2) | (TOUR == 0)
-u0, v0 = N["vues"][0]
-u0, v0 = np.array(u0), np.array(v0)
+u0a, v0a = np.array(u0), np.array(v0)
 xs, ys = np.zeros(NPTS), np.zeros(NPTS)
-L = (0.75, 2.25, 3.6, 4.3)
-R = (4.95, 2.25, 3.6, 4.3)
+L = (0.7, 2.35, 5.75, 4.25)
+R = (6.95, 2.35, 5.75, 4.25)
 for masque, box in ((connu0, L), (~connu0, R)):
-    xx, yy, _ = ecran(u0[masque], v0[masque], box)
+    xx, yy, _ = ecran(u0a[masque], v0a[masque], box)
     xs[masque], ys[masque] = xx, yy
 coul0, cont_0 = etat(0)
 n_ann0 = int(connu0.sum())
 
 s = diapo(RUB_K, "J'écoute et j'annote : la machine apprend sur mes exemples", "", ms=1500)
-boite(s, 4.7, 1.8, 0.02, 4.85, SAGE, nom="!!split")
-texte(s, 0.75, 1.8, 3.6, 0.35, f"Annotées ({n_ann0})", size=14, color=INK, bold=True, nom="!!hl")
-texte(s, 4.95, 1.8, 3.6, 0.35, f"En attente ({NPTS - n_ann0})", size=14, color=MUTED, bold=True, nom="!!hr")
+boite(s, 6.66, 1.85, 0.02, 4.85, SAGE, nom="!!split")
+texte(s, 0.7, 1.85, 5.75, 0.35, f"Annotées ({n_ann0})", size=15, color=INK, bold=True, nom="!!hl")
+texte(s, 6.95, 1.85, 5.75, 0.35, f"En attente ({NPTS - n_ann0})", size=15, color=MUTED, bold=True, nom="!!hr")
 nuage(s, xs, ys, coul0, cont_0, "split")
 legende(s, [(POS, "A. blanci", True), (NEG, "autre son", True), (GRIS, "en attente", False)])
-A_ = D
-panneau(s, [
-    "J'écoute des fenêtres et je dis : A. blanci, ou autre chose (oiseau, pluie, autre grenouille…).",
-    f"À ce jour : {fr(A_['n_annotees'])} fenêtres annotées, dont {fr(A_['n_positives'])} avec A. blanci, sur {A_['n_micros_annotes']} points d'écoute.",
-    "Ici, on rejoue l'apprentissage depuis le début, avec mes vraies annotations.",
-])
-notes(s, f"""Deuxième idée : apprendre. J'écoute des fenêtres et je les étiquette : A. blanci, ou autre chose. À ce jour, {fr(A_['n_annotees'])} fenêtres annotées, dont {fr(A_['n_positives'])} avec le chant. À gauche, les fenêtres déjà écoutées, à droite l'immense majorité, en attente. Ce que vous allez voir est un rejeu : on repart de quelques dizaines d'annotations et on refait le chemin, avec mes vraies étiquettes.""")
+notes(s, f"""Alors on apprend. J'écoute des fenêtres et je les étiquette : A. blanci, ou autre chose. À ce jour, {fr(D['n_annotees'])} fenêtres écoutées, dont {fr(D['n_positives'])} avec le chant, sur {D['n_micros_annotes']} points d'écoute. À gauche, les fenêtres déjà écoutées ; à droite, l'immense majorité, en attente. Ce que vous allez voir est un rejeu : on repart de {N['n_rejeu'][0]} annotations et on refait le chemin, avec mes vraies étiquettes.""")
 
 # scanner
+bande = D["bande"]
+bvals = np.array(bande["brut"])
+bmax = np.abs(bvals).max()
 poids = np.array(bande["poids"])
+CW, CX = 0.205, 1.0
 SY1, SY2 = 3.0, 4.35
 
 
+def cellule(v, pale=False):
+    t = min(1.0, abs(v) / bmax) * (0.25 if pale else 1)
+    base = "2A7F72" if v >= 0 else "C8553D"
+    a_ = [int(base[k:k + 2], 16) for k in (0, 2, 4)]
+    return "".join(f"{round(255 + (c - 255) * t):02X}" for c in a_)
+
+
 def bandes(s, scan_x, allume):
-    for j, v in enumerate(vals):
-        pale = allume and poids[j] < 0.35
-        boite(s, CX + j * CW, SY1, CW - 0.02, 0.5, cellule(v, pale), nom=f"!!c{j}")
+    for j, v in enumerate(bvals):
+        boite(s, CX + j * CW, SY1, CW - 0.02, 0.5, cellule(v, allume and poids[j] < 0.35), nom=f"!!c{j}")
         pj = poids[j] if allume else 0
         g = "".join(f"{round(255 + (c - 255) * pj):02X}" for c in (0x1E, 0x6B, 0x45))
         boite(s, CX + j * CW, SY2, CW - 0.02, 0.5, g if allume else GRIS_PALE, line=GRIS_PALE, nom=f"!!w{j}")
     boite(s, scan_x, SY1 - 0.2, 0.06, 1.85, GOLD, nom="!!scan")
-    texte(s, CX, SY1 - 0.5, 9.0, 0.3, "Les nombres d'une fenêtre avec A. blanci (48 des 1 536)", size=12, color=MUTED, nom="!!sl1")
+    texte(s, CX, SY1 - 0.5, 9.0, 0.3, f"Les nombres d'une fenêtre avec A. blanci (48 des {fr(DIM)})", size=12, color=MUTED, nom="!!sl1")
     texte(s, CX, SY2 + 0.58, 9.0, 0.3, "Poids appris par la tête : l'importance de chaque nombre", size=12, color=MUTED, nom="!!sl2")
 
 
 s = diapo(RUB_K, "Une petite tête de classification cherche ce qui distingue mes exemples", "", ms=900)
 bandes(s, CX - 0.15, False)
-texte(s, 1.0, 5.6, 11.6, 1.2, "La tête est un petit calcul ajouté au bout de Perch : la seule partie que j'entraîne, en quelques secondes, sur mes annotations.", size=15, color=INK, nom="!!sct")
-notes(s, """La machine reprend la signature de 1 536 nombres. Au bout de Perch, j'ajoute une petite tête de classification : c'est la seule partie que j'entraîne, et elle s'entraîne en quelques secondes sur un portable. Elle va passer les nombres au crible.""")
+texte(s, 1.0, 5.6, 11.6, 1.2, "La tête est un petit calcul ajouté au bout de BirdNET : la seule partie que j'entraîne, en quelques secondes, sur mes annotations.", size=15, color=INK, nom="!!sct")
+notes(s, f"""La machine reprend les {fr(DIM)} nombres. Au bout de BirdNET, j'ajoute une petite tête de classification : c'est la seule partie que j'entraîne, et elle s'entraîne en quelques secondes sur un portable. Elle va passer les nombres au crible.""")
 
 s = diapo(RUB_K, "Elle apprend quels nombres comptent, et ignore les autres", "", ms=2200)
 bandes(s, CX + 48 * CW + 0.1, True)
-texte(s, 1.0, 5.6, 11.6, 1.2, "Un poids pour chacun des 1 536 nombres : forts sur certains, presque nuls ailleurs. Ensemble, ils dessinent une direction « ressemble au chant d'A. blanci ». Aucun nombre n'est, à lui seul, « le nombre blanci ».", size=15, color=INK, nom="!!sct")
-notes(s, """Elle apprend un poids pour chaque nombre : élevé là où mes exemples avec chant diffèrent des autres, presque nul ailleurs. Les nombres qui comptent s'allument, les autres s'éteignent. Attention : ce n'est pas un nombre magique qui serait la grenouille. C'est une combinaison de poids, une direction dans l'espace des signatures. Et cette direction, on peut la regarder.""")
+texte(s, 1.0, 5.6, 11.6, 1.2, f"Un poids pour chacun des {fr(DIM)} nombres : forts sur certains, presque nuls ailleurs. Ensemble, ils dessinent une direction « ressemble au chant d'A. blanci ». Aucun nombre n'est, à lui seul, « le nombre blanci ».", size=15, color=INK, nom="!!sct")
+notes(s, """Elle apprend un poids pour chaque nombre : élevé là où mes exemples avec chant diffèrent des autres, presque nul ailleurs. Les nombres qui comptent s'allument, les autres s'éteignent. Ce n'est pas un nombre magique qui serait la grenouille : c'est une combinaison de poids, une direction dans l'espace. Et cette direction, on peut la regarder.""")
 
-# retour au nuage, vue ACP, annotations de départ
+x0, y0, _ = VUES[0]
 s = diapo(RUB_K, "Vu sous l'angle habituel, mes exemples sont mêlés", "", ms=1500)
 nuage(s, x0, y0, coul0, cont_0, "annotées, ACP")
 boussole(s, 0)
 legende(s, [(POS, "A. blanci", True), (NEG, "autre son", True), (GRIS, "en attente", False)])
-panneau(s, [
-    "Retour à l'ombre du début.",
-    "Verts et rouges sont mêlés : aucune ligne droite ne les sépare sur ce dessin.",
-    "La boussole indique d'où l'on regarde le nuage.",
-])
-notes(s, """Revenons au nuage, vu sous le même angle qu'au début. Les verts et les rouges sont mêlés : aucune ligne ne les sépare. La boussole, en haut à droite, dit d'où l'on regarde. La flèche verte, c'est la direction apprise par la tête : pour l'instant, elle pointe presque vers nous, on ne la voit pas.""")
+panneau(s, ["Retour au nuage, vu à plat.", "Verts et rouges sont mêlés : aucune ligne droite ne les sépare sur ce dessin.", "La boussole indique d'où l'on regarde."])
+notes(s, """Revenons au nuage, vu sous le même angle qu'au début. Les verts et les rouges sont mêlés : aucune ligne ne les sépare. La boussole dit d'où l'on regarde. La flèche verte, c'est la direction apprise par la tête : pour l'instant, elle pointe presque vers nous, on ne la voit pas.""")
 
 for k in range(1, len(N["vues"])):
     xk, yk, _ = VUES[k]
@@ -560,16 +591,10 @@ for k in range(1, len(N["vues"])):
     nuage(s, xk, yk, coul0, cont_0, f"rotation {k}")
     boussole(s, k)
     legende(s, [(POS, "A. blanci", True), (NEG, "autre son", True), (GRIS, "en attente", False)])
-    panneau(s, [
-        "Mêmes points, même nuage : seul l'angle de vue change.",
-        "On tourne jusqu'à regarder le nuage dans la direction apprise par la tête.",
-    ] if not dernier else [
-        "Axe horizontal : la direction apprise par la tête.",
-        "À droite, ce qui ressemble au chant ; à gauche, le reste.",
-        "Les verts et les rouges mêlés tout à l'heure étaient déjà séparés : l'ombre le cachait.",
-    ])
+    panneau(s, ["Mêmes points, même nuage : seul l'angle de vue change.", "On tourne jusqu'à regarder le nuage dans la direction apprise par la tête."] if not dernier else [
+        "Axe horizontal : la direction apprise par la tête.", "À droite, ce qui ressemble au chant ; à gauche, le reste.", "Les verts et les rouges mêlés tout à l'heure étaient déjà séparés : l'ombre le cachait."])
     notes(s, "Le nuage tourne : ce sont exactement les mêmes points, on change seulement l'angle de vue." if not dernier else
-          """Et voilà : regardé dans la direction apprise, le nuage se range. Les verts à droite, les rouges à gauche. Les points mêlés tout à l'heure étaient déjà séparés dans l'espace complet : c'est l'ombre en deux dimensions qui le cachait. Précision pour les curieux : l'axe est celui de la tête entraînée sur toutes mes annotations ; je le garde fixe pour la suite, pour que les points ne bougent plus et qu'on ne regarde que les couleurs.""")
+          """Et voilà : regardé dans la direction apprise, le nuage se range. Les verts à droite, les rouges à gauche. Les points mêlés tout à l'heure étaient déjà séparés dans l'espace complet : c'est l'ombre en deux dimensions qui le cachait. Pour les curieux : l'axe est celui de la tête entraînée sur toutes mes annotations ; je le garde fixe pour la suite, pour que les points ne bougent plus et qu'on ne regarde que les couleurs.""")
 
 xf, yf, (lo_u, hi_u) = VUES[-1]
 seuil_x = GX + (np.clip(N["seuil_u"], lo_u, hi_u) - lo_u) / (hi_u - lo_u) * (GW - R_PT)
@@ -585,15 +610,10 @@ s = diapo(RUB_K, "La tête note les fenêtres en attente, avec sa certitude", ""
 nuage(s, xf, yf, c, k_, "scores v0")
 ligne_seuil(s)
 legende(s, LEG_SC)
-panneau(s, [
-    "Sans contour : la couleur vient du modèle, pas de mon écoute.",
-    "Vert foncé : sûr que c'est A. blanci. Rouge terre : sûr que non. Or : il hésite.",
-    "Ligne : le seuil de décision.",
-], h=3.6)
+panneau(s, ["Sans contour : la couleur vient du modèle, pas de mon écoute.", "Vert foncé : sûr que c'est A. blanci. Rouge terre : sûr que non. Or : il hésite.", "Ligne : le seuil de décision."], h=3.6)
 jauge(s, 0)
 notes(s, f"""Les fenêtres en attente reçoivent une note de la tête. Sans contour, pour rappeler que ce n'est pas moi qui ai écouté. Vert foncé, le modèle est sûr qu'il y a le chant ; rouge terre, sûr que non ; doré, il hésite. En bas à droite, le score du modèle, mesuré sur des points d'écoute qu'il n'a jamais entendus : {fr(N['ap_rejeu'][0], 2)} sur 1 pour l'instant.""")
 
-# file 60-20-20 du tour 1
 file1 = {"incertaine": [], "meilleur score": [], "hasard": []}
 for i in range(NPTS):
     if TOUR[i] == 1 and N["cat1"][i] in file1:
@@ -610,7 +630,7 @@ for cat in file1:
     sel = [i for c_, i in choisis if c_ == cat]
     if not sel:
         continue
-    rows.append((cat, yrow, len(sel)))
+    rows.append((cat, yrow))
     for i in sel:
         xx[i], yy[i] = POP[0] + 0.35, yrow
         yrow += 0.3
@@ -620,19 +640,15 @@ nuage(s, xx, yy, c, k_, "file", seulement=[i for i in range(NPTS) if i not in se
 boite(s, *POP, "FFFFFF", line=INK, lw=1.25, nom="!!popup")
 nuage(s, xx, yy, c, k_, seulement=ids_file)
 texte(s, POP[0] + 0.2, POP[1] + 0.12, POP[2] - 0.4, 0.35, "File de réécoute", size=14, bold=True, nom="!!popt")
-for cat, yr, _n in rows:
+for cat, yr_ in rows:
     pct = {"incertaine": "60 % : là où il hésite", "meilleur score": "20 % : ses meilleurs scores", "hasard": "20 % : au hasard"}[cat]
-    texte(s, POP[0] + 0.6, yr - 0.05, 2.0, 0.3, pct, size=10, color=MUTED, nom=f"!!pc_{cat}")
+    texte(s, POP[0] + 0.6, yr_ - 0.05, 2.0, 0.3, pct, size=10, color=MUTED, nom=f"!!pc_{cat}")
 for _cat, i in choisis:
     fleche(s, POP[0] + 2.65, yy[i] + R_PT / 2, POP[0] + 3.2, yy[i] + R_PT / 2, color=SAGE, width=1.25, nom=f"!!fa{i}")
-    boite(s, POP[0] + 3.3, yy[i], R_PT, R_PT, POS if Y[i] == 1 else NEG, line=INK, forme=MSO_SHAPE.OVAL, nom=f"!!r{i}", lw=1.5)
-    texte(s, POP[0] + 3.5, yy[i] - 0.07, 0.8, 0.25, "blanci" if Y[i] == 1 else "autre", size=10, color=INK, nom=f"!!rt{i}")
+    boite(s, POP[0] + 3.3, yy[i], R_PT, R_PT, POS if Y[i] == 1 else NEG, line=INK, forme=MSO_SHAPE.OVAL, nom=f"!!r{i}", lw=LW_PT)
+    texte(s, POP[0] + 3.5, yy[i] - 0.08, 0.8, 0.25, "blanci" if Y[i] == 1 else "autre", size=10, color=INK, nom=f"!!rt{i}")
 legende(s, LEG_SC)
-panneau(s, [
-    "Le modèle choisit quoi me faire écouter :",
-    "60 % de fenêtres où il hésite, 20 % de ses meilleurs scores (pour traquer ses fausses alertes), 20 % au hasard (pour ne rien oublier).",
-    "À droite de chaque fenêtre : ce que j'ai entendu.",
-], h=3.6)
+panneau(s, ["Le modèle choisit quoi me faire écouter :", "60 % de fenêtres où il hésite, 20 % de ses meilleurs scores (pour traquer ses fausses alertes), 20 % au hasard (pour ne rien oublier).", "À droite de chaque fenêtre : ce que j'ai entendu."], h=3.6)
 jauge(s, 0)
 notes(s, """Le modèle me propose une file de réécoute. Soixante pour cent de fenêtres où il hésite : c'est là que mon oreille lui apprend le plus. Vingt pour cent de ses meilleurs scores, pour attraper ses fausses alertes. Vingt pour cent au hasard, pour qu'il ne s'enferme pas dans ses certitudes. J'écoute, et je tranche : à droite de chaque fenêtre, ce que j'ai entendu. Ces fenêtres réécoutées ne servent jamais à noter le modèle.""")
 
@@ -678,19 +694,20 @@ cv = SIM["courbes"]
 s = diapo(RUB_K, "Comment on saura que ça marche", "", transition=False)
 s.shapes.add_picture(str(ICI / "courbe.png"), Inches(0.6), Inches(1.75), height=Inches(4.6))
 texte(s, 0.6, 6.4, 7.2, 0.6, f"Rejeu sur mes annotations : départ à {SIM['N0']} fenêtres, +{SIM['lot']} par tour ; 10 répétitions (bande : min-max). Noté sur {SIM['n_eval_micros']} points d'écoute jamais vus ({fr(SIM['n_eval'])} fenêtres, dont {SIM['n_eval_pos']} avec chant).", size=11, color=MUTED, italic=True)
+mieux = cv["actif"]["moy"][-1] > cv["hasard"]["moy"][-1] + 0.01
 panneau(s, [
     [B("La note : la précision moyenne")],
     f"1 : toutes les fenêtres avec chant classées avant les autres ; au hasard : {fr(SIM['prevalence_eval'], 2)} ici.",
     [B("Ce que dit le rejeu")],
-    f"{SIM['N0']} fenêtres suffisent pour {fr(cv['actif']['moy'][0], 2)} ; la note plafonne vers {fr(cv['actif']['moy'][-1], 2)}. La file 60-20-20 ne bat pas le hasard ici.",
+    f"{SIM['N0']} fenêtres suffisent pour {fr(cv['actif']['moy'][0], 2)} ; la note plafonne vers {fr(cv['actif']['moy'][-1], 2)}." + (" La file 60-20-20 fait mieux que le hasard." if mieux else " La file 60-20-20 ne bat pas le hasard ici."),
     [B("Pas encore de note officielle")],
     "Ici le chant est fréquent (extraits choisis) ; dans la forêt entière il est bien plus rare et la note sera plus basse. Il faut geler un jeu de test tiré au sort.",
 ], size=12)
-notes(s, f"""Comment saura-t-on que ça marche ? Le modèle est noté sur des points d'écoute qu'il n'a jamais entendus, avec la précision moyenne : un, s'il classe toutes les fenêtres avec chant avant les autres ; un modèle qui répondrait au hasard aurait ici {fr(SIM['prevalence_eval'], 2)}. Sur le rejeu, avec seulement {SIM['N0']} fenêtres annotées, la note est déjà de {fr(cv['actif']['moy'][0], 2)} : la signature de Perch porte bien le chant. Elle monte puis plafonne vers {fr(cv['actif']['moy'][-1], 2)}. Et honnêtement, sur ce rejeu, choisir les fenêtres par la file 60-20-20 ne fait pas mieux que les tirer au hasard : mes annotations ont déjà été choisies par des files, le hasard parmi elles n'est pas le hasard dans la forêt. Deux limites, donc, avant d'annoncer un chiffre : ici le chant est fréquent, parce que j'ai écouté des extraits où il était probable ; dans la forêt entière il est bien plus rare, et la note sera plus basse. Il faut geler un jeu de test : des enregistrements tirés au sort, écoutés en entier, que le modèle ne verra jamais.""")
+notes(s, f"""Comment saura-t-on que ça marche ? Le modèle est noté sur des points d'écoute qu'il n'a jamais entendus, avec la précision moyenne : un, s'il classe toutes les fenêtres avec chant avant les autres ; un modèle qui répondrait au hasard aurait ici {fr(SIM['prevalence_eval'], 2)}. Sur le rejeu, avec {SIM['N0']} fenêtres annotées, la note est de {fr(cv['actif']['moy'][0], 2)} ; elle monte puis plafonne vers {fr(cv['actif']['moy'][-1], 2)}. {"La file 60-20-20 fait un peu mieux que le hasard." if mieux else "Et honnêtement, sur ce rejeu, choisir les fenêtres par la file 60-20-20 ne fait pas mieux que les tirer au hasard : mes annotations ont déjà été choisies par des files, le hasard parmi elles n'est pas le hasard dans la forêt."} Deux limites avant d'annoncer un chiffre : ici le chant est fréquent, parce que j'ai écouté des extraits où il était probable ; dans la forêt entière il est bien plus rare, et la note sera plus basse. Il faut geler un jeu de test : des enregistrements tirés au sort, écoutés en entier, que le modèle ne verra jamais.""")
 
 # la suite
 s = diapo(RUB_S, "Février 2027 : de la carte SD à la carte de présence", "", transition=False)
-etapes = [("Cartes SD", "nouvelle campagne"), ("Contrôle qualité", "pistes, durées, relevés"), ("Encodage Perch", "≈ 50 fois plus vite que l'écoute"), ("Scores", "par fenêtre et par enregistrement"), ("Écoute ciblée", "les hésitations d'abord")]
+etapes = [("Cartes SD", "nouvelle campagne"), ("Contrôle qualité", "pistes, durées, relevés"), ("Encodage BirdNET", "plus de 50 fois plus vite que l'écoute"), ("Scores", "par fenêtre et par enregistrement"), ("Écoute ciblée", "les hésitations d'abord")]
 for k, (t, st) in enumerate(etapes):
     x = 0.6 + k * 2.5
     boite(s, x, 1.95, 2.2, 1.35, PALER if k < 4 else PALE, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.08)
@@ -702,17 +719,17 @@ fleche(s, 11.6, 3.35, 11.6, 3.75, color=SAGE, width=2)
 texte(s, 7.8, 3.8, 4.95, 0.6, "réentraînement : les nouvelles données affinent le modèle", size=12, color=MUTED, align="r", italic=True)
 texte(s, 0.6, 4.4, 5.9, 2.6, [
     [B("Ce que le stage livre")],
-    f"Un corpus contrôlé et figé ({fr(95633)} enregistrements).",
-    f"Un poste d'annotation et {fr(D['n_annotees'])} fenêtres annotées.",
+    f"Un corpus contrôlé et figé ({fr(C['enregistrements'])} enregistrements).",
+    f"Un poste d'annotation et {fr(D['n_annotees'])} fenêtres écoutées.",
     "La chaîne encodage → tête → file d'écoute, testée.",
 ], size=14, after=6)
 texte(s, 6.9, 4.4, 5.9, 2.6, [
     [B("Ce qu'il reste à faire")],
     "Geler le jeu de test et donner une note officielle.",
-    "Choisir l'encodeur sur nos données (Perch, BirdNET 3).",
+    "Choisir l'encodeur sur nos données (BirdNET, Perch…).",
     "Suivre le modèle dans le temps : chaque nouvelle campagne est sa vraie épreuve.",
 ], size=14, after=6)
-notes(s, """Concrètement, pour la campagne de février : à la récupération des cartes, le contrôle qualité, puis l'encodage, une cinquantaine de fois plus rapide que l'écoute, puis les scores, et l'écoute ciblée des cas douteux. Ces nouvelles écoutes réentraînent le modèle. Le stage livre un corpus propre, un poste d'annotation, et la chaîne complète. Il reste à geler un jeu de test pour donner une vraie note, à choisir définitivement l'encodeur sur nos données, et à suivre le modèle dans le temps : chaque nouvelle campagne sera son vrai test.""")
+notes(s, """Concrètement, pour la campagne de février : à la récupération des cartes, le contrôle qualité, puis l'encodage, bien plus rapide que l'écoute, puis les scores, et l'écoute ciblée des cas douteux. Ces nouvelles écoutes réentraînent le modèle. Le stage livre un corpus propre, un poste d'annotation, et la chaîne complète. Il reste à geler un jeu de test pour donner une vraie note, à choisir définitivement l'encodeur sur nos données, et à suivre le modèle dans le temps : chaque nouvelle campagne sera son vrai test.""")
 
 # merci
 s = prs.slides.add_slide(BLANK)
@@ -732,19 +749,45 @@ import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-n = len(PLANCHE)
 cols = 5
+n = len(PLANCHE)
 fig, axes = plt.subplots(-(-n // cols), cols, figsize=(4 * cols, 2.6 * -(-n // cols)))
 for ax in axes.flat:
     ax.set_axis_off()
 for ax, (titre, x, y, coul, cont) in zip(axes.flat, PLANCHE, strict=False):
     ax.set_axis_on()
-    ax.scatter(x + R_PT / 2, -(y + R_PT / 2), s=10, c=["#" + c for c in coul],
-               edgecolors=["#" + c if c else "none" for c in (cont or [None] * len(x))], linewidths=1)
-    ax.set_xlim(GX - 0.1, GX + GW + 0.1)
-    ax.set_ylim(-(GY + GH + 0.1), -GY + 0.1)
+    ax.scatter(x + R_PT / 2, -(y + R_PT / 2), s=6, c=["#" + c for c in coul], edgecolors=["#" + c if c else "none" for c in (cont or [None] * len(x))], linewidths=0.6)
+    ax.set_xlim(0.4, 12.9)
+    ax.set_ylim(-7.0, -1.6)
     ax.set_title(titre, fontsize=9)
     ax.set_xticks([])
     ax.set_yticks([])
 fig.tight_layout()
 fig.savefig(ICI / "planche.png", dpi=70)
+
+# rendu de contrôle des diapos d'encodage (forme d'onde) : positions exactes des barres
+fig, axes = plt.subplots(1, 3, figsize=(18, 3.6))
+for ax, mode in zip(axes, ("entier", "fenetres", "zoom"), strict=True):
+    ax.set_facecolor("#" + ECRAN)
+    for i in range(NB):
+        if i in dans:
+            continue
+        t = i * PAS
+        if mode == "zoom":
+            xx_ = ZX0 + (t - F0) * ZPPS
+            if xx_ < 0 or xx_ > 13.3:
+                continue
+            ax.vlines(xx_, ZCY - lo[i] / PW * ZHH, ZCY - hi[i] / PW * ZHH, color="r")
+        else:
+            ax.vlines(WX0 + t * PPS, CY - lo[i] / P * HH, CY - hi[i] / P * HH, color="#" + ONDE, lw=0.6)
+    for j in range(NF):
+        t = F0 + j * FPAS
+        if mode == "zoom":
+            ax.vlines(ZX0 + (t - F0) * ZPPS, ZCY - flo[j] / PW * ZHH, ZCY - fhi[j] / PW * ZHH, color="#" + ONDE, lw=0.8)
+        else:
+            ax.vlines(WX0 + t * PPS, CY - flo[j] / P * HH, CY - fhi[j] / P * HH, color="#" + GOLD if mode == "fenetres" else "#" + ONDE, lw=0.3)
+    ax.set_xlim(0, 13.33)
+    ax.set_ylim(7.5, 0)
+    ax.set_title(mode)
+fig.tight_layout()
+fig.savefig(ICI / "planche_onde.png", dpi=70)
