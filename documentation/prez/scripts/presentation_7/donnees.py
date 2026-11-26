@@ -278,6 +278,46 @@ for t in TS:
     boussole.append({nom: [round(float(d @ v1), 3), round(float(d @ v2), 3)] for nom, d in (("ACP 1", a1), ("ACP 2", a2), ("tête", b1))})
     triedre.append({nom: [round(float(d @ v1), 4), round(float(d @ v2), 4)] for nom, d in REPERE.items()})
 seuil_u = float((-finale.intercept_[0] - X.mean(0) @ finale.coef_[0]) / np.linalg.norm(finale.coef_[0]))
+# frontière (score 0,5) de chaque version de la tête dans la vue finale : son hyperplan coupe le
+# plan de la vue (axes b1, b2, passant par le centre du nuage) selon la droite α u + β v + γ = 0
+mu = X.mean(0)
+frontieres = [[float(m.coef_[0] @ b1), float(m.coef_[0] @ b2), float(m.coef_[0] @ mu + m.intercept_[0])] for m in versions]
+uf, vf = Xc @ b1, Xc @ b2
+for t, (al, be, ga) in enumerate(frontieres):
+    accord = float(np.mean(np.sign(al * uf + be * vf + ga) == np.sign(np.array(scores[t]) - 0.5)))
+    print(f"frontière v{t} : angle {np.degrees(np.arctan2(be, al)):.0f}°, accord avec les couleurs {accord:.2f}")
+
+# entraînement de la tête finale, passe par passe : L-BFGS (le solveur de scikit-learn) sur le même
+# objectif, Σ poids_i × perte logistique_i + ‖w‖² / 2C, depuis des poids nuls ; chaque itération
+# relit toutes les fenêtres annotées
+from scipy.optimize import minimize  # noqa: E402
+from scipy.special import expit  # noqa: E402
+
+idx_f = np.concatenate([tr, [hero]])
+Xf, yf_ = Xa[idx_f].astype(np.float64), ya[idx_f]
+sw = np.where(yf_ == 1, len(yf_) / (2 * yf_.sum()), len(yf_) / (2 * (len(yf_) - yf_.sum())))
+sgn = 2.0 * yf_ - 1
+
+
+def objectif(th):
+    z = Xf @ th[:-1] + th[-1]
+    g = sw * (expit(z) - yf_)
+    return float((sw * np.logaddexp(0, -sgn * z)).sum() + 0.5 * th[:-1] @ th[:-1]), np.append(Xf.T @ g + th[:-1], g.sum())
+
+
+trajet = [np.zeros(Xf.shape[1] + 1)]
+minimize(objectif, trajet[0], jac=True, method="L-BFGS-B", callback=lambda th: trajet.append(th.copy()), options={"maxiter": 3000})
+trajet = np.array(trajet)
+print("entraînement :", len(trajet) - 1, "itérations ; écart max aux poids de scikit-learn", float(np.abs(trajet[-1, :-1] - finale.coef_[0]).max()))
+rng_t = np.random.default_rng(SEED + 2)
+ech = np.concatenate([rng_t.choice(np.flatnonzero(yf_ == c), 70, replace=False) for c in (1, 0)])
+dims16 = np.r_[0:8, len(finale.coef_[0]) - 8 : len(finale.coef_[0])]
+OUT["entrainement"] = {
+    "poids": trajet[:, dims16].round(3).tolist(),
+    "score_hero": expit(trajet[:, :-1] @ Xa[hero] + trajet[:, -1]).round(3).tolist(),
+    "scores_ech": expit(trajet[:, :-1] @ Xf[ech].T + trajet[:, -1:]).round(3).tolist(), "y_ech": yf_[ech].astype(int).tolist(),
+    "n_fenetres": int(len(yf_)), "n_pos": int(yf_.sum()),
+}
 groupes = KMeans(4, n_init=10, random_state=SEED).fit_predict(X).tolist()
 # bande de 48 nombres de la fenêtre héros et poids de la tête finale sur ces 48 nombres
 w = finale.coef_[0]
@@ -286,7 +326,7 @@ dims = np.sort(np.concatenate([top, rng.choice(np.setdiff1d(np.arange(len(w)), t
 OUT["bande"] = {"dims": dims.tolist(), "brut": a["X"][hero][dims].round(3).tolist(), "poids": (np.abs(w[dims]) / np.abs(w).max()).round(3).tolist()}
 OUT["nuage"] = {
     "site": site.tolist(), "y": y.astype(int).tolist(), "tour": tour.astype(int).tolist(), "cat1": cat,
-    "groupe": groupes, "vues": vues, "ts": TS, "boussole": boussole, "triedre": triedre, "cube": cube, "seuil_u": seuil_u, "scores": scores,
+    "groupe": groupes, "vues": vues, "ts": TS, "boussole": boussole, "triedre": triedre, "cube": cube, "seuil_u": seuil_u, "scores": scores, "frontieres": frontieres,
     "ap_rejeu": [round(float(x), 3) for x in ap0], "n_rejeu": n0.tolist(),
 }
 brut = a["X"][hero]
