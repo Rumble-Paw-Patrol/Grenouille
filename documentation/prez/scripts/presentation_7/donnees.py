@@ -16,7 +16,7 @@ Entrées (rapports/presentation_7/, écrites par extraire_birdnet.py) : `birdnet
    fenêtres avec chant dans chaque groupe.
 2. Simulation d'apprentissage actif, tête linéaire (régression logistique, C = 1, classes
    équilibrées) : les micros sont coupés en deux (70 % apprentissage, 30 % évaluation, graine
-   fixe). Départ : 80 fenêtres annotées tirées au hasard dans les micros d'apprentissage ; à
+   fixe). Départ : 170 fenêtres annotées tirées au hasard dans les micros d'apprentissage ; à
    chaque tour, 40 fenêtres de plus, choisies 60-20-20 (incertaines, meilleurs scores, hasard)
    ou toutes au hasard ; on « révèle » leur label (déjà connu : c'est un rejeu). Note : AP sur
    les fenêtres des micros d'évaluation, jamais vues. 10 répétitions (graines), moyenne et
@@ -142,7 +142,7 @@ eval_pts = set(rng0.choice(pts_pos, max(1, int(0.3 * len(pts_pos))), replace=Fal
 is_eval = np.isin(pa, list(eval_pts))
 tr, te = np.flatnonzero(~is_eval), np.flatnonzero(is_eval)
 print("évaluation :", len(te), "fenêtres,", int(ya[te].sum()), "positives,", len(eval_pts), "micros")
-N0, LOT, TOURS = 80, 40, 8
+N0, LOT, TOURS = 170, 40, 8
 
 
 def tete(idx):
@@ -261,7 +261,13 @@ b1 = finale.coef_[0] / np.linalg.norm(finale.coef_[0])
 b2 = a1 - (a1 @ b1) * b1
 b2 /= np.linalg.norm(b2)
 TS = [0.0, 0.25, 0.5, 0.75, 1.0]
-vues, boussole = [], []
+# repère XYZ : toutes les vues sont des projections du même espace à 3 dimensions,
+# engendré par l'ACP 1 (X), l'ACP 2 (Y) et la direction de la tête rendue orthogonale aux deux (Z)
+e3 = b1 - (b1 @ a1) * a1 - (b1 @ a2) * a2
+e3 /= np.linalg.norm(e3)
+REPERE = {"X": a1, "Y": a2, "Z": e3}
+cube = float(max(np.percentile(np.abs(Xc @ d), 85) for d in REPERE.values()))
+vues, boussole, triedre = [], [], []
 for t in TS:
     v1 = (1 - t) * a1 + t * b1
     v1 /= np.linalg.norm(v1)
@@ -270,6 +276,7 @@ for t in TS:
     v2 /= np.linalg.norm(v2)
     vues.append([(Xc @ v1).round(4).tolist(), (Xc @ v2).round(4).tolist()])
     boussole.append({nom: [round(float(d @ v1), 3), round(float(d @ v2), 3)] for nom, d in (("ACP 1", a1), ("ACP 2", a2), ("tête", b1))})
+    triedre.append({nom: [round(float(d @ v1), 4), round(float(d @ v2), 4)] for nom, d in REPERE.items()})
 seuil_u = float((-finale.intercept_[0] - X.mean(0) @ finale.coef_[0]) / np.linalg.norm(finale.coef_[0]))
 groupes = KMeans(4, n_init=10, random_state=SEED).fit_predict(X).tolist()
 # bande de 48 nombres de la fenêtre héros et poids de la tête finale sur ces 48 nombres
@@ -279,11 +286,11 @@ dims = np.sort(np.concatenate([top, rng.choice(np.setdiff1d(np.arange(len(w)), t
 OUT["bande"] = {"dims": dims.tolist(), "brut": a["X"][hero][dims].round(3).tolist(), "poids": (np.abs(w[dims]) / np.abs(w).max()).round(3).tolist()}
 OUT["nuage"] = {
     "site": site.tolist(), "y": y.astype(int).tolist(), "tour": tour.astype(int).tolist(), "cat1": cat,
-    "groupe": groupes, "vues": vues, "ts": TS, "boussole": boussole, "seuil_u": seuil_u, "scores": scores,
+    "groupe": groupes, "vues": vues, "ts": TS, "boussole": boussole, "triedre": triedre, "cube": cube, "seuil_u": seuil_u, "scores": scores,
     "ap_rejeu": [round(float(x), 3) for x in ap0], "n_rejeu": n0.tolist(),
 }
 brut = a["X"][hero]
-OUT["vecteur"] = {"haut": brut[:8].round(2).tolist(), "bas": brut[-8:].round(2).tolist(), "min": round(float(brut.min()), 3), "max": round(float(brut.max()), 3),
+OUT["vecteur"] = {"haut": brut[:8].round(2).tolist(), "bas": brut[-8:].round(2).tolist(), "poids": np.concatenate([w[:8], w[-8:]]).round(2).tolist(), "poids_max": round(float(np.abs(w).max()), 2), "min": round(float(brut.min()), 3), "max": round(float(brut.max()), 3),
                   "corpus_min": round(float(np.percentile(e["X"], 0.5)), 3), "corpus_max": round(float(np.percentile(e["X"], 99.5)), 3)}
 (ICI / "donnees.json").write_text(json.dumps(OUT, ensure_ascii=False), encoding="utf-8")
 print("nuage :", len(X), "points ; révélés tours 0-4 :", len(rev), "; héros", OUT["hero"])

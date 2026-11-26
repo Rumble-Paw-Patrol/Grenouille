@@ -3,8 +3,8 @@
 
     uv run --with python-pptx python documentation/prez/scripts/presentation_7/deck.py [sortie.pptx]
 
-Sortie par défaut : `documentation/prez/presentation_7_pna_v2.pptx` (la v1 est retouchée à la main
-par Léonard : ne jamais écrire par-dessus). Lit dans `rapports/presentation_7/` : `donnees.json`
+Sortie par défaut : `documentation/prez/presentation_7_pna_v3.pptx` (la v1 est retouchée à la main
+par Léonard, la v2 est sa version de test : ne jamais écrire par-dessus). Lit dans `rapports/presentation_7/` : `donnees.json`
 et `courbe.png` (donnees.py, BirdNET 2.4), `onde.npz`, `fenetre_spectro.png`,
 `inv_sites_pna.png`, `chiffres_pna.json` (figures_pna.py), `spectro.png` et `extrait.wav`
 (figures_audio.py) ; et `documentation/prez/figures/titre.png`.
@@ -14,7 +14,8 @@ grandir et recolorer les formes qui portent le même nom (Morphose, PowerPoint 2
 365 ; un PowerPoint plus ancien fait un fondu). La forme d'onde est le vrai signal (minimum et
 maximum par tranche) ; le zoom sur la fenêtre de 3 s chasse le reste de l'enregistrement hors de
 l'écran. Les vues du nuage sont de vraies projections linéaires des 1 024 nombres de BirdNET.
-Les diapos intermédiaires de la rotation avancent seules (une seule frappe pour la rotation).
+Aucune diapo n'avance seule (une diapo à avance automatique empêche le retour en arrière) ; le
+réseau de neurones de la diapo « dans BirdNET » est un GIF animé, que PowerPoint joue en boucle.
 Écrit aussi `planche.png` (contrôle visuel des nuages) dans `rapports/presentation_7/`.
 """
 
@@ -36,7 +37,7 @@ from pptx.util import Inches, Pt
 DEPOT = Path(__file__).resolve().parents[4]
 ICI = DEPOT / "rapports" / "presentation_7"  # données, jamais committées
 FIG = DEPOT / "documentation" / "prez" / "figures"
-SORTIE = Path(sys.argv[1]) if len(sys.argv) > 1 else DEPOT / "documentation" / "prez" / "presentation_7_pna_v2.pptx"
+SORTIE = Path(sys.argv[1]) if len(sys.argv) > 1 else DEPOT / "documentation" / "prez" / "presentation_7_pna_v3.pptx"
 D = json.loads((ICI / "donnees.json").read_text(encoding="utf-8"))
 K = json.loads((ICI / "chiffres_pna.json").read_text(encoding="utf-8"))
 N = D["nuage"]
@@ -93,7 +94,18 @@ def morph(slide, ms=1200, auto=False):
         sld.append(el)
 
 
+ZOOM = []  # [(cx, cy, k)] : tout ce qui est dessiné est agrandi k fois autour de (cx, cy)
+
+
+def zt(x, y, w, h):
+    if not ZOOM:
+        return x, y, w, h
+    cx, cy, k = ZOOM[0]
+    return cx + (x - cx) * k, cy + (y - cy) * k, w * k, h * k
+
+
 def boite(s, x, y, w, h, fill=None, line=None, forme=MSO_SHAPE.RECTANGLE, nom=None, lw=0.75, dash=False, radius=None):
+    x, y, w, h = zt(x, y, w, h)
     sh = s.shapes.add_shape(forme, Inches(x), Inches(y), Inches(max(w, 0.001)), Inches(max(h, 0.001)))
     if nom:
         sh.name = nom
@@ -116,6 +128,7 @@ def boite(s, x, y, w, h, fill=None, line=None, forme=MSO_SHAPE.RECTANGLE, nom=No
 
 
 def texte(s, x, y, w, h, lignes, size=14, color=INK, bold=False, font="Calibri", align="l", nom=None, anchor="t", after=8, italic=False):
+    x, y, w, h = zt(x, y, w, h)
     tb = s.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
     if nom:
         tb.name = nom
@@ -203,7 +216,20 @@ def ecran(u, v, box=(GX, GY, GW, GH)):
     return x, y, (lo_u, hi_u)
 
 
+CX0, CY0 = GX + GW / 2, GY + GH / 2
 VUES = [ecran(*v) for v in N["vues"]]
+# chaque vue remplit le cadre (sinon la vue finale s'écrase : le nuage s'étale peu le long de la
+# direction de la tête) ; le cube suit exactement la même mise à l'échelle que les points
+ECH = []
+for u, v in N["vues"]:
+    lo_u, hi_u = np.percentile(u, [1, 99])
+    lo_v, hi_v = np.percentile(v, [1, 99])
+    ECH.append((lo_u, hi_u, lo_v, hi_v))
+
+
+def vers_ecran(k, u, v):
+    lo_u, hi_u, lo_v, hi_v = ECH[k]
+    return GX + R_PT / 2 + (u - lo_u) / (hi_u - lo_u) * (GW - R_PT), GY + R_PT / 2 + (1 - (v - lo_v) / (hi_v - lo_v)) * (GH - R_PT)
 
 
 def degrade(p):
@@ -229,17 +255,46 @@ def legende(s, items, y0=6.82, x=GX):
         x += 0.36 + 0.08 * len(lib) + 0.25
 
 
-def boussole(s, k):
-    """Trois flèches : où pointent l'ACP 1, l'ACP 2 et la direction de la tête dans la vue k."""
-    cx, cy, R = 10.9, 5.65, 0.62
-    boite(s, cx - R - 0.12, cy - R - 0.12, 2 * R + 0.24, 2 * R + 0.24, "FFFFFF", line=GRIS_PALE, forme=MSO_SHAPE.OVAL, nom="!!bous")
-    for nom, coul in (("ACP 1", MUTED), ("ACP 2", SAGE), ("tête", POS)):
-        dx, dy = N["boussole"][k][nom]
-        x2, y2 = cx + R * dx, cy - R * dy
-        fleche(s, cx, cy, x2 if abs(x2 - cx) > 0.01 else cx + 0.01, y2, color=coul, width=2.2 if nom == "tête" else 1.5, nom=f"!!b_{nom}")
-        lx = x2 + (0.06 if dx >= 0 else -0.5)
-        texte(s, lx, y2 - 0.12, 0.5, 0.22, nom, size=9, color=coul, bold=nom == "tête", nom=f"!!bl_{nom}", align="l" if dx >= 0 else "r")
-    texte(s, cx - 0.9, cy + R + 0.16, 1.8, 0.22, "angle de vue", size=9, color=MUTED, align="c", nom="!!bt")
+ANGLES = {}  # dernier angle de chaque segment : la Morphose tourne d'un angle à l'autre sans saut
+COUL_AXE = {"X": "3E7CB1", "Y": "D9822B", "Z": "8A6BBE"}
+
+
+def segment(s, x1, y1, x2, y2, nom, coul, ep=0.014):
+    L = float(np.hypot(x2 - x1, y2 - y1))
+    ang = float(np.degrees(np.arctan2(y2 - y1, x2 - x1))) if L > 1e-3 else ANGLES.get(nom, 0.0)
+    prec = ANGLES.get(nom)
+    if prec is None:  # même segment, tourné de 180° au besoin, entre 90 et 270 : loin du passage 360 → 0
+        ang = ang % 360
+        ang = ang + 180 if ang < 90 else ang - 180 if ang >= 270 else ang
+    else:
+        ang = min((ang + d for d in (-360, -180, 0, 180, 360)), key=lambda a: abs(a - prec))
+    ANGLES[nom] = ang
+    sh = boite(s, (x1 + x2) / 2 - L / 2, (y1 + y2) / 2 - ep / 2, max(L, 0.002), ep, coul, nom=nom)
+    sh.rotation = ang % 360
+
+
+def repere(s, k, cx=10.875, cy=5.72, c=0.5):
+    """Cube et axes X, Y, Z (à échelle fixe, dans le panneau) de l'espace à 3 dimensions dont
+    toutes les vues du nuage sont des ombres : X = ACP 1, Y = ACP 2, Z = direction de la tête
+    rendue orthogonale aux deux. Il tourne avec exactement les mêmes vecteurs que le nuage."""
+    T = N["triedre"][k]
+
+    def proj(a, b, d):
+        u = a * T["X"][0] + b * T["Y"][0] + d * T["Z"][0]
+        v = a * T["X"][1] + b * T["Y"][1] + d * T["Z"][1]
+        return cx + c * u, cy - c * v
+
+    coins = [(a, b, d) for a in (-1, 1) for b in (-1, 1) for d in (-1, 1)]
+    n = 0
+    for i, p_ in enumerate(coins):
+        for q in coins[i + 1:]:
+            if sum(x != y for x, y in zip(p_, q, strict=True)) == 1:
+                segment(s, *proj(*p_), *proj(*q), f"!!cube{n}", "B9C3BD", ep=0.014)
+                n += 1
+    for nom, (a, b, d) in (("X", (1.6, 0, 0)), ("Y", (0, 1.6, 0)), ("Z", (0, 0, 1.6))):
+        x2, y2 = proj(a, b, d)
+        segment(s, cx, cy, x2, y2, f"!!axe{nom}", COUL_AXE[nom], ep=0.035)
+        texte(s, x2 - 0.15 + (0.13 if x2 >= cx else -0.13), y2 - 0.17 + (0.11 if y2 >= cy else -0.11), 0.3, 0.3, nom, size=14, bold=True, color=COUL_AXE[nom], align="c", anchor="m", nom=f"!!axel{nom}", after=0)
 
 
 SC = N["scores"]
@@ -427,7 +482,7 @@ def case(v):
     return "".join(f"{round(255 + (c - 255) * t):02X}" for c in base)
 
 
-def vecteur(s, x):
+def vecteur(s, x, crochet=INK, legende_coul=MUTED, legende=None):
     rows = [("v", j) for j in range(8)] + [("e", None)] + [("v", 8 + j) for j in range(8)]
     for r, (kind, j) in enumerate(rows):
         y = VY0 + r * VH
@@ -438,21 +493,52 @@ def vecteur(s, x):
         texte(s, x, y, VW, VH, fr(vals[j], 2), size=13, color=INK, align="c", anchor="m", nom=f"!!vt{j}", after=0)
     bas = VY0 + len(rows) * VH
     for side, xx in (("g", x - 0.08), ("d", x + VW + 0.06)):
-        boite(s, xx, VY0 - 0.04, 0.02, bas - VY0 + 0.08, INK, nom=f"!!bk{side}")
-        boite(s, min(xx, xx + 0.08 * (1 if side == "g" else -1)), VY0 - 0.04, 0.1, 0.02, INK, nom=f"!!bk{side}h")
-        boite(s, min(xx, xx + 0.08 * (1 if side == "g" else -1)), bas + 0.02, 0.1, 0.02, INK, nom=f"!!bk{side}b")
-    texte(s, x - 0.6, bas + 0.12, VW + 1.2, 0.3, f"16 nombres affichés sur {fr(DIM)}", size=12, color=MUTED, align="c", nom="!!vlab")
+        boite(s, xx, VY0 - 0.04, 0.02, bas - VY0 + 0.08, crochet, nom=f"!!bk{side}")
+        boite(s, min(xx, xx + 0.08 * (1 if side == "g" else -1)), VY0 - 0.04, 0.1, 0.02, crochet, nom=f"!!bk{side}h")
+        boite(s, min(xx, xx + 0.08 * (1 if side == "g" else -1)), bas + 0.02, 0.1, 0.02, crochet, nom=f"!!bk{side}b")
+    texte(s, x - 0.6, bas + 0.12, VW + 1.2, 0.3, legende or f"16 nombres affichés sur {fr(DIM)}", size=12, color=legende_coul, align="c", nom="!!vlab")
     return VY0 + (bas - VY0) / 2
 
 
-s = diapo(RUB_E, f"Une fenêtre de 3 secondes devient {fr(DIM)} nombres", "", ms=1600)
+BNB = (7.0, 3.8, 1.65, 0.8)  # la boîte BirdNET de la diapo 7
+NOTE7 = f"""Zoomons sur cette fenêtre de trois secondes : la note d'A. blanci au milieu, et le bruit de la forêt autour. BirdNET la transforme en {fr(DIM)} nombres, rangés dans une colonne : on appelle ça un vecteur. J'en affiche seize. Je ne modifie pas BirdNET : je m'en sers comme d'une oreille déjà exercée. Regardons ce qu'il y a dans la boîte."""
+
+
+def diapo7(note):
+    s = diapo(RUB_E, f"Une fenêtre de 3 secondes devient {fr(DIM)} nombres", "", ms=1600)
+    onde(s, "zoom")
+    fleche(s, 6.62, 4.2, 6.95, 4.2, color=SAGE, width=2.2, nom="!!fa1")
+    boite(s, *BNB, DARK, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.12, nom="!!bn")
+    texte(s, *BNB, [[B("BirdNET")]], size=17, color="FFFFFF", align="c", anchor="m", nom="!!bnt")
+    fleche(s, 8.7, 4.2, 9.1, 4.2, color=SAGE, width=2.2, nom="!!fa2")
+    notes(s, note)
+    return vecteur(s, VX)
+
+
+vmid = diapo7(NOTE7)
+
+# dans BirdNET : la boîte grandit jusqu'à remplir l'écran, le reste est chassé au loin
+s = diapo(RUB_E, "BirdNET : un réseau de neurones qui reconnaît des motifs dans les spectrogrammes", "", ms=1700)
+ZOOM.append((BNB[0] + BNB[2] / 2, BNB[1] + BNB[3] / 2, 9.0))
 onde(s, "zoom")
-fleche(s, 6.62, 4.2, 6.95, 4.2, color=SAGE, width=2.2, nom="!!fa1")
-boite(s, 7.0, 3.8, 1.65, 0.8, DARK, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.12, nom="!!bn")
-texte(s, 7.0, 3.8, 1.65, 0.8, [[B("BirdNET")]], size=17, color="FFFFFF", align="c", anchor="m", nom="!!bnt")
-fleche(s, 8.7, 4.2, 9.1, 4.2, color=SAGE, width=2.2, nom="!!fa2")
-vmid = vecteur(s, VX)
-notes(s, f"""Zoomons sur cette fenêtre de trois secondes : la note d'A. blanci au milieu, et le bruit de la forêt autour. BirdNET, un réseau de neurones de l'université Cornell entraîné sur les chants de plus de 6 000 espèces, transforme ces trois secondes en {fr(DIM)} nombres, rangés dans une colonne : on appelle ça un vecteur. J'en affiche seize. Que veut dire chaque nombre ? Personne ne sait le dire : c'est la boîte noire. Mais deux sons qui se ressemblent donnent deux colonnes de nombres proches. Je ne modifie pas BirdNET : je m'en sers comme d'une oreille déjà exercée.""")
+ZOOM.clear()
+boite(s, 0.45, 1.6, 12.45, 5.4, DARK, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.03, nom="!!bn")
+texte(s, 0.75, 1.75, 3.0, 0.45, [[B("BirdNET")]], size=18, color="FFFFFF", nom="!!bnt")
+s.shapes.add_picture(str(ICI / "fenetre_spectro_sombre.png"), Inches(0.75), Inches(2.4), Inches(2.85), Inches(2.67))
+texte(s, 0.75, 5.12, 2.85, 0.3, "la fenêtre de 3 s, en spectrogramme", size=11, color=SAGE, align="c")
+fleche(s, 3.68, 3.73, 4.05, 3.73, color=GOLD, width=2.2)
+s.shapes.add_picture(str(ICI / "reseau.gif"), Inches(4.1), Inches(2.2), Inches(5.05), Inches(3.03))
+fleche(s, 9.2, 3.73, 9.6, 3.73, color=GOLD, width=2.2)
+vecteur(s, 10.0, crochet="FFFFFF", legende_coul=SAGE, legende=f"16 des {fr(DIM)} nombres")
+texte(s, 0.75, 5.55, 8.6, 1.3, [[
+    ("Entraîné sur les chants de plus de 6 000 espèces, il a appris à reconnaître des motifs dans les spectrogrammes. Il en ressort une ", {}),
+    ("signature", {"bold": True, "color": GOLD}),
+    (f" : l'embedding, un vecteur qui place la fenêtre de 3 s dans un espace à {fr(DIM)} dimensions.", {}),
+]], size=15, color="FFFFFF")
+notes(s, f"""Ouvrons la boîte. BirdNET est un réseau de neurones, développé par l'université Cornell. On lui donne la fenêtre sous forme de spectrogramme, une image du son. Couche après couche, ses neurones s'activent : ils ont appris, sur les chants de plus de 6 000 espèces, à reconnaître des motifs dans ces images, une note qui monte, un trille, un bourdonnement. De tout ce travail ressort une signature : {fr(DIM)} nombres, l'embedding. C'est ce vecteur. Il place notre fenêtre de trois secondes dans un espace à {fr(DIM)} dimensions. Que veut dire chaque nombre, pris seul ? Personne ne sait le dire : c'est la boîte noire. Mais deux sons qui se ressemblent ont des signatures proches.""")
+
+# retour : la boîte se referme
+vmid = diapo7("""Refermons la boîte : une fenêtre de trois secondes, une signature de 1 024 nombres. Voyons maintenant ce qu'on fait de ces signatures.""".replace("1 024", fr(DIM)))
 
 # ---------------------------------------------------------- 2 · regrouper
 u0, v0 = N["vues"][0]
@@ -539,65 +625,68 @@ nuage(s, xs, ys, coul0, cont_0, "split")
 legende(s, [(POS, "A. blanci", True), (NEG, "autre son", True), (GRIS, "en attente", False)])
 notes(s, f"""Alors on apprend. J'écoute des fenêtres et je les étiquette : A. blanci, ou autre chose. À ce jour, {fr(D['n_annotees'])} fenêtres écoutées, dont {fr(D['n_positives'])} avec le chant, sur {D['n_micros_annotes']} points d'écoute. À gauche, les fenêtres déjà écoutées ; à droite, l'immense majorité, en attente. Ce que vous allez voir est un rejeu : on repart de {N['n_rejeu'][0]} annotations et on refait le chemin, avec mes vraies étiquettes.""")
 
-# scanner
-bande = D["bande"]
-bvals = np.array(bande["brut"])
-bmax = np.abs(bvals).max()
-poids = np.array(bande["poids"])
-CW, CX = 0.205, 1.0
-SY1, SY2 = 3.0, 4.35
+# scanner : la signature ne bouge pas ; le scanner descend et les poids apparaissent
+PDS = V["poids"]
+PMAX = max(abs(p) for p in PDS)
 
 
-def cellule(v, pale=False):
-    t = min(1.0, abs(v) / bmax) * (0.25 if pale else 1)
-    base = "2A7F72" if v >= 0 else "C8553D"
-    a_ = [int(base[k:k + 2], 16) for k in (0, 2, 4)]
-    return "".join(f"{round(255 + (c - 255) * t):02X}" for c in a_)
+def poids_cell(p):
+    base = (0x1E, 0x6B, 0x45) if p >= 0 else (0xC8, 0x55, 0x3D)
+    t = min(1.0, abs(p) / PMAX) * 0.85
+    return "".join(f"{round(255 + (c - 255) * t):02X}" for c in base)
 
 
-def bandes(s, scan_x, allume):
-    for j, v in enumerate(bvals):
-        boite(s, CX + j * CW, SY1, CW - 0.02, 0.5, cellule(v, allume and poids[j] < 0.35), nom=f"!!c{j}")
-        pj = poids[j] if allume else 0
-        g = "".join(f"{round(255 + (c - 255) * pj):02X}" for c in (0x1E, 0x6B, 0x45))
-        boite(s, CX + j * CW, SY2, CW - 0.02, 0.5, g if allume else GRIS_PALE, line=GRIS_PALE, nom=f"!!w{j}")
-    boite(s, scan_x, SY1 - 0.2, 0.06, 1.85, GOLD, nom="!!scan")
-    texte(s, CX, SY1 - 0.5, 9.0, 0.3, f"Les nombres d'une fenêtre avec A. blanci (48 des {fr(DIM)})", size=12, color=MUTED, nom="!!sl1")
-    texte(s, CX, SY2 + 0.58, 9.0, 0.3, "Poids appris par la tête : l'importance de chaque nombre", size=12, color=MUTED, nom="!!sl2")
+def scanner(s, revele):
+    xs_ = 3.2
+    vecteur(s, xs_)
+    rows = list(range(8)) + [None] + [8 + j for j in range(8)]
+    xw = xs_ + VW + 0.75
+    texte(s, xs_ + VW + 0.1, VY0 + 8 * VH - 0.1, 0.55, 0.45, "×", size=22, color=MUTED, align="c", anchor="m", nom="!!fois", after=0)
+    for r, j in enumerate(rows):
+        y = VY0 + r * VH
+        if j is None:
+            texte(s, xw, y - 0.04, VW, VH + 0.05, "⋮", size=16, color=MUTED, align="c", nom="!!well", anchor="m", after=0)
+            continue
+        boite(s, xw, y, VW, VH, poids_cell(PDS[j]) if revele else GRIS_PALE, line="C9D3CE", lw=0.5, nom=f"!!w{j}")
+        texte(s, xw, y, VW, VH, (("+" if PDS[j] > 0 else "") + fr(PDS[j], 1)) if revele else " ", size=13, color=INK, align="c", anchor="m", nom=f"!!wt{j}", after=0)
+    bas = VY0 + 17 * VH
+    texte(s, xs_ - 0.3, 1.55, VW + 0.6, 0.35, "Signature", size=13, bold=True, color=INK, align="c", nom="!!h1")
+    texte(s, xw - 0.3, 1.55, VW + 0.6, 0.35, "Poids appris", size=13, bold=True, color=POS, align="c", nom="!!h2")
+    boite(s, xs_ - 0.3, (bas + 0.06) if revele else (VY0 - 0.12), xw + VW + 0.3 - (xs_ - 0.3), 0.05, GOLD, nom="!!scan")
 
 
-s = diapo(RUB_K, "Une petite tête de classification cherche ce qui distingue mes exemples", "", ms=900)
-bandes(s, CX - 0.15, False)
-texte(s, 1.0, 5.6, 11.6, 1.2, "La tête est un petit calcul ajouté au bout de BirdNET : la seule partie que j'entraîne, en quelques secondes, sur mes annotations.", size=15, color=INK, nom="!!sct")
-notes(s, f"""La machine reprend les {fr(DIM)} nombres. Au bout de BirdNET, j'ajoute une petite tête de classification : c'est la seule partie que j'entraîne, et elle s'entraîne en quelques secondes sur un portable. Elle va passer les nombres au crible.""")
+s = diapo(RUB_K, "Une petite tête de classification passe les nombres au crible", "", ms=900)
+scanner(s, False)
+panneau(s, ["La tête est un petit calcul ajouté au bout de BirdNET.", "C'est la seule partie que j'entraîne : quelques secondes, sur mes annotations.", "Elle doit trouver le poids de chacun des nombres."])
+notes(s, f"""La signature de notre fenêtre, à gauche, ne change pas. Au bout de BirdNET, j'ajoute une petite tête de classification : c'est la seule partie que j'entraîne, et elle s'entraîne en quelques secondes sur un portable. Elle doit trouver un poids pour chacun des {fr(DIM)} nombres.""")
 
-s = diapo(RUB_K, "Elle apprend quels nombres comptent, et ignore les autres", "", ms=2200)
-bandes(s, CX + 48 * CW + 0.1, True)
-texte(s, 1.0, 5.6, 11.6, 1.2, f"Un poids pour chacun des {fr(DIM)} nombres : forts sur certains, presque nuls ailleurs. Ensemble, ils dessinent une direction « ressemble au chant d'A. blanci ». Aucun nombre n'est, à lui seul, « le nombre blanci ».", size=15, color=INK, nom="!!sct")
-notes(s, """Elle apprend un poids pour chaque nombre : élevé là où mes exemples avec chant diffèrent des autres, presque nul ailleurs. Les nombres qui comptent s'allument, les autres s'éteignent. Ce n'est pas un nombre magique qui serait la grenouille : c'est une combinaison de poids, une direction dans l'espace. Et cette direction, on peut la regarder.""")
+s = diapo(RUB_K, "Elle apprend quels nombres comptent, et ignore les autres", "", ms=2400)
+scanner(s, True)
+panneau(s, ["Un poids par nombre : fort sur certains, presque nul ailleurs.", "Vert : pousse vers « A. blanci ». Rouge : pousse vers « autre chose ».", "Score = somme des nombres × poids. Aucun nombre n'est, à lui seul, « le nombre blanci »."])
+notes(s, """Le scanner passe, les poids apparaissent. Chaque nombre de la signature reçoit un poids : vert, il pousse vers « A. blanci » ; rouge, vers « autre chose » ; presque nul, il est ignoré. Le score d'une fenêtre, c'est la somme des nombres multipliés par leurs poids. Ce n'est pas un nombre magique qui serait la grenouille : c'est une combinaison, une direction dans l'espace. Et cette direction, on peut la regarder.""")
 
 x0, y0, _ = VUES[0]
 s = diapo(RUB_K, "Vu sous l'angle habituel, mes exemples sont mêlés", "", ms=1500)
 nuage(s, x0, y0, coul0, cont_0, "annotées, ACP")
-boussole(s, 0)
 legende(s, [(POS, "A. blanci", True), (NEG, "autre son", True), (GRIS, "en attente", False)])
-panneau(s, ["Retour au nuage, vu à plat.", "Verts et rouges sont mêlés : aucune ligne droite ne les sépare sur ce dessin.", "La boussole indique d'où l'on regarde."])
-notes(s, """Revenons au nuage, vu sous le même angle qu'au début. Les verts et les rouges sont mêlés : aucune ligne ne les sépare. La boussole dit d'où l'on regarde. La flèche verte, c'est la direction apprise par la tête : pour l'instant, elle pointe presque vers nous, on ne la voit pas.""")
+panneau(s, ["Retour au nuage, vu à plat.", "Verts et rouges sont mêlés : aucune ligne droite ne les sépare sur ce dessin.", "Le cube et les axes X, Y, Z montrent d'où l'on regarde."])
+repere(s, 0)
+notes(s, """Revenons au nuage, vu sous le même angle qu'au début. Les verts et les rouges sont mêlés : aucune ligne ne les sépare. Le cube et les axes X, Y, Z sont là pour sentir la rotation : X et Y sont les deux directions de ce dessin à plat ; Z, c'est la direction apprise par la tête. Pour l'instant, Z pointe vers nous : on ne la voit pas.""")
 
 for k in range(1, len(N["vues"])):
     xk, yk, _ = VUES[k]
     dernier = k == len(N["vues"]) - 1
-    s = diapo(RUB_K, "On fait tourner le nuage vers la direction apprise" if not dernier else "Vu sous l'angle de la tête, les chants forment un groupe", "", ms=1100, auto=not dernier)
+    s = diapo(RUB_K, "On fait tourner le nuage vers la direction apprise" if not dernier else "Vu sous l'angle de la tête, les chants forment un groupe", "", ms=1300)
     nuage(s, xk, yk, coul0, cont_0, f"rotation {k}")
-    boussole(s, k)
     legende(s, [(POS, "A. blanci", True), (NEG, "autre son", True), (GRIS, "en attente", False)])
-    panneau(s, ["Mêmes points, même nuage : seul l'angle de vue change.", "On tourne jusqu'à regarder le nuage dans la direction apprise par la tête."] if not dernier else [
-        "Axe horizontal : la direction apprise par la tête.", "À droite, ce qui ressemble au chant ; à gauche, le reste.", "Les verts et les rouges mêlés tout à l'heure étaient déjà séparés : l'ombre le cachait."])
+    panneau(s, ["Mêmes points, même nuage : seul l'angle de vue change.", "On tourne jusqu'à regarder le nuage selon Z, la direction apprise par la tête."] if not dernier else [
+        "Axe horizontal : Z, la direction apprise par la tête.", "À droite, ce qui ressemble au chant ; à gauche, le reste.", "Les verts et les rouges mêlés tout à l'heure étaient déjà séparés : l'ombre le cachait."])
+    repere(s, k)
     notes(s, "Le nuage tourne : ce sont exactement les mêmes points, on change seulement l'angle de vue." if not dernier else
           """Et voilà : regardé dans la direction apprise, le nuage se range. Les verts à droite, les rouges à gauche. Les points mêlés tout à l'heure étaient déjà séparés dans l'espace complet : c'est l'ombre en deux dimensions qui le cachait. Pour les curieux : l'axe est celui de la tête entraînée sur toutes mes annotations ; je le garde fixe pour la suite, pour que les points ne bougent plus et qu'on ne regarde que les couleurs.""")
 
-xf, yf, (lo_u, hi_u) = VUES[-1]
-seuil_x = GX + (np.clip(N["seuil_u"], lo_u, hi_u) - lo_u) / (hi_u - lo_u) * (GW - R_PT)
+xf, yf, _ = VUES[-1]
+seuil_x = float(np.clip(vers_ecran(len(VUES) - 1, N["seuil_u"], 0.0)[0], GX, GX + GW))
 
 
 def ligne_seuil(s):
@@ -621,11 +710,9 @@ for i in range(NPTS):
 quota = {"incertaine": 6, "meilleur score": 2, "hasard": 2}
 choisis = [(cat, i) for cat in file1 for i in file1[cat][: quota[cat]]]
 POP = (0.75, 1.85, 4.3, 4.75)
-s = diapo(RUB_K, "Je réécoute ce que le modèle me propose : la file 60-20-20", "", ms=1500)
-c, k_ = etat(0, 0)
 xx, yy = xf.copy(), yf.copy()
 rows = []
-yrow = POP[1] + 0.55
+yrow = POP[1] + 0.8
 for cat in file1:
     sel = [i for c_, i in choisis if c_ == cat]
     if not sel:
@@ -634,23 +721,56 @@ for cat in file1:
     for i in sel:
         xx[i], yy[i] = POP[0] + 0.35, yrow
         yrow += 0.3
-    yrow += 0.3
+    yrow += 0.4
 ids_file = [i for _, i in choisis]
-nuage(s, xx, yy, c, k_, "file", seulement=[i for i in range(NPTS) if i not in set(ids_file)])
-boite(s, *POP, "FFFFFF", line=INK, lw=1.25, nom="!!popup")
-nuage(s, xx, yy, c, k_, seulement=ids_file)
-texte(s, POP[0] + 0.2, POP[1] + 0.12, POP[2] - 0.4, 0.35, "File de réécoute", size=14, bold=True, nom="!!popt")
-for cat, yr_ in rows:
-    pct = {"incertaine": "60 % : là où il hésite", "meilleur score": "20 % : ses meilleurs scores", "hasard": "20 % : au hasard"}[cat]
-    texte(s, POP[0] + 0.6, yr_ - 0.05, 2.0, 0.3, pct, size=10, color=MUTED, nom=f"!!pc_{cat}")
-for _cat, i in choisis:
-    fleche(s, POP[0] + 2.65, yy[i] + R_PT / 2, POP[0] + 3.2, yy[i] + R_PT / 2, color=SAGE, width=1.25, nom=f"!!fa{i}")
-    boite(s, POP[0] + 3.3, yy[i], R_PT, R_PT, POS if Y[i] == 1 else NEG, line=INK, forme=MSO_SHAPE.OVAL, nom=f"!!r{i}", lw=LW_PT)
-    texte(s, POP[0] + 3.5, yy[i] - 0.08, 0.8, 0.25, "blanci" if Y[i] == 1 else "autre", size=10, color=INK, nom=f"!!rt{i}")
+autres = [i for i in range(NPTS) if i not in set(ids_file)]
+PANF = ["Le modèle choisit quoi me faire écouter :", "60 % de fenêtres où il hésite, 20 % de ses meilleurs scores (pour traquer ses fausses alertes), 20 % au hasard (pour ne rien oublier)."]
+
+
+def encadre(s):
+    boite(s, *POP, "FFFFFF", line=INK, lw=1.25, nom="!!popup")
+    texte(s, POP[0] + 0.2, POP[1] + 0.12, POP[2] - 0.4, 0.35, "File de réécoute", size=14, bold=True, nom="!!popt")
+    for cat, yr_ in rows:
+        pct = {"incertaine": "60 % : là où il hésite", "meilleur score": "20 % : ses meilleurs scores", "hasard": "20 % : au hasard"}[cat]
+        texte(s, POP[0] + 0.3, yr_ - 0.3, 3.0, 0.26, pct, size=11, color=MUTED, nom=f"!!pc_{cat}", after=0)
+
+
+c, k_ = etat(0, 0)
+# clic 1 : l'encadré s'ouvre, les points n'ont pas encore bougé
+s = diapo(RUB_K, "Le modèle me propose une file de réécoute : 60-20-20", "", ms=900)
+nuage(s, xf, yf, c, k_, "file 1", seulement=autres)
+encadre(s)
+nuage(s, xf, yf, c, k_, seulement=ids_file)
 legende(s, LEG_SC)
-panneau(s, ["Le modèle choisit quoi me faire écouter :", "60 % de fenêtres où il hésite, 20 % de ses meilleurs scores (pour traquer ses fausses alertes), 20 % au hasard (pour ne rien oublier).", "À droite de chaque fenêtre : ce que j'ai entendu."], h=3.6)
+panneau(s, PANF, h=3.6)
 jauge(s, 0)
-notes(s, """Le modèle me propose une file de réécoute. Soixante pour cent de fenêtres où il hésite : c'est là que mon oreille lui apprend le plus. Vingt pour cent de ses meilleurs scores, pour attraper ses fausses alertes. Vingt pour cent au hasard, pour qu'il ne s'enferme pas dans ses certitudes. J'écoute, et je tranche : à droite de chaque fenêtre, ce que j'ai entendu. Ces fenêtres réécoutées ne servent jamais à noter le modèle.""")
+notes(s, """Le modèle me propose une file de réécoute. Soixante pour cent de fenêtres où il hésite : c'est là que mon oreille lui apprend le plus. Vingt pour cent de ses meilleurs scores, pour attraper ses fausses alertes. Vingt pour cent au hasard, pour qu'il ne s'enferme pas dans ses certitudes.""")
+
+# clic 2 : les fenêtres choisies viennent dans l'encadré
+s = diapo(RUB_K, "Le modèle me propose une file de réécoute : 60-20-20", "", ms=1400)
+nuage(s, xx, yy, c, k_, "file 2", seulement=autres)
+encadre(s)
+for i in ids_file:  # sous chaque point, son double, qui sortira avec mon étiquette au clic suivant
+    boite(s, xx[i], yy[i], R_PT, R_PT, c[i], forme=MSO_SHAPE.OVAL, nom=f"!!r{i}", lw=LW_PT)
+nuage(s, xx, yy, c, k_, seulement=ids_file)
+legende(s, LEG_SC)
+panneau(s, PANF, h=3.6)
+jauge(s, 0)
+notes(s, "Voici les fenêtres qu'il me propose, rangées par raison. Je les écoute une à une.")
+
+# clic 3 : mon étiquette sort de chaque point
+s = diapo(RUB_K, "J'écoute et je tranche", "", ms=1400)
+nuage(s, xx, yy, c, k_, "file 3", seulement=autres)
+encadre(s)
+for _cat, i in choisis:
+    fleche(s, POP[0] + 0.55, yy[i] + R_PT / 2, POP[0] + 3.2, yy[i] + R_PT / 2, color=SAGE, width=1.25, nom=f"!!fa{i}")
+    boite(s, POP[0] + 3.3, yy[i], R_PT, R_PT, POS if Y[i] == 1 else NEG, line=INK, forme=MSO_SHAPE.OVAL, nom=f"!!r{i}", lw=LW_PT)
+    texte(s, POP[0] + 3.48, yy[i] - 0.08, 0.8, 0.25, "blanci" if Y[i] == 1 else "autre", size=10, color=INK, nom=f"!!rt{i}")
+nuage(s, xx, yy, c, k_, seulement=ids_file)
+legende(s, LEG_SC)
+panneau(s, PANF + ["À droite de chaque fenêtre : ce que j'ai entendu."], h=3.6)
+jauge(s, 0)
+notes(s, """J'écoute, et je tranche : à droite de chaque fenêtre, ce que j'ai entendu, A. blanci ou autre chose. Ces fenêtres réécoutées ne servent jamais à noter le modèle.""")
 
 s = diapo(RUB_K, "Mes réponses entrent dans les annotations ; on réentraîne", "", ms=1300)
 c, k_ = etat(1)
