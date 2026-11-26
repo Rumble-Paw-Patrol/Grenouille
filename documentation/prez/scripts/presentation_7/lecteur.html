@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Présentation</title>
+<!-- Lecteur de diapos sans PowerPoint, rempli par exporter_html.py (prez n° 7). Hors ligne : rien n'est chargé du réseau. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; }
+  .diapo { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
+  .s { position: absolute; box-sizing: border-box; transform-origin: 50% 50%; }
+  .s > svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .s > img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; user-select: none; }
+  .tx { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .tx p { margin: 0; line-height: 1.2; white-space: pre-wrap; }
+  .media { cursor: pointer; }
+  .media .lire { position: absolute; left: 12px; bottom: 12px; width: 44px; height: 44px; border-radius: 50%; background: rgba(14, 42, 36, .78); color: #fff; font: 22px/44px Calibri, Arial, sans-serif; text-align: center; opacity: 0; transition: opacity .2s; }
+  .media:hover .lire, .media.joue .lire { opacity: 1; }
+  #notes { position: fixed; left: 0; right: 0; bottom: 0; max-height: 34vh; overflow: auto; padding: 14px 22px; background: rgba(12, 22, 19, .92); color: #E8F0EC; font: 17px/1.45 Calibri, Arial, sans-serif; z-index: 10; }
+  #notes b { color: #E9B44C; }
+  #saisie { position: fixed; right: 18px; top: 14px; padding: 6px 12px; border-radius: 6px; background: rgba(12, 22, 19, .85); color: #fff; font: 20px Calibri, Arial, sans-serif; z-index: 11; }
+  body.cache, body.cache * { cursor: none !important; }
+  body.imprime { overflow: visible; background: #fff; height: auto; }
+  body.imprime .page { position: relative; width: 1280px; height: 720px; overflow: hidden; break-after: page; }
+  body.imprime .page .diapo { width: 1333.333px; height: 750px; transform: scale(.96); transform-origin: 0 0; }
+  @page { size: 13.333in 7.5in; margin: 0; }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="notes" hidden></div>
+<div id="saisie" hidden></div>
+<script id="donnees" type="application/json">/*DONNEES*/null</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("donnees").textContent);
+const W = D.w, H = D.h, N = D.diapos.length;
+const PARAM = new URLSearchParams(location.search);
+const IMPRIME = PARAM.has("print"), VIDEO = PARAM.has("video");
+const scene = document.getElementById("scene");
+const POLICES = {
+  Calibri: 'Calibri, Carlito, "Segoe UI", Arial, sans-serif',
+  Cambria: 'Cambria, Caladea, Georgia, "Times New Roman", serif',
+  Consolas: 'Consolas, "Courier New", monospace',
+};
+const police = f => POLICES[f] || `"${f}", Calibri, Arial, sans-serif`;
+const EASE = "cubic-bezier(0.45, 0, 0.55, 1)";
+const SVG = "http://www.w3.org/2000/svg";
+let numMarqueur = 0;
+const sons = [];
+
+function svgEl(tag, attrs) {
+  const e = document.createElementNS(SVG, tag);
+  for (const k in attrs) if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function pointes(svg, el, l) {
+  if (!l.fin && !l.deb) return;
+  const defs = svgEl("defs", {});
+  svg.insertBefore(defs, svg.firstChild);
+  const mk = debut => {
+    const id = "m" + (numMarqueur++);
+    const m = svgEl("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 3.2, markerHeight: 3.2, orient: debut ? "auto-start-reverse" : "auto", markerUnits: "strokeWidth" });
+    m.appendChild(svgEl("path", { d: "M0,0 L10,5 L0,10 z", fill: "#" + l.c }));
+    defs.appendChild(m);
+    return `url(#${id})`;
+  };
+  if (l.fin) el.setAttribute("marker-end", mk(false));
+  if (l.deb) el.setAttribute("marker-start", mk(true));
+}
+
+function trace(l) {
+  const a = { stroke: "#" + l.c, "stroke-width": l.w, fill: "none" };
+  if (l.d) a["stroke-dasharray"] = `${4 * l.w} ${3 * l.w}`;
+  return a;
+}
+
+function contour(sp) {
+  const svg = svgEl("svg", {});
+  const a = trace(sp.l);
+  let e;
+  if (!sp.f && (sp.h < 1 || sp.w < 1)) {  // trait fin (frontière, repère) : une seule ligne, sur la longueur
+    e = sp.h < sp.w ? svgEl("line", { x1: 0, y1: "50%", x2: "100%", y2: "50%", ...a }) : svgEl("line", { x1: "50%", y1: 0, x2: "50%", y2: "100%", ...a });
+  } else if (sp.g === "ellipse") {
+    e = svgEl("ellipse", { cx: "50%", cy: "50%", rx: "50%", ry: "50%", ...a });
+  } else {
+    e = svgEl("rect", { x: 0, y: 0, width: "100%", height: "100%", rx: sp.g === "round" ? sp.rad : 0, ...a });
+  }
+  svg.appendChild(e);
+  return svg;
+}
+
+function texteEl(t) {
+  const b = document.createElement("div");
+  b.className = "tx";
+  b.style.justifyContent = { t: "flex-start", ctr: "center", b: "flex-end" }[t.a] || "flex-start";
+  for (const p of t.ps) {
+    const e = document.createElement("p");
+    e.style.textAlign = { l: "left", ctr: "center", r: "right", just: "justify" }[p.al] || "left";
+    e.style.marginBottom = p.sa + "px";
+    e.style.fontSize = Math.max(...p.rs.map(r => r.s)) + "px";
+    if (!t.wrap) e.style.whiteSpace = "pre";
+    for (const r of p.rs) {
+      const s = document.createElement("span");
+      s.textContent = r.t;
+      s.style.fontFamily = police(r.f);
+      s.style.fontSize = r.s + "px";
+      if (r.b) s.style.fontWeight = "700";
+      if (r.i) s.style.fontStyle = "italic";
+      s.style.color = "#" + r.c;
+      e.appendChild(s);
+    }
+    b.appendChild(e);
+  }
+  return b;
+}
+
+function image(h) {
+  const g = D.gifs[h];
+  if (g && IMPRIME) return g.fin;
+  if (g && VIDEO && g.images.length) return g.images[0];
+  return D.assets[h];
+}
+
+function geo(sp) {
+  return { x: sp.x, y: sp.y, w: Math.max(sp.w, 0.01), h: Math.max(sp.h, 0.01), r: sp.r || 0 };
+}
+function place(d, g) {
+  d.style.left = g.x + "px"; d.style.top = g.y + "px";
+  d.style.width = g.w + "px"; d.style.height = g.h + "px";
+  d.style.transform = `rotate(${g.r}deg)`;
+}
+function cle(g, plus) {
+  return Object.assign({ left: g.x + "px", top: g.y + "px", width: g.w + "px", height: g.h + "px", transform: `rotate(${g.r}deg)` }, plus || {});
+}
+
+function forme(sp) {
+  const d = document.createElement("div");
+  d.className = "s";
+  place(d, geo(sp));
+  if (sp.k === "box") {
+    if (sp.f) d.style.background = "#" + sp.f;
+    if (sp.g === "ellipse") d.style.borderRadius = "50%";
+    else if (sp.g === "round") d.style.borderRadius = sp.rad + "px";
+    else if (sp.g === "snip") d.style.clipPath = `polygon(0 0, calc(100% - ${sp.rad}px) 0, 100% ${sp.rad}px, 100% 100%, 0 100%)`;
+    if (sp.l) d.appendChild(contour(sp));
+    if (sp.t) d.appendChild(texteEl(sp.t));
+  } else if (sp.k === "pic") {
+    const im = document.createElement("img");
+    im.src = image(sp.src);
+    im.draggable = false;
+    im.alt = "";
+    if (D.gifs[sp.src] && VIDEO) im.dataset.gif = sp.src;
+    d.appendChild(im);
+    if (sp.au && !IMPRIME) {
+      const au = new Audio(D.assets[sp.au]);
+      sons.push(au);
+      d.classList.add("media");
+      const bouton = document.createElement("div");
+      bouton.className = "lire";
+      bouton.textContent = "▶";
+      d.appendChild(bouton);
+      au.addEventListener("play", () => { d.classList.add("joue"); bouton.textContent = "❚❚"; });
+      au.addEventListener("pause", () => { d.classList.remove("joue"); bouton.textContent = "▶"; });
+      d.addEventListener("click", e => {
+        e.stopPropagation();
+        if (au.paused) { au.currentTime = au.ended ? 0 : au.currentTime; au.play(); } else au.pause();
+      });
+    }
+  } else if (sp.k === "line" && sp.l) {
+    const svg = svgEl("svg", {});
+    const e = svgEl("line", { x1: sp.fx ? "100%" : 0, y1: sp.fy ? "100%" : 0, x2: sp.fx ? 0 : "100%", y2: sp.fy ? 0 : "100%", ...trace(sp.l) });
+    svg.appendChild(e);
+    pointes(svg, e, sp.l);
+    d.appendChild(svg);
+  } else if (sp.k === "path") {
+    const svg = svgEl("svg", {});
+    const e = svgEl("path", { d: sp.p, ...(sp.l ? trace(sp.l) : { fill: "none" }) });
+    if (sp.f) e.setAttribute("fill", "#" + sp.f);
+    svg.appendChild(e);
+    if (sp.l) pointes(svg, e, sp.l);
+    d.appendChild(svg);
+  }
+  return d;
+}
+
+const signature = sp => JSON.stringify([sp.k, Math.round(sp.x), Math.round(sp.y), Math.round(sp.w), Math.round(sp.h), sp.r, sp.src || "", sp.f || "", sp.t || "", sp.l || "", sp.p || ""]);
+const allure = sp => JSON.stringify([sp.k, sp.g || "", sp.l || null, sp.t || null, sp.src || "", sp.p || "", !!sp.fx, !!sp.fy]);
+
+function construit(n) {
+  const dia = D.diapos[n];
+  const root = document.createElement("div");
+  root.className = "diapo";
+  root.style.background = "#" + dia.bg;
+  const map = new Map();
+  for (const sp of dia.f) {
+    const el = forme(sp);
+    root.appendChild(el);
+    let k = sp.n && sp.n.startsWith("!!") ? sp.n : "u|" + signature(sp);
+    while (map.has(k)) k += "+";
+    map.set(k, { el, sp });
+  }
+  return { root, map, bg: "#" + dia.bg, n };
+}
+
+// ------------------------------------------------------------ transitions
+let actuel = null, cur = 0, anims = [], enCours = null;
+
+function morphose(A, B, dur) {
+  const o = { duration: dur, easing: EASE, fill: "both" };
+  B.root.style.background = "transparent";
+  anims.push(B.root.animate([{ backgroundColor: A.bg }, { backgroundColor: B.bg }], o));
+  const vus = new Set();
+  for (const [k, b] of B.map) {
+    const a = A.map.get(k);
+    if (!a) { anims.push(b.el.animate([{ opacity: 0 }, { opacity: 1 }], o)); continue; }
+    vus.add(k);
+    const ga = geo(a.sp), gb = geo(b.sp);
+    gb.r = ga.r + ((((gb.r - ga.r) % 360) + 540) % 360) - 180;  // le plus court chemin
+    if (allure(a.sp) === allure(b.sp)) {
+      a.el.style.visibility = "hidden";
+      const pa = {}, pb = {};
+      if (a.sp.f && b.sp.f) { pa.backgroundColor = "#" + a.sp.f; pb.backgroundColor = "#" + b.sp.f; }
+      if (a.sp.g === "round") { pa.borderRadius = a.sp.rad + "px"; pb.borderRadius = b.sp.rad + "px"; }  // l'arrondi suit la taille
+      anims.push(b.el.animate([cle(ga, pa), cle(gb, pb)], o));
+    } else {  // la forme change d'aspect (texte, contour) : elle glisse en fondu enchaîné
+      anims.push(a.el.animate([cle(ga, { opacity: 1 }), cle(gb, { opacity: 0 })], o));
+      anims.push(b.el.animate([cle(ga, { opacity: 0 }), cle(gb, { opacity: 1 })], o));
+    }
+  }
+  for (const [k, a] of A.map) if (!vus.has(k)) anims.push(a.el.animate([{ opacity: 1 }, { opacity: 0 }], o));
+}
+
+function pousse(A, B, dur) {
+  const o = { duration: dur, easing: EASE, fill: "both" };
+  anims.push(A.root.animate([{ transform: "translateX(0)" }, { transform: "translateX(-100%)" }], o));
+  anims.push(B.root.animate([{ transform: "translateX(100%)" }, { transform: "translateX(0)" }], o));
+}
+
+function fondu(A, B, dur) {
+  anims.push(B.root.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur, easing: EASE, fill: "both" }));
+}
+
+function terminer() {
+  if (!enCours) return;
+  for (const a of anims) a.finish();
+  enCours();
+}
+
+function aller(n, anime) {
+  if (n < 0 || n >= N) return;
+  terminer();
+  for (const s of sons) s.pause();
+  const B = construit(n);
+  const tr = D.diapos[n].tr;
+  const A = actuel;
+  scene.appendChild(B.root);
+  actuel = B; cur = n; affiche();
+  if (!A || !anime || !tr) { if (A) A.root.remove(); return 0; }
+  anims = [];
+  if (tr.type === "morph") morphose(A, B, tr.dur);
+  else if (tr.type === "push") pousse(A, B, tr.dur);
+  else fondu(A, B, tr.dur);
+  const nettoie = () => {
+    if (enCours !== nettoie) return;
+    enCours = null;
+    A.root.remove();
+    B.root.style.background = B.bg;
+    for (const an of anims) an.cancel();
+    anims = [];
+  };
+  enCours = nettoie;
+  Promise.all(anims.map(a => a.finished)).then(nettoie).catch(() => {});
+  return tr.dur;
+}
+
+// ------------------------------------------------------------ affichage, clavier, souris
+function ajuste() {
+  if (IMPRIME) return;
+  const k = Math.min(innerWidth / W, innerHeight / H);
+  scene.style.width = W + "px"; scene.style.height = H + "px";
+  scene.style.transform = `translate(${(innerWidth - W * k) / 2}px, ${(innerHeight - H * k) / 2}px) scale(${k})`;
+}
+
+const notes = document.getElementById("notes"), saisie = document.getElementById("saisie");
+function affiche() {
+  if (!VIDEO) history.replaceState(null, "", "#" + (cur + 1));
+  notes.innerHTML = `<b>${cur + 1} / ${N}</b> — ` + (D.diapos[cur].notes || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+}
+const suivante = () => aller(cur + 1, true);
+const precedente = () => aller(cur - 1, false);
+let tampon = "";
+
+if (IMPRIME) {
+  document.body.classList.add("imprime");
+  for (let n = 0; n < N; n++) {
+    const page = document.createElement("div");
+    page.className = "page";
+    page.appendChild(construit(n).root);
+    document.body.appendChild(page);
+  }
+  scene.remove();
+} else {
+  ajuste();
+  addEventListener("resize", ajuste);
+  const h = parseInt(location.hash.slice(1), 10);
+  aller(Number.isFinite(h) ? Math.min(Math.max(h, 1), N) - 1 : 0, false);
+  if (!VIDEO) {
+    addEventListener("keydown", e => {
+      if (e.key >= "0" && e.key <= "9") { tampon += e.key; saisie.textContent = "diapo " + tampon; saisie.hidden = false; return; }
+      if (e.key === "Enter" && tampon) { aller(parseInt(tampon, 10) - 1, false); tampon = ""; saisie.hidden = true; return; }
+      tampon = ""; saisie.hidden = true;
+      if (["ArrowRight", "ArrowDown", " ", "PageDown", "Enter"].includes(e.key)) { e.preventDefault(); suivante(); }
+      else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); precedente(); }
+      else if (e.key === "Home") aller(0, false);
+      else if (e.key === "End") aller(N - 1, false);
+      else if (e.key === "f" || e.key === "F") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+      else if (e.key === "n" || e.key === "N") notes.hidden = !notes.hidden;
+    });
+    addEventListener("click", e => { if (!notes.contains(e.target)) suivante(); });
+    addEventListener("contextmenu", e => { e.preventDefault(); precedente(); });
+    addEventListener("hashchange", () => {
+      const k = parseInt(location.hash.slice(1), 10);
+      if (Number.isFinite(k) && k - 1 !== cur) aller(Math.min(Math.max(k, 1), N) - 1, false);
+    });
+    let minuterie = null;
+    addEventListener("mousemove", () => {
+      document.body.classList.remove("cache");
+      clearTimeout(minuterie);
+      minuterie = setTimeout(() => document.body.classList.add("cache"), 2500);
+    });
+  }
+}
+
+// ------------------------------------------------------------ pilotage image par image (exporter_video.py)
+window.deck = {
+  n: N,
+  transition: n => D.diapos[n].tr,
+  aGif: () => !!scene.querySelector("img[data-gif]"),
+  // décode d'avance les images des GIF et attend les polices : chaque capture est alors complète
+  async prepare() {
+    const attente = [];
+    window.cacheGif = [];
+    for (const h in D.gifs) for (const src of D.gifs[h].images) {
+      const im = new Image();
+      im.src = src;
+      window.cacheGif.push(im);
+      attente.push(im.decode().catch(() => {}));
+    }
+    await Promise.all(attente);
+    await document.fonts.ready;
+    return true;
+  },
+  // démarre la diapo n et fige sa transition ; renvoie sa durée (0 si aucune)
+  demarre(n) {
+    const d = aller(n, n > 0);
+    for (const a of anims) a.pause();
+    return d || 0;
+  },
+  // place la transition et les GIF au temps t (ms depuis le début de la diapo)
+  temps(t) {
+    for (const a of anims) a.currentTime = Math.min(t, a.effect.getTiming().duration);
+    for (const im of scene.querySelectorAll("img[data-gif]")) {
+      const g = D.gifs[im.dataset.gif];
+      const total = g.durees.reduce((x, y) => x + y, 0);
+      let r = t % total, k = 0;
+      while (k < g.durees.length - 1 && r >= g.durees[k]) { r -= g.durees[k]; k++; }
+      if (im.dataset.k !== String(k)) { im.src = g.images[k]; im.dataset.k = String(k); }
+    }
+  },
+  termine: () => terminer(),
+};
+</script>
+</body>
+</html>

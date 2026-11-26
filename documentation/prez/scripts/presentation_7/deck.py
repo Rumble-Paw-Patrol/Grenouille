@@ -3,7 +3,7 @@
 
     uv run --with python-pptx python documentation/prez/scripts/presentation_7/deck.py [sortie.pptx]
 
-Sortie par défaut : `documentation/prez/presentation_7_pna_v5.pptx` (v1 à v4 : versions de Léonard,
+Sortie par défaut : `documentation/prez/presentation_Leonard_PNA.pptx`, la version finale (ex-v5 ; v1 à v4 : versions de Léonard,
 ne jamais écrire par-dessus). Les diapos sans animation entrent par une poussée latérale. Lit dans `rapports/presentation_7/` : `donnees.json`
 (donnees.py, BirdNET 2.4), `onde.npz`, `fenetre_spectro.png`, les figures de figures_v4.py, figures_v5.py et animation_reseau.py,
 `inv_sites_pna.png`, `chiffres_pna.json` (figures_pna.py), `spectro.png` et `extrait.wav`
@@ -37,7 +37,7 @@ from pptx.util import Inches, Pt
 DEPOT = Path(__file__).resolve().parents[4]
 ICI = DEPOT / "rapports" / "presentation_7"  # données, jamais committées
 FIG = DEPOT / "documentation" / "prez" / "figures"
-SORTIE = Path(sys.argv[1]) if len(sys.argv) > 1 else DEPOT / "documentation" / "prez" / "presentation_7_pna_v5.pptx"
+SORTIE = Path(sys.argv[1]) if len(sys.argv) > 1 else DEPOT / "documentation" / "prez" / "presentation_Leonard_PNA.pptx"
 D = json.loads((ICI / "donnees.json").read_text(encoding="utf-8"))
 K = json.loads((ICI / "chiffres_pna.json").read_text(encoding="utf-8"))
 N = D["nuage"]
@@ -155,7 +155,7 @@ def texte(s, x, y, w, h, lignes, size=14, color=INK, bold=False, font="Calibri",
         for r in runs:
             t, kw = (r, {}) if isinstance(r, str) else r
             run = para.add_run()
-            run.text = t
+            run.text = t.replace("A. blanci", "A.\u00a0blanci")  # « A. » et « blanci » jamais sur deux lignes
             f = run.font
             f.name = kw.get("font", font)
             f.size = Pt(kw.get("size", size))
@@ -644,7 +644,7 @@ EN = D["entrainement"]
 score_hero = EN["score_hero"][-1]
 s = diapo(RUB_K, "La tête de classification : un neurone qui apprend un poids par nombre", "", transition="pousse")
 boite(s, 0.45, 1.6, 12.45, 5.4, DARK, forme=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.03)
-vecteur(s, 1.15, crochet="FFFFFF", legende_coul=SAGE, legende="la signature de notre fenêtre", p="tv")
+vecteur(s, 1.15, crochet="FFFFFF", legende_coul=SAGE, legende="la signature", p="tv")
 s.shapes.add_picture(str(ICI / "tete_apprend.gif"), Inches(2.72), Inches(1.7), Inches(5.95), Inches(5.2))
 texte(s, 8.95, 1.85, 3.8, 0.45, [[B("Ma tête de classification")]], size=18, color="FFFFFF")
 texte(s, 8.95, 2.45, 3.75, 4.4, [
