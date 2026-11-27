@@ -16,6 +16,12 @@ sous-titre et un chant (WAV, MP3, FLAC, OGG) avec sa bande de fréquences ; le s
 est calculé ici, cadré sur la bande (pointillés), et le bouton d'écoute joue ce chant. La
 grenouille 8-bit est celle d'A. blanci : elle n'apparaît qu'avec l'en-tête d'origine. Le tout
 est rangé dans `annotations/entete/` (`entete.json`, `chant.wav`, `spectrogramme.png`).
+
+**Références supplémentaires** (`add_reference`, annotation multi-espèces) : d'autres chants
+de référence, chacun avec son espèce, son spectrogramme (calculé d'après le son et cadré sur sa
+bande, ou une image fournie telle quelle) et son bouton d'écoute, en vignettes sous le
+spectrogramme principal. Rangées à côté de l'en-tête (`references.json`, `reference_*.wav`,
+`reference_*.png`), y compris pour l'en-tête d'origine.
 """
 
 from __future__ import annotations
@@ -34,6 +40,8 @@ from blanci.core.config import PROJECT_ROOT, project_path
 BANDEAU_DIR = Path(tempfile.gettempdir()) / "blanci_bandeau"
 SOURCES = PROJECT_ROOT / "documentation" / "tableau-de-bord"
 FILES = ("spectrogramme.jpg", "chant.mp3", "grenouille.json")
+REFERENCES_FILE = "references.json"
+MAX_REFERENCES = 12
 HEADER_DIR = project_path("annotations/entete")
 MAX_SONG_S = 30.0  # chant du bandeau : les 30 premières secondes au plus
 
@@ -189,6 +197,21 @@ INDEX = r"""<!doctype html>
   .axe { position: absolute; z-index: 2; left: 8px; font: 10.5px/1.2 var(--mono); color: #FFF0C8;
          background: rgba(0, 0, 0, .45); padding: 2px 6px; border-radius: 4px; }
   .legende { font: 11px/1.4 var(--mono); color: var(--muted); }
+  /* Références supplémentaires : une vignette par espèce, sous le spectrogramme principal. */
+  .refs { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  .ref { margin: 0; display: grid; gap: 5px; }
+  .ref figcaption { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+                    font-size: 13px; }
+  .ref figcaption i { font-family: "Instrument Serif", Georgia, serif; font-size: 17px;
+                      color: var(--ink); }
+  .ref .ref-leg { font: 10.5px/1.3 var(--mono); color: var(--muted); }
+  .ref .spectro img { height: clamp(44px, 4.6vw, 60px); }
+  .ref .spectro:not(.joue) .tete-lecture { opacity: 0; }
+  .ref-ecouter { flex: none; align-self: center; height: 24px; padding: 0 10px; border: 0;
+    border-radius: 999px; cursor: pointer; font: 600 11.5px/1 "Hanken Grotesk", system-ui,
+    sans-serif; color: #1A0B03;
+    background: linear-gradient(100deg, #FFE08A 0%, #F5A53A 48%, #E4573F 100%); }
+  .ref-ecouter[aria-pressed="true"] { filter: brightness(.9); }
   @media (prefers-reduced-motion: no-preference) {
     .tete-lecture { opacity: 1; animation: balayage 18s linear infinite; }
     .ecouter .egaliseur i { animation: egaliseur .9s ease-in-out infinite alternate; }
@@ -232,6 +255,7 @@ INDEX = r"""<!doctype html>
     <span class="axe" id="axe-bas" style="bottom: 6px" aria-hidden="true"></span>
   </div>
   <div class="legende"></div>
+  <div class="refs" id="refs" hidden></div>
 </header>
 <script>
 const $ = s => document.querySelector(s);
@@ -281,6 +305,43 @@ function poser(a) {
   document.documentElement.style.setProperty("--cycle", `${a.cycle_ms / 1000}s`);
   ecouteur.charger(a.image ? a.sound : null, a.cycle_ms);
   if (a.sprite) montrerGrenouille(); else $(".perchoir").hidden = true;
+  references(a.references || []);
+}
+// Références supplémentaires (multi-espèces) : une vignette chacune, avec son écoute.
+const ecouteurs = [];
+function references(refs) {
+  const box = $("#refs");
+  ecouteurs.splice(0).forEach(e => e.charger(null));
+  box.replaceChildren();
+  box.hidden = !refs.length;
+  refs.forEach(r => {
+    const fig = document.createElement("figure");
+    fig.className = "ref";
+    fig.innerHTML = `<figcaption><button type="button" class="ref-ecouter" aria-pressed="false"
+      hidden><span class="libelle">Écouter le chant</span></button><i></i>
+      <span class="ref-leg"></span></figcaption><div class="spectro"><img alt="">
+      <span class="bande-f" aria-hidden="true"></span>
+      <span class="tete-lecture" aria-hidden="true"></span>
+      <span class="axe" style="top: 4px" aria-hidden="true"></span>
+      <span class="axe" style="bottom: 4px" aria-hidden="true"></span></div>`;
+    fig.querySelector("i").textContent = r.species;
+    fig.querySelector(".ref-leg").textContent = r.legend || "";
+    const spectro = fig.querySelector(".spectro"), img = spectro.querySelector("img");
+    img.src = r.image; img.alt = r.alt || `Spectrogramme de référence : ${r.species}`;
+    const [haut, bas] = spectro.querySelectorAll(".axe"), bande = spectro.querySelector(".bande-f");
+    if (r.top_khz != null) {
+      haut.textContent = `${r.top_khz} kHz`.replace(".", ",");
+      bas.textContent = `${r.bottom_khz} kHz`.replace(".", ",");
+    } else { haut.hidden = true; bas.hidden = true; }
+    if (r.band_top != null) {
+      bande.style.top = `${r.band_top}%`; bande.style.height = `${r.band_height}%`;
+    } else bande.hidden = true;
+    spectro.style.setProperty("--cycle", `${(r.cycle_ms || 18000) / 1000}s`);
+    box.appendChild(fig);
+    const e = ecoute(fig.querySelector(".ref-ecouter"), spectro);
+    e.charger(r.sound || null, r.cycle_ms);
+    ecouteurs.push(e);
+  });
 }
 // Habillage choisi dans le poste : mode (jour / nuit) et style, posés en variables de la page.
 function look(l) {
@@ -615,6 +676,119 @@ def save_header(
     return data
 
 
+def read_references(folder: Path | None = None) -> list[dict]:
+    """Références supplémentaires de l'en-tête (`add_reference`), dans l'ordre d'ajout."""
+    try:
+        data = json.loads(((folder or HEADER_DIR) / REFERENCES_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return (
+        [r for r in data if isinstance(r, dict) and r.get("species")]
+        if isinstance(data, list)
+        else []
+    )
+
+
+def _write_references(refs: list[dict], folder: Path) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / REFERENCES_FILE).write_text(
+        json.dumps(refs, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def add_reference(
+    species: str,
+    band_khz: tuple[float, float] | None = None,
+    audio: bytes | None = None,
+    image: bytes | None = None,
+    image_suffix: str = ".png",
+    legend: str = "",
+    folder: Path | None = None,
+) -> dict:
+    """Ajoute une référence (annotation multi-espèces) : `species`, et un chant (`audio`, ses
+    `MAX_SONG_S` premières secondes en mono, comme `save_header`) ou un spectrogramme (`image`,
+    PNG ou JPEG, montré tel quel), ou les deux. Sans image, le spectrogramme est calculé sur le
+    chant et cadré sur `band_khz` (exigée alors, en pointillés). Renvoie la référence."""
+    import numpy as np
+    import soundfile as sf
+
+    folder = folder or HEADER_DIR
+    species = species.strip()
+    if not species:
+        raise ValueError("nom d'espèce vide")
+    if audio is None and image is None:
+        raise ValueError("donner le chant de référence, son spectrogramme, ou les deux")
+    refs = read_references(folder)
+    if len(refs) >= MAX_REFERENCES:
+        raise ValueError(f"{MAX_REFERENCES} références au plus : en retirer une d'abord")
+    key = hashlib.sha1((audio or b"") + (image or b"") + species.encode()).hexdigest()[:12]
+    if any(r.get("id") == key for r in refs):
+        raise ValueError(f"cette référence de {species} est déjà dans l'en-tête")
+    folder.mkdir(parents=True, exist_ok=True)
+    ref: dict = {"id": key, "species": species, "legend": legend.strip(), "sound": None}
+    x = sr = None
+    if audio is not None:
+        try:
+            x, sr = sf.read(io.BytesIO(audio), dtype="float32", always_2d=True)
+        except Exception as exc:  # format inconnu, fichier abîmé
+            raise ValueError(f"fichier audio illisible ({exc})") from exc
+        x = x[: int(MAX_SONG_S * sr)].mean(axis=1)
+        x = x / max(float(np.max(np.abs(x))), 1e-9) * 0.9
+        ref["sound"] = f"reference_{key}.wav"
+        ref["cycle_ms"] = max(1000, round(len(x) / sr * 1000))
+    if image is not None:
+        suffix = (
+            image_suffix.lower() if image_suffix.lower() in (".png", ".jpg", ".jpeg") else ".png"
+        )
+        ref["image"] = f"reference_{key}{suffix}"
+        ref.update(top_khz=None, bottom_khz=None, band_top=None, band_height=None)
+        ref["band_khz"] = None
+        (folder / ref["image"]).write_bytes(image)
+    else:
+        if band_khz is None or None in band_khz:
+            raise ValueError("bande d'écoute du chant de référence : de … à … kHz")
+        lo, hi = sorted(float(f) for f in band_khz)
+        nyquist = sr / 2000
+        if hi - lo < 0.05:
+            raise ValueError("bande trop étroite : donner ses deux bornes en kHz")
+        if lo >= nyquist:
+            raise ValueError(
+                f"bande au-dessus de ce que l'enregistrement contient ({nyquist:g} kHz)"
+            )
+        hi = min(hi, nyquist)
+        f0, f1 = max(0.0, lo - (hi - lo)), min(nyquist, hi + (hi - lo))
+        ref["image"] = f"reference_{key}.png"
+        _spectrogram_png(x, sr, f0 * 1000, f1 * 1000, folder / ref["image"])
+        ref.update(
+            top_khz=round(f1, 2),
+            bottom_khz=round(f0, 2),
+            band_top=round((f1 - hi) / (f1 - f0) * 100, 2),
+            band_height=round((hi - lo) / (f1 - f0) * 100, 2),
+            band_khz=[lo, hi],
+        )
+    if x is not None:
+        sf.write(folder / ref["sound"], x, sr, subtype="PCM_16")
+    duration = f", {ref['cycle_ms'] / 1000:.0f} s" if ref.get("cycle_ms") else ""
+    band = ref.get("band_khz")
+    ref["alt"] = f"Spectrogramme de référence de {species}{duration}" + (
+        f", bande {_khz(band[0])}–{_khz(band[1])} kHz" if band else ""
+    )
+    _write_references([*refs, ref], folder)
+    return ref
+
+
+def remove_reference(ref_id: str, folder: Path | None = None) -> None:
+    """Retire une référence de l'en-tête, et ses fichiers."""
+    folder = folder or HEADER_DIR
+    refs = read_references(folder)
+    for r in refs:
+        if r.get("id") == ref_id:
+            for key in ("image", "sound"):
+                if r.get(key):
+                    (folder / str(r[key])).unlink(missing_ok=True)
+    _write_references([r for r in refs if r.get("id") != ref_id], folder)
+
+
 def reset_header(folder: Path | None = None) -> None:
     """Revient à l'en-tête d'origine (le chant enregistré est gardé pour plus tard)."""
     (folder or HEADER_DIR).joinpath("entete.json").unlink(missing_ok=True)
@@ -668,4 +842,13 @@ def bandeau() -> dict | None:
         for key in ("image", "sound"):
             path = HEADER_DIR / str(args.get(key) or "")
             args[key] = _publish(path) if args.get(key) and path.is_file() else None
+    refs = []
+    for ref in read_references():
+        ref = dict(ref)
+        for key in ("image", "sound"):
+            path = HEADER_DIR / str(ref.get(key) or "")
+            ref[key] = _publish(path) if ref.get(key) and path.is_file() else None
+        if ref["image"]:
+            refs.append(ref)
+    args["references"] = refs
     return _component(header=args, look=look(), key="bandeau", default=None)

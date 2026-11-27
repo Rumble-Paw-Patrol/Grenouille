@@ -481,6 +481,126 @@ def progress(
     return pd.Series([latest.get(i) for i in ids], index=queue.index, dtype=object)
 
 
+# Filtre « Ce qui y a été entendu » de la navigation (`queue_mask`) : code → nom affiché.
+CONTENT_FILTERS = {
+    "any": "Peu importe",
+    "positive": "A. blanci entendu (positif)",
+    "negative": "Rien d'A. blanci (négatif)",
+    "commented": "Un commentaire (extrait ou fenêtre)",
+    "disagree": "Des avis différents (positif contre négatif)",
+}
+
+
+def commented(
+    con: sqlite3.Connection, queue: pd.DataFrame, annotator: list[str | None] | None = None
+) -> pd.Series:
+    """Pour chaque candidat : vrai si un envoi de ces annotateurs (`annotator_filter`) qui le
+    recouvre porte un commentaire, sur l'extrait ou sur une fenêtre qui le touche ; aussi un
+    commentaire laissé sur la fenêtre elle-même (annotation par fenêtres)."""
+    from blanci.inputs.dataset import load_spans
+
+    spans, intervals = load_spans(con, annotator)
+    marks: dict[str, list[tuple[float, float]]] = {}
+    for rid, a, b in spans.loc[
+        spans["comment"].notna(), ["recording_id", "start_s", "end_s"]
+    ].itertuples(index=False):
+        marks.setdefault(rid, []).append((float(a), float(b)))
+    noted = intervals[intervals["comment"].notna() & (intervals["comment"].astype(str) != "")]
+    for rid, a, b in noted[["recording_id", "start_s", "end_s"]].itertuples(index=False):
+        marks.setdefault(rid, []).append((float(a), float(b)))
+    ids = _window_ids(queue)
+    window_notes = {wid for wid, _ in latest_comments(con, ids, annotator).items()}
+    out = []
+    for wid, rid, o, d in zip(
+        ids, queue["recording_id"], queue["offset_s"], queue["dur_s"], strict=True
+    ):
+        o, e = float(o), float(o) + float(d)
+        out.append(wid in window_notes or any(a < e and b > o for a, b in marks.get(rid, ())))
+    return pd.Series(out, index=queue.index, dtype=bool)
+
+
+def latest_comments(
+    con: sqlite3.Connection, window_ids: list[str], annotator: list[str | None] | None = None
+) -> dict[str, str]:
+    """Commentaire des labels de fenêtre (annotation par fenêtres) de ces fenêtres : {window_id :
+    texte}, le plus récent de chacune."""
+    from blanci.inputs.dataset import annotator_filter
+
+    condition, params = annotator_filter(annotator)
+    wanted, found = set(window_ids), {}
+    rows = con.execute(
+        "SELECT window_id, conditions FROM labels WHERE conditions LIKE '%\"comment\"%'"
+        + (f" AND {condition}" if condition else "")
+        + " ORDER BY label_id",
+        params,
+    )
+    for wid, conditions in rows:
+        text = (json.loads(conditions or "{}").get("comment") or "").strip()
+        if wid in wanted and text:
+            found[wid] = text
+    return found
+
+
+def queue_mask(
+    con: sqlite3.Connection,
+    queue: pd.DataFrame,
+    skip: list[str | None] | None | bool = False,
+    keep: list[str | None] | None | bool = False,
+    content: str = "any",
+    content_who: list[str | None] | None = None,
+    everyone: list[str] | None = None,
+) -> pd.Series:
+    """Extraits de la file à écouter (vrai) selon les filtres de la navigation, combinés :
+
+    - `skip` : sauter ceux déjà écoutés par l'un de ces annotateurs (None : par n'importe qui ;
+      False : pas de filtre) ;
+    - `keep` : ne garder que ceux déjà écoutés par l'un d'eux (même codage), par exemple « ce
+      que les autres ont écouté », pour le réécouter derrière eux ;
+    - `content` (`CONTENT_FILTERS`) : ne garder que ceux où les réponses de `content_who`
+      (None : tout le monde) disent A. blanci (l'un au moins), rien (aucun), un commentaire,
+      ou des avis différents (l'un positif, un autre négatif). Chacun compte par sa dernière
+      réponse ; `everyone` : les noms à comparer, ceux de la base par défaut.
+    Un extrait jamais écouté n'a pas de contenu : tout filtre de contenu l'écarte."""
+    from blanci.inputs.labels import POSITIVE_LABELS
+
+    keep_mask = pd.Series(True, index=queue.index)
+    if skip is not False:
+        keep_mask &= progress(con, queue, skip).isna()
+    if keep is not False:
+        keep_mask &= progress(con, queue, keep).notna()
+    if content == "any":
+        return keep_mask
+    if content not in CONTENT_FILTERS:
+        raise ValueError(f"filtre de contenu inconnu : {content!r}")
+    if content == "commented":
+        return keep_mask & commented(con, queue, content_who)
+    # Réponses de chacun : un extrait est positif si l'un l'a dit, même si un autre l'a
+    # réécouté depuis sans rien entendre (c'est alors aussi un avis différent).
+    names = everyone
+    if names is None:
+        names = [
+            a
+            for (a,) in con.execute(
+                "SELECT DISTINCT annotator FROM spans UNION SELECT DISTINCT annotator FROM labels"
+            )
+        ]
+    if content_who is not None:
+        allowed = {(n or "").casefold() for n in content_who}
+        names = [n for n in names if (n or "").casefold() in allowed]
+    pos = pd.Series(False, index=queue.index)
+    neg = pd.Series(False, index=queue.index)
+    for name in dict.fromkeys(names):
+        heard = progress(con, queue, [name])
+        positive = heard.isin(POSITIVE_LABELS)
+        pos |= positive
+        neg |= heard.notna() & ~positive
+    if content == "positive":
+        return keep_mask & pos
+    if content == "negative":
+        return keep_mask & neg & ~pos
+    return keep_mask & pos & neg
+
+
 def next_position(
     done: pd.Series, pos: int, unheard_only: bool, step: int = 1, wrap: bool = True
 ) -> int:
@@ -578,6 +698,65 @@ def wav_bytes(
     buffer = io.BytesIO()
     sf.write(buffer, x, sr, format="WAV", subtype="PCM_16")
     return buffer.getvalue()
+
+
+def peak_frequency(
+    wav: np.ndarray, sr: int, band_hz: tuple[float, float] | None = None, n_fft: int = 2048
+) -> float | None:
+    """Fréquence du maximum d'énergie (FME, Hz) d'un morceau de signal : sommet du spectre de
+    puissance moyen (trames de Hann de `n_fft` points, recouvrement de moitié), cherché dans
+    `band_hz` (bande de la fenêtre temps-fréquence ; None : de 0 à la moitié de f_e), affiné par
+    une parabole sur les trois raies autour du sommet. None pour un morceau vide ou muet."""
+    x = np.asarray(wav, dtype=np.float64).ravel()
+    if x.size < 16 or not np.any(x):
+        return None
+    n = int(min(n_fft, 1 << int(np.floor(np.log2(x.size)))))
+    hop = max(1, n // 2)
+    frames = np.lib.stride_tricks.sliding_window_view(x, n)[::hop] * np.hanning(n)
+    power = (np.abs(np.fft.rfft(frames, axis=1)) ** 2).mean(axis=0)
+    freqs = np.fft.rfftfreq(n, 1 / sr)
+    lo, hi = (0.0, sr / 2) if band_hz is None else sorted(float(f) for f in band_hz)
+    keep = np.flatnonzero((freqs >= lo) & (freqs <= hi))
+    if keep.size == 0 or not np.any(power[keep]):
+        return None
+    k = int(keep[np.argmax(power[keep])])
+    f = float(freqs[k])
+    if 0 < k < len(power) - 1:  # parabole sur les log-puissances voisines
+        a, b, c = np.log(power[k - 1 : k + 2] + 1e-30)
+        den = a - 2 * b + c
+        if den < 0:
+            f += 0.5 * (a - c) / den * (freqs[1] - freqs[0])
+    return round(min(max(f, lo), hi), 1)
+
+
+def with_peak_frequencies(
+    intervals: list,
+    path: str | Path,
+    channel: int = 0,
+    default_band: tuple[float, float] | None = None,
+    n_fft: int = 2048,
+) -> list[list]:
+    """Fenêtres du poste ([début, fin, label, qualité, piste, f basse, f haute, FME,
+    commentaire], les dernières facultatives) avec leur FME mesurée dans l'enregistrement
+    `path` (`peak_frequency`), sur la piste de chaque fenêtre (sinon `channel`), dans sa bande ;
+    une fenêtre en temps seulement est mesurée dans `default_band` (la bande du signal de la
+    configuration, celle de l'espèce : le bruit grave du vent ou de la pluie ne l'emporte pas),
+    ou sur toute la hauteur sans elle. Une FME que la lecture n'a pas pu mesurer reste vide."""
+    out = []
+    path = Path(path)
+    for iv in intervals:
+        row = [*iv, *[None] * (9 - len(iv))][:9]
+        t0, t1, ch, f0, f1 = float(row[0]), float(row[1]), row[4], row[5], row[6]
+        band = (float(f0), float(f1)) if f0 is not None and f1 is not None else default_band
+        try:
+            wav, sr, _ = read_clip(
+                path.parent, path.name, t0, t1 - t0, 0.0, int(channel if ch is None else ch)
+            )
+            row[7] = peak_frequency(wav, sr, band, n_fft)
+        except (OSError, RuntimeError, ValueError):
+            row[7] = None
+        out.append(row)
+    return out
 
 
 # --- Réponses -------------------------------------------------------------------------------------
@@ -754,22 +933,28 @@ def extract_intervals(
     return {who: _clipped(con, span_id, start_s, end_s) for who, span_id in latest}
 
 
-def _clipped(
-    con: sqlite3.Connection, span_id: int, start_s: float, end_s: float
-) -> list[tuple[float, float, str, str | None, int | None]]:
-    """Intervalles (début, fin, label, qualité, piste écoutée) de l'envoi `span_id`, coupés aux
-    bornes de l'extrait [start_s, end_s]. Piste : celle de l'intervalle, sinon celle de l'envoi
-    (`conditions.channel_listened`) : un réenvoi la garde."""
+def _clipped(con: sqlite3.Connection, span_id: int, start_s: float, end_s: float) -> list[tuple]:
+    """Fenêtres (début, fin, label, qualité, piste écoutée, puis fréquence basse, fréquence
+    haute, FME, commentaire) de l'envoi `span_id`, coupées aux bornes de l'extrait
+    [start_s, end_s]. Piste : celle de la fenêtre, sinon celle de l'envoi
+    (`conditions.channel_listened`) : un réenvoi la garde. Les quatre dernières ne sont
+    données que si l'une existe (fenêtre en temps seulement, sans FME ni commentaire : cinq
+    valeurs, comme avant la migration 8)."""
     kept = []
-    for a, b, c, q, ch in con.execute(
+    for a, b, c, q, ch, f0, f1, fme, note in con.execute(
         "SELECT i.start_s, i.end_s, i.label, i.quality, "
-        "COALESCE(i.channel, json_extract(s.conditions, '$.channel_listened')) "
+        "COALESCE(i.channel, json_extract(s.conditions, '$.channel_listened')), "
+        "i.f_min_hz, i.f_max_hz, i.fme_hz, i.comment "
         "FROM intervals i JOIN spans s USING (span_id) WHERE i.span_id = ? ORDER BY i.start_s",
         (span_id,),
     ):
         a, b = max(float(a), start_s), min(float(b), end_s)
         if b - a >= 0.01:
-            kept.append((round(a, 3), round(b, 3), str(c), q, None if ch is None else int(ch)))
+            row: tuple = (round(a, 3), round(b, 3), str(c), q, None if ch is None else int(ch))
+            extra = (f0, f1, fme, note)
+            if any(x is not None for x in extra):
+                row += extra
+            kept.append(row)
     return kept
 
 
@@ -825,7 +1010,8 @@ def extract_comments(
     """Commentaires laissés sur l'extrait [start_s, end_s], du plus ancien au plus récent :
     {who, date, text, start_s, end_s}. Ceux des extraits écoutés qui le recouvrent d'au moins
     `SAME_EXTRACT_OVERLAP` du plus court (toutes versions : un réenvoi sans commentaire n'efface
-    pas l'ancien), et ceux des fenêtres qui le touchent (annotation par fenêtres). Un même texte
+    pas l'ancien), ceux des fenêtres qui le touchent (annotation par fenêtres), et ceux des
+    fenêtres tracées dans les envois qui le touchent (`window` : vrai). Un même texte
     du même annotateur n'est gardé qu'une fois, à sa dernière date. `annotator` : comme
     `extract_intervals`."""
     from blanci.inputs.dataset import SAME_EXTRACT_OVERLAP, annotator_filter
@@ -846,13 +1032,25 @@ def extract_comments(
         + (f" AND {condition}" if condition else ""),
         (recording_id, end_s, start_s, *params),
     ).fetchall()
+    # Commentaires des fenêtres tracées (migration 8) : ceux des envois qui touchent l'extrait.
+    condition, params = annotator_filter(annotator, "s.annotator")
+    boxes = con.execute(
+        "SELECT s.annotator, s.created_at, i.comment, i.start_s, i.end_s FROM intervals i "
+        "JOIN spans s USING (span_id) WHERE s.recording_id = ? AND i.comment IS NOT NULL "
+        "AND i.start_s < ? AND i.end_s > ?" + (f" AND {condition}" if condition else ""),
+        (recording_id, end_s, start_s, *params),
+    ).fetchall()
+    rows = [(*r, False) for r in [*spans, *windows]] + [(*r, True) for r in boxes]
     kept: dict[tuple, dict[str, Any]] = {}
-    for who, date, conditions, a, b in sorted([*spans, *windows], key=lambda r: r[1] or ""):
-        text = (json.loads(conditions or "{}").get("comment") or "").strip()
+    for who, date, conditions, a, b, box in sorted(rows, key=lambda r: r[1] or ""):
+        text = (conditions if box else json.loads(conditions or "{}").get("comment") or "").strip()
         if text:
-            key = ((who or "").casefold(), text)
+            # Un même texte sur deux fenêtres différentes reste deux commentaires.
+            key = ((who or "").casefold(), text, *((round(a, 1), round(b, 1)) if box else ()))
             kept.pop(key, None)  # réordonné à sa dernière date
             kept[key] = {"who": who, "date": date, "text": text, "start_s": a, "end_s": b}
+            if box:
+                kept[key]["window"] = True
     return list(kept.values())
 
 

@@ -126,7 +126,9 @@ def load_spans(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(extraits écoutés, intervalles) de l'annotation par intervalles. Les intervalles
     portent recording_id et `channel`, la piste écoutée quand ils ont été placés (celle de
-    l'envoi, `conditions.channel_listened`, s'ils ne la disent pas ; vide si aucune) ;
+    l'envoi, `conditions.channel_listened`, s'ils ne la disent pas ; vide si aucune), puis la
+    bande de la fenêtre (`f_min_hz`, `f_max_hz`, vides en temps seulement), sa FME (`fme_hz`)
+    et son commentaire ;
     `annotator` : seulement les extraits de cet annotateur, ou de ces
     annotateurs (`annotator_filter` ; masquage des autres dans le poste, §5)."""
     condition, params = annotator_filter(annotator)
@@ -142,7 +144,8 @@ def load_spans(
     spans = spans.drop(columns="conditions")
     intervals = pd.read_sql_query(
         "SELECT i.span_id, s.recording_id, i.start_s, i.end_s, i.label, i.quality, "
-        "COALESCE(i.channel, json_extract(s.conditions, '$.channel_listened')) AS channel "
+        "COALESCE(i.channel, json_extract(s.conditions, '$.channel_listened')) AS channel, "
+        "i.f_min_hz, i.f_max_hz, i.fme_hz, i.comment "
         f"FROM intervals i JOIN spans s USING (span_id) {where_joined} "
         "ORDER BY i.interval_id",
         con,
@@ -197,7 +200,7 @@ def annotated_spans(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame
     ]  # fmt: skip
     intervals = intervals.merge(rec, on="recording_id", how="left")[
         ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "label",
-         "quality", "valable", "channel"]
+         "quality", "valable", "channel", "f_min_hz", "f_max_hz", "fme_hz", "comment"]
     ]  # fmt: skip
     return extracts, intervals
 

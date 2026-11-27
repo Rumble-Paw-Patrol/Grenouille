@@ -76,8 +76,11 @@ import streamlit.components.v1 as components
 from blanci.annotation import projets
 from blanci.annotation.bandeau import (
     DEFAULT_HEADER,
+    add_reference,
     bandeau,
     read_header,
+    read_references,
+    remove_reference,
     reset_header,
     save_header,
 )
@@ -96,6 +99,7 @@ from blanci.annotation.style import BRAND, CHART_COLORS, LABEL_COLORS, UNHEARD_C
 from blanci.annotation.viewer import HELP, asset, asset_src, viewer, viewer_args
 from blanci.annotation.workbench import (
     ANSWERS,
+    CONTENT_FILTERS,
     INTERVAL_ANSWERS,
     add_annotator,
     extract_comments,
@@ -109,6 +113,7 @@ from blanci.annotation.workbench import (
     next_position,
     ordered_classes,
     progress,
+    queue_mask,
     queue_track,
     read_annotators,
     read_channels,
@@ -117,6 +122,7 @@ from blanci.annotation.workbench import (
     split_windows,
     visible_annotators,
     wav_bytes,
+    with_peak_frequencies,
 )
 from blanci.core.config import (
     DEFAULT_CONFIG,
@@ -129,7 +135,7 @@ from blanci.core.db import connect, window_id_for
 from blanci.core.locate import locate, remember_root, remembered_roots, variants
 from blanci.service import export_annotations
 
-NAMES = dict(ANSWERS) | {"edge": "bord d'un intervalle (écarté)"}
+NAMES = dict(ANSWERS) | {"edge": "bord d'une fenêtre (écarté)"}
 SHOW_METHOD = False  # rubrique « Méthode » du bandeau latéral (annotation par fenêtres)
 EXISTING, MAP = "existing", "map"
 MODES = {
@@ -465,23 +471,59 @@ def _skip_who(con, me: str, picked: list[str], names: list[str]) -> tuple[bool, 
     return bool(chosen), _stored_names(con, chosen) if chosen else []
 
 
-def _to_skip(con, queue, skipping: bool, who: list | None):
-    """Extraits que ◀ ▶ et la validation sautent (`_skip_who`). Série de la file : le label
-    entendu pour ceux à sauter, None pour les autres (`next_position`)."""
-    if skipping:
-        return progress(con, queue, who)
+# « Quelqu'un d'autre » dans « N'écouter que ceux déjà écoutés par » : tout annotateur qui n'est
+# pas soi (ceux de la base, de la liste, et les lignes sans annotateur).
+OTHERS = "Quelqu'un d'autre"
+
+
+def _keep_who(con, me: str, picked: list[str], names: list[str]) -> list | bool:
+    """Menu « N'écouter que ceux déjà écoutés par » : False (pas de condition), ou les
+    annotateurs dont une écoute garde l'extrait, tels qu'écrits dans la base (None : lignes sans
+    annotateur). « Moi » sans annotateur choisi ne garde rien."""
+    if not picked:
+        return False
+    me_key = me.strip().casefold()
+    chosen: list[str | None] = []
+    for p in picked:
+        if p == OTHERS:
+            stored = con.execute(
+                "SELECT DISTINCT annotator FROM spans UNION SELECT DISTINCT annotator FROM labels"
+            )
+            others = [*(a for (a,) in stored), *names]
+            chosen += [a for a in others if a is None or a.strip().casefold() != me_key]
+        elif p == ME:
+            if me:
+                chosen.append(me)
+        else:
+            chosen.append(p)
+    named = [c for c in dict.fromkeys(chosen) if c is not None]
+    out: list[str | None] = _stored_names(con, named) if named else []
+    if None in chosen:
+        out.append(None)
+    return out
+
+
+def _to_skip(con, queue, nav: tuple):
+    """Extraits que ◀ ▶ et la validation sautent, d'après les filtres de la navigation
+    (`queue_mask` : sauter, ne garder que, contenu). (on filtre, série de la file : « x » pour
+    ceux à sauter, None pour les autres, `next_position`)."""
+    import numpy as np
     import pandas as pd
 
-    return pd.Series([None] * len(queue), index=queue.index, dtype=object)
+    skip, keep, content, content_who = nav
+    filtering = skip is not False or keep is not False or content != "any"
+    if not filtering:
+        return False, pd.Series([None] * len(queue), index=queue.index, dtype=object)
+    mask = queue_mask(con, queue, skip, keep, content, content_who)
+    return True, pd.Series(np.where(mask.to_numpy(), None, "x"), index=queue.index, dtype=object)
 
 
 def _advance(con, queue, pos, nav_args, key, end) -> None:
-    """Après une réponse : extrait suivant (qui reste à écouter si « Sauter les extraits déjà
-    écoutés par » a des noms), ou fin de file si cette réponse vient d'écouter le dernier."""
-    skipping = nav_args[0]
-    nav = _to_skip(con, queue, *nav_args)
-    st.session_state[key] = next_position(nav, pos, skipping)
-    st.session_state[end] = skipping and bool(nav.notna().all())
+    """Après une réponse : extrait suivant (qui reste à écouter selon les filtres de la
+    navigation), ou fin de file si plus rien n'y répond."""
+    filtering, nav = _to_skip(con, queue, nav_args)
+    st.session_state[key] = next_position(nav, pos, filtering)
+    st.session_state[end] = filtering and bool(nav.notna().all())
 
 
 def _pick(key: str, widget: str, end: str) -> None:
@@ -693,11 +735,17 @@ def _comment_key(form_key: str) -> str:
     return f"comment::{form_key}::{st.session_state.get('validated', 0)}"
 
 
-def _save_extract(con, candidate, t0, t1, intervals, annotator, channel, comment) -> bool:
-    """Enregistre l'extrait écouté et ses intervalles ; vrai si c'est fait."""
+def _save_extract(
+    con, candidate, t0, t1, intervals, annotator, channel, comment, full=None, band_hz=None
+) -> bool:
+    """Enregistre l'extrait écouté et ses fenêtres ; vrai si c'est fait. `full` :
+    l'enregistrement, où la FME de chaque fenêtre est mesurée (`with_peak_frequencies` ; une
+    fenêtre en temps seulement, dans `band_hz`)."""
     if not annotator.strip():
         st.error(_NO_ANNOTATOR)
         return False
+    if full is not None and intervals:
+        intervals = with_peak_frequencies(intervals, full, channel, band_hz)
     try:
         save_span(
             con,
@@ -933,11 +981,9 @@ def _comments_panel(comments: list[dict], t0: float, t1: float) -> None:
         return
     lines = []
     for c in comments:
-        where = (
-            ""
-            if abs(c["start_s"] - t0) < 0.05 and abs(c["end_s"] - t1) < 0.05
-            else f" · {c['start_s']:.1f}–{c['end_s']:.1f} s"
-        )
+        span = f"{c['start_s']:.1f}–{c['end_s']:.1f} s"
+        whole = abs(c["start_s"] - t0) < 0.05 and abs(c["end_s"] - t1) < 0.05
+        where = f" · fenêtre {span}" if c.get("window") else "" if whole else f" · {span}"
         date = str(c["date"] or "")[:10]
         lines.append(f"- **{c['who'] or '(sans nom)'}** ({date}{where}) : {c['text']}")
     st.markdown("💬 **Commentaires déjà laissés**\n" + "\n".join(lines))
@@ -1028,6 +1074,8 @@ def _project_fields(kind: str, active: str) -> None:
         reset_header(folder)
         st.session_state.pop("project_dialog", None)
         st.rerun()
+    if not new:
+        _references_fields(folder)
     if not sent:
         return
     unchanged = (title, species, subtitle, song, lo, hi, legend) == (
@@ -1077,6 +1125,58 @@ def _project_fields(kind: str, active: str) -> None:
     st.session_state.pop("project_pick", None)
     st.session_state.pop("project_dialog", None)
     st.rerun()
+
+
+def _references_fields(folder) -> None:
+    """Références supplémentaires de l'en-tête (annotation multi-espèces,
+    `bandeau.add_reference`) : celles déjà là, chacune retirable, puis l'ajout d'une autre (un
+    chant et sa bande, ou une image de spectrogramme, ou les deux). Enregistré tout de suite,
+    la fenêtre reste ouverte."""
+    st.markdown("**Références supplémentaires** (plusieurs espèces à reconnaître)")
+    refs = read_references(folder)
+    for ref in refs:
+        cols = st.columns([5, 1])
+        band = ref.get("band_khz")
+        cols[0].markdown(
+            f"*{ref['species']}*"
+            + (f" · {band[0]:g}–{band[1]:g} kHz" if band else " · image")
+            + (" · 🔊" if ref.get("sound") else "")
+            + (f" · {ref['legend']}" if ref.get("legend") else "")
+        )
+        if cols[1].button("Retirer", key=f"refdel::{ref['id']}", use_container_width=True):
+            remove_reference(ref["id"], folder)
+            st.rerun()  # la fenêtre reste ouverte (`project_dialog`), l'en-tête se redessine
+    with st.form("project::reference", border=True, clear_on_submit=True):
+        cols = st.columns(2)
+        species = cols[0].text_input("Espèce", placeholder="Anomaloglossus degranvillei")
+        legend = cols[1].text_input("Légende (lieu, date…)", placeholder="facultatif")
+        cols = st.columns(2)
+        song = cols[0].file_uploader("Chant de référence", type=["wav", "mp3", "flac", "ogg"])
+        image = cols[1].file_uploader(
+            "Spectrogramme de référence (facultatif)",
+            type=["png", "jpg", "jpeg"],
+            help="Montré tel quel à la place du spectrogramme calculé sur le chant (figure "
+            "d'un article, capture d'un autre logiciel…).",
+        )
+        cols = st.columns(2)
+        lo = cols[0].number_input("Bande de (kHz)", 0.0, 96.0, None, 0.1)
+        hi = cols[1].number_input("à (kHz)", 0.0, 96.0, None, 0.1)
+        added = st.form_submit_button("Ajouter la référence", use_container_width=True)
+    if added:
+        try:
+            add_reference(
+                species,
+                None if lo is None or hi is None else (lo, hi),
+                song.getvalue() if song is not None else None,
+                image.getvalue() if image is not None else None,
+                Path(image.name).suffix if image is not None else ".png",
+                legend,
+                folder=folder,
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            st.rerun()  # listée ci-dessus, et dans l'en-tête
 
 
 @st.dialog("Nouveau projet", width="large", on_dismiss=_closer("project_dialog"))
@@ -1137,6 +1237,30 @@ def _choose_project(active: str) -> None:
 def _signature(intervals) -> list:
     """Intervalles comparables d'un envoi à l'autre : bornes au dixième de seconde, étiquette."""
     return sorted((round(float(i[0]), 1), round(float(i[1]), 1), str(i[2])) for i in intervals)
+
+
+def _content(intervals) -> list:
+    """Tout ce qu'on peut changer à ses fenêtres (bornes, étiquette, qualité, bande au hertz,
+    commentaire) : un changement non validé fait demander « Êtes-vous sûr ? » en partant."""
+
+    def at(i, k):
+        return i[k] if len(i) > k else None
+
+    def hz(x):
+        return None if x is None or x != x else round(float(x))
+
+    return sorted(
+        (
+            round(float(i[0]), 1),
+            round(float(i[1]), 1),
+            str(i[2]),
+            str(at(i, 3) or ""),
+            str(hz(at(i, 5))),
+            str(hz(at(i, 6))),
+            (at(i, 8) or "").strip() if isinstance(at(i, 8), str) else "",
+        )
+        for i in intervals
+    )
 
 
 def _submit_doubts(intervals, history: list[dict], me: str) -> list[str]:
@@ -1295,6 +1419,30 @@ def main() -> None:
             key="skip_pick",
             placeholder="Personne",
         )
+        # Les autres filtres de la file, combinés au premier : réécouter derrière les autres
+        # (« Quelqu'un d'autre » ici, « Moi » au-dessus), seulement les positifs, etc.
+        keep_options = [OTHERS, *skip_options]
+        st.session_state.keep_pick = [
+            p for p in st.session_state.get("keep_pick", []) if p in keep_options
+        ]
+        keep_pick = st.multiselect(
+            "N'écouter que ceux déjà écoutés par",
+            keep_options,
+            key="keep_pick",
+            placeholder="Pas de condition",
+            help="Seulement les extraits qu'au moins une de ces personnes a déjà écoutés. Avec "
+            "« Quelqu'un d'autre » ici et « Moi » au-dessus : ce que les autres ont écouté et "
+            "pas encore vous.",
+        )
+        content_pick = st.selectbox(
+            "Ce qui y a été entendu",
+            list(CONTENT_FILTERS),
+            format_func=CONTENT_FILTERS.get,
+            key="content_pick",
+            help="D'après les réponses des personnes choisies juste au-dessus (sinon de tous "
+            "ceux qui ne sont pas masqués). Un extrait jamais écouté n'a pas de contenu : il "
+            "est sauté dès qu'un de ces filtres est choisi.",
+        )
         hidden, everyone, hidden_comments, no_comments = _masking_panel(names)
         _send_panel(annotator)
         # Rubrique « Méthode » masquée (annotation par fenêtres suspendue) : mettre
@@ -1337,10 +1485,18 @@ def main() -> None:
     done = progress(con, queue, who)
     n = len(queue)
     offset_h = cfg["recorder"]["filename_utc_offset_h"]
-    # Ce que ◀ ▶ et la validation sautent : ses écoutes, celles des collègues, ou rien.
-    nav_args = _skip_who(con, me, skip_pick, names)
-    skipping = nav_args[0]
-    nav = _to_skip(con, queue, *nav_args)
+    # Ce que ◀ ▶ et la validation sautent : ses écoutes, celles des collègues, ce qui ne répond
+    # pas aux autres filtres, ou rien.
+    skipping, skip_who = _skip_who(con, me, skip_pick, names)
+    keep_who = _keep_who(con, me, keep_pick, names)
+    nav_args = (
+        skip_who if skipping else False,
+        keep_who,
+        content_pick,
+        shown if keep_who is False else keep_who,
+    )
+    skipping, nav = _to_skip(con, queue, nav_args)
+    only_skip = keep_who is False and content_pick == "any"
     all_heard = skipping and bool(nav.notna().all())
 
     key = f"pos::{chosen}"
@@ -1362,8 +1518,12 @@ def main() -> None:
                 st.markdown(readme.read_text(encoding="utf-8"))
     if all_heard and st.session_state.get(end):
         st.success(
-            "File terminée : tous les extraits sont écoutés. Pour en réécouter un, le choisir "
-            "dans la liste de la file (panneau de gauche)."
+            (
+                "File terminée : tous les extraits sont écoutés. "
+                if only_skip
+                else "Plus aucun extrait de la file ne répond aux filtres de la navigation. "
+            )
+            + "Pour en réécouter un, le choisir dans la liste de la file (panneau de gauche)."
         )
         return
 
@@ -1487,7 +1647,9 @@ def main() -> None:
             st.session_state.pop("confirmed_submit", None)
             comment = (st.session_state.get(_comment_key(form_key)) or "").strip() or None
             channel = st.session_state.get(f"ch::{extract}", start_channel)
-            if _save_extract(con, candidate, t0, t1, intervals, annotator, channel, comment):
+            if _save_extract(
+                con, candidate, t0, t1, intervals, annotator, channel, comment, full, band_hz
+            ):
                 _advance(con, queue, pos, nav_args, key, end)
                 st.rerun()
             tried = True
@@ -1589,7 +1751,9 @@ def main() -> None:
             elif (
                 (submit_now or confirmed)
                 and not tried
-                and _save_extract(con, candidate, t0, t1, intervals, annotator, channel, comment)
+                and _save_extract(
+                    con, candidate, t0, t1, intervals, annotator, channel, comment, full, band_hz
+                )
             ):
                 _advance(con, queue, pos, nav_args, key, end)
                 st.rerun()
@@ -1636,6 +1800,9 @@ def main() -> None:
         why = (
             "Tous les extraits de la file sont déjà écoutés par les personnes choisies dans "
             "« Sauter les extraits déjà écoutés par ». Les retirer du menu pour parcourir la file."
+            if only_skip
+            else "Aucun extrait de la file ne répond aux filtres de la navigation (panneau de "
+            "gauche). Les desserrer pour parcourir la file."
         )
         why_before = why_after = why
     else:
@@ -1646,7 +1813,7 @@ def main() -> None:
     unsaved = (
         media is not None
         and not window_mode
-        and (_signature(intervals) != _signature(own) or bool(comment))
+        and (_content(intervals) != _content(own) or bool(comment))
     )
     live_comment = _comment_key(form_key) if media is not None and not window_mode else ""
     nav_cols = st.columns(2, gap="small")
