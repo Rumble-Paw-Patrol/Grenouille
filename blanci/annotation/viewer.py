@@ -1,5 +1,6 @@
 """Visualiseur de spectrogramme du poste d'annotation : composant Streamlit (page HTML et
-JavaScript, sans outil de construction) qui renvoie à Python les intervalles tracés.
+JavaScript, sans outil de construction) qui renvoie à Python les fenêtres tracées (en temps,
+ou en temps et en fréquence), avec leur commentaire.
 
 Tout ce qui ne change pas l'annotation se fait dans le navigateur, sans aller-retour avec
 Python : le spectrogramme est calculé à la résolution de la vue (zoomer l'affine), une fois
@@ -43,23 +44,36 @@ base » |
 | Se déplacer dans le temps | **Flèches ← →** du clavier |
 | Déplacer les frontières de la bande d'écoute | **Tirer le bord** de la bande (pointillé, \
 curseur ↕) |
-| Tracer un intervalle | **Clic gauche + glisser** sur le spectrogramme |
-| Choisir l'étiquette des prochains intervalles | Touches **1** à **9** du clavier, ou **clic** \
-sur une étiquette en haut (aucun intervalle sélectionné) |
+| Tracer une fenêtre | **Clic gauche + glisser** sur le spectrogramme : en temps (toute la \
+hauteur), ou en temps et en fréquence (un rectangle) selon le bouton **Fenêtre** de la barre ; \
+**Alt + glisser** trace l'autre sorte |
+| Choisir l'étiquette des prochaines fenêtres | Touches **1** à **9** du clavier, ou **clic** \
+sur une étiquette en haut (aucune fenêtre sélectionnée) |
 | Proposer une étiquette (espèce…) ou une qualité | **+** à côté de la liste : celles déjà \
 connues (retirées, ou vues dans les annotations) d'abord, ou un nom nouveau |
 | Retirer une étiquette ou une qualité de la liste | **−** puis **clic** sur celle à retirer (les \
-intervalles déjà posés la gardent ; le **+** la repropose) |
+fenêtres déjà posées la gardent ; le **+** la repropose) |
 | Régler le spectrogramme d'un micro | Filtre dynamique et contraste dans l'encadré du micro, \
 au-dessus du spectrogramme |
-| Ajuster un intervalle | **Tirer son bord** (curseur ↔) ; les pointillés gris à l'intérieur de \
+| Ajuster une fenêtre | **Tirer son bord** (curseur ↔ en temps, ↕ en fréquence) ; les \
+pointillés gris à l'intérieur de \
 chaque bord sont les zones tampons (0,07 s au début, 0,2 s à la fin) ; le bouton **Zones \
 tampons** les affiche ou les cache (réglage retenu), sans rien changer à l'apprentissage |
 | Deux notes dans le même train ? | Bouton **±3 s** : deux pointillés gris à 3 s \
 de part et d'autre du curseur |
-| Sélectionner un intervalle | **Clic** dessus, ou sur sa pastille sous le spectrogramme |
-| Modifier l'étiquette d'un intervalle | Une fois sélectionné, **clic** sur une étiquette en haut |
-| Supprimer un intervalle | Une fois sélectionné, touche **Suppr**, ou **clic** sur la petite \
+| Sélectionner une fenêtre | **Clic** dessus, ou sur sa pastille sous le spectrogramme : une \
+bulle s'ouvre en haut à droite de la fenêtre (temps, fréquences, FME) |
+| Commenter une fenêtre | Dans sa bulle : la zone de texte (positif, doute, faux ami, autre \
+espèce…) ; une fenêtre commentée porte une petite bulle 💬 sur le spectrogramme et sur sa pastille \
+|
+| Fenêtre en temps → temps-fréquence, et retour | Dans sa bulle : **Borner à la bande d'écoute** \
+ou **Toute la hauteur** |
+| Voir la FME (fréquence du maximum d'énergie) | Toujours dans la bulle ; le bouton **FME** de la \
+barre l'ajoute en trait blanc sur chaque fenêtre et sur les pastilles (réglage retenu) |
+| Voir ce que l'on entend en « Bande seule » | Le spectrogramme est filtré comme le son : noir \
+hors de la bande en coupure franche (FFT), assombri selon la raideur du filtre sinon |
+| Modifier l'étiquette d'une fenêtre | Une fois sélectionnée, **clic** sur une étiquette en haut |
+| Supprimer une fenêtre | Une fois sélectionnée, touche **Suppr**, ou **clic** sur la petite \
 croix de sa pastille |
 | Valider l'annotation | Bouton **Valider** à droite du spectrogramme, seul moyen d'envoyer \
 (aucun raccourci clavier ; le commentaire facultatif se tape dans la zone de texte sous le \
@@ -155,7 +169,32 @@ INDEX = r"""<!doctype html>
                      color: var(--accent-ink); border-color: transparent;
                      box-shadow: 0 4px 16px -6px var(--accent-2); }
   /* Toile et, à sa droite, « Valider » (sans descendre jusqu'au formulaire). */
-  .stage { display: flex; gap: 10px; align-items: stretch; }
+  .stage { display: flex; gap: 10px; align-items: stretch; position: relative; }
+  /* Bulle d'une fenêtre sélectionnée : en haut à droite, hors de la fenêtre ; temps, bande,
+     FME, et son commentaire (modifiable pour les siennes, en lecture pour celles des autres). */
+  #bubble { position: absolute; z-index: 5; width: 250px; display: grid; gap: 6px;
+            padding: 8px 10px 9px; border-radius: 12px 12px 12px 3px;
+            background: var(--champ); border: 1px solid var(--accent);
+            box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .8), 0 0 18px -8px var(--accent); }
+  #bubble.left { border-radius: 12px 12px 3px 12px; }
+  #bubble .bhead { display: flex; gap: 6px; align-items: center; font-weight: 600; }
+  #bubble .bhead .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  #bubble .bhead .bwho { color: var(--muted); font: 10px var(--mono); letter-spacing: .06em;
+                         text-transform: uppercase; }
+  #bubble .bclose { margin-left: auto; padding: 0 6px; min-height: 0; border: 0;
+                    background: transparent; color: var(--muted); }
+  #bubble .binfo { font: 11px/1.45 var(--mono); color: var(--muted); }
+  #bubble .binfo b { color: var(--ink); font-weight: 600; }
+  #bubble textarea { box-sizing: border-box; width: 100%; resize: vertical; min-height: 44px;
+                     padding: 5px 8px; border-radius: 8px; font: inherit; color: var(--ink);
+                     background: var(--fond); border: 1px solid var(--line-fort); }
+  #bubble textarea:focus { outline: none; border-color: var(--accent);
+                           box-shadow: 0 0 0 3px var(--anneau); }
+  #bubble .bnote { font-size: 12.5px; white-space: pre-wrap; padding: 4px 8px;
+                   border-left: 3px solid var(--gold); background: var(--anneau);
+                   border-radius: 0 6px 6px 0; }
+  #bubble .brow { display: flex; gap: 6px; flex-wrap: wrap; }
+  #bubble .brow button { padding: 1px 8px; min-height: 22px; font-size: 11.5px; }
   #submit { flex: none; width: 92px; padding: 8px; border: 0; border-radius: 12px;
             font-weight: 700; line-height: 1.3; white-space: pre-line;
             background: linear-gradient(160deg, var(--accent), var(--accent-2));
@@ -220,6 +259,7 @@ INDEX = r"""<!doctype html>
                  border-radius: 999px; }
   .chip button:hover:not(:disabled) { color: #F07A63; box-shadow: none; }
   .chip .q { font-weight: 700; }
+  .chip .fme { font-family: var(--mono); font-size: 10.5px; opacity: .85; }
   /* Intervalles des autres annotateurs : en lecture seule, cerclés de tirets. */
   .chip.ro { border-style: dashed; padding-right: 10px; }
   .pills { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -258,8 +298,8 @@ INDEX = r"""<!doctype html>
 </style></head><body>
 <div class="bar">
   <span class="group types" id="ivbar"
-        title="Pleine : étiquette des prochains intervalles (touches 1 à 9).
-Cerclée : celle de l'intervalle sélectionné (un clic la change).">
+        title="Pleine : étiquette des prochaines fenêtres (touches 1 à 9).
+Cerclée : celle de la fenêtre sélectionnée (un clic la change).">
     <span class="lbl">Étiquette</span><span class="pills" id="ivbtns"></span>
     <button id="addlbl" class="mini"
             title="Proposer une étiquette (déjà connue, ou nouvelle)">+</button>
@@ -267,7 +307,7 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
  celle à retirer (le + la repropose)">−</button>
   </span>
   <span class="group" id="qbar"
-        title="Qualité du chant : de l'intervalle sélectionné, et des prochains">
+        title="Qualité du chant : de la fenêtre sélectionnée, et des prochaines">
     <span class="lbl">Qualité</span><span class="seg medailles" id="qbtns"></span>
     <button id="addq" class="mini" hidden title="Ajouter une qualité (D…)">+</button>
     <button id="rmq" class="mini" hidden
@@ -300,7 +340,8 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
  traînée à la fréquence des frontières sur les claquements">FFT (coupure franche)</option>
     </select>
     <button id="bandonly" class="toggle" aria-pressed="false"
-            title="Allumé : on n'entend que la bande, filtrée comme choisi à gauche">Bande
+            title="Allumé : on n'entend que la bande, filtrée comme choisi à gauche ; le
+ spectrogramme montre ce qu'on entend (noir hors de la bande en FFT)">Bande
  seule</button></span>
   <span class="group">
     <button id="home" title="Tout l'extrait, 0 à 10 kHz (double-clic)">Vue de base</button>
@@ -308,9 +349,19 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
             title="La vue suit la tête de lecture pendant l'écoute">Suivre</button>
     <button id="gap3" class="toggle" aria-pressed="false"
             title="Allumé : deux pointillés gris à 3 s de part et d'autre du curseur. Deux notes
- à moins de 3 s : même intervalle ; à plus de 3 s : on clôt puis on en ouvre un autre">±3 s</button>
+ à moins de 3 s : même fenêtre ; à plus de 3 s : on la clôt puis on en ouvre une autre"
+            >±3 s</button>
+    <span class="seg" id="boxbar" title="Sorte des prochaines fenêtres (Alt + glisser : l'autre)">
+      <button id="boxt" value="t" title="Fenêtre en temps : toute la hauteur du spectrogramme"
+        >Temps</button><button id="boxtf" value="tf"
+        title="Fenêtre en temps et en fréquence : un rectangle (bande de fréquences de la fenêtre)"
+        >Temps-fréquence</button></span>
+    <button id="fmebtn" class="toggle" aria-pressed="false"
+            title="Allumé : la FME (fréquence du maximum d'énergie) de chaque fenêtre, en trait
+ blanc sur le spectrogramme et sur les pastilles. Toujours lisible dans la bulle d'une fenêtre
+ sélectionnée">FME</button>
     <button id="edges" class="toggle on" aria-pressed="true"
-            title="Allumé : les pointillés gris et la zone voilée aux bords de chaque intervalle
+            title="Allumé : les pointillés gris et la zone voilée aux bords de chaque fenêtre
  (zones tampons écartées de l'apprentissage). Éteint : on ne les trace plus, rien ne change
  pour l'apprentissage">Zones tampons</button>
   </span>
@@ -318,10 +369,11 @@ Cerclée : celle de l'intervalle sélectionné (un clic la change).">
 </div>
 <div class="mics" id="mics"></div>
 <div class="stage"><canvas id="c" tabindex="0"></canvas>
-  <button id="submit" hidden></button></div>
+  <button id="submit" hidden></button><div id="bubble" hidden></div></div>
 <div id="commentbox" hidden>
   <input type="text" id="comment" maxlength="1000" autocomplete="off"
-         placeholder="Commentaire facultatif : ce qui mérite d'être dit"></div>
+         placeholder="Commentaire facultatif sur l'extrait (une fenêtre se commente dans sa
+ bulle)"></div>
 <div id="list"></div>
 <div id="others"></div>
 <div id="notes"></div>
@@ -387,6 +439,9 @@ function showSettings() {
   $("edges").classList.toggle("on", S.edges !== false);  // allumé tant qu'on ne l'a pas éteint
   $("edges").setAttribute("aria-pressed", String(S.edges !== false));
   $("slope").value = String(S.slope);
+  ["boxt", "boxtf"].forEach(id => $(id).classList.toggle("on", $(id).value === boxKind()));
+  $("fmebtn").classList.toggle("on", !!S.fme);
+  $("fmebtn").setAttribute("aria-pressed", String(!!S.fme));
   [...$("mics").children].forEach((card, i) => {
     const m = mic(i), q = c => card.querySelector(c);
     q(".gain").value = m.gain; q(".gainv").textContent = `+${m.gain} dB`;
@@ -635,15 +690,18 @@ function filtered(x, rate, lo, hi) {
 function setBand(lo, hi) {
   lo = Math.max(0, Math.min(lo, hi - 100)); hi = Math.max(hi, lo + 100);
   S.band = [Math.round(lo / 10) * 10, Math.round(hi / 10) * 10];
-  showSettings(); applyAudio(); saveSettings(); draw();
+  showSettings(); applyAudio(); saveSettings();
+  if (S.bandOnly) moved(); else draw();  // spectrogramme filtré : recalculé une fois au repos
 }
 $("lo").onchange = () => setBand(+$("lo").value * 1000, S.band[1]);
 $("hi").onchange = () => setBand(S.band[0], +$("hi").value * 1000);
 $("bandonly").onclick = () => {
   S.bandOnly = !S.bandOnly; showSettings(); applyAudio(); applyFFT(); saveSettings();
+  if (D && view) draw();
 };
 $("slope").onchange = () => {
   const v = $("slope").value; S.slope = v === "fft" ? v : +v; applyAudio(); saveSettings();
+  if (D && view) draw();
 };
 // Choisir un micro : son spectrogramme (même vue, même zoom) et son son ; la lecture continue,
 // le lecteur choisi est recalé sur l'autre s'ils ont dérivé.
@@ -739,12 +797,20 @@ function backupSave(list) {
 function backupClear() {
   const all = backupRead(); delete all[backupKey()]; backupWrite(all);
 }
-// Un intervalle reçu ([début, fin, label, qualité, piste]) : la piste est celle qu'on écoutait
-// en le traçant (`shownTrack`), gardée quand on déplace ses bords ou qu'on change d'étiquette ;
-// null quand elle n'est pas connue (envoi d'avant, paquet relu).
-const ivOf = ([t0, t1, l, q, ch]) => ({t0, t1, label: l, quality: q || null, channel: ch ?? null});
+// Une fenêtre reçue ([début, fin, label, qualité, piste, f basse, f haute, FME, commentaire]) :
+// la piste est celle qu'on écoutait en la traçant (`shownTrack`), gardée quand on déplace ses
+// bords ou qu'on change d'étiquette ; null quand elle n'est pas connue (envoi d'avant, paquet
+// relu). Bande (Hz) : null pour une fenêtre en temps seulement (toute la hauteur).
+const ivOf = ([t0, t1, l, q, ch, f0, f1, fme, note]) => ({
+  t0, t1, label: l, quality: q || null, channel: ch ?? null, f0: f0 ?? null, f1: f1 ?? null,
+  fme: fme ?? null, note: note || null});
+const hzRound = f => f == null ? null : Math.round(f);
+// La FME envoyée est celle mesurée ici ; le poste la remesure à l'envoi dans le fichier
+// d'origine (`workbench.with_peak_frequencies`).
+const ivList = () => intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality,
+  i.channel, hzRound(i.f0), hzRound(i.f1), fmeOf(i), i.note || null]);
 function emit(extra) {
-  const list = intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality, i.channel]);
+  const list = ivList();
   if (D.interval_mode) {
     if (extra && extra.action && extra.action.type === "submit") backupClear();
     else backupSave(list);
@@ -752,8 +818,7 @@ function emit(extra) {
   send("streamlit:setComponentValue", {dataType: "json", value: Object.assign({
     key: D.extract, ivkey: D.ivkey, channel: shownTrack(),
     comment: $("comment").value, reset: D.reset,
-    intervals: intervals.map(i => [round(i.t0), round(i.t1), i.label, i.quality, i.channel]),
-    add_label: null, action: null,
+    intervals: list, add_label: null, action: null,
   }, extra || {})});
 }
 // Nouvelle étiquette : nom et couleur saisis ici, ajoutées à la liste par le poste (`nonce`
@@ -915,6 +980,7 @@ function render(args) {
       setTimeout(() => emit(), 0);  // le poste reprend aussi ces intervalles
     }
     selected = -1; otherSel = null; vmax = []; specKey = ""; ownHidden = false;
+    fmeCache.clear(); $("bubble")._sig = null;
     specView = null; settling = false; buffers = [];
     if (wide) clearTimeout(wide.timer);
     wide = null;
@@ -1005,6 +1071,7 @@ function decode(i) {
     decoding[i] = (p?.x ? Promise.resolve(p) : decodeTrack(raw[i])).then(r => {
       if (token !== loading) return;
       buffers[i] = r.x; buffers.rate = r.rate; vmax[i] = r.vmax;
+      if (S.fme || $("bubble").hidden === false) list();  // FME mesurables
       draw();
     });
   }
@@ -1061,9 +1128,12 @@ async function prepareOne(next, token) {
   if (token !== prepToken) return false;
   const v = {t0: a.start, t1: a.start + p.x.length / p.rate, f0: 0, f1: D.fview};
   const cols = Math.max(1, Math.round(W())), rows = Math.max(1, Math.round(PH()));
-  const n = fftSize(v, p.rate), m = mic(ch), key = specKeyOf(a.src, v, cols, rows, n, m);
+  const n = fftSize(v, p.rate), m = mic(ch), flt = specFilter();
+  const key = specKeyOf(a.src, v, cols, rows, n, m, flt);
   pinned.add(key);
-  if (!specCache.has(key)) remember(key, paint(p.x, p.rate, a.start, p.vmax, v, cols, rows, n, m));
+  if (!specCache.has(key)) {
+    remember(key, paint(p.x, p.rate, a.start, p.vmax, v, cols, rows, n, m, flt));
+  }
   const fk = fftWant();  // le son filtré : celui du micro affiché
   if (p.fft?.key === fk) return true;
   const y = await filtered(p.x, p.rate, Math.max(S.band[0], 1), S.band[1]);
@@ -1138,9 +1208,9 @@ function fftSize(v, rate) {
 }
 // Clé d'une image : la piste (son fichier), la vue (au centième, pour retrouver celle préparée
 // d'avance malgré les arrondis du décodage), la taille et les réglages.
-function specKeyOf(src, v, cols, rows, n, m) {
+function specKeyOf(src, v, cols, rows, n, m, flt) {
   const t = [v.t0, v.t1, v.f0, v.f1].map(z => z.toFixed(2));
-  return [src, ...t, cols, rows, n, m.range, m.contrast].join();
+  return [src, ...t, cols, rows, n, m.range, m.contrast, filterSig(flt)].join();
 }
 // Les spectrogrammes préparés pour les extraits suivants (`pinned`) ne sont pas chassés par
 // les vues calculées pendant un zoom sur l'extrait en cours.
@@ -1154,11 +1224,11 @@ function remember(key, canvas) {
 }
 function renderSpectrogram(cols, rows) {
   const ch = shownTrack(), a = D.audios[ch], n = fftSize(view, buffers.rate), m = mic(ch);
-  const key = specKeyOf(a.src, view, cols, rows, n, m);
+  const flt = specFilter(), key = specKeyOf(a.src, view, cols, rows, n, m, flt);
   if (key === specKey) return;
   specKey = key; specView = {...view};
   spec = specCache.get(key)
-    || paint(buffers[ch], buffers.rate, a.start, vmax[ch], view, cols, rows, n, m);
+    || paint(buffers[ch], buffers.rate, a.start, vmax[ch], view, cols, rows, n, m, flt);
   remember(key, spec);
 }
 // Zone élargie (une demi-vue de plus de chaque côté), calculée en tâche de fond, par petits
@@ -1174,8 +1244,8 @@ function startWide() {
              f1: Math.min(fmax(), view.f1 + (view.f1 - view.f0) / 2)};
   const cols = Math.max(1, Math.round(W() * (v.t1 - v.t0) / (view.t1 - view.t0) / 2));
   const rows = Math.max(1, Math.round(PH() * (v.f1 - v.f0) / (view.f1 - view.f0) / 2));
-  const n = Math.min(fftSize(view, buffers.rate), 4096), m = mic(ch);
-  const key = specKeyOf(a.src, v, cols, rows, n, m);
+  const n = Math.min(fftSize(view, buffers.rate), 4096), m = mic(ch), flt = specFilter();
+  const key = specKeyOf(a.src, v, cols, rows, n, m, flt);
   if (wide && wide.key === key) return;
   if (wide) clearTimeout(wide.timer);
   const out = document.createElement("canvas"); out.width = cols; out.height = rows;
@@ -1188,33 +1258,43 @@ function startWide() {
     const t = performance.now();
     while (job.order.length && performance.now() - t < 12) {
       const c0 = job.order.shift();
-      paintCols(out, x, rate, a.start, top, v, cols, rows, n, c0, Math.min(cols, c0 + step), m);
+      paintCols(out, x, rate, a.start, top, v, cols, rows, n, c0, Math.min(cols, c0 + step), m,
+                flt);
     }
     if (drag) draw();
     if (job.order.length) job.timer = setTimeout(work, 0);
   })();
 }
-function paint(x, rate, start, top, v, cols, rows, n, m) {
+function paint(x, rate, start, top, v, cols, rows, n, m, flt) {
   const out = document.createElement("canvas"); out.width = cols; out.height = rows;
-  return paintCols(out, x, rate, start, top, v, cols, rows, n, 0, cols, m);
+  return paintCols(out, x, rate, start, top, v, cols, rows, n, 0, cols, m, flt);
 }
-function paintCols(out, x, rate, start, top, v, cols, rows, n, c0, c1, m) {
+function paintCols(out, x, rate, start, top, v, cols, rows, n, c0, c1, m, flt) {
   const sctx = out.getContext("2d"), image = sctx.createImageData(c1 - c0, rows), px = image.data;
   const binHz = rate / n, range = m.range;
   // Contraste : courbe en puissance sur l'échelle (0 = linéaire) ; le haut ne bouge pas, les
   // niveaux moyens (bruit de fond) s'assombrissent.
   const gamma = 1 + 0.35 * m.contrast, lut = new Uint8Array(256);
   for (let i = 0; i < 256; i++) lut[i] = Math.round(255 * Math.pow(i / 255, gamma));
-  const binOf = new Float32Array(rows);
+  const binOf = new Float32Array(rows), att = new Float32Array(rows);
   for (let r = 0; r < rows; r++) {
     binOf[r] = (v.f1 - (r + 0.5) / rows * (v.f1 - v.f0)) / binHz;
+    if (!flt) continue;  // « Bande seule » : la ligne atténuée comme le son (`specFilter`)
+    const f = Math.max(binOf[r] * binHz, 1);
+    if (!flt.order) att[r] = f < flt.lo || f > flt.hi ? -1e9 : 0;
+    else {
+      const e = 2 * flt.order;
+      att[r] = -10 * Math.log10(1 + Math.pow(f / flt.hi, e))
+               - 10 * Math.log10(1 + Math.pow(flt.lo / f, e));
+    }
   }
   for (let c = c0; c < c1; c++) {
     const t = v.t0 + (c + 0.5) / cols * (v.t1 - v.t0);
     const db = spectrum(x, (t - start) * rate, n);
     for (let r = 0; r < rows; r++) {
       const b = binOf[r], k = Math.floor(b), f = b - k;
-      const l = k + 1 < db.length ? db[k] * (1 - f) + db[k + 1] * f : db[db.length - 1];
+      const l = (k + 1 < db.length ? db[k] * (1 - f) + db[k + 1] * f : db[db.length - 1])
+        + att[r];
       const i = Math.max(0, Math.min(255, Math.round((l - (top - range)) / range * 255)));
       const o = (r * (c1 - c0) + c - c0) * 4, color = MAGMA[lut[i]];
       px[o] = color[0]; px[o + 1] = color[1]; px[o + 2] = color[2]; px[o + 3] = 255;
@@ -1314,46 +1394,58 @@ function draw() {
   // Les envois déjà faits, sous ses intervalles : comme les siens (voile, barre haute épaisse,
   // bords latéraux), mais en tirets ; une bande nommée par envoi en bas ; un clic en met un en
   // relief. Les envois masqués ou rendus silencieux ne sont pas dessinés.
+  // Fenêtre temps-fréquence : le même dessin sur son rectangle (bords haut et bas compris).
   drawnRows().forEach((o, k) => {
     const y = M.t + PH() - 3 - 13 * (k + 1);
-    o.intervals.forEach(([t0, t1, l], j) => {
-      const x0 = xOf(t0), x1 = xOf(t1), c = rgb(l), on = otherSel === `${o.idx}:${j}`;
-      ctx.fillStyle = `rgba(${c}, ${on ? 0.32 : 0.20})`; ctx.fillRect(x0, M.t, x1 - x0, PH());
-      ctx.setLineDash([8, 5]); ctx.strokeStyle = `rgba(${c}, 0.95)`; ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.moveTo(x0, M.t + 2.5); ctx.lineTo(x1, M.t + 2.5); ctx.stroke();
+    o.intervals.forEach((raw, j) => {
+      const iv = ivOf(raw), box = isBox(iv), c = rgb(iv.label), on = otherSel === `${o.idx}:${j}`;
+      const x0 = xOf(iv.t0), x1 = xOf(iv.t1), y0 = ivTop(iv), y1 = ivBot(iv);
+      ctx.fillStyle = `rgba(${c}, ${on ? 0.32 : 0.20})`; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      ctx.setLineDash([8, 5]); ctx.strokeStyle = `rgba(${c}, 0.95)`; ctx.lineWidth = box ? 3 : 5;
+      const yb = y0 + (box ? 1.5 : 2.5);
+      ctx.beginPath(); ctx.moveTo(x0, yb); ctx.lineTo(x1, yb); ctx.stroke();
       ctx.setLineDash([6, 4]); ctx.strokeStyle = `rgb(${c})`; ctx.lineWidth = on ? 3 : 1.5;
-      ctx.beginPath(); ctx.moveTo(x0, M.t); ctx.lineTo(x0, M.t + PH());
-      ctx.moveTo(x1, M.t); ctx.lineTo(x1, M.t + PH()); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1);
+      ctx.moveTo(x1, y0); ctx.lineTo(x1, y1);
+      if (box) { ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); }
+      ctx.stroke(); ctx.setLineDash([]);
+      if (S.fme) { const f = fmeOf(iv); if (f != null) fmeLine(x0, x1, f, true); }
+      if (iv.note) noteMark(x0, x1, y0 + (box ? 2 : 4), true);
       ctx.fillStyle = `rgba(${c}, 0.8)`; ctx.fillRect(x0, y, x1 - x0, 11);
       ctx.fillStyle = "#0B0B0B"; ctx.font = '600 9.5px "Hanken Grotesk", system-ui, sans-serif';
       ctx.fillText(o.who, x0 + 3, y + 9, Math.max(x1 - x0 - 6, 1));
     });
   });
-  const shown = drag && drag.mode === "draw" && drag.moved
-    ? [...intervals, {t0: Math.min(drag.t, drag.t2), t1: Math.max(drag.t, drag.t2),
-                      label: newLabel}]
-    : ownHidden ? [] : intervals;
+  const drawing = drag && drag.mode === "draw" && drag.moved ? drawnBox(drag) : null;
+  const shown = drawing ? [...intervals, drawing] : ownHidden ? [] : intervals;
   shown.forEach((iv, i) => {
     const x0 = xOf(iv.t0), x1 = xOf(iv.t1), c = COLORS[iv.label] || [200, 200, 200];
-    ctx.fillStyle = `rgba(${c}, 0.20)`; ctx.fillRect(x0, M.t, x1 - x0, PH());
-    ctx.fillStyle = `rgba(${c}, 0.95)`; ctx.fillRect(x0, M.t, x1 - x0, 5);
+    const box = isBox(iv), y0 = ivTop(iv), y1 = ivBot(iv);
+    ctx.fillStyle = `rgba(${c}, 0.20)`; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.fillStyle = `rgba(${c}, 0.95)`; ctx.fillRect(x0, y0, x1 - x0, box ? 3 : 5);
     ctx.strokeStyle = `rgb(${c})`; ctx.lineWidth = i === selected ? 3 : 1.5;
-    ctx.beginPath(); ctx.moveTo(x0, M.t); ctx.lineTo(x0, M.t + PH());
-    ctx.moveTo(x1, M.t); ctx.lineTo(x1, M.t + PH()); ctx.stroke();
+    if (box) ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    else {
+      ctx.beginPath(); ctx.moveTo(x0, M.t); ctx.lineTo(x0, M.t + PH());
+      ctx.moveTo(x1, M.t); ctx.lineTo(x1, M.t + PH()); ctx.stroke();
+    }
+    if (iv === drawing) return;
+    if (S.fme) { const f = fmeOf(iv); if (f != null) fmeLine(x0, x1, f, false); }
+    if (iv.note) noteMark(x0, x1, y0 + (box ? 2 : 4), false);
   });
   // Zones tampons au bord de chaque intervalle tracé : pointillé gris à l'intérieur (début :
   // 0,07 s après t0 ; fin : 0,2 s avant t1, au plus la moitié de l'intervalle), zone voilée.
   if (D.interval_mode && S.edges !== false) {
     ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
     shown.forEach(iv => {
-      const half = (iv.t1 - iv.t0) / 2;
+      const half = (iv.t1 - iv.t0) / 2, y0 = ivTop(iv), y1 = ivBot(iv);
       [[iv.t0, iv.t0 + Math.min(EDGE_START, half)], [iv.t1 - Math.min(EDGE_END, half), iv.t1]]
         .forEach(([a, b]) => {
           const xa = xOf(a), xb = xOf(b);
-          ctx.fillStyle = "rgba(200, 200, 200, 0.18)"; ctx.fillRect(xa, M.t, xb - xa, PH());
+          ctx.fillStyle = "rgba(200, 200, 200, 0.18)"; ctx.fillRect(xa, y0, xb - xa, y1 - y0);
           ctx.strokeStyle = "rgba(210, 210, 210, 0.85)";
-          ctx.beginPath(); ctx.moveTo(xa, M.t); ctx.lineTo(xa, M.t + PH());
-          ctx.moveTo(xb, M.t); ctx.lineTo(xb, M.t + PH()); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(xa, y0); ctx.lineTo(xa, y1);
+          ctx.moveTo(xb, y0); ctx.lineTo(xb, y1); ctx.stroke();
         });
     });
     ctx.setLineDash([]);
@@ -1382,6 +1474,7 @@ function draw() {
   }
   ctx.restore();
   axes();
+  placeBubble();
 }
 function axes() {
   ctx.fillStyle = AXIS; ctx.strokeStyle = TICK; ctx.lineWidth = 1; ctx.font = MONO;
@@ -1426,6 +1519,208 @@ function zoomFreq(factor, at) {
   clampView(); moved();
 }
 
+// --- Fenêtres temps-fréquence, FME, bulle ------------------------------------------------
+// Sorte des prochaines fenêtres : « t » (en temps, toute la hauteur) ou « tf » (rectangle en
+// temps et en fréquence) ; Alt + glisser trace l'autre. Retenue d'une séance à l'autre.
+const boxKind = () => S.box === "tf" ? "tf" : "t";
+const isBox = iv => iv.f0 != null && iv.f1 != null;
+const ivTop = iv => isBox(iv) ? yOf(iv.f1) : M.t;
+const ivBot = iv => isBox(iv) ? yOf(iv.f0) : M.t + PH();
+const khz = f => (f / 1000).toFixed(f < 10000 ? 2 : 1).replace(".", ",");
+// FME : sommet du spectre de puissance moyen de la fenêtre (trames de Hann de 2048 points,
+// recouvrement de moitié, 400 au plus), dans sa bande, ou dans la bande du signal (`D.band`)
+// pour une fenêtre en temps seulement ; parabole sur les trois raies du sommet. Même calcul
+// que `workbench.peak_frequency`. Gardée en mémoire par fenêtre (clé : piste, bornes, bande).
+const fmeCache = new Map();
+function fmeOf(iv) {
+  const ch = iv.channel != null && buffers[iv.channel] ? iv.channel : shownTrack();
+  const x = buffers[ch], rate = buffers.rate, a0 = D && D.audios[ch];
+  if (!x || !rate || !a0) return iv.fme ?? null;
+  const band = isBox(iv) ? [Math.min(iv.f0, iv.f1), Math.max(iv.f0, iv.f1)]
+    : (D.band || [0, rate / 2]);
+  const key = [a0.src, iv.t0.toFixed(3), iv.t1.toFixed(3), Math.round(band[0]),
+               Math.round(band[1])].join();
+  if (fmeCache.has(key)) return fmeCache.get(key);
+  const a = Math.max(0, Math.round((iv.t0 - a0.start) * rate));
+  const b = Math.min(x.length, Math.round((iv.t1 - a0.start) * rate));
+  let value = null;
+  if (b - a >= 64) {
+    const m = Math.min(2048, 2 ** Math.floor(Math.log2(b - a)));
+    const hop = Math.max(m / 2, Math.ceil((b - a - m) / 400));
+    const pow = new Float64Array(m / 2 + 1);
+    for (let c = a + m / 2; c + m / 2 <= b; c += hop) {
+      const db = spectrum(x, c, m);
+      for (let k = 0; k <= m / 2; k++) pow[k] += Math.pow(10, db[k] / 10);
+    }
+    const binHz = rate / m, k0 = Math.ceil(band[0] / binHz);
+    const k1 = Math.min(m / 2, Math.floor(band[1] / binHz));
+    let k = -1;
+    for (let j = k0; j <= k1; j++) if (k < 0 || pow[j] > pow[k]) k = j;
+    if (k >= 0) {
+      let f = k * binHz;
+      if (k > 0 && k < m / 2) {
+        const [l, c, h] = [pow[k - 1], pow[k], pow[k + 1]].map(v => Math.log(v + 1e-30));
+        const den = l - 2 * c + h;
+        if (den < 0) f += 0.5 * (l - h) / den * binHz;
+      }
+      value = Math.round(Math.min(Math.max(f, band[0]), band[1]) * 10) / 10;
+    }
+  }
+  fmeCache.set(key, value);
+  return value;
+}
+// Petite bulle dorée en haut à droite d'une fenêtre commentée (dedans, sous sa barre ; dehors
+// si la fenêtre est trop étroite).
+function noteMark(x0, x1, y0, ro) {
+  const w = 13, h = 9, x = x1 - x0 > w + 8 ? x1 - w - 4 : x1 + 3, y = y0 + 7;
+  ctx.save();
+  ctx.globalAlpha = ro ? 0.8 : 1;
+  ctx.fillStyle = "#FFE08A"; ctx.strokeStyle = "rgba(10, 8, 4, 0.85)"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y); ctx.lineTo(x + w - 2, y); ctx.quadraticCurveTo(x + w, y, x + w, y + 2);
+  ctx.lineTo(x + w, y + h - 2); ctx.quadraticCurveTo(x + w, y + h, x + w - 2, y + h);
+  ctx.lineTo(x + 6, y + h); ctx.lineTo(x + 2.5, y + h + 3.5); ctx.lineTo(x + 3, y + h);
+  ctx.lineTo(x + 2, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - 2); ctx.lineTo(x, y + 2);
+  ctx.quadraticCurveTo(x, y, x + 2, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "rgba(10, 8, 4, 0.8)";
+  [3.5, 6.5, 9.5].forEach(dx => ctx.fillRect(x + dx - 0.6, y + h / 2 - 0.6, 1.3, 1.3));
+  ctx.restore();
+}
+// Trait de la FME : blanc cerné de noir, sur la largeur de la fenêtre.
+function fmeLine(x0, x1, f, dashed) {
+  const y = Math.round(yOf(f)) + 0.5;
+  ctx.save();
+  if (dashed) ctx.setLineDash([4, 3]);
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.75)"; ctx.lineWidth = 3.5;
+  ctx.beginPath(); ctx.moveTo(x0 + 1, y); ctx.lineTo(x1 - 1, y); ctx.stroke();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.95)"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x0 + 1, y); ctx.lineTo(x1 - 1, y); ctx.stroke();
+  ctx.restore();
+}
+// La bulle : celle de sa fenêtre sélectionnée (commentaire modifiable), ou de la fenêtre d'un
+// autre envoi mise en relief (lecture seule).
+function bubbleTarget() {
+  if (!D || !D.interval_mode) return null;
+  if (selected >= 0 && intervals[selected] && !ownHidden) {
+    return {own: true, iv: intervals[selected], sig: `own:${selected}`};
+  }
+  if (otherSel) {
+    const [k, j] = otherSel.split(":").map(Number);
+    const row = histRows().find(o => o.idx === k);
+    if (row && !row.silent && row.intervals[j]) {
+      return {own: false, iv: ivOf(row.intervals[j]), who: row.who, date: row.date,
+              sig: `other:${otherSel}`};
+    }
+  }
+  return null;
+}
+let noteTimer = null;
+function bubbleInfo(tg) {
+  const iv = tg.iv, f = fmeOf(iv), t0 = Math.min(iv.t0, iv.t1), t1 = Math.max(iv.t0, iv.t1);
+  const band = isBox(iv) ? `${khz(Math.min(iv.f0, iv.f1))}–${khz(Math.max(iv.f0, iv.f1))} kHz`
+    : "toute la hauteur";
+  return `<div><b>${t0.toFixed(2).replace(".", ",")}–${t1.toFixed(2).replace(".", ",")} s</b>`
+    + ` (${(t1 - t0).toFixed(2).replace(".", ",")} s)</div><div>${band}</div>`
+    + `<div>FME <b>${f == null ? "—" : khz(f) + " kHz"}</b></div>`;
+}
+function buildBubble() {
+  const box = $("bubble"), tg = bubbleTarget();
+  if (!tg) { box.hidden = true; box.innerHTML = ""; box._sig = null; return; }
+  box.hidden = false;
+  if (box._sig === tg.sig && box.contains(document.activeElement)) return;  // on y écrit
+  box._sig = tg.sig; box.innerHTML = "";
+  const iv = tg.iv, head = document.createElement("div");
+  head.className = "bhead";
+  const dot = document.createElement("span");
+  dot.className = "dot"; dot.style.background = `rgb(${rgb(iv.label)})`;
+  head.append(dot, labelName(iv.label));
+  if (iv.quality) {
+    const q = document.createElement("b");
+    q.className = "q"; q.dataset.q = iv.quality; q.textContent = iv.quality;
+    q.style.color = "var(--m)"; head.append(q);
+  }
+  if (!tg.own) {
+    const who = document.createElement("span");
+    who.className = "bwho"; who.textContent = tg.who; head.append(who);
+  }
+  const close = document.createElement("button");
+  close.className = "bclose"; close.textContent = "×"; close.title = "Fermer la bulle";
+  close.onclick = () => { selected = -1; otherSel = null; list(); draw(); };
+  head.append(close);
+  const info = document.createElement("div");
+  info.className = "binfo"; info.innerHTML = bubbleInfo(tg);
+  box.append(head, info);
+  if (tg.own) {
+    const area = document.createElement("textarea");
+    area.rows = 2; area.maxLength = 1000; area.value = iv.note || "";
+    area.placeholder = "Commentaire de la fenêtre : positif, doute, faux ami, autre espèce…";
+    area.oninput = () => {
+      iv.note = area.value.trim() ? area.value : null;
+      clearTimeout(noteTimer);
+      noteTimer = setTimeout(() => emit(), 700);
+      list(); draw();
+    };
+    area.onchange = () => { clearTimeout(noteTimer); emit(); };
+    const row = document.createElement("div");
+    row.className = "brow";
+    const kind = document.createElement("button");
+    if (isBox(iv)) {
+      kind.textContent = "↕ Toute la hauteur";
+      kind.title = "En faire une fenêtre en temps seulement";
+      kind.onclick = () => { iv.f0 = null; iv.f1 = null; box._sig = null; changed(); };
+    } else {
+      kind.textContent = "Borner à la bande d'écoute";
+      kind.title = "En faire une fenêtre temps-fréquence, sur la bande d'écoute (bords à tirer)";
+      kind.onclick = () => { [iv.f0, iv.f1] = S.band; box._sig = null; changed(); };
+    }
+    row.append(kind);
+    box.append(area, row);
+  } else if (iv.note) {
+    const note = document.createElement("div");
+    note.className = "bnote"; note.textContent = iv.note; box.append(note);
+  } else {
+    const none = document.createElement("div");
+    none.className = "binfo"; none.textContent = "sans commentaire"; box.append(none);
+  }
+}
+// La bulle ne prend pas la main du spectrogramme : ses boutons ne gardent pas le focus (barre
+// d'espace, Suppr restent au spectrogramme), sa zone de texte si.
+$("bubble").addEventListener("mousedown", e => {
+  e.stopPropagation();
+  if (e.target.tagName === "BUTTON") e.preventDefault();
+});
+// Position : coin bas-gauche de la bulle contre le coin haut-droit de la fenêtre, dehors ; à
+// gauche de la fenêtre si la place manque à droite ; cachée quand la fenêtre sort de la vue.
+function placeBubble() {
+  const box = $("bubble");
+  if (box.hidden) return;
+  const tg = bubbleTarget();
+  if (!tg) { buildBubble(); return; }
+  const info = box.querySelector(".binfo"), html = bubbleInfo(tg);
+  if (info && info.innerHTML !== html) info.innerHTML = html;
+  const iv = tg.iv, x0 = xOf(Math.min(iv.t0, iv.t1)), x1 = xOf(Math.max(iv.t0, iv.t1));
+  const y0 = Math.max(M.t, Math.min(ivTop(iv), ivBot(iv)));
+  const out = x1 < M.l || x0 > M.l + W() || y0 > M.t + PH();
+  box.style.visibility = out ? "hidden" : "";
+  if (out) return;
+  const bw = box.offsetWidth, bh = box.offsetHeight, cw = canvas.clientWidth;
+  let left = Math.min(x1, M.l + W()) + 6, onLeft = false;
+  if (left + bw > cw) { left = Math.max(x0, M.l) - 6 - bw; onLeft = true; }
+  left = Math.max(0, Math.min(left, cw - bw));
+  const stageTop = box.parentElement.offsetTop;
+  const top = Math.max(2 - stageTop, y0 - bh - 4);
+  box.classList.toggle("left", onLeft);
+  box.style.left = `${canvas.offsetLeft + left}px`; box.style.top = `${canvas.offsetTop + top}px`;
+}
+// Spectrogramme de ce qu'on entend : en « Bande seule », chaque ligne est atténuée comme le
+// son (Butterworth d'ordre raideur / 6 de chaque côté, −3 dB sur les frontières), noire hors de
+// la bande en coupure franche (FFT).
+function specFilter() {
+  if (!S.bandOnly) return null;
+  return {lo: Math.max(S.band[0], 10), hi: S.band[1], order: S.slope === "fft" ? 0 : S.slope / 6};
+}
+const filterSig = f => f ? `${f.lo}-${f.hi}-${f.order}` : "";
+
 // --- Intervalles -------------------------------------------------------------------------
 // Pastilles sous le spectrogramme, sans menu déroulant : le type se change en sélectionnant
 // l'intervalle puis en cliquant un bouton de type (ou 1 à 4).
@@ -1436,14 +1731,14 @@ function list() {
   const me = document.createElement("button");
   me.className = "head";
   me.innerHTML = '<span class="who me">Vous :</span>';
-  me.title = ownHidden ? "Vos intervalles sont cachés : cliquer pour les remontrer"
-                       : "Cacher vos intervalles, pour mieux voir ceux déjà posés dessous "
+  me.title = ownHidden ? "Vos fenêtres sont cachées : cliquer pour les remontrer"
+                       : "Cacher vos fenêtres, pour mieux voir celles déjà posées dessous "
                          + "(rien n'est effacé)";
   me.onclick = () => { ownHidden = !ownHidden; selected = -1; list(); draw(); };
   box.appendChild(me);
   if (!intervals.length) {
     const none = document.createElement("span");
-    none.className = "none"; none.textContent = "aucun intervalle (tout l'extrait sera négatif)";
+    none.className = "none"; none.textContent = "aucune fenêtre (tout l'extrait sera négatif)";
     box.appendChild(none);
   }
   intervals.map((iv, i) => [iv, i]).sort((a, b) => a[0].t0 - b[0].t0).forEach(([iv, i]) => {
@@ -1451,8 +1746,9 @@ function list() {
     chip.className = "chip" + (i === selected ? " sel" : "");
     chip.style.background = `rgba(${rgb(iv.label)}, 0.18)`;
     chip.style.borderColor = i === selected ? "var(--sel)" : `rgb(${rgb(iv.label)})`;
-    chip.title = "Sélectionner, puis cliquer une étiquette en haut pour la changer";
-    chip.append(`${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s · ${labelName(iv.label)}`);
+    chip.title = "Sélectionner (sa bulle s'ouvre : commentaire, FME), puis cliquer une "
+      + "étiquette en haut pour la changer";
+    chip.append(`${chipText(iv)} · ${labelName(iv.label)}`);
     if (iv.quality) {
       const q = document.createElement("b");
       q.className = "q"; q.dataset.q = iv.quality; q.textContent = iv.quality;
@@ -1463,6 +1759,7 @@ function list() {
       chip.append(` · 🎧 ${iv.channel + 1}`);
       chip.title += `\nTracé en écoutant ${D.audios[iv.channel].name}`;
     }
+    chipExtras(chip, iv);
     const x = document.createElement("button");
     x.textContent = "×"; x.title = "Effacer";
     x.onclick = ev => { ev.stopPropagation(); remove(i); };
@@ -1477,7 +1774,25 @@ function list() {
     chip.append(x); box.appendChild(chip);
   });
   others();
-  showTypes(); showQualities(); setHeight();
+  showTypes(); showQualities(); buildBubble(); setHeight();
+}
+// Texte d'une pastille : le temps, et la bande d'une fenêtre temps-fréquence.
+const chipText = iv => `${iv.t0.toFixed(1)}–${iv.t1.toFixed(1)} s`
+  + (isBox(iv) ? ` · ${(iv.f0 / 1000).toFixed(1)}–${(iv.f1 / 1000).toFixed(1)} kHz` : "");
+// FME (bouton « FME » allumé) et bulle 💬 d'une fenêtre commentée, au bout de la pastille.
+function chipExtras(chip, iv) {
+  const f = S.fme ? fmeOf(iv) : null;
+  if (f != null) {
+    const s = document.createElement("span");
+    s.className = "fme"; s.textContent = `FME ${(f / 1000).toFixed(2)}`;
+    s.title = `Fréquence du maximum d'énergie : ${khz(f)} kHz`;
+    chip.append(" · ", s);
+  }
+  if (iv.note) {
+    const n = document.createElement("span");
+    n.textContent = " 💬"; n.title = `Commentaire : ${iv.note}`;
+    chip.append(n);
+  }
 }
 // Envois déjà faits sur l'extrait, une ligne chacun du plus ancien au plus récent (soi compris,
 // et plusieurs fois la même personne si elle est repassée). Un clic sur le nom et la date rend
@@ -1514,18 +1829,20 @@ function others() {
     if (r.masked) {  // rien sur le contenu (vide ou pas) : ce serait le dévoiler
       say("annotations masquées : décocher le bouton « Masquer les annotations »");
     } else if (!r.intervals.length) {
-      say("aucun intervalle");
+      say("aucune fenêtre");
     }
-    if (!r.masked) r.intervals.forEach(([t0, t1, l, q], j) => {
+    if (!r.masked) r.intervals.forEach((raw, j) => {
+      const iv = ivOf(raw), {t0, t1, label: l, quality: q} = iv;
       const chip = document.createElement("span");
-      chip.className = "chip ro";
+      chip.className = "chip ro" + (otherSel === `${r.idx}:${j}` ? " sel" : "");
       chip.style.background = `rgba(${rgb(l)}, 0.10)`; chip.style.borderColor = `rgb(${rgb(l)})`;
       chip.title = `Tracé par ${r.who}${r.date ? ` le ${r.date}` : ""} (lecture seule)`;
-      chip.append(`${t0.toFixed(1)}–${t1.toFixed(1)} s · ${labelName(l)}`);
+      chip.append(`${chipText(iv)} · ${labelName(l)}`);
       if (q) {
         const b = document.createElement("b");
         b.className = "q"; b.dataset.q = q; b.textContent = q; chip.append(" · ", b);
       }
+      chipExtras(chip, iv);
       chip.onclick = () => {
         selected = -1; otherSel = r.silent ? null : `${r.idx}:${j}`;
         const span = view.t1 - view.t0;
@@ -1543,23 +1860,44 @@ function changed() { list(); draw(); emit(); }
 function remove(i) { intervals.splice(i, 1); selected = -1; changed(); }
 const localX = e => e.clientX - canvas.getBoundingClientRect().left;
 const localY = e => e.clientY - canvas.getBoundingClientRect().top;
-function hit(x) {  // [indice, bord ("t0", "t1") ou null] de l'intervalle sous le curseur
-  if (ownHidden) return [-1, null];  // ses intervalles cachés ne se prennent pas
+// [indice, bord ("t0", "t1" en temps ; "f0", "f1" en fréquence) ou null] de la fenêtre sous le
+// curseur ; la dernière tracée d'abord (dessinée au-dessus).
+function hit(x, y) {
+  if (ownHidden) return [-1, null];  // ses fenêtres cachées ne se prennent pas
   for (let i = intervals.length - 1; i >= 0; i--) {
-    const iv = intervals[i];
-    if (Math.abs(x - xOf(iv.t0)) < 6) return [i, "t0"];
-    if (Math.abs(x - xOf(iv.t1)) < 6) return [i, "t1"];
+    const iv = intervals[i], x0 = xOf(iv.t0), x1 = xOf(iv.t1), y0 = ivTop(iv), y1 = ivBot(iv);
+    const inY = y >= y0 - 6 && y <= y1 + 6, inX = x >= x0 - 6 && x <= x1 + 6;
+    if (inY && Math.abs(x - x0) < 6) return [i, "t0"];
+    if (inY && Math.abs(x - x1) < 6) return [i, "t1"];
+    if (isBox(iv) && inX && Math.abs(y - y0) < 6) return [i, "f1"];
+    if (isBox(iv) && inX && Math.abs(y - y1) < 6) return [i, "f0"];
   }
-  const t = tOf(x);
-  return [intervals.findIndex(iv => t >= iv.t0 && t <= iv.t1), null];
+  const t = tOf(x), f = fOf(y);
+  for (let i = intervals.length - 1; i >= 0; i--) {
+    if (inside(intervals[i], t, f)) return [i, null];
+  }
+  return [-1, null];
 }
-function otherAt(t) {  // "k:j" de l'intervalle d'un autre annotateur sous t, ou null
+const inside = (iv, t, f) => t >= Math.min(iv.t0, iv.t1) && t <= Math.max(iv.t0, iv.t1)
+  && (!isBox(iv) || (f >= Math.min(iv.f0, iv.f1) && f <= Math.max(iv.f0, iv.f1)));
+function otherAt(t, f) {  // "k:j" de la fenêtre d'un autre annotateur sous (t, f), ou null
   let found = null;
-  drawnRows().forEach(o => o.intervals.forEach(([t0, t1], j) => {
-    if (t >= t0 && t <= t1) found = `${o.idx}:${j}`;
+  drawnRows().forEach(o => o.intervals.forEach((raw, j) => {
+    if (inside(ivOf(raw), t, f)) found = `${o.idx}:${j}`;
   }));
   return found;
 }
+// Fenêtre en cours de tracé : rectangle si l'on trace en temps-fréquence et que le geste a une
+// hauteur (6 px au moins), sinon toute la hauteur.
+function drawnBox(d) {
+  const iv = {t0: Math.min(d.t, d.t2), t1: Math.max(d.t, d.t2), label: newLabel,
+              f0: null, f1: null};
+  if (d.tf && Math.abs(yOf(d.f) - yOf(d.f2)) >= 6) {
+    iv.f0 = Math.min(d.f, d.f2); iv.f1 = Math.max(d.f, d.f2);
+  }
+  return iv;
+}
+const clampF = f => Math.min(Math.max(f, 0), fmax());
 function bandLine(y) {  // 0 ou 1 : pointillé de la bande sous le curseur, sinon -1
   return S.band.findIndex(f => Math.abs(yOf(f) - y) < 5);
 }
@@ -1581,14 +1919,17 @@ canvas.addEventListener("mousedown", e => {
   canvas.focus();
   const x = localX(e), y = localY(e), line = bandLine(y);
   const t = Math.min(Math.max(tOf(x), D.t0), D.t1);  // un clic hors de l'extrait est borné
+  const f = clampF(fOf(y));
   const right = e.button === 2;
-  const [i, edge] = D.interval_mode && !right ? hit(x) : [-1, null];
+  const [i, edge] = D.interval_mode && !right ? hit(x, y) : [-1, null];
   let mode = "pan";
-  if (!right && line >= 0) mode = "band";
+  // Bord en fréquence d'une fenêtre, puis frontière de la bande d'écoute, puis bord en temps.
+  if (!right && edge && edge[0] === "f") mode = "edge";
+  else if (!right && line >= 0) mode = "band";
   else if (!right && D.interval_mode) mode = edge ? "edge" : "draw";
   if (mode === "draw" && ownHidden) { ownHidden = false; list(); }
   drag = {mode, right, x: e.clientX, y: e.clientY, view: {...view}, moved: false, t, t2: t, i,
-          edge, line};
+          edge, line, f, f2: f, tf: (boxKind() === "tf") !== e.altKey};
 });
 const gapOn = () => $("gap3").classList.contains("on");
 canvas.addEventListener("mouseleave", () => { hoverT = null; if (gapOn() && D && view) draw(); });
@@ -1597,9 +1938,9 @@ canvas.addEventListener("mousemove", e => {
   hoverT = tOf(localX(e));
   if (gapOn() && view && !drag) draw();
   if (drag) return;
-  const x = localX(e), y = localY(e);
-  canvas.style.cursor = bandLine(y) >= 0 ? "ns-resize"
-    : D.interval_mode && hit(x)[1] ? "ew-resize" : "crosshair";
+  const x = localX(e), y = localY(e), edge = D.interval_mode ? hit(x, y)[1] : null;
+  canvas.style.cursor = edge && edge[0] === "f" ? "ns-resize"
+    : bandLine(y) >= 0 ? "ns-resize" : edge ? "ew-resize" : "crosshair";
 });
 window.addEventListener("mousemove", e => {
   if (!drag) return;
@@ -1626,9 +1967,9 @@ window.addEventListener("mousemove", e => {
     if (drag.line === 0) setBand(Math.min(f, S.band[1] - 100), S.band[1]);
     else setBand(S.band[0], Math.max(f, S.band[0] + 100));
   } else if (drag.mode === "edge") {
-    intervals[drag.i][drag.edge] = t;
+    intervals[drag.i][drag.edge] = drag.edge[0] === "f" ? clampF(fOf(localY(e))) : t;
   } else {
-    drag.t2 = t;
+    drag.t2 = t; drag.f2 = clampF(fOf(localY(e)));
   }
   draw();
 });
@@ -1644,7 +1985,7 @@ window.addEventListener("mouseup", e => {
     // Sélection par un clic seulement : un clic sur une étiquette change alors cet intervalle.
     if (D.interval_mode) {
       selected = d.i;
-      otherSel = d.i >= 0 ? null : otherAt(d.t);
+      otherSel = d.i >= 0 ? null : otherAt(d.t, d.f);
       list();
     }
     const p = players[active];  // la lecture reprendra de cet instant
@@ -1653,14 +1994,18 @@ window.addEventListener("mouseup", e => {
     return;
   }
   if (d.mode === "draw") {
-    const t0 = Math.min(d.t, d.t2), t1 = Math.max(d.t, d.t2);
-    if (t1 - t0 >= 0.05) {
-      intervals.push({t0, t1, label: newLabel, quality: newQuality, channel: shownTrack()});
+    const box = drawnBox(d);
+    if (box.t1 - box.t0 >= 0.05) {
+      intervals.push({...box, quality: newQuality, channel: shownTrack(), fme: null, note: null});
       selected = -1; changed();
     } else draw();
   } else if (d.mode === "edge") {
     const iv = intervals[d.i];
     [iv.t0, iv.t1] = [Math.min(iv.t0, iv.t1), Math.max(iv.t0, iv.t1)];
+    if (isBox(iv)) {  // 50 Hz de hauteur au moins
+      [iv.f0, iv.f1] = [Math.min(iv.f0, iv.f1), Math.max(iv.f0, iv.f1)];
+      if (iv.f1 - iv.f0 < 50) iv.f1 = Math.min(fmax(), iv.f0 + 50);
+    }
     if (iv.t1 - iv.t0 < 0.05) remove(d.i); else changed();
   }
 });
@@ -1691,9 +2036,16 @@ $("edges").onclick = () => {
   if (D && view) draw();
 };
 $("home").onclick = () => canvas.dispatchEvent(new Event("dblclick"));
+["boxt", "boxtf"].forEach(id => {
+  $(id).onclick = () => { S.box = $(id).value; saveSettings(); showSettings(); };
+});
+$("fmebtn").onclick = () => {
+  S.fme = !S.fme; saveSettings(); showSettings();
+  if (D && view) { list(); draw(); }
+};
 document.addEventListener("keydown", e => {
   // Aucun raccourci n'envoie l'extrait : seul le bouton « Valider » à l'écran le fait.
-  if (["SELECT", "INPUT"].includes(e.target.tagName)) return;
+  if (["SELECT", "INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
   if (e.code === "Space") {
     e.preventDefault();
     const p = players[active]; if (p) (p.paused ? p.play() : p.pause());
@@ -1818,17 +2170,34 @@ _component = None
 
 
 def _intervals(intervals: list | None) -> list[list]:
-    """[début, fin, label, qualité, piste écoutée] de chaque intervalle (None si absentes)."""
-    return [
-        [
-            float(i[0]),
-            float(i[1]),
-            str(i[2]),
-            i[3] if len(i) > 3 else None,
-            None if len(i) < 5 or i[4] is None else int(i[4]),
-        ]
-        for i in intervals or []
-    ]
+    """[début, fin, label, qualité, piste écoutée, fréquence basse, fréquence haute, FME,
+    commentaire] de chaque fenêtre (None si absentes : fenêtre en temps seulement, FME pas
+    encore mesurée, pas de commentaire)."""
+
+    def hz(x) -> float | None:
+        try:
+            x = float(x)
+        except (TypeError, ValueError):
+            return None
+        return x if x == x else None  # NaN (case vide relue par pandas) : absente
+
+    out = []
+    for i in intervals or []:
+        i = [*i, *[None] * (9 - len(i))]
+        out.append(
+            [
+                float(i[0]),
+                float(i[1]),
+                str(i[2]),
+                i[3],
+                None if i[4] is None else int(i[4]),
+                hz(i[5]),
+                hz(i[6]),
+                hz(i[7]),
+                (str(i[8]).strip() or None) if isinstance(i[8], str) else None,
+            ]
+        )
+    return out
 
 
 def viewer_args(

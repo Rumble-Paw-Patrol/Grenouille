@@ -163,6 +163,17 @@ MIGRATIONS = [
     """
     ALTER TABLE intervals ADD COLUMN channel INTEGER;
     """,
+    # 8 — fenêtres temps-fréquence (le terme « fenêtre » remplace « intervalle » dans le poste) :
+    # bande de fréquences de la fenêtre (NULL : toute la hauteur, fenêtre en temps seulement),
+    # fréquence du maximum d'énergie (FME) mesurée sur la fenêtre et dans sa bande, à l'envoi,
+    # sur la piste écoutée ; commentaire propre à la fenêtre (positif, doute, faux ami, autre
+    # espèce…), à côté de celui de l'extrait (`spans.conditions.comment`).
+    """
+    ALTER TABLE intervals ADD COLUMN f_min_hz REAL;
+    ALTER TABLE intervals ADD COLUMN f_max_hz REAL;
+    ALTER TABLE intervals ADD COLUMN fme_hz REAL;
+    ALTER TABLE intervals ADD COLUMN comment TEXT;
+    """,
 ]
 
 

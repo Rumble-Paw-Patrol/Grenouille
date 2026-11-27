@@ -398,9 +398,11 @@ $("send").addEventListener("click", async () => {
   }
   const it = item(), t0 = it.offset_s, t1 = it.offset_s + it.dur_s;
   const r2 = t => Math.round(t * 100) / 100;
+  // fenêtres temps-fréquence : bande, FME mesurée par le visualiseur, commentaire de la fenêtre
   const traced = current
-    .map(([a, b, l, q, ch]) =>
-      [r2(Math.max(a, t0)), r2(Math.min(b, t1)), l, q || null, ch ?? null])
+    .map(([a, b, l, q, ch, f0, f1, fme, note]) =>
+      [r2(Math.max(a, t0)), r2(Math.min(b, t1)), l, q || null, ch ?? null, f0 ?? null,
+       f1 ?? null, fme ?? null, note || null])
     .filter(([a, b]) => b > a);
   const accord = !traced.length && (it.proposal || []).length > 0;  // rien tracé = d'accord
   answers[it.key] = {
@@ -431,7 +433,7 @@ function csvs() {  // comme `service.export_annotations`
     "n_blanci", "intervalles", "other_label", "classes", "multiclass", "quality", "species",
     "comment", "annotator", "source", "created_at", "recording_id", "channel"];
   const head2 = ["span_id", "path", "site", "mic_id", "start_utc", "start_s", "end_s", "label",
-    "quality", "valable", "annotator", "channel"];
+    "quality", "valable", "annotator", "channel", "f_min_hz", "f_max_hz", "fme_hz", "comment"];
   let a = line(head1), b = line(head2);
   P.items.map((it, i) => [it, i + 1, answers[it.key]]).filter(([, , s]) => s)
     .sort((x, y) => x[2].created_at.localeCompare(y[2].created_at))
@@ -444,8 +446,9 @@ function csvs() {  // comme `service.export_annotations`
           (q ? ` (${q})` : "")).join("; "),
         "background", labels.length ? labels.join(", ") : "background", "False", "",
         s.species, s.comment, me, it.source, s.created_at, it.recording_id, s.channel]);
-      for (const [x, y, l, q, ch] of s.intervals) {
-        b += line([id, it.path, it.site, it.mic_id, it.start_utc, x, y, l, q, "True", me, ch]);
+      for (const [x, y, l, q, ch, f0, f1, fme, note] of s.intervals) {
+        b += line([id, it.path, it.site, it.mic_id, it.start_utc, x, y, l, q, "True", me, ch,
+          f0, f1, fme, note]);
       }
     });
   return [a, b];

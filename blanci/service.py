@@ -10,6 +10,7 @@ dire de quel modèle vient un « à vérifier » remonté six mois plus tôt (§
 from __future__ import annotations
 
 import json
+import math
 import re
 import sqlite3
 import tempfile
@@ -682,6 +683,25 @@ INTERVAL_LABELS = ("blanci", "blanci_chorus", "blanci_uncertain", "false_friend"
 CUSTOM_PREFIX = "custom_"
 
 
+INTERVAL_COLUMNS = (
+    "span_id, start_s, end_s, label, quality, channel, f_min_hz, f_max_hz, fme_hz, comment"
+)
+
+
+def _band(f_min: Any, f_max: Any) -> tuple[float | None, float | None]:
+    """Bande (Hz) d'une fenêtre temps-fréquence, bornes rangées ; (None, None) pour une
+    fenêtre en temps seulement. Une seule borne donnée, ou une bande vide : refusée."""
+    given = [f is not None and not (isinstance(f, float) and math.isnan(f)) for f in (f_min, f_max)]
+    if not any(given):
+        return None, None
+    if not all(given):
+        raise ValueError(f"bande de fenêtre incomplète : {f_min}–{f_max} Hz")
+    lo, hi = sorted((float(f_min), float(f_max)))
+    if lo < 0 or hi - lo < 1:
+        raise ValueError(f"bande de fenêtre vide ou négative : {lo}–{hi} Hz")
+    return round(lo, 1), round(hi, 1)
+
+
 def append_span(
     con: sqlite3.Connection,
     recording_id: str,
@@ -697,11 +717,13 @@ def append_span(
     annotator: str | None = None,
 ) -> int:
     """Ajoute un extrait écouté [start_s, end_s] et ses intervalles d'A. blanci (début, fin,
-    label, qualité et piste écoutée facultatives) ; renvoie span_id. `other_label` : label des
-    fenêtres de l'extrait qui ne touchent aucun intervalle. `quality` : qualité de l'extrait,
-    celle des intervalles qui n'ont pas la leur. Piste d'un intervalle : 0 ou 1, celle qu'on
-    écoutait en le plaçant ; None : celle de l'envoi (`conditions.channel_listened`). Ajout
-    seul : une correction est un nouveau span (§13.7)."""
+    label, puis, facultatifs : qualité, piste écoutée, fréquences basse et haute de la fenêtre,
+    FME, commentaire) ; renvoie span_id. `other_label` : label des fenêtres de l'extrait qui ne
+    touchent aucun intervalle. `quality` : qualité de l'extrait, celle des intervalles qui
+    n'ont pas la leur. Piste d'un intervalle : 0 ou 1, celle qu'on écoutait en le plaçant ;
+    None : celle de l'envoi (`conditions.channel_listened`). Bande (Hz) : None pour une fenêtre
+    en temps seulement (toute la hauteur du spectrogramme). Ajout seul : une correction est un
+    nouveau span (§13.7)."""
     if not end_s > start_s:
         raise ValueError(f"extrait vide : {start_s}–{end_s} s")
     if other_label not in LABELS or other_label in POSITIVE_LABELS:
@@ -714,8 +736,8 @@ def append_span(
         raise ValueError(f"source inconnue : {source!r} (attendues : {', '.join(SOURCES)})")
     cleaned = []
     for i0, i1, label, *rest in intervals:
-        interval_quality = rest[0] if rest else None
-        channel = rest[1] if len(rest) > 1 else None
+        rest = [*rest, *[None] * (6 - len(rest))]
+        interval_quality, channel, f_min, f_max, fme, note = rest[:6]
         if label not in INTERVAL_LABELS and not label.startswith(CUSTOM_PREFIX):
             raise ValueError(f"label d'intervalle inconnu : {label!r}")
         _check_quality(interval_quality)
@@ -725,7 +747,12 @@ def append_span(
         if i1 <= i0:
             raise ValueError(f"intervalle vide ou hors de l'extrait : {i0}–{i1} s")
         channel = None if channel is None else int(channel)
-        cleaned.append((round(i0, 2), round(i1, 2), label, interval_quality, channel))
+        f_min, f_max = _band(f_min, f_max)
+        fme = None if fme is None or not math.isfinite(float(fme)) else round(float(fme), 1)
+        note = (str(note).strip() or None) if note is not None else None
+        cleaned.append(
+            (round(i0, 2), round(i1, 2), label, interval_quality, channel, f_min, f_max, fme, note)
+        )
     if (
         con.execute("SELECT 1 FROM recordings WHERE recording_id = ?", (recording_id,)).fetchone()
         is None
@@ -751,8 +778,7 @@ def append_span(
     )
     span_id = int(cursor.lastrowid)
     con.executemany(
-        "INSERT INTO intervals (span_id, start_s, end_s, label, quality, channel) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        f"INSERT INTO intervals ({INTERVAL_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [(span_id, *interval) for interval in cleaned],
     )
     con.commit()
@@ -799,6 +825,16 @@ def _text(value: Any) -> str | None:
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return None
     return str(value).strip() or None
+
+
+def _hz(value: Any) -> float | None:
+    """Fréquence (Hz) lue dans un CSV ; None pour une case vide ou illisible."""
+    text = _text(value)
+    try:
+        hz = float(text) if text is not None else None
+    except ValueError:
+        return None
+    return hz if hz is not None and math.isfinite(hz) else None
 
 
 def _channel(value: Any) -> int | None:
@@ -987,8 +1023,8 @@ def _import_set(
             )
             span = by_span.get(row.span_id, pd.DataFrame(columns=["start_s"]))
             con.executemany(
-                "INSERT INTO intervals (span_id, start_s, end_s, label, quality, channel) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                f"INSERT INTO intervals ({INTERVAL_COLUMNS}) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (
                         cursor.lastrowid,
@@ -997,6 +1033,13 @@ def _import_set(
                         i.label,
                         _text(i.quality),
                         _channel(getattr(i, "channel", None)),
+                        # fenêtres temps-fréquence, FME et commentaire : absents des exports
+                        # d'avant (colonnes manquantes, lues vides)
+                        *_band(
+                            _hz(getattr(i, "f_min_hz", None)), _hz(getattr(i, "f_max_hz", None))
+                        ),
+                        _hz(getattr(i, "fme_hz", None)),
+                        _text(getattr(i, "comment", None)),
                     )
                     for i in span.sort_values("start_s").itertuples(index=False)
                 ],
